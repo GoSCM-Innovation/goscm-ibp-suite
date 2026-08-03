@@ -19,6 +19,15 @@ La razón de existir de esta carpeta está en [`../docs/FASE-0-LEVANTAMIENTO.md`
 | `jobs/` | Application Jobs: plantillas, programar, cancelar, reiniciar, cabeceras, pasos, logs. Tabla única de códigos de estado | v8 |
 | `ai-tools/` | Registro de herramientas del asistente de IA. Cada operación de esta capa se expone con su esquema, el permiso que exige y si es de lectura o escritura | nuevo |
 
+## Estado
+
+| Módulo | Estado |
+|---|---|
+| `persistence/` | Implementado: cliente Postgres (Neon), cliente Redis (Upstash), guarda de aislamiento por cliente y esquema inicial en `migrations/`. Aplicar con `npm run db:migrate`. **Falta verificarlo contra una base viva** — todavía no hay instancia de Neon |
+| El resto | Pendiente. Orden de construcción en `docs/FASE-0-LEVANTAMIENTO.md` §8 |
+
+Para leer o escribir datos de un cliente se usa `queryScoped` / `queryOneScoped`, **nunca** `query` a secas: llevan la guarda que exige el filtro por cliente y fallan cerradas si no pueden demostrarlo. `query` queda para el panel de administración y para las tablas que no son de nadie.
+
 ## Reglas
 
 - **Las reglas de SAP van codificadas como guardas, no como comentarios.** Son 17 comportamientos medidos contra tenants reales (ver `docs/FASE-0-LEVANTAMIENTO.md` §5). Ejemplos: nunca `$top=0` en Planning Data; `KF ne 0` es ignorado silenciosamente por SAP; un chunk ya enviado a staging **no se reintenta** (se reintenta la transacción completa).

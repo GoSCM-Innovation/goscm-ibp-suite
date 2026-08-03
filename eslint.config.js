@@ -27,9 +27,9 @@ export default defineConfig([
       'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]' }],
     },
   },
-  // Capa transversal (core/) y funciones serverless (api/): corren en Node, sin React.
+  // Capa transversal (core/), funciones serverless (api/) y scripts: Node, sin React.
   {
-    files: ['core/**/*.js', 'api/**/*.js', '*.config.js'],
+    files: ['core/**/*.js', 'api/**/*.js', 'scripts/**/*.js', '*.config.js'],
     extends: [js.configs.recommended],
     languageOptions: {
       ecmaVersion: 'latest',
