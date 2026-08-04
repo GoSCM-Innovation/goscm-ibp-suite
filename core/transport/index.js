@@ -7,9 +7,11 @@ export {
   DEFAULT_ALLOWED_SERVICES,
   DEFAULT_CIDS_HOST_PATTERN,
   DEFAULT_IBP_HOST_PATTERN,
+  assertSapHost,
   assertSapUrl,
   checkOdataService,
   isPrivateAddress,
+  validateSapHost,
   validateSapUrl,
 } from './ssrf.js'
 

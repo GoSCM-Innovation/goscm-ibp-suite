@@ -103,12 +103,11 @@ export function checkOdataService(pathname) {
 }
 
 /**
- * Valida una URL saliente. Devuelve el motivo del rechazo, o `null` si se puede llamar.
- *
- * `kind` es 'ibp' o 'cids'. Se exige explícitamente para que nadie valide una URL "en
- * general": cada destino tiene su propio patrón de host.
+ * Valida el destino de una URL: protocolo, patrón de host y que no resuelva a una dirección
+ * interna. NO mira la ruta, así que sirve para comprobar la dirección base de una conexión
+ * antes de guardarla, cuando todavía no hay ningún servicio en la ruta.
  */
-export async function validateSapUrl(rawUrl, { kind } = {}) {
+export async function validateSapHost(rawUrl, { kind } = {}) {
   if (kind !== 'ibp' && kind !== 'cids') {
     throw new Error(`Destino desconocido: "${kind}". Debe ser 'ibp' o 'cids'.`)
   }
@@ -136,11 +135,6 @@ export async function validateSapUrl(rawUrl, { kind } = {}) {
 
   if (!pattern.test(host)) return 'Host no permitido'
 
-  if (kind === 'ibp') {
-    const serviceError = checkOdataService(parsed.pathname)
-    if (serviceError) return serviceError
-  }
-
   let addresses
   try {
     addresses = await lookup(host, { all: true })
@@ -155,8 +149,37 @@ export async function validateSapUrl(rawUrl, { kind } = {}) {
   return null
 }
 
+/**
+ * Valida una URL que se va a llamar: todo lo del destino, más el servicio de OData de la ruta
+ * cuando el destino es IBP. Es la que usa el transporte antes de cada llamada.
+ *
+ * `kind` es 'ibp' o 'cids'. Se exige explícitamente para que nadie valide una URL "en
+ * general": cada destino tiene su propio patrón de host.
+ */
+export async function validateSapUrl(rawUrl, { kind } = {}) {
+  if (kind === 'ibp') {
+    // El servicio se comprueba ANTES de resolver el nombre: es gratis y descarta la mayoría
+    // de los intentos sin gastar una consulta de DNS.
+    let parsed
+    try {
+      parsed = new URL(rawUrl)
+    } catch {
+      return 'URL inválida'
+    }
+    const serviceError = checkOdataService(parsed.pathname)
+    if (serviceError) return serviceError
+  }
+  return validateSapHost(rawUrl, { kind })
+}
+
 /** Igual que `validateSapUrl`, pero revienta en vez de devolver el motivo. */
 export async function assertSapUrl(rawUrl, options) {
   const reason = await validateSapUrl(rawUrl, options)
   if (reason) throw new Error(`URL rechazada (${reason}): ${rawUrl}`)
+}
+
+/** Igual que `validateSapHost`, pero revienta en vez de devolver el motivo. */
+export async function assertSapHost(rawUrl, options) {
+  const reason = await validateSapHost(rawUrl, options)
+  if (reason) throw new Error(`Dirección rechazada (${reason}): ${rawUrl}`)
 }

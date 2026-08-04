@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { checkOdataService, isPrivateAddress, validateSapUrl } from './ssrf.js'
+import { checkOdataService, isPrivateAddress, validateSapHost, validateSapUrl } from './ssrf.js'
 import { lookup } from 'node:dns/promises'
 
 vi.mock('node:dns/promises', () => ({ lookup: vi.fn() }))
@@ -107,7 +107,12 @@ describe('validateSapUrl', () => {
 
   it('no acepta un host de IBP como destino de CI-DS ni al revés', async () => {
     await expect(validateSapUrl(IBP, { kind: 'cids' })).resolves.toBe('Host no permitido')
-    await expect(validateSapUrl('https://x.kyma.ondemand.com/s', { kind: 'ibp' })).resolves.toBe('Host no permitido')
+    // Con una ruta de servicio válida, lo que sobra es el host.
+    const cidsConRutaDeIbp = 'https://x.kyma.ondemand.com/sap/opu/odata/IBP/MASTER_DATA_API_SRV/X'
+    await expect(validateSapUrl(cidsConRutaDeIbp, { kind: 'ibp' })).resolves.toBe('Host no permitido')
+    // Y con la ruta propia de CI-DS, sobra la ruta.
+    await expect(validateSapUrl('https://x.kyma.ondemand.com/s', { kind: 'ibp' }))
+      .resolves.toMatch(/no es un servicio/)
   })
 
   it('exige decir a qué destino se llama', async () => {
@@ -126,7 +131,31 @@ describe('validateSapUrl', () => {
     process.env.ALLOWED_IBP_HOST_REGEX = '(('
     vi.spyOn(console, 'error').mockImplementation(() => {})
     await expect(validateSapUrl(IBP, { kind: 'ibp' })).resolves.toBeNull()
-    await expect(validateSapUrl('https://malicioso.com/x', { kind: 'ibp' })).resolves.toBe('Host no permitido')
+    const ajena = 'https://malicioso.com/sap/opu/odata/IBP/MASTER_DATA_API_SRV/X'
+    await expect(validateSapUrl(ajena, { kind: 'ibp' })).resolves.toBe('Host no permitido')
+  })
+})
+
+describe('validateSapHost', () => {
+  it('acepta la dirección base de un tenant, sin servicio en la ruta', async () => {
+    // Es lo que hace falta para guardar una conexión: todavía no hay ninguna llamada.
+    await expect(validateSapHost('https://cliente-api.scmibp1.ondemand.com/', { kind: 'ibp' }))
+      .resolves.toBeNull()
+  })
+
+  it('esa misma dirección no vale para llamar, porque no lleva servicio', async () => {
+    await expect(validateSapUrl('https://cliente-api.scmibp1.ondemand.com/', { kind: 'ibp' }))
+      .resolves.toMatch(/no es un servicio/)
+  })
+
+  it('sigue rechazando un host ajeno', async () => {
+    await expect(validateSapHost('https://malicioso.com/', { kind: 'ibp' })).resolves.toBe('Host no permitido')
+  })
+
+  it('sigue rechazando lo que resuelve a una dirección interna', async () => {
+    lookup.mockResolvedValue([{ address: '10.0.0.5' }])
+    await expect(validateSapHost('https://cliente-api.scmibp.ondemand.com/', { kind: 'ibp' }))
+      .resolves.toMatch(/dirección interna/)
   })
 })
 
