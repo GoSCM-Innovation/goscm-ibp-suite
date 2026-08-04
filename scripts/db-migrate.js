@@ -7,35 +7,17 @@
 // Cada archivo se aplica como una transacción: o entra entero con su fila de registro, o no
 // entra nada.
 
-import { readdirSync, readFileSync, existsSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { splitStatements } from '../core/persistence/split-statements.js'
+import { loadLocalEnv } from './load-env.js'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const MIGRATIONS_DIR = join(ROOT, 'core', 'persistence', 'migrations')
 
-// Carga mínima de las variables locales. En Vercel ya vienen del entorno.
-// `.env.local` primero: es lo que escribe `vercel env pull` y tiene prioridad sobre el
-// `.env` escrito a mano. Lo que ya esté en el entorno gana sobre ambos.
-function loadDotEnv() {
-  for (const name of ['.env.local', '.env']) {
-    const file = join(ROOT, name)
-    if (!existsSync(file)) continue
-    for (const line of readFileSync(file, 'utf-8').split('\n')) {
-      const trimmed = line.trim()
-      if (!trimmed || trimmed.startsWith('#')) continue
-      const separator = trimmed.indexOf('=')
-      if (separator === -1) continue
-      const key = trimmed.slice(0, separator).trim()
-      const value = trimmed.slice(separator + 1).trim().replace(/^["']|["']$/g, '')
-      if (process.env[key] === undefined) process.env[key] = value
-    }
-  }
-}
-
 async function main() {
-  loadDotEnv()
+  loadLocalEnv(ROOT)
 
   if (!process.env.DATABASE_URL) {
     console.error(

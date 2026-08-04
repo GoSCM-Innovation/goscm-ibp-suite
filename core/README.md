@@ -23,8 +23,13 @@ La razón de existir de esta carpeta está en [`../docs/FASE-0-LEVANTAMIENTO.md`
 
 | Módulo | Estado |
 |---|---|
-| `persistence/` | Implementado: cliente Postgres (Neon), cliente Redis (Upstash), guarda de aislamiento por cliente y esquema inicial en `migrations/`. Aplicar con `npm run db:migrate`. **Falta verificarlo contra una base viva** — todavía no hay instancia de Neon |
+| `persistence/` | Implementado y verificado contra Neon y Upstash reales: un cliente Postgres, un cliente Redis, guarda de aislamiento por cliente y migraciones (`npm run db:migrate`) |
+| `auth/` | Implementado y verificado de punta a punta: ingreso por **código de un solo uso al correo**, sesión de una jornada en cookie httpOnly, y guardas de sesión, administrador y módulo contratado. Microsoft y Google quedan para una iteración posterior — la estructura ya los contempla (`allowed_providers`) |
 | El resto | Pendiente. Orden de construcción en `docs/FASE-0-LEVANTAMIENTO.md` §8 |
+
+El primer administrador se crea con `npm run db:seed` porque la base arranca vacía y el panel exige ser administrador para entrar. Es el único punto del sistema donde nace un usuario sin que otro lo autorice.
+
+Mientras no haya proveedor de correo, el código se imprime en la consola del servidor; en producción eso revienta a propósito en vez de dejar códigos en los registros.
 
 Para leer o escribir datos de un cliente se usa `queryScoped` / `queryOneScoped`, **nunca** `query` a secas: llevan la guarda que exige el filtro por cliente y fallan cerradas si no pueden demostrarlo. `query` queda para el panel de administración y para las tablas que no son de nadie.
 

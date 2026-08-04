@@ -54,11 +54,30 @@ function devApiPlugin() {
 
         const url = new URL(rawUrl, 'http://localhost')
         const segments = url.pathname.slice('/api/'.length).split('/').filter(Boolean)
-        const name = segments[0] || ''
+        if (segments.length === 0) return next()
+        // El filtro es también la defensa contra rutas con ".." que se escapen de api/.
+        if (!segments.every((segment) => /^[a-zA-Z0-9_-]+$/.test(segment))) return next()
 
-        if (!/^[a-zA-Z0-9_-]+$/.test(name)) return next()
-        const file = resolve(apiDir, `${name}.js`)
-        if (!existsSync(file)) return next()
+        // Se resuelve igual que en Vercel: primero api/<a>/<b>.js, y si no existe, api/<a>.js
+        // con el segmento sobrante como parámetro de ruta.
+        let file = null
+        let pathParam = null
+        if (segments.length >= 2) {
+          const nested = resolve(apiDir, segments[0], `${segments[1]}.js`)
+          if (existsSync(nested)) {
+            file = nested
+            pathParam = segments[2]
+          }
+        }
+        if (!file) {
+          const flat = resolve(apiDir, `${segments[0]}.js`)
+          if (existsSync(flat)) {
+            file = flat
+            pathParam = segments[1]
+          }
+        }
+        if (!file) return next()
+        const name = segments.join('/')
 
         try {
           const bodyText = await readBody(req)
@@ -73,8 +92,8 @@ function devApiPlugin() {
             req.body = {}
           }
           req.query = Object.fromEntries(url.searchParams)
-          // Segmentos extra de la ruta, para handlers tipo /api/recurso/:id
-          if (segments[1]) req.query.id = segments[1]
+          // Segmento sobrante de la ruta, para handlers tipo /api/recurso/:id
+          if (pathParam) req.query.id = pathParam
 
           decorateRes(res)
           const mod = await import(pathToFileURL(file).href)
