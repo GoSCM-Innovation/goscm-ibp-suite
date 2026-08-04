@@ -57,13 +57,24 @@ describe('getConnection', () => {
   })
 
   it('trae los acuerdos con su usuario de SAP, nunca con su contraseña', async () => {
-    queryOneScoped.mockResolvedValue({ id: CONEXION, kind: 'ibp', name: 'QA' })
+    queryOneScoped.mockResolvedValue({ id: CONEXION, kind: 'ibp', name: 'QA', base_url: 'https://x/' })
     queryScoped.mockResolvedValue([{ id: 'a-1', agreement: 'SAP_COM_0326', sap_user: 'USR0326' }])
 
     const conexion = await getConnection(CLIENTE, CONEXION)
 
-    expect(conexion.agreements[0]).toEqual({ id: 'a-1', agreement: 'SAP_COM_0326', sap_user: 'USR0326' })
+    expect(conexion.agreements[0]).toMatchObject({ id: 'a-1', agreement: 'SAP_COM_0326', sapUser: 'USR0326' })
     expect(queryScoped.mock.calls[0][1]).not.toMatch(/secret_/)
+  })
+
+  it('devuelve los nombres en el estilo de la aplicación, no los de la base', async () => {
+    queryOneScoped.mockResolvedValue({ id: CONEXION, kind: 'ibp', name: 'QA', base_url: 'https://x/', is_production: true })
+    queryScoped.mockResolvedValue([])
+
+    const conexion = await getConnection(CLIENTE, CONEXION)
+
+    expect(conexion.baseUrl).toBe('https://x/')
+    expect(conexion.isProduction).toBe(true)
+    expect(conexion).not.toHaveProperty('base_url')
   })
 })
 

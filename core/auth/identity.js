@@ -38,7 +38,7 @@ export async function findUserForLogin(email, provider = 'email') {
   if (!looksLikeEmail(normalized)) return null
 
   const rows = await query(
-    `select u.id, u.client_id, u.email, u.name, u.is_admin, u.allowed_providers
+    `select u.id, u.client_id, u.email, u.name, u.is_admin, u.is_platform_admin, u.allowed_providers
      from users u
      join clients c on c.id = u.client_id
      where lower(u.email) = $1
@@ -57,6 +57,7 @@ export async function findUserForLogin(email, provider = 'email') {
     email: user.email,
     name: user.name,
     isAdmin: user.is_admin,
+    isPlatformAdmin: user.is_platform_admin,
   }
 }
 

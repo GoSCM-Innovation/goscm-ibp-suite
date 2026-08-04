@@ -5,7 +5,9 @@ import {
   getSession,
   hasModule,
   requireAdmin,
+  requireClientAccess,
   requireModule,
+  requirePlatformAdmin,
   requireSession,
 } from './guards.js'
 import { readSession } from './sessions.js'
@@ -79,6 +81,59 @@ describe('requireAdmin', () => {
     const res = fakeRes()
     await requireAdmin(conCookie('s-1'), res)
     expect(res.code).toBe(401)
+  })
+})
+
+describe('requirePlatformAdmin', () => {
+  it('rechaza al administrador de un cliente: la palanca comercial no es suya', async () => {
+    readSession.mockResolvedValue({ ...SESION, isAdmin: true, isPlatformAdmin: false })
+    const res = fakeRes()
+    await expect(requirePlatformAdmin(conCookie('s-1'), res)).resolves.toBeNull()
+    expect(res.code).toBe(403)
+  })
+
+  it('deja pasar al administrador de plataforma', async () => {
+    readSession.mockResolvedValue({ ...SESION, isPlatformAdmin: true })
+    const res = fakeRes()
+    await expect(requirePlatformAdmin(conCookie('s-1'), res)).resolves.toMatchObject({ isPlatformAdmin: true })
+    expect(res.code).toBeNull()
+  })
+})
+
+describe('requireAdmin con los dos niveles', () => {
+  it('el administrador de plataforma también administra su cliente', async () => {
+    readSession.mockResolvedValue({ ...SESION, isAdmin: false, isPlatformAdmin: true })
+    const res = fakeRes()
+    await expect(requireAdmin(conCookie('s-1'), res)).resolves.not.toBeNull()
+  })
+})
+
+describe('requireClientAccess', () => {
+  it('sin cliente indicado se administra el propio', async () => {
+    readSession.mockResolvedValue({ ...SESION, isAdmin: true })
+    const res = fakeRes()
+    await expect(requireClientAccess(conCookie('s-1'), res)).resolves.toMatchObject({ clientId: 'c-1' })
+  })
+
+  it('el administrador de un cliente no puede administrar otro', async () => {
+    readSession.mockResolvedValue({ ...SESION, isAdmin: true, isPlatformAdmin: false })
+    const res = fakeRes()
+    await expect(requireClientAccess(conCookie('s-1'), res, 'c-2')).resolves.toBeNull()
+    // 404 y no 403: un "prohibido" confirmaría que ese cliente existe.
+    expect(res.code).toBe(404)
+  })
+
+  it('el administrador de plataforma puede con cualquier cliente', async () => {
+    readSession.mockResolvedValue({ ...SESION, isPlatformAdmin: true })
+    const res = fakeRes()
+    await expect(requireClientAccess(conCookie('s-1'), res, 'c-2')).resolves.toMatchObject({ clientId: 'c-2' })
+  })
+
+  it('quien no es administrador de nada no pasa', async () => {
+    readSession.mockResolvedValue({ ...SESION, isAdmin: false, isPlatformAdmin: false })
+    const res = fakeRes()
+    await expect(requireClientAccess(conCookie('s-1'), res)).resolves.toBeNull()
+    expect(res.code).toBe(403)
   })
 })
 

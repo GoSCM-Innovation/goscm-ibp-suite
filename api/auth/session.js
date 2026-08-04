@@ -12,7 +12,13 @@ export default async function handler(req, res) {
 
     const modules = await contractedModules(session.clientId)
     return res.status(200).json({
-      user: { email: session.email, name: session.name, isAdmin: session.isAdmin },
+      user: {
+        id: session.userId,
+        email: session.email,
+        name: session.name,
+        isAdmin: session.isAdmin,
+        isPlatformAdmin: session.isPlatformAdmin,
+      },
       modules,
     })
   } catch (error) {

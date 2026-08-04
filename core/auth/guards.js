@@ -38,14 +38,50 @@ export async function requireSession(req, res) {
   return session
 }
 
+/** Administrador de su propio cliente. Un administrador de plataforma también lo es. */
 export async function requireAdmin(req, res) {
   const session = await requireSession(req, res)
   if (!session) return null
-  if (!session.isAdmin) {
+  if (!session.isAdmin && !session.isPlatformAdmin) {
     res.status(403).json({ error: 'Hace falta ser administrador.' })
     return null
   }
   return session
+}
+
+/**
+ * Administrador de la plataforma: dar de alta clientes y activar o vencer módulos.
+ * Es la palanca comercial, y por eso no la toca el administrador de un cliente.
+ */
+export async function requirePlatformAdmin(req, res) {
+  const session = await requireSession(req, res)
+  if (!session) return null
+  if (!session.isPlatformAdmin) {
+    res.status(403).json({ error: 'Hace falta ser administrador de la plataforma.' })
+    return null
+  }
+  return session
+}
+
+/**
+ * Permite administrar los datos de un cliente: el administrador de plataforma puede con
+ * cualquiera; el de un cliente, solo con el suyo. Sin cliente indicado se administra el
+ * propio, que es lo que quiere el administrador de un cliente siempre.
+ *
+ * Devuelve `{ session, clientId }` — el `clientId` ya resuelto, para que quien llame no tenga
+ * que volver a decidirlo. Responde 404 y no 403 ante un cliente ajeno: contestar "prohibido"
+ * confirmaría que ese cliente existe.
+ */
+export async function requireClientAccess(req, res, requestedClientId = null) {
+  const session = await requireAdmin(req, res)
+  if (!session) return null
+
+  const clientId = requestedClientId || session.clientId
+  if (!session.isPlatformAdmin && clientId !== session.clientId) {
+    res.status(404).json({ error: 'El cliente no existe.' })
+    return null
+  }
+  return { session, clientId }
 }
 
 /**

@@ -28,13 +28,20 @@ export function generateSessionId() {
   return randomBytes(32).toString('base64url')
 }
 
-export async function createSession({ userId, clientId, isAdmin, email, name }) {
+export async function createSession({ userId, clientId, isAdmin, isPlatformAdmin, email, name }) {
   const redis = getRedis()
   const id = generateSessionId()
 
   await redis.set(
     sessionKey(id),
-    { userId, clientId, isAdmin: Boolean(isAdmin), email, name: name ?? null },
+    {
+      userId,
+      clientId,
+      isAdmin: Boolean(isAdmin),
+      isPlatformAdmin: Boolean(isPlatformAdmin),
+      email,
+      name: name ?? null,
+    },
     { ex: SESSION_TTL_SECONDS },
   )
 

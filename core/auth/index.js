@@ -18,5 +18,15 @@ export {
   destroyUserSessions,
 } from './sessions.js'
 export { SESSION_COOKIE, sessionCookie, expiredSessionCookie, readSessionCookie, isSecureRequest } from './cookies.js'
-export { MODULES, getSession, requireSession, requireAdmin, requireModule, hasModule, contractedModules } from './guards.js'
+export {
+  MODULES,
+  contractedModules,
+  getSession,
+  hasModule,
+  requireAdmin,
+  requireClientAccess,
+  requireModule,
+  requirePlatformAdmin,
+  requireSession,
+} from './guards.js'
 export { setCodeSender, resetCodeSender } from './delivery.js'

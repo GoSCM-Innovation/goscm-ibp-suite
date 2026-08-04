@@ -28,11 +28,15 @@ La razón de existir de esta carpeta está en [`../docs/FASE-0-LEVANTAMIENTO.md`
 | `transport/` | Implementado con tests: el único punto que llama a SAP. Portero anti-SSRF (validador de v9 + allowlist de host y de servicios de v7), Basic Auth, sin seguir redirecciones, reutilización del token de escritura, guardia anti-truncamiento y lectura de `$metadata` en servidor. **Sin verificar contra un tenant real todavía** |
 | `odata/` | Implementado con tests: construcción de filtros y consultas, paginación (por enlace de continuación y por posición), conteo, presupuesto de bytes por página y reintento de lecturas. Las reglas de SAP van como candados. **Sin verificar contra un tenant real todavía** |
 | `soap/` | Implementado con tests: cliente de CI-DS portado de `api/soap.js` de v9 sin cambiar comportamiento. Añade lo que allí faltaba: la dirección pasa por el portero anti-SSRF y hay tiempo máximo. **Sin verificar contra un tenant real todavía** |
+| `connections/` | Implementado y verificado contra la base real: modelo unificado de conexión, cada acuerdo de comunicación con su propio usuario de SAP, y las contraseñas cifradas con AES-256-GCM y atadas a su fila |
+| `accounts/` | Implementado y verificado de punta a punta: clientes, usuarios y suscripción por módulo, con dos niveles de administración |
 | El resto | Pendiente. Orden de construcción en `docs/FASE-0-LEVANTAMIENTO.md` §8 |
 
 Las reglas de SAP que van **codificadas como candados** en `transport/` y `odata/`, no como comentarios: `$top=0` prohibido en datos de planificación (tumba el servicio), `$select` obligatorio en datos de planificación (sin él SAP agrega a otro nivel), `ne 0` y `ne ''` rechazados (SAP los ignora en silencio), lectura en paralelo denegada sin `$orderby` estable (habría solapes y huecos), y un servicio de OData fuera de la lista no se llama.
 
 El primer administrador se crea con `npm run db:seed` porque la base arranca vacía y el panel exige ser administrador para entrar. Es el único punto del sistema donde nace un usuario sin que otro lo autorice.
+
+Hay **dos niveles de administración**: el de la plataforma (GoSCM) da de alta clientes y activa o vence módulos —es decidir qué se cobra—, y el de un cliente gestiona solo su gente y sus conexiones a SAP. Nadie puede quitarse a sí mismo el rol de plataforma, ni dejar la plataforma sin ninguno.
 
 Mientras no haya proveedor de correo, el código se imprime en la consola del servidor; en producción eso revienta a propósito en vez de dejar códigos en los registros.
 

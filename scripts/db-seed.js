@@ -78,21 +78,32 @@ async function main() {
 
   const existente = await queryOneScoped(
     cliente.id,
-    'select id, is_admin from users where lower(email) = $1 and client_id = $2',
+    'select id, is_admin, is_platform_admin from users where lower(email) = $1 and client_id = $2',
     [correo, cliente.id],
   )
 
   if (existente) {
-    console.log(`El usuario ${correo} ya existía (${existente.id}, admin: ${existente.is_admin}).`)
+    // Si ya existía pero sin el rol de plataforma, se le da: este script es el único camino
+    // para que exista el primero.
+    if (!existente.is_platform_admin) {
+      await queryScoped(
+        cliente.id,
+        'update users set is_admin = true, is_platform_admin = true where id = $1 and client_id = $2',
+        [existente.id, cliente.id],
+      )
+      console.log(`El usuario ${correo} ya existía (${existente.id}); ascendido a administrador de plataforma.`)
+    } else {
+      console.log(`El usuario ${correo} ya existía como administrador de plataforma (${existente.id}).`)
+    }
   } else {
     const usuario = await queryOneScoped(
       cliente.id,
-      `insert into users (client_id, email, name, is_admin, allowed_providers)
-       values ($1, $2, $3, true, array['email']::text[])
+      `insert into users (client_id, email, name, is_admin, is_platform_admin, allowed_providers)
+       values ($1, $2, $3, true, true, array['email']::text[])
        returning id`,
       [cliente.id, correo, nombre],
     )
-    console.log(`Administrador ${correo} creado (${usuario.id}).`)
+    console.log(`Administrador de plataforma ${correo} creado (${usuario.id}).`)
   }
 
   for (const modulo of modulos) {

@@ -36,6 +36,7 @@ export default async function handler(req, res) {
       userId: user.id,
       clientId: user.clientId,
       isAdmin: user.isAdmin,
+      isPlatformAdmin: user.isPlatformAdmin,
       email: user.email,
       name: user.name,
     })
@@ -49,7 +50,13 @@ export default async function handler(req, res) {
     }))
 
     return res.status(200).json({
-      user: { email: user.email, name: user.name, isAdmin: user.isAdmin },
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        isAdmin: user.isAdmin,
+        isPlatformAdmin: user.isPlatformAdmin,
+      },
       modules,
     })
   } catch (error) {

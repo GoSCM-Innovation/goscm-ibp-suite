@@ -28,6 +28,28 @@ export const KNOWN_AGREEMENTS = Object.freeze([
   'SAP_COM_0924',
 ])
 
+// Traducción de los nombres de la base al estilo del resto de la aplicación. Se hace en la
+// frontera para que ninguna pantalla tenga que saber cómo se llaman las columnas.
+
+const toConnection = (row) => row && ({
+  id: row.id,
+  kind: row.kind,
+  name: row.name,
+  baseUrl: row.base_url,
+  organization: row.organization,
+  isProduction: row.is_production,
+  createdAt: row.created_at,
+  ...(row.agreement_count === undefined ? {} : { agreementCount: row.agreement_count }),
+})
+
+const toAgreement = (row) => row && ({
+  id: row.id,
+  agreement: row.agreement,
+  sapUser: row.sap_user,
+  createdAt: row.created_at,
+  updatedAt: row.updated_at,
+})
+
 function assertKind(kind) {
   if (!CONNECTION_KINDS.includes(kind)) {
     throw new Error(`Tipo de conexión desconocido: "${kind}". Debe ser 'ibp' o 'cids'.`)
@@ -36,7 +58,7 @@ function assertKind(kind) {
 
 /** Las conexiones de un cliente, sin secretos y con cuántos acuerdos tiene cada una. */
 export async function listConnections(clientId) {
-  return queryScoped(
+  const rows = await queryScoped(
     clientId,
     `select c.id, c.kind, c.name, c.base_url, c.organization, c.is_production, c.created_at,
             count(a.id)::int as agreement_count
@@ -47,6 +69,7 @@ export async function listConnections(clientId) {
      order by c.name`,
     [clientId],
   )
+  return rows.map(toConnection)
 }
 
 /** Una conexión con sus acuerdos. Cada acuerdo trae su usuario de SAP, nunca su contraseña. */
@@ -59,7 +82,7 @@ export async function getConnection(clientId, connectionId) {
   )
   if (!connection) return null
 
-  connection.agreements = await queryScoped(
+  const agreements = await queryScoped(
     clientId,
     `select id, agreement, sap_user, created_at, updated_at
      from connection_agreements
@@ -67,7 +90,7 @@ export async function getConnection(clientId, connectionId) {
      order by agreement`,
     [connectionId, clientId],
   )
-  return connection
+  return { ...toConnection(connection), agreements: agreements.map(toAgreement) }
 }
 
 export async function createConnection(clientId, { kind, name, baseUrl, organization = null, isProduction = false }) {
@@ -79,13 +102,13 @@ export async function createConnection(clientId, { kind, name, baseUrl, organiza
   // administrador delante, y no dentro de meses cuando alguien intente usar la conexión.
   await assertSapHost(baseUrl, { kind })
 
-  return queryOneScoped(
+  return toConnection(await queryOneScoped(
     clientId,
     `insert into connections (client_id, kind, name, base_url, organization, is_production)
      values ($1, $2, $3, $4, $5, $6)
      returning id, kind, name, base_url, organization, is_production, created_at`,
     [clientId, kind, name.trim(), baseUrl.trim(), organization, Boolean(isProduction)],
-  )
+  ))
 }
 
 export async function deleteConnection(clientId, connectionId) {
@@ -120,7 +143,7 @@ export async function upsertAgreement(clientId, connectionId, { agreement, sapUs
   const name = agreement.trim()
   const secret = encryptSecret(password, { clientId, connectionId, agreement: name })
 
-  return queryOneScoped(
+  return toAgreement(await queryOneScoped(
     clientId,
     `insert into connection_agreements
        (client_id, connection_id, agreement, sap_user, secret_ciphertext, secret_iv, secret_tag)
@@ -133,7 +156,7 @@ export async function upsertAgreement(clientId, connectionId, { agreement, sapUs
        updated_at = now()
      returning id, agreement, sap_user, created_at, updated_at`,
     [clientId, connectionId, name, sapUser.trim(), secret.ciphertext, secret.iv, secret.tag],
-  )
+  ))
 }
 
 export async function deleteAgreement(clientId, agreementId) {
@@ -180,5 +203,5 @@ export async function getConnectionTarget(clientId, connectionId) {
     [connectionId, clientId],
   )
   if (!row) throw new Error('La conexión no existe para este cliente.')
-  return row
+  return toConnection(row)
 }
