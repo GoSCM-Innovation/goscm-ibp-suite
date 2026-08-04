@@ -29,6 +29,23 @@ describe('getRedis', () => {
     expect(RedisMock).not.toHaveBeenCalled()
   })
 
+  it('acepta los nombres de la consola de Upstash cuando no están los del marketplace', () => {
+    delete process.env.KV_REST_API_URL
+    delete process.env.KV_REST_API_TOKEN
+    process.env.UPSTASH_REDIS_REST_URL = 'https://directo.upstash.io'
+    process.env.UPSTASH_REDIS_REST_TOKEN = 'token-directo'
+    try {
+      getRedis()
+      expect(RedisMock).toHaveBeenCalledWith({
+        url: 'https://directo.upstash.io',
+        token: 'token-directo',
+      })
+    } finally {
+      delete process.env.UPSTASH_REDIS_REST_URL
+      delete process.env.UPSTASH_REDIS_REST_TOKEN
+    }
+  })
+
   it('crea el cliente una sola vez y lo reutiliza', () => {
     const primero = getRedis()
     const segundo = getRedis()

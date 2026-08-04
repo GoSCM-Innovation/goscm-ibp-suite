@@ -12,12 +12,18 @@ import { Redis } from '@upstash/redis'
 
 let client = null
 
+// Se aceptan los dos nombres que existen en la práctica: `KV_REST_API_*`, que es como los
+// inyecta el marketplace de Vercel, y `UPSTASH_REDIS_REST_*`, que es como los entrega la
+// consola de Upstash cuando la cuenta es directa. Da igual por qué puerta se contrate.
 export function getRedis() {
   if (client) return client
-  const url = process.env.KV_REST_API_URL
-  const token = process.env.KV_REST_API_TOKEN
+  const url = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL
+  const token = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN
   if (!url || !token) {
-    throw new Error('Faltan KV_REST_API_URL o KV_REST_API_TOKEN: no hay conexión a Redis configurada.')
+    throw new Error(
+      'No hay conexión a Redis configurada: faltan KV_REST_API_URL y KV_REST_API_TOKEN ' +
+      '(o sus equivalentes UPSTASH_REDIS_REST_URL y UPSTASH_REDIS_REST_TOKEN).',
+    )
   }
   client = new Redis({ url, token })
   return client
