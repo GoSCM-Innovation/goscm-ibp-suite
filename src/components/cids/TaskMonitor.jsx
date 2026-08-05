@@ -60,7 +60,12 @@ const rangoInicial = (zona) => ({
   hasta: toInputValue(new Date(), zona),
 })
 
-export default function TaskMonitor({ connectionId }) {
+/**
+ * La búsqueda llega de arriba (`busqueda` / `onBuscar`) en vez de vivir aquí. Es lo que permite que
+ * al lanzar una tarea se salte al monitor ya filtrado por ella sin que este componente sepa que el
+ * lanzador existe, y sin un efecto que copie una prop al estado.
+ */
+export default function TaskMonitor({ connectionId, busqueda, onBuscar }) {
   const [zona, setZona] = useState(readStoredTzMode)
   // Lo que se escribe en los campos.
   const [rango, setRango] = useState(() => rangoInicial(readStoredTzMode()))
@@ -72,7 +77,6 @@ export default function TaskMonitor({ connectionId }) {
   const [error, setError] = useState('')
   const [ultimoRefresco, setUltimoRefresco] = useState(null)
 
-  const [busqueda, setBusqueda] = useState('')
   const [estadoActivo, setEstadoActivo] = useState('TODOS')
   const [pagina, setPagina] = useState(1)
 
@@ -355,7 +359,7 @@ export default function TaskMonitor({ connectionId }) {
             style={{ width: 170 }}
             placeholder="Buscar…"
             value={busqueda}
-            onChange={(evento) => { setBusqueda(evento.target.value); setPagina(1) }}
+            onChange={(evento) => { onBuscar(evento.target.value); setPagina(1) }}
             aria-label="Buscar"
           />
           {/* Copiar con las columnas a medio cargar daría una tabla con huecos que parecen datos

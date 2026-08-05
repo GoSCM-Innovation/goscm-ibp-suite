@@ -68,12 +68,12 @@ export default function TaskLogsModal({ connectionId, run, onClose }) {
         </>
       }
     >
-      <div className="modal-tabs">
+      <div className="tabs modal-tabs">
         {PESTANIAS.map((pestania) => (
           <button
             key={pestania.key}
             type="button"
-            className={`modal-tab${activa === pestania.key ? ' active' : ''}`}
+            className={`tab${activa === pestania.key ? ' active' : ''}`}
             onClick={() => setActiva(pestania.key)}
             aria-pressed={activa === pestania.key}
           >

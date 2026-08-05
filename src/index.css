@@ -344,6 +344,24 @@ a { color: var(--cyan); }
   width: 66px;
 }
 
+/* ─── Pestañas ────────────────────────────────────────────── */
+
+/* Las mismas para las herramientas de un módulo y para el interior de un diálogo: la variante del
+   diálogo solo cambia los márgenes. */
+.tabs { border-bottom: 1px solid var(--border); display: flex; flex-shrink: 0; overflow-x: auto; }
+.tab {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text2);
+  font-size: 12.5px;
+  padding: 9px 15px;
+  transition: color .15s ease, border-color .15s ease;
+  white-space: nowrap;
+}
+.tab:hover { color: var(--text); }
+.tab.active { border-bottom-color: var(--accent); color: var(--text); font-weight: 600; }
+
 /* ─── Página de un módulo ─────────────────────────────────── */
 
 /* Ocupa el alto disponible para que la tabla del módulo tenga su propio desplazamiento y la
@@ -458,6 +476,107 @@ a { color: var(--cyan); }
 .pager { align-items: center; display: flex; gap: 6px; justify-content: center; }
 .pager-info { color: var(--text2); font-size: 11.5px; padding: 0 8px; white-space: nowrap; }
 
+/* ─── Árbol de proyectos y tareas ─────────────────────────── */
+
+.tree {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  flex: 1;
+  min-height: 160px;
+  overflow: auto;
+}
+.tree-group + .tree-group { border-top: 1px solid var(--border); }
+
+.tree-project { align-items: center; display: flex; gap: 4px; padding-right: 12px; }
+.tree-project.open { background: var(--accent-bg-soft); }
+.tree-project:not(.open):hover { background: var(--surface-glass-soft); }
+
+.tree-pin {
+  background: none;
+  border: none;
+  color: var(--text3);
+  flex-shrink: 0;
+  font-size: 14px;
+  line-height: 1;
+  padding: 10px 4px 10px 12px;
+}
+.tree-pin.on { color: var(--accent); }
+.tree-pin:hover { color: var(--accent); }
+
+/* El resto de la fila es un botón entero: abrir el proyecto es la acción principal. */
+.tree-open {
+  align-items: center;
+  background: none;
+  border: none;
+  display: flex;
+  flex: 1;
+  gap: 9px;
+  min-width: 0;
+  padding: 10px 6px;
+  text-align: left;
+}
+.tree-caret { color: var(--text3); flex-shrink: 0; font-size: 10px; width: 12px; }
+.tree-name { color: var(--text); font-size: 13px; font-weight: 600; flex-shrink: 0; }
+.tree-project.open .tree-name { color: var(--accent); }
+.tree-desc {
+  color: var(--text3);
+  font-size: 11.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tree-count { color: var(--text3); flex-shrink: 0; font-size: 10.5px; margin-left: auto; }
+
+.tree-tasks { border-top: 1px solid var(--border); }
+.tree-hueco { color: var(--text3); font-size: 11.5px; padding: 11px 40px; }
+
+.tree-task { align-items: center; border-top: 1px solid var(--border); display: flex; gap: 12px; padding: 8px 12px 8px 40px; }
+.tree-task:first-child { border-top: none; }
+.tree-task:hover { background: var(--surface-glass-soft); }
+.tree-task-what { flex: 1; min-width: 0; }
+.tree-task-name { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tree-task-desc {
+  color: var(--text3);
+  font-size: 10.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.type-badge {
+  background: color-mix(in srgb, var(--cyan) 15%, transparent);
+  border: 1px solid color-mix(in srgb, var(--cyan) 35%, transparent);
+  border-radius: 999px;
+  color: var(--cyan);
+  flex-shrink: 0;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  padding: 2px 7px;
+  text-transform: uppercase;
+}
+.type-badge.process {
+  background: color-mix(in srgb, var(--purple) 15%, transparent);
+  border-color: color-mix(in srgb, var(--purple) 35%, transparent);
+  color: var(--purple);
+}
+
+.btn-run {
+  background: color-mix(in srgb, var(--green) 12%, transparent);
+  border-color: color-mix(in srgb, var(--green) 35%, transparent);
+  color: var(--green);
+  flex-shrink: 0;
+  font-weight: 600;
+}
+.btn-run:hover:not(:disabled) { background: color-mix(in srgb, var(--green) 20%, transparent); }
+
+/* ─── Formularios dentro de un diálogo ────────────────────── */
+
+.form-stack { display: flex; flex-direction: column; gap: 13px; }
+.var-row { display: flex; flex-direction: column; gap: 5px; }
+.var-name { color: var(--text2); font-size: 11px; font-weight: 600; }
+.var-desc { color: var(--text3); font-weight: 400; }
+
 /* Barra de acciones: aparece al elegir una fila y desaparece al soltarla. */
 .action-bar {
   align-items: center;
@@ -530,17 +649,9 @@ a { color: var(--cyan); }
 }
 .modal-foot-info { color: var(--text2); flex: 1; font-size: 11px; min-width: 0; }
 
-.modal-tabs { border-bottom: 1px solid var(--border); display: flex; margin: -16px -18px 14px; padding: 0 18px; }
-.modal-tab {
-  background: none;
-  border: none;
-  border-bottom: 2px solid transparent;
-  color: var(--text2);
-  font-size: 12px;
-  padding: 8px 14px;
-}
-.modal-tab:hover { color: var(--text); }
-.modal-tab.active { border-bottom-color: var(--accent); color: var(--text); font-weight: 600; }
+/* Dentro de un diálogo las pestañas van pegadas a los bordes, así que se comen el relleno del
+   cuerpo. Depende de que `.modal-body` tenga 16px por 18px, que es dos reglas más arriba. */
+.modal-tabs { margin: -16px -18px 14px; padding: 0 18px; }
 
 /* Un registro de SAP trae líneas largas: se respetan los saltos y se parten las líneas para que
    no aparezca un desplazamiento horizontal en el diálogo. */
