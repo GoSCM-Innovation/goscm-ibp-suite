@@ -17,8 +17,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 // Se importa el archivo suelto y no `core/cids/index.js` a propósito: el índice arrastra la
 // sesión, y con ella Redis y el cifrado, que no tienen nada que hacer en el navegador. Esto es
 // una tabla de datos sin dependencias.
-import { formatDuration, isTerminal, statusMeta } from '../../../core/cids/task-status.js'
+import { formatDuration, isCancelable, isTerminal, statusMeta } from '../../../core/cids/task-status.js'
 import { cidsCall, fetchTaskDetails } from '../../lib/cids.js'
+import { copyText } from '../../lib/clipboard.js'
+import { toTsv } from '../../lib/tsv.js'
+import Modal from '../ui/Modal.jsx'
+import TaskLogsModal from './TaskLogsModal.jsx'
 import {
   TZ_OPTIONS,
   daysBetween,
@@ -74,6 +78,19 @@ export default function TaskMonitor({ connectionId }) {
 
   const [detalles, setDetalles] = useState({})
   const [cargandoDetalles, setCargandoDetalles] = useState(false)
+
+  // De la fila elegida se guarda el identificador, no la fila: al refrescar llegan objetos nuevos,
+  // y si una ejecución desaparece del rango la selección se suelta sola en vez de quedar apuntando
+  // a algo que ya no está en la tabla.
+  const [runElegido, setRunElegido] = useState(null)
+  // El visor de registros se queda con una copia de la ejecución, no con la fila viva: leer un
+  // registro de error largo lleva su tiempo y el diálogo no debe cerrarse solo porque la lista se
+  // refrescó por detrás.
+  const [registrosDe, setRegistrosDe] = useState(null)
+  const [confirmarCancelar, setConfirmarCancelar] = useState(false)
+  const [cancelando, setCancelando] = useState(false)
+  const [avisoCancelar, setAvisoCancelar] = useState(null)
+  const [copiado, setCopiado] = useState(null)
 
   // Lo ya consultado se lee DENTRO del efecto que consulta, no al pintar, así que va por
   // referencia y no como dependencia. Si fuera dependencia, cada respuesta volvería a disparar
@@ -239,6 +256,52 @@ export default function TaskMonitor({ connectionId }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clavePagina, connectionId, ultimoRefresco])
 
+  const elegida = runElegido ? ejecuciones.find((fila) => fila.runId === runElegido) ?? null : null
+  const sePuedeCancelar = elegida !== null && isCancelable(elegida.statusCode)
+
+  function elegir(fila) {
+    setRunElegido((actual) => (actual === fila.runId ? null : fila.runId))
+    setAvisoCancelar(null)
+  }
+
+  async function cancelar() {
+    setConfirmarCancelar(false)
+    setCancelando(true)
+    setAvisoCancelar(null)
+    try {
+      const respuesta = await cidsCall(connectionId, 'cancelTask', { runId: elegida.runId })
+      // Se muestra lo que contestó SAP si contestó algo: es más útil que un mensaje nuestro, y no
+      // afirma nada sobre cuándo se detiene de verdad, que eso lo decide el tenant.
+      setAvisoCancelar({ ok: true, texto: respuesta?.message || 'Cancelación enviada.' })
+      await cargar()
+    } catch (fallo) {
+      setAvisoCancelar({ ok: false, texto: fallo.message })
+    } finally {
+      setCancelando(false)
+    }
+  }
+
+  async function copiarPagina() {
+    const filas = [
+      ['Estado', 'Tarea', 'Inicio', 'Fin', 'Duración', 'RunID', 'JobID'],
+      ...enPagina.map((fila) => {
+        const detalle = detalles[fila.runId]
+        return [
+          statusMeta(fila.statusCode).label,
+          fila.taskName,
+          formatEpochMs(fila.startDate, zona),
+          textoFin(detalle, zona),
+          detalle ? formatDuration(detalle.durationSeconds) : '',
+          fila.runId,
+          fila.jobId,
+        ]
+      }),
+    ]
+    const pudo = await copyText(toTsv(filas))
+    setCopiado(pudo ? 'ok' : 'error')
+    setTimeout(() => setCopiado(null), 1500)
+  }
+
   return (
     <div className="monitor">
       <div className={`progress-line${cargando || cargandoDetalles ? ' on' : ''}`} />
@@ -295,6 +358,17 @@ export default function TaskMonitor({ connectionId }) {
             onChange={(evento) => { setBusqueda(evento.target.value); setPagina(1) }}
             aria-label="Buscar"
           />
+          {/* Copiar con las columnas a medio cargar daría una tabla con huecos que parecen datos
+              vacíos, así que se espera a que terminen. Es lo que hacía v9. */}
+          <button
+            type="button"
+            className="btn btn-sm"
+            onClick={copiarPagina}
+            disabled={enPagina.length === 0 || cargandoDetalles}
+            title={cargandoDetalles ? 'Esperá a que terminen de cargar el fin y la duración' : 'Copiar esta página para pegarla en Excel'}
+          >
+            {copiado === 'ok' ? '✓ Copiado' : copiado === 'error' ? '✕ No se pudo' : '⧉ Copiar'}
+          </button>
           <button type="button" className="btn btn-sm" onClick={cargar} disabled={cargando || !rangoValido}>
             ↺ Actualizar
           </button>
@@ -364,7 +438,14 @@ export default function TaskMonitor({ connectionId }) {
             ) : enPagina.length === 0 ? (
               <tr><td className="table-empty" colSpan={7}>Ninguna ejecución en este rango.</td></tr>
             ) : enPagina.map((fila, indice) => (
-              <Fila key={fila.runId || indice} fila={fila} detalle={detalles[fila.runId]} zona={zona} />
+              <Fila
+                key={fila.runId || indice}
+                fila={fila}
+                detalle={detalles[fila.runId]}
+                zona={zona}
+                elegida={fila.runId === runElegido}
+                onElegir={() => elegir(fila)}
+              />
             ))}
           </tbody>
         </table>
@@ -379,13 +460,99 @@ export default function TaskMonitor({ connectionId }) {
           <button type="button" className="btn btn-sm" disabled={paginaVisible === totalPaginas} onClick={() => setPagina(totalPaginas)}>Última »</button>
         </div>
       )}
+
+      {elegida && (
+        <div className="action-bar">
+          <div className="action-bar-what">
+            <div className="action-bar-label">Ejecución elegida</div>
+            <div className="action-bar-name">
+              {elegida.taskName ?? '—'}
+              <span className="mono action-bar-run">RunID {elegida.runId}</span>
+            </div>
+          </div>
+
+          {avisoCancelar && (
+            <span className={avisoCancelar.ok ? 'action-bar-ok' : 'action-bar-error'}>
+              {avisoCancelar.ok ? '✓ ' : '✕ '}{avisoCancelar.texto}
+            </span>
+          )}
+
+          <div className="action-bar-buttons">
+            <button type="button" className="btn btn-sm" onClick={() => setRegistrosDe(elegida)}>
+              📋 Ver registros
+            </button>
+            <button
+              type="button"
+              className="btn btn-sm btn-danger"
+              onClick={() => setConfirmarCancelar(true)}
+              disabled={!sePuedeCancelar || cancelando}
+              title={sePuedeCancelar
+                ? 'Pedirle a CI-DS que detenga esta ejecución'
+                : `Una ejecución en estado "${statusMeta(elegida.statusCode).label}" ya no se puede cancelar`}
+            >
+              {cancelando ? 'Cancelando…' : '✕ Cancelar'}
+            </button>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setRunElegido(null); setAvisoCancelar(null) }}>
+              Deseleccionar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {registrosDe && (
+        <TaskLogsModal connectionId={connectionId} run={registrosDe} onClose={() => setRegistrosDe(null)} />
+      )}
+
+      {confirmarCancelar && elegida && (
+        <Modal
+          title="Cancelar la ejecución"
+          subtitle={`RunID ${elegida.runId}`}
+          onClose={() => setConfirmarCancelar(false)}
+          footer={
+            <>
+              <div className="modal-foot-info" />
+              <button type="button" className="btn btn-sm" onClick={() => setConfirmarCancelar(false)}>No, dejarla</button>
+              <button type="button" className="btn btn-sm btn-primary" onClick={cancelar}>Sí, cancelar</button>
+            </>
+          }
+        >
+          <p>
+            Se le va a pedir a CI-DS que detenga <b>{elegida.taskName ?? 'esta tarea'}</b>, que ahora
+            está en estado <b>{statusMeta(elegida.statusCode).label}</b>.
+          </p>
+          <p className="page-hint" style={{ marginTop: 10 }}>
+            Lo que ya haya cargado en el sistema de destino no se deshace: cancelar detiene la
+            ejecución, no revierte lo hecho.
+          </p>
+        </Modal>
+      )}
     </div>
   )
 }
 
-function Fila({ fila, detalle, zona }) {
+/**
+ * El mismo texto que muestra la columna "Fin", sin marcado, para pegar en una hoja de cálculo.
+ * Allí no se distingue "todavía no se preguntó" de "la consulta falló" —las dos quedan en blanco—
+ * porque una celda vacía en Excel ya se lee como "sin dato".
+ */
+function textoFin(detalle, zona) {
+  if (!detalle || detalle.failed) return ''
+  if (!detalle.endTime) return 'En curso'
+  return formatSapTimestamp(detalle.endTime, zona)
+}
+
+function Fila({ fila, detalle, zona, elegida, onElegir }) {
   return (
-    <tr>
+    <tr
+      className={elegida ? 'selected' : undefined}
+      onClick={onElegir}
+      // Con el teclado la fila se elige igual: es lo que habilita ver registros y cancelar.
+      tabIndex={0}
+      onKeyDown={(evento) => {
+        if (evento.key === 'Enter' || evento.key === ' ') { evento.preventDefault(); onElegir() }
+      }}
+      aria-selected={elegida}
+    >
       <td><StatusBadge codigo={fila.statusCode} /></td>
       <td title={fila.taskName || ''}>{fila.taskName || '—'}</td>
       <td>{formatEpochMs(fila.startDate, zona)}</td>
