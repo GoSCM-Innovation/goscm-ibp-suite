@@ -18,7 +18,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 // sesión, y con ella Redis y el cifrado, que no tienen nada que hacer en el navegador. Esto es
 // una tabla de datos sin dependencias.
 import { formatDuration, isCancelable, isTerminal, statusMeta } from '../../../core/cids/task-status.js'
-import { cidsCall, fetchTaskDetails } from '../../lib/cids.js'
+import { cidsCall, fetchTaskDetails, isTaskPromoted } from '../../lib/cids.js'
+import PromotedBadge from './PromotedBadge.jsx'
 import { copyText } from '../../lib/clipboard.js'
 import { toTsv } from '../../lib/tsv.js'
 import Modal from '../ui/Modal.jsx'
@@ -65,7 +66,7 @@ const rangoInicial = (zona) => ({
  * al lanzar una tarea se salte al monitor ya filtrado por ella sin que este componente sepa que el
  * lanzador existe, y sin un efecto que copie una prop al estado.
  */
-export default function TaskMonitor({ connectionId, busqueda, onBuscar }) {
+export default function TaskMonitor({ connectionId, busqueda, onBuscar, transportadas }) {
   const [zona, setZona] = useState(readStoredTzMode)
   // Lo que se escribe en los campos.
   const [rango, setRango] = useState(() => rangoInicial(readStoredTzMode()))
@@ -447,6 +448,7 @@ export default function TaskMonitor({ connectionId, busqueda, onBuscar }) {
                 fila={fila}
                 detalle={detalles[fila.runId]}
                 zona={zona}
+                transportada={isTaskPromoted(transportadas, fila.taskName)}
                 elegida={fila.runId === runElegido}
                 onElegir={() => elegir(fila)}
               />
@@ -545,7 +547,7 @@ function textoFin(detalle, zona) {
   return formatSapTimestamp(detalle.endTime, zona)
 }
 
-function Fila({ fila, detalle, zona, elegida, onElegir }) {
+function Fila({ fila, detalle, zona, transportada, elegida, onElegir }) {
   return (
     <tr
       className={elegida ? 'selected' : undefined}
@@ -558,7 +560,12 @@ function Fila({ fila, detalle, zona, elegida, onElegir }) {
       aria-selected={elegida}
     >
       <td><StatusBadge codigo={fila.statusCode} /></td>
-      <td title={fila.taskName || ''}>{fila.taskName || '—'}</td>
+      <td title={fila.taskName || ''}>
+        <span className="task-cell">
+          <span className="task-cell-name">{fila.taskName || '—'}</span>
+          {transportada && <PromotedBadge />}
+        </span>
+      </td>
       <td>{formatEpochMs(fila.startDate, zona)}</td>
       <td><Fin detalle={detalle} zona={zona} /></td>
       <td>{detalle ? formatDuration(detalle.durationSeconds) : <span className="muted">…</span>}</td>

@@ -543,6 +543,25 @@ a { color: var(--cyan); }
   white-space: nowrap;
 }
 
+/* "Esta tarea ya existe en el tenant productivo." Se distingue del estado de una ejecución a
+   propósito: es información sobre la tarea, no sobre lo que pasó al ejecutarla. */
+.promoted-badge {
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+  border-radius: 999px;
+  color: var(--accent);
+  flex-shrink: 0;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  padding: 1px 6px;
+  white-space: nowrap;
+}
+
+/* La marca va pegada al nombre, y es el nombre el que se recorta cuando no cabe. */
+.task-cell { align-items: center; display: flex; gap: 6px; min-width: 0; }
+.task-cell-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
 .type-badge {
   background: color-mix(in srgb, var(--cyan) 15%, transparent);
   border: 1px solid color-mix(in srgb, var(--cyan) 35%, transparent);

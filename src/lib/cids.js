@@ -26,6 +26,21 @@ export async function listCidsConnections() {
 }
 
 /**
+ * Los nombres de tarea que este tenant ya tiene en producción, como conjunto para consultarlo
+ * rápido. `null` significa que la comparación no aplica —esta conexión es la productiva o no
+ * declaró su contraparte— y NO que no haya ninguna transportada.
+ */
+export async function fetchPromotedTaskNames(connectionId) {
+  const { names } = await api.get('/api/cids/promoted', { connectionId })
+  return Array.isArray(names) ? new Set(names) : null
+}
+
+/** Así se comparan los nombres. Tiene que coincidir con `normalizeTaskName` de `core/cids`. */
+export function isTaskPromoted(promoted, taskName) {
+  return Boolean(promoted?.has(String(taskName ?? '').trim().toUpperCase()))
+}
+
+/**
  * Fin y duración de un puñado de ejecuciones, en tandas.
  *
  * Las tandas van **una tras otra, no en paralelo**. Si salieran a la vez, cada una consultaría a

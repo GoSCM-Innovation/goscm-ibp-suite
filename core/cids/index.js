@@ -16,6 +16,14 @@ export {
 } from './operations.js'
 
 export {
+  PROMOTED_CACHE_SECONDS,
+  PROMOTED_CONCURRENCY,
+  forgetPromotedTaskNames,
+  getPromotedTaskNames,
+  normalizeTaskName,
+} from './promoted-tasks.js'
+
+export {
   DETAIL_CONCURRENCY,
   MAX_RUNS_PER_BATCH,
   fetchTaskDetails,

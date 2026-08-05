@@ -6,6 +6,7 @@ import {
   getConnection,
   getCredentials,
   listConnections,
+  setProductionCounterpart,
   upsertAgreement,
 } from './connections.js'
 import { queryOneScoped, queryScoped } from '../persistence/tenant-scope.js'
@@ -59,6 +60,74 @@ describe('listConnections', () => {
   it('rechaza un tipo que no existe en vez de devolver la lista entera', async () => {
     await expect(listConnections(CLIENTE, { kind: 'sqlserver' })).rejects.toThrow(/desconocido/)
     expect(queryScoped).not.toHaveBeenCalled()
+  })
+})
+
+describe('setProductionCounterpart', () => {
+  const PRUEBAS = { id: CONEXION, kind: 'cids', is_production: false }
+  const PRODUCTIVA = { id: 'conn-prd', kind: 'cids', is_production: true }
+
+  /** Responde a cada consulta de conexión según el identificador que le pidan. */
+  const conBase = (porId) => {
+    queryOneScoped.mockImplementation(async (_cliente, sql, params) => {
+      if (sql.startsWith('update connections')) return { id: CONEXION, production_counterpart_id: params[0] }
+      return porId[params[0]] ?? null
+    })
+  }
+
+  it('escribe el enlace cuando la contraparte es productiva y del mismo tipo', async () => {
+    conBase({ [CONEXION]: PRUEBAS, 'conn-prd': PRODUCTIVA })
+
+    const guardada = await setProductionCounterpart(CLIENTE, CONEXION, 'conn-prd')
+
+    expect(guardada.productionCounterpartId).toBe('conn-prd')
+    const [, sql, params] = queryOneScoped.mock.calls.at(-1)
+    expect(sql).toContain('client_id = $3')
+    expect(params).toEqual(['conn-prd', CONEXION, CLIENTE])
+  })
+
+  it('borra el enlace con un valor vacío, sin comprobar ninguna contraparte', async () => {
+    conBase({ [CONEXION]: PRUEBAS })
+
+    const guardada = await setProductionCounterpart(CLIENTE, CONEXION, null)
+
+    expect(guardada.productionCounterpartId).toBeNull()
+    expect(queryOneScoped.mock.calls.at(-1)[2]).toEqual([null, CONEXION, CLIENTE])
+  })
+
+  it('rechaza apuntarse a sí misma', async () => {
+    conBase({ [CONEXION]: PRUEBAS })
+    await expect(setProductionCounterpart(CLIENTE, CONEXION, CONEXION)).rejects.toThrow(/su propia contraparte/)
+  })
+
+  // El punto de todo el enlace: si la apuntada no es productiva, la estrella aparecería en tareas
+  // que no están transportadas.
+  it('rechaza una contraparte que no está marcada como productiva', async () => {
+    conBase({ [CONEXION]: PRUEBAS, 'conn-qa2': { id: 'conn-qa2', kind: 'cids', is_production: false } })
+    await expect(setProductionCounterpart(CLIENTE, CONEXION, 'conn-qa2')).rejects.toThrow(/no está marcada como productiva/)
+  })
+
+  it('rechaza una contraparte de otro tipo de conexión', async () => {
+    conBase({ [CONEXION]: PRUEBAS, 'conn-ibp': { id: 'conn-ibp', kind: 'ibp', is_production: true } })
+    await expect(setProductionCounterpart(CLIENTE, CONEXION, 'conn-ibp')).rejects.toThrow(/mismo tipo/)
+  })
+
+  it('rechaza darle contraparte a una conexión que ya es productiva', async () => {
+    conBase({ [CONEXION]: { ...PRUEBAS, is_production: true }, 'conn-prd': PRODUCTIVA })
+    await expect(setProductionCounterpart(CLIENTE, CONEXION, 'conn-prd')).rejects.toThrow(/productiva no tiene contraparte/)
+  })
+
+  // Una conexión de otro cliente no se distingue de una que no existe: contestar distinto
+  // confirmaría que existe.
+  it('trata una contraparte ajena igual que una inexistente', async () => {
+    conBase({ [CONEXION]: PRUEBAS })
+    await expect(setProductionCounterpart(CLIENTE, CONEXION, 'conn-de-otro')).rejects.toThrow(/no existe para este cliente/)
+  })
+
+  it('no escribe nada si la conexión no es del cliente', async () => {
+    conBase({})
+    await expect(setProductionCounterpart(CLIENTE, CONEXION, 'conn-prd')).rejects.toThrow(/no existe para este cliente/)
+    expect(queryOneScoped.mock.calls.every(([, sql]) => !sql.startsWith('update'))).toBe(true)
   })
 })
 

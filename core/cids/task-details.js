@@ -10,6 +10,7 @@
 // mismo tope de concurrencia.
 
 import { runCidsOperation } from './operations.js'
+import { runPool } from './pool.js'
 
 /**
  * Cuántas consultas a SAP van a la vez. Portado de v9.
@@ -28,17 +29,6 @@ export const DETAIL_CONCURRENCY = 6
  * monitor empiece a fallar por tiempo justo cuando el tenant está lento.
  */
 export const MAX_RUNS_PER_BATCH = 15
-
-/** Ejecuta `worker` sobre `items` con como máximo `limit` en vuelo. Portado de v9. */
-async function runPool(items, limit, worker) {
-  let siguiente = 0
-  const carriles = Math.min(limit, items.length)
-  await Promise.all(Array.from({ length: carriles }, async () => {
-    while (siguiente < items.length) {
-      await worker(items[siguiente++])
-    }
-  }))
-}
 
 /**
  * SAP devuelve la marca de tiempo de fin con separadores que cambian según el tenant

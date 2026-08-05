@@ -5,7 +5,7 @@
 // la sesión vive en el servidor y se renueva sola cuando SAP la rechaza.
 
 import { useEffect, useState } from 'react'
-import { listCidsConnections } from '../../lib/cids.js'
+import { fetchPromotedTaskNames, listCidsConnections } from '../../lib/cids.js'
 import TaskMonitor from './TaskMonitor.jsx'
 import TaskLauncher from './TaskLauncher.jsx'
 
@@ -24,6 +24,21 @@ export default function CidsTools() {
   // lanzar una tarea se salte al monitor ya filtrado por ella —lo que hacía v9— sin que el monitor
   // tenga que enterarse de que existe el lanzador.
   const [busqueda, setBusqueda] = useState('')
+
+  // Qué tareas de este tenant ya están en producción. Se pide una vez por conexión y se comparte
+  // entre las dos herramientas: armarla le cuesta al tenant productivo una consulta por proyecto,
+  // así que pedirla por pantalla sería pagarla dos veces. `null` = la comparación no aplica.
+  const [transportadas, setTransportadas] = useState(null)
+
+  useEffect(() => {
+    if (!elegida) return undefined
+    let abandonado = false
+    fetchPromotedTaskNames(elegida)
+      .then((nombres) => { if (!abandonado) setTransportadas(nombres) })
+      // Que falle no rompe nada: es una marca de más, no un dato del que dependa una decisión.
+      .catch(() => { if (!abandonado) setTransportadas(null) })
+    return () => { abandonado = true }
+  }, [elegida])
 
   useEffect(() => {
     listCidsConnections()
@@ -107,12 +122,14 @@ export default function CidsTools() {
           connectionId={elegida}
           busqueda={busqueda}
           onBuscar={setBusqueda}
+          transportadas={transportadas}
         />
       ) : (
         <TaskLauncher
           key={`tareas-${elegida}`}
           connectionId={elegida}
           onTaskLanzada={verEnMonitor}
+          transportadas={transportadas}
         />
       )}
     </div>

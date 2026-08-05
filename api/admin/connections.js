@@ -5,12 +5,14 @@
 // servidor la descifra, justo antes de llamar a SAP.
 
 import { requireClientAccess } from '../../core/auth/guards.js'
+import { forgetPromotedTaskNames } from '../../core/cids/promoted-tasks.js'
 import {
   createConnection,
   deleteAgreement,
   deleteConnection,
   getConnection,
   listConnections,
+  setProductionCounterpart,
   upsertAgreement,
 } from '../../core/connections/connections.js'
 
@@ -47,6 +49,18 @@ export default async function handler(req, res) {
         isProduction: Boolean(req.body?.isProduction),
       })
       return res.status(201).json({ connection })
+    }
+
+    if (req.method === 'PATCH') {
+      // Hoy lo único que se modifica de una conexión ya creada es su contraparte productiva.
+      const { connectionId, productionCounterpartId } = req.body ?? {}
+      if (!connectionId) return res.status(400).json({ error: 'Falta la conexión.' })
+
+      const connection = await setProductionCounterpart(clientId, connectionId, productionCounterpartId || null)
+      // La lista de tareas transportadas se armó mirando la contraparte anterior: si el enlace
+      // cambió, lo guardado ya no corresponde a nada.
+      await forgetPromotedTaskNames(clientId, connectionId)
+      return res.status(200).json({ connection })
     }
 
     if (req.method === 'DELETE') {

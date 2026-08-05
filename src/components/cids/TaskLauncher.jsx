@@ -8,7 +8,8 @@
 // serían decenas de consultas para mostrar algo que casi nadie mira entero.
 
 import { useEffect, useMemo, useState } from 'react'
-import { cidsCall } from '../../lib/cids.js'
+import { cidsCall, isTaskPromoted } from '../../lib/cids.js'
+import PromotedBadge from './PromotedBadge.jsx'
 import RunTaskModal from './RunTaskModal.jsx'
 
 /** Los proyectos fijados se recuerdan por conexión: los de un tenant no son los de otro. */
@@ -31,7 +32,7 @@ function guardarFijados(connectionId, fijados) {
   }
 }
 
-export default function TaskLauncher({ connectionId, onTaskLanzada }) {
+export default function TaskLauncher({ connectionId, onTaskLanzada, transportadas }) {
   const [proyectos, setProyectos] = useState([])
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState('')
@@ -180,6 +181,7 @@ export default function TaskLauncher({ connectionId, onTaskLanzada }) {
             tareas={tareas[proyecto.guid]}
             fijado={fijados.has(proyecto.guid)}
             busqueda={busqueda}
+            transportadas={transportadas}
             onAbrir={() => abrir(proyecto)}
             onFijar={() => fijar(proyecto.guid)}
             onEjecutar={setLanzar}
@@ -199,7 +201,7 @@ export default function TaskLauncher({ connectionId, onTaskLanzada }) {
   )
 }
 
-function Proyecto({ proyecto, abierto, cargando, tareas, fijado, busqueda, onAbrir, onFijar, onEjecutar }) {
+function Proyecto({ proyecto, abierto, cargando, tareas, fijado, busqueda, transportadas, onAbrir, onFijar, onEjecutar }) {
   const texto = busqueda.trim().toLowerCase()
   const suyas = tareas ?? []
   const mostradas = texto
@@ -240,6 +242,7 @@ function Proyecto({ proyecto, abierto, cargando, tareas, fijado, busqueda, onAbr
               <span className={`type-badge${tarea.type === 'PROCESS' ? ' process' : ''}`}>
                 {tarea.type || 'TASK'}
               </span>
+              {isTaskPromoted(transportadas, tarea.taskName) && <PromotedBadge />}
               <div className="tree-task-what">
                 <div className="tree-task-name" title={tarea.taskName || ''}>{tarea.taskName || '—'}</div>
                 {tarea.description && <div className="tree-task-desc">{tarea.description}</div>}
