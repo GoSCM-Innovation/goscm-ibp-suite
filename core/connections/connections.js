@@ -28,6 +28,14 @@ export const KNOWN_AGREEMENTS = Object.freeze([
   'SAP_COM_0924',
 ])
 
+/**
+ * CI-DS no tiene acuerdos de comunicación: es un solo usuario y contraseña por endpoint. Para
+ * no inventar una segunda tabla que guardaría exactamente lo mismo, sus credenciales viven en
+ * la misma con este nombre fijo. La interfaz no lo muestra: para una conexión de CI-DS pide
+ * simplemente usuario y contraseña.
+ */
+export const CIDS_AGREEMENT = 'CIDS'
+
 // Traducción de los nombres de la base al estilo del resto de la aplicación. Se hace en la
 // frontera para que ninguna pantalla tenga que saber cómo se llaman las columnas.
 

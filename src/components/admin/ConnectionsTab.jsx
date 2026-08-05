@@ -9,6 +9,11 @@ import { api } from '../../lib/api.js'
 
 const ACUERDOS_CONOCIDOS = ['SAP_COM_0326', 'SAP_COM_0068', 'SAP_COM_0720', 'SAP_COM_0924']
 
+// CI-DS no tiene acuerdos de comunicación: es un usuario y una contraseña por endpoint. Se
+// guardan con este nombre fijo, que coincide con el de `core/connections`, y la pantalla no
+// se lo enseña a nadie.
+const ACUERDO_CIDS = 'CIDS'
+
 export default function ConnectionsTab({ clientId }) {
   const [connections, setConnections] = useState([])
   const [detail, setDetail] = useState(null)
@@ -79,7 +84,7 @@ export default function ConnectionsTab({ clientId }) {
       await api.post('/api/admin/connections', {
         clientId,
         connectionId: detail.id,
-        agreement: acuerdo.agreement,
+        agreement: detail.kind === 'cids' ? ACUERDO_CIDS : acuerdo.agreement,
         sapUser: acuerdo.sapUser,
         password: acuerdo.password,
       })
@@ -148,24 +153,36 @@ export default function ConnectionsTab({ clientId }) {
 
       {detail && (
         <div className="card">
-          <div className="card-title">Acuerdos de comunicación · {detail.name}</div>
+          <div className="card-title">
+            {detail.kind === 'cids' ? `Credenciales · ${detail.name}` : `Acuerdos de comunicación · ${detail.name}`}
+          </div>
           <p className="card-hint" style={{ marginTop: 4 }}>
-            Cada acuerdo tiene su propio usuario de SAP. La contraseña no se puede volver a ver:
-            para cambiarla, se escribe una nueva.
+            {detail.kind === 'cids'
+              ? 'El usuario con el que la Suite se identifica en CI-DS. La contraseña no se puede volver a ver: para cambiarla, se escribe una nueva.'
+              : 'Cada acuerdo tiene su propio usuario de SAP. La contraseña no se puede volver a ver: para cambiarla, se escribe una nueva.'}
           </p>
 
           <div className="table-wrap" style={{ marginTop: 12 }}>
             <table className="table">
               <thead>
-                <tr><th>Acuerdo</th><th>Usuario de SAP</th><th>Actualizado</th><th /></tr>
+                <tr>
+                  {detail.kind !== 'cids' && <th>Acuerdo</th>}
+                  <th>Usuario</th><th>Actualizado</th><th />
+                </tr>
               </thead>
               <tbody>
                 {detail.agreements.length === 0 && (
-                  <tr><td className="table-empty" colSpan={4}>Esta conexión todavía no tiene acuerdos.</td></tr>
+                  <tr>
+                    <td className="table-empty" colSpan={4}>
+                      {detail.kind === 'cids'
+                        ? 'Esta conexión todavía no tiene credenciales.'
+                        : 'Esta conexión todavía no tiene acuerdos.'}
+                    </td>
+                  </tr>
                 )}
                 {detail.agreements.map((a) => (
                   <tr key={a.id}>
-                    <td className="mono">{a.agreement}</td>
+                    {detail.kind !== 'cids' && <td className="mono">{a.agreement}</td>}
                     <td>{a.sapUser}</td>
                     <td style={{ color: 'var(--text2)' }}>{new Date(a.updatedAt).toLocaleString()}</td>
                     <td style={{ textAlign: 'right' }}>
@@ -180,22 +197,24 @@ export default function ConnectionsTab({ clientId }) {
           </div>
 
           <form onSubmit={saveAgreement} style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 16 }}>
-            <div className="field" style={{ flex: '1 1 180px' }}>
-              <label htmlFor="agreement">Acuerdo</label>
-              <input
-                id="agreement"
-                className="input mono"
-                list="acuerdos-conocidos"
-                required
-                value={acuerdo.agreement}
-                onChange={(e) => setAcuerdo({ ...acuerdo, agreement: e.target.value.toUpperCase() })}
-              />
-              <datalist id="acuerdos-conocidos">
-                {ACUERDOS_CONOCIDOS.map((a) => <option key={a} value={a} />)}
-              </datalist>
-            </div>
+            {detail.kind !== 'cids' && (
+              <div className="field" style={{ flex: '1 1 180px' }}>
+                <label htmlFor="agreement">Acuerdo</label>
+                <input
+                  id="agreement"
+                  className="input mono"
+                  list="acuerdos-conocidos"
+                  required
+                  value={acuerdo.agreement}
+                  onChange={(e) => setAcuerdo({ ...acuerdo, agreement: e.target.value.toUpperCase() })}
+                />
+                <datalist id="acuerdos-conocidos">
+                  {ACUERDOS_CONOCIDOS.map((a) => <option key={a} value={a} />)}
+                </datalist>
+              </div>
+            )}
             <div className="field" style={{ flex: '1 1 160px' }}>
-              <label htmlFor="sapUser">Usuario de SAP</label>
+              <label htmlFor="sapUser">Usuario</label>
               <input
                 id="sapUser"
                 className="input"
@@ -217,7 +236,7 @@ export default function ConnectionsTab({ clientId }) {
               />
             </div>
             <button className="btn btn-primary" type="submit" disabled={busy} style={{ alignSelf: 'flex-end' }}>
-              Guardar acuerdo
+              {detail.kind === 'cids' ? 'Guardar credenciales' : 'Guardar acuerdo'}
             </button>
           </form>
         </div>
