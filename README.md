@@ -1,4 +1,4 @@
-# Suite IBP — GoSCM (`goscm-ibp-suite`)
+# GoSCM Suite (`goscm-ibp-suite`)
 
 Plataforma web unificada para operar **SAP IBP** y **SAP CI-DS**, comercializada por suscripción. Reúne en una sola aplicación —un login, un panel— tres módulos que antes eran tres aplicaciones separadas:
 

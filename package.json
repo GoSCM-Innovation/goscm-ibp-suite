@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "Suite IBP de GoSCM — plataforma unificada para SAP IBP y SAP CI-DS",
+  "description": "GoSCM Suite — plataforma unificada para SAP IBP y SAP CI-DS",
   "engines": {
     "node": ">=20.19.0"
   },

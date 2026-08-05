@@ -51,7 +51,7 @@ export default function Login({ onSignedIn }) {
       <div className="login-card">
         <div style={{ marginBottom: 24 }}>
           <img src="/logo-goscm.png" alt="GoSCM" className="login-logo" />
-          <div style={{ fontSize: 15, fontWeight: 700, marginTop: 14 }}>Suite IBP</div>
+          <div style={{ fontSize: 15, fontWeight: 700, marginTop: 14 }}>GoSCM Suite</div>
           <div style={{ color: 'var(--text3)', fontSize: 11.5 }}>SAP IBP y CI-DS en un solo sitio</div>
         </div>
 

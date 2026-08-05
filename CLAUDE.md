@@ -1,4 +1,4 @@
-# Reglas del proyecto `goscm-ibp-suite` (Suite IBP)
+# Reglas del proyecto `goscm-ibp-suite` (GoSCM Suite)
 
 ## Regla fundamental
 **No inventar información nunca.** Si se necesita un dato específico (endpoints SAP IBP, escenarios de comunicación, roles, configuraciones) y no está en el código, en `docs/` o en lo que el usuario ha proporcionado, **preguntar antes de escribir cualquier cosa**.

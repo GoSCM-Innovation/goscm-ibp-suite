@@ -17,7 +17,8 @@ export default function Shell({ user, modules, theme, onToggleTheme, onSignOut, 
         <div className="header-brand">
           <img src="/logo-goscm.png" alt="GoSCM" className="header-logo" />
           <div className="header-sep" />
-          <span>Suite IBP</span>
+          {/* El logo ya dice GoSCM, así que al lado va solo "Suite": junto se lee GoSCM Suite. */}
+          <span>Suite</span>
         </div>
         <div className="header-sep" />
         <span className="header-context">{user.name || user.email}</span>
