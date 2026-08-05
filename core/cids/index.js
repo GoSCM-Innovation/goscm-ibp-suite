@@ -31,10 +31,16 @@ export {
 
 export {
   CANCELABLE_STATUSES,
+  FAILED_STATUSES,
+  QUEUED_STATUSES,
   TASK_STATUS,
   TERMINAL_STATUSES,
+  WARNING_STATUSES,
   formatDuration,
   isCancelable,
+  isFailed,
+  isQueued,
   isTerminal,
+  isWarning,
   statusMeta,
 } from './task-status.js'

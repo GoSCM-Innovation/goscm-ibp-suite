@@ -42,6 +42,30 @@ export const TERMINAL_STATUSES = Object.freeze([
 /** Estados en los que todavía se puede cancelar la tarea. */
 export const CANCELABLE_STATUSES = Object.freeze(['RUNNING', 'QUEUEING', 'IMPORTED', 'FETCHED'])
 
+/**
+ * Los tres grupos con los que se cuenta en un tablero: esperando, con avisos, y falladas.
+ *
+ * Estaban escritos a mano en los dos resúmenes de v9, y no coincidían entre sí ni consigo mismos:
+ * el indicador de "Fallidas" contaba solo ERROR mientras que el gráfico por día y la lista de
+ * últimas fallidas contaban también TERMINATION_FAILED. Una cancelación que no se pudo completar
+ * es un fallo, así que el grupo la incluye y ahora las tres cuentas dan lo mismo.
+ */
+export const QUEUED_STATUSES = Object.freeze(['QUEUEING', 'IMPORTED', 'FETCHED'])
+export const WARNING_STATUSES = Object.freeze(['SUCCESS_WITH_ERRORS_D', 'SUCCESS_WITH_ERRORS_E'])
+export const FAILED_STATUSES = Object.freeze(['ERROR', 'TERMINATION_FAILED'])
+
+export function isQueued(statusCode) {
+  return QUEUED_STATUSES.includes(statusCode)
+}
+
+export function isWarning(statusCode) {
+  return WARNING_STATUSES.includes(statusCode)
+}
+
+export function isFailed(statusCode) {
+  return FAILED_STATUSES.includes(statusCode)
+}
+
 export function isTerminal(statusCode) {
   return TERMINAL_STATUSES.includes(statusCode)
 }

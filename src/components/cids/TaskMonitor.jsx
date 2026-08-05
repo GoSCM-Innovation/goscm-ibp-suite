@@ -24,22 +24,12 @@ import { copyText } from '../../lib/clipboard.js'
 import { toTsv } from '../../lib/tsv.js'
 import Modal from '../ui/Modal.jsx'
 import TaskLogsModal from './TaskLogsModal.jsx'
-import {
-  TZ_OPTIONS,
-  daysBetween,
-  formatEpochMs,
-  formatSapTimestamp,
-  fromInputValue,
-  readStoredTzMode,
-  storeTzMode,
-  toInputValue,
-} from '../../lib/dates.js'
+import { formatEpochMs, formatSapTimestamp } from '../../lib/dates.js'
+import { useDateRange } from '../../lib/useDateRange.js'
+import DateRangeBar from '../ui/DateRangeBar.jsx'
 
 /** Cada cuánto se vuelve a pedir la lista. De v9. */
 const REFRESH_MS = 30_000
-
-/** Cuánto se espera sin tocar las fechas antes de consultar con el rango nuevo. */
-const APLICAR_MS = 500
 
 /** Filas por página. De v9: es también cuántas ejecuciones se enriquecen de una vez. */
 const PAGE_SIZE = 50
@@ -50,28 +40,15 @@ const PAGE_SIZE = 50
  */
 const MAX_DAYS = 90
 
-/** Zonas que se ofrecen. La del equipo queda fuera del selector, igual que en v9. */
-const ZONAS = TZ_OPTIONS.filter((opcion) => opcion.value !== 'local')
-
-const DIA_MS = 86_400_000
-
-/** Rango de arranque: la última semana, que es con lo que abría v9. */
-const rangoInicial = (zona) => ({
-  desde: toInputValue(new Date(Date.now() - 7 * DIA_MS), zona),
-  hasta: toInputValue(new Date(), zona),
-})
-
 /**
  * La búsqueda llega de arriba (`busqueda` / `onBuscar`) en vez de vivir aquí. Es lo que permite que
  * al lanzar una tarea se salte al monitor ya filtrado por ella sin que este componente sepa que el
  * lanzador existe, y sin un efecto que copie una prop al estado.
  */
 export default function TaskMonitor({ connectionId, busqueda, onBuscar, transportadas }) {
-  const [zona, setZona] = useState(readStoredTzMode)
-  // Lo que se escribe en los campos.
-  const [rango, setRango] = useState(() => rangoInicial(readStoredTzMode()))
-  // Lo que se está consultando. No es lo mismo: ver más abajo por qué.
-  const [rangoActivo, setRangoActivo] = useState(rango)
+  // El rango, la zona y sus tres reglas viven en el gancho: los tableros usan el mismo.
+  const fechas = useDateRange({ maxDays: MAX_DAYS })
+  const { zona, rangoIncompleto, rangoExcedido, rangoValido, startDateFrom, startDateTo } = fechas
 
   const [ejecuciones, setEjecuciones] = useState([])
   const [cargando, setCargando] = useState(true)
@@ -102,70 +79,6 @@ export default function TaskMonitor({ connectionId, busqueda, onBuscar, transpor
   // el efecto y las ejecuciones vivas —que sí hay que volver a preguntar— entrarían en bucle.
   const detallesRef = useRef(detalles)
   useEffect(() => { detallesRef.current = detalles }, [detalles])
-
-  const dias = daysBetween(rango.desde, rango.hasta, zona)
-  const rangoIncompleto = dias === null
-  const rangoExcedido = dias !== null && dias > MAX_DAYS
-  const rangoValido = !rangoIncompleto && !rangoExcedido
-
-  // Al cambiar de zona, los campos tienen que seguir apuntando al mismo instante: lo que se
-  // mueve es cómo se escribe, no qué se pidió. Por eso cambiar de zona no vuelve a consultar.
-  function cambiarZona(nueva) {
-    const desde = fromInputValue(rango.desde, zona)
-    const hasta = fromInputValue(rango.hasta, zona)
-    const escrito = {
-      desde: desde ? toInputValue(desde, nueva) : rango.desde,
-      hasta: hasta ? toInputValue(hasta, nueva) : rango.hasta,
-    }
-    setRango(escrito)
-    setRangoActivo(escrito)
-    setZona(nueva)
-    storeTzMode(nueva)
-  }
-
-  // Al mover una punta más allá del tope, se arrastra la otra en vez de dejar un rango inválido
-  // y un mensaje de error. Es lo que hacía v9.
-  function cambiarRango(punta, valor) {
-    setPagina(1)
-    setRango((actual) => {
-      const escrito = { ...actual, [punta]: valor }
-      const nuevoDias = daysBetween(escrito.desde, escrito.hasta, zona)
-      if (nuevoDias === null || nuevoDias <= MAX_DAYS) return escrito
-
-      // La punta que se acaba de mover manda; la otra se acerca hasta el tope.
-      const movida = fromInputValue(valor, zona)
-      return punta === 'desde'
-        ? { desde: valor, hasta: toInputValue(new Date(movida.getTime() + MAX_DAYS * DIA_MS), zona) }
-        : { desde: toInputValue(new Date(movida.getTime() - MAX_DAYS * DIA_MS), zona), hasta: valor }
-    })
-  }
-
-  // El rango se aplica cuando pasa un momento sin tocarlo.
-  //
-  // Un campo de fecha va emitiendo lo que se escribe, incluido el instante en que queda vacío.
-  // Consultar en cada uno de esos pasos serían tres o cuatro consultas de varios segundos, y la
-  // del campo vacío sería la peor de todas: sin rango, CI-DS devuelve el histórico completo.
-  //
-  // En el montaje el valor es el mismo objeto, así que React no repinta y la primera carga sale
-  // en el acto: el retardo es solo para los cambios.
-  useEffect(() => {
-    if (!rangoValido) return undefined
-    const espera = setTimeout(() => setRangoActivo(rango), APLICAR_MS)
-    return () => clearTimeout(espera)
-  }, [rango, rangoValido])
-
-  // Las dos puntas ya en UTC, que es lo que entiende SAP. Se sacan aparte para que la carga
-  // dependa de los textos que se le mandan y no del objeto: así cambiar de zona, que no cambia
-  // el instante, no vuelve a consultar.
-  const { startDateFrom, startDateTo } = useMemo(() => {
-    const desde = fromInputValue(rangoActivo.desde, zona)
-    const hasta = fromInputValue(rangoActivo.hasta, zona)
-    if (!desde || !hasta) return {}
-    // El extremo se estira al final del minuto elegido: si no, una ejecución que arrancó a las
-    // 12:30:40 queda fuera de un rango que termina a las 12:30.
-    hasta.setSeconds(59, 999)
-    return { startDateFrom: desde.toISOString(), startDateTo: hasta.toISOString() }
-  }, [rangoActivo, zona])
 
   const cargar = useCallback(async () => {
     // Sin las dos puntas no se consulta. No es una validación de formulario: CI-DS sin rango
@@ -323,36 +236,13 @@ export default function TaskMonitor({ connectionId, busqueda, onBuscar, transpor
         </div>
 
         <div className="monitor-bar">
-          <div className="seg" role="group" aria-label="Zona horaria">
-            {ZONAS.map((opcion) => (
-              <button
-                key={opcion.value}
-                type="button"
-                className={`seg-btn${zona === opcion.value ? ' active' : ''}`}
-                onClick={() => cambiarZona(opcion.value)}
-                aria-pressed={zona === opcion.value}
-              >
-                {opcion.label}
-              </button>
-            ))}
-          </div>
-
-          <input
-            type="datetime-local"
-            className="input input-sm"
-            value={rango.desde}
-            onChange={(evento) => cambiarRango('desde', evento.target.value)}
-            aria-label="Desde"
+          <DateRangeBar
+            rango={fechas.rango}
+            zona={zona}
+            dias={fechas.dias}
+            onZona={fechas.cambiarZona}
+            onRango={(punta, valor) => { setPagina(1); fechas.cambiarRango(punta, valor) }}
           />
-          <span className="arrow" aria-hidden="true">→</span>
-          <input
-            type="datetime-local"
-            className="input input-sm"
-            value={rango.hasta}
-            onChange={(evento) => cambiarRango('hasta', evento.target.value)}
-            aria-label="Hasta"
-          />
-          {dias !== null && <span className="tag tag-muted">{dias} d</span>}
 
           <input
             type="search"

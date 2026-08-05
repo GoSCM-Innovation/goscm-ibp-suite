@@ -108,6 +108,21 @@ export function formatEpochMs(epochMs, mode) {
   return Number.isNaN(fecha.getTime()) ? '—' : escribir(partes(fecha, mode))
 }
 
+/**
+ * "DD/MM" a partir de los milisegundos desde 1970, para el eje de un gráfico por día.
+ *
+ * Se ordena bien alfabéticamente dentro de un mismo mes, que es lo que hace el tablero, pero NO
+ * cruza el cambio de año: "01/01" queda antes de "31/12". Con el tope de 90 días del rango eso solo
+ * aparece en un rango que cruce diciembre, y es lo mismo que hacía v9.
+ */
+export function dayLabelEpochMs(epochMs, mode) {
+  if (!epochMs) return '?'
+  const fecha = new Date(Number.parseInt(epochMs, 10))
+  if (Number.isNaN(fecha.getTime())) return '?'
+  const { dia, mes } = partes(fecha, mode)
+  return `${dosDigitos(dia)}/${dosDigitos(mes)}`
+}
+
 /** Fecha a texto para un campo `datetime-local`, con la hora de la zona elegida. */
 export function toInputValue(date, mode) {
   const corrida = new Date(date.getTime() + tzOffsetHours(mode) * 3600000)

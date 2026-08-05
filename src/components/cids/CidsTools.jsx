@@ -4,12 +4,20 @@
 // diálogo para identificarse contra SAP y el aviso de "sesión vencida". Las dos desaparecen porque
 // la sesión vive en el servidor y se renueva sola cuando SAP la rechaza.
 
-import { useEffect, useState } from 'react'
+import { Suspense, lazy, useEffect, useState } from 'react'
 import { fetchPromotedTaskNames, listCidsConnections } from '../../lib/cids.js'
 import TaskMonitor from './TaskMonitor.jsx'
 import TaskLauncher from './TaskLauncher.jsx'
 
+// El tablero se carga aparte, solo cuando se abre su pestaña. Es el único que usa la librería de
+// gráficos, y esa librería pesa más que todo el resto de la aplicación junta: dejarla en el paquete
+// principal se la haría descargar hasta a quien solo entra a ver el monitor.
+const Summary = lazy(() => import('./Summary.jsx'))
+
+// El orden es el de v9: se entra por el resumen, que es la pantalla que contesta "¿cómo venimos?"
+// antes de que nadie tenga que buscar una ejecución concreta.
 const HERRAMIENTAS = [
+  { id: 'resumen', label: 'Resumen' },
   { id: 'monitor', label: 'Monitor de tareas' },
   { id: 'tareas', label: 'Proyectos y tareas' },
 ]
@@ -18,7 +26,7 @@ export default function CidsTools() {
   const [conexiones, setConexiones] = useState(null)
   const [elegida, setElegida] = useState('')
   const [error, setError] = useState('')
-  const [herramienta, setHerramienta] = useState('monitor')
+  const [herramienta, setHerramienta] = useState('resumen')
 
   // La búsqueda del monitor vive acá arriba y no dentro del monitor. Es lo que permite que al
   // lanzar una tarea se salte al monitor ya filtrado por ella —lo que hacía v9— sin que el monitor
@@ -26,8 +34,8 @@ export default function CidsTools() {
   const [busqueda, setBusqueda] = useState('')
 
   // Qué tareas de este tenant ya están en producción. Se pide una vez por conexión y se comparte
-  // entre las dos herramientas: armarla le cuesta al tenant productivo una consulta por proyecto,
-  // así que pedirla por pantalla sería pagarla dos veces. `null` = la comparación no aplica.
+  // entre las herramientas que la usan: armarla le cuesta al repositorio productivo una consulta por
+  // proyecto, así que pedirla por pantalla sería pagarla dos veces. `null` = la comparación no aplica.
   const [transportadas, setTransportadas] = useState(null)
 
   useEffect(() => {
@@ -113,10 +121,15 @@ export default function CidsTools() {
       {/* La clave fuerza a empezar de cero al cambiar de tenant: fechas, filtros y proyectos
           abiertos son de la conexión que se estaba mirando, no del usuario.
 
-          Las dos herramientas se montan y se desmontan al cambiar de pestaña, igual que en v9. La
-          alternativa —dejarlas montadas y solo esconderlas— haría que el monitor siguiera
-          consultando a SAP cada treinta segundos mientras mirás otra cosa. */}
-      {herramienta === 'monitor' ? (
+          Cada herramienta se monta y se desmonta al cambiar de pestaña, igual que en v9. La
+          alternativa —dejarlas montadas y solo esconderlas— haría que el monitor y el resumen
+          siguieran consultando a SAP en sus relojes mientras mirás otra cosa. */}
+      {herramienta === 'resumen' && (
+        <Suspense fallback={<div className="page-hint">Cargando el tablero…</div>}>
+          <Summary key={`resumen-${elegida}`} connectionId={elegida} />
+        </Suspense>
+      )}
+      {herramienta === 'monitor' && (
         <TaskMonitor
           key={`monitor-${elegida}`}
           connectionId={elegida}
@@ -124,7 +137,8 @@ export default function CidsTools() {
           onBuscar={setBusqueda}
           transportadas={transportadas}
         />
-      ) : (
+      )}
+      {herramienta === 'tareas' && (
         <TaskLauncher
           key={`tareas-${elegida}`}
           connectionId={elegida}

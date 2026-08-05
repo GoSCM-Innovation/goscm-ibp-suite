@@ -1,11 +1,17 @@
 import { describe, it, expect } from 'vitest'
 import {
   CANCELABLE_STATUSES,
+  FAILED_STATUSES,
+  QUEUED_STATUSES,
   TASK_STATUS,
   TERMINAL_STATUSES,
+  WARNING_STATUSES,
   formatDuration,
   isCancelable,
+  isFailed,
+  isQueued,
   isTerminal,
+  isWarning,
   statusMeta,
 } from './task-status.js'
 
@@ -76,5 +82,42 @@ describe('formatDuration', () => {
 
   it('acepta un número en texto, que es como llega de SAP', () => {
     expect(formatDuration('296')).toBe('4m 56s')
+  })
+})
+
+// Los tres grupos con los que cuenta un tablero. En v9 estaban a mano en los dos resúmenes y no
+// coincidían entre sí.
+describe('grupos de estado para los tableros', () => {
+  it('en cola son los que esperan turno, sin incluir el que ya corre', () => {
+    expect(QUEUED_STATUSES).toEqual(['QUEUEING', 'IMPORTED', 'FETCHED'])
+    expect(isQueued('QUEUEING')).toBe(true)
+    expect(isQueued('RUNNING')).toBe(false)
+  })
+
+  it('los avisos son las dos variantes de "correcta con errores"', () => {
+    expect(isWarning('SUCCESS_WITH_ERRORS_D')).toBe(true)
+    expect(isWarning('SUCCESS_WITH_ERRORS_E')).toBe(true)
+    expect(isWarning('SUCCESS')).toBe(false)
+  })
+
+  // Es la corrección respecto de v9: una cancelación que no se pudo completar es un fallo.
+  it('las falladas incluyen la cancelación fallida', () => {
+    expect(isFailed('ERROR')).toBe(true)
+    expect(isFailed('TERMINATION_FAILED')).toBe(true)
+    expect(isFailed('TERMINATED')).toBe(false)
+    expect(isFailed('SUCCESS')).toBe(false)
+  })
+
+  it('los tres grupos no se pisan entre sí', () => {
+    for (const codigo of [...QUEUED_STATUSES, ...WARNING_STATUSES, ...FAILED_STATUSES]) {
+      const pertenencias = [isQueued(codigo), isWarning(codigo), isFailed(codigo)].filter(Boolean)
+      expect(pertenencias).toHaveLength(1)
+    }
+  })
+
+  it('todos los códigos de los grupos existen en la tabla', () => {
+    for (const codigo of [...QUEUED_STATUSES, ...WARNING_STATUSES, ...FAILED_STATUSES]) {
+      expect(TASK_STATUS).toHaveProperty(codigo)
+    }
   })
 })

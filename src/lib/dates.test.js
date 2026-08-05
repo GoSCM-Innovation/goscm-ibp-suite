@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
+  dayLabelEpochMs,
   daysBetween,
   formatEpochMs,
   formatSapTimestamp,
@@ -63,6 +64,24 @@ describe('formatEpochMs', () => {
     expect(formatEpochMs(null, 'utc')).toBe('—')
     expect(formatEpochMs('', 'utc')).toBe('—')
     expect(formatEpochMs('no es un número', 'utc')).toBe('—')
+  })
+})
+
+describe('dayLabelEpochMs', () => {
+  it('da el dia y el mes de la zona elegida', () => {
+    expect(dayLabelEpochMs(EPOCH_MS, 'utc')).toBe('04/08')
+  })
+
+  // El mismo instante puede caer en otro dia segun la zona: 02:00 UTC del dia 5 es el dia 4 en UTC-4.
+  it('cambia de dia cuando la zona lo cambia', () => {
+    const madrugada = Date.UTC(2026, 7, 5, 2, 0, 0)
+    expect(dayLabelEpochMs(madrugada, 'utc')).toBe('05/08')
+    expect(dayLabelEpochMs(madrugada, 'utc-4')).toBe('04/08')
+  })
+
+  it('sin dato devuelve un interrogante, no revienta el eje del grafico', () => {
+    expect(dayLabelEpochMs(null, 'utc')).toBe('?')
+    expect(dayLabelEpochMs('no es un numero', 'utc')).toBe('?')
   })
 })
 
