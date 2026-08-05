@@ -14,28 +14,20 @@
 //     medio escribir mandaba una consulta sin rango.
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import {
-  BarChart, Bar, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
-} from 'recharts'
-import {
-  isFailed, isQueued, isWarning, statusMeta,
-} from '../../../core/cids/task-status.js'
+import { isFailed, isQueued, isWarning, statusMeta, successRate } from '../../../core/cids/task-status.js'
 import { cidsCall } from '../../lib/cids.js'
-import { dayLabelEpochMs } from '../../lib/dates.js'
+import {
+  colorDeTasa, latestFailed, latestWarnings, perDayBreakdown, statusBreakdown, topTasks,
+} from '../../lib/cids-stats.js'
 import { useDateRange } from '../../lib/useDateRange.js'
 import DateRangeBar from '../ui/DateRangeBar.jsx'
+import { PerDayBars, SinDatos, StatusDonut } from './StatusCharts.jsx'
 
 /** Cada cuánto se recarga solo. De v9: cinco minutos, no treinta segundos como el monitor. */
 const REFRESH_MS = 5 * 60 * 1000
 
 /** El mismo tope de SAP CI-DS que el monitor. */
 const MAX_DAYS = 90
-
-/** Cuántos días se dibujan en el gráfico de barras. De v9. */
-const DIAS_EN_GRAFICO = 14
-
-/** Cuántas filas se listan en los cuadros de abajo. De v9. */
-const FILAS_EN_LISTA = 5
 
 /** El estado de un agente viene prefijado con "AGENT:". Se quita solo para mostrarlo, como en v9. */
 const estadoAgente = (valor) => String(valor || '').replace(/^AGENT:/, '') || 'UNKNOWN'
@@ -140,76 +132,33 @@ export default function Summary({ connectionId }) {
           <Kpi label="Falladas" valor={resumen.falladas} color="var(--red)" />
           <Kpi
             label="Tasa de éxito"
-            valor={`${resumen.tasaExito}%`}
-            color={resumen.tasaExito >= 90 ? 'var(--green)' : resumen.tasaExito >= 70 ? 'var(--accent)' : 'var(--red)'}
+            valor={resumen.tasaExito === null ? '—' : `${resumen.tasaExito}%`}
+            color={colorDeTasa(resumen.tasaExito)}
           />
         </div>
 
         <div className="grid-charts">
           <div className="card">
             <div className="card-label">Distribución por estado</div>
-            {resumen.porEstado.length === 0 ? <SinDatos /> : (
-              <>
-                <ResponsiveContainer width="100%" height={220}>
-                  <PieChart>
-                    <Pie
-                      data={resumen.porEstado}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={55}
-                      outerRadius={85}
-                      paddingAngle={2}
-                      dataKey="value"
-                    >
-                      {resumen.porEstado.map((porcion) => (
-                        <Cell key={porcion.code} fill={porcion.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip contentStyle={ESTILO_TOOLTIP} />
-                  </PieChart>
-                </ResponsiveContainer>
-                {/* Leyenda propia y no la de recharts: con once estados la suya se corta. */}
-                <div className="leyenda">
-                  {resumen.porEstado.map((porcion) => (
-                    <span className="leyenda-item" key={porcion.code}>
-                      <span className="leyenda-color" style={{ background: porcion.color }} />
-                      {porcion.name} ({porcion.value})
-                    </span>
-                  ))}
-                </div>
-              </>
-            )}
+            <StatusDonut porEstado={resumen.porEstado} />
           </div>
 
           <div className="card">
             <div className="card-label">Ejecuciones por día</div>
-            {resumen.porDia.length === 0 ? <SinDatos /> : (
-              <ResponsiveContainer width="100%" height={240}>
-                <BarChart data={resumen.porDia} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                  <XAxis dataKey="dia" tick={EJE} />
-                  <YAxis tick={EJE} allowDecimals={false} />
-                  <Tooltip contentStyle={ESTILO_TOOLTIP} />
-                  <Legend wrapperStyle={{ fontSize: 11 }} />
-                  <Bar dataKey="Correctas" stackId="a" fill="var(--green)" />
-                  <Bar dataKey="Falladas" stackId="a" fill="var(--red)" />
-                  <Bar dataKey="Otras" stackId="a" fill="var(--text3)" radius={[3, 3, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            )}
+            <PerDayBars porDia={resumen.porDia} />
           </div>
         </div>
 
         <div className="grid-stats">
           <div className="card">
             <div className="card-label">Tareas más ejecutadas</div>
-            {resumen.masEjecutadas.length === 0 ? <SinDatos /> : resumen.masEjecutadas.map(([nombre, veces], i) => (
+            {resumen.masEjecutadas.length === 0 ? <SinDatos /> : resumen.masEjecutadas.map((tarea, i) => (
               <Ranking
-                key={nombre}
+                key={tarea.clave}
                 puesto={i + 1}
-                nombre={nombre}
-                veces={veces}
-                maximo={resumen.masEjecutadas[0][1]}
+                nombre={tarea.taskName}
+                veces={tarea.veces}
+                maximo={resumen.masEjecutadas[0].veces}
               />
             ))}
           </div>
@@ -269,60 +218,19 @@ export default function Summary({ connectionId }) {
  * ejecuciones en números, sin nada de React en medio.
  */
 function calcular(ejecuciones, zona) {
-  const total = ejecuciones.length
-  const enEjecucion = ejecuciones.filter((fila) => fila.statusCode === 'RUNNING').length
-  const enCola = ejecuciones.filter((fila) => isQueued(fila.statusCode)).length
-  const correctas = ejecuciones.filter((fila) => fila.statusCode === 'SUCCESS').length
-  const conAvisosTotal = ejecuciones.filter((fila) => isWarning(fila.statusCode)).length
-  const falladas = ejecuciones.filter((fila) => isFailed(fila.statusCode)).length
-
-  // Una tarea correcta con errores cuenta como éxito: terminó y dejó el dato. Es lo que hacía v9.
-  const tasaExito = total > 0 ? Math.round(((correctas + conAvisosTotal) / total) * 100) : 0
-
-  const cuentaPorEstado = new Map()
-  const cuentaPorDia = new Map()
-  const cuentaPorTarea = new Map()
-
-  for (const fila of ejecuciones) {
-    cuentaPorEstado.set(fila.statusCode, (cuentaPorEstado.get(fila.statusCode) ?? 0) + 1)
-
-    const dia = dayLabelEpochMs(fila.startDate, zona)
-    const delDia = cuentaPorDia.get(dia) ?? { dia, Correctas: 0, Falladas: 0, Otras: 0 }
-    if (fila.statusCode === 'SUCCESS') delDia.Correctas += 1
-    else if (isFailed(fila.statusCode)) delDia.Falladas += 1
-    else delDia.Otras += 1
-    cuentaPorDia.set(dia, delDia)
-
-    const nombre = fila.taskName || '—'
-    cuentaPorTarea.set(nombre, (cuentaPorTarea.get(nombre) ?? 0) + 1)
-  }
-
-  const porEstado = [...cuentaPorEstado.entries()]
-    .map(([code, value]) => ({ code, value, name: statusMeta(code).label, color: statusMeta(code).color }))
-    .sort((a, b) => b.value - a.value)
-
-  const porDia = [...cuentaPorDia.values()]
-    .sort((a, b) => a.dia.localeCompare(b.dia))
-    .slice(-DIAS_EN_GRAFICO)
-
-  const masEjecutadas = [...cuentaPorTarea.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, FILAS_EN_LISTA)
-
-  const masRecienteArriba = (a, b) => (Number.parseInt(b.startDate, 10) || 0) - (Number.parseInt(a.startDate, 10) || 0)
-
   return {
-    total,
-    enEjecucion,
-    enCola,
-    correctas,
-    falladas,
-    tasaExito,
-    porEstado,
-    porDia,
-    masEjecutadas,
-    ultimasFalladas: ejecuciones.filter((f) => isFailed(f.statusCode)).sort(masRecienteArriba).slice(0, FILAS_EN_LISTA),
-    conAvisos: ejecuciones.filter((f) => isWarning(f.statusCode)).sort(masRecienteArriba).slice(0, FILAS_EN_LISTA),
+    total: ejecuciones.length,
+    enEjecucion: ejecuciones.filter((fila) => fila.statusCode === 'RUNNING').length,
+    enCola: ejecuciones.filter((fila) => isQueued(fila.statusCode)).length,
+    correctas: ejecuciones.filter((fila) => fila.statusCode === 'SUCCESS').length,
+    falladas: ejecuciones.filter((fila) => isFailed(fila.statusCode)).length,
+    conAvisosTotal: ejecuciones.filter((fila) => isWarning(fila.statusCode)).length,
+    tasaExito: successRate(ejecuciones.map((fila) => fila.statusCode)),
+    porEstado: statusBreakdown(ejecuciones, statusMeta),
+    porDia: perDayBreakdown(ejecuciones, zona),
+    masEjecutadas: topTasks(ejecuciones),
+    ultimasFalladas: latestFailed(ejecuciones),
+    conAvisos: latestWarnings(ejecuciones),
   }
 }
 
@@ -351,17 +259,3 @@ function Ranking({ puesto, nombre, veces, maximo }) {
     </div>
   )
 }
-
-function SinDatos() {
-  return <div className="sin-datos">Sin datos en el período</div>
-}
-
-const ESTILO_TOOLTIP = {
-  background: 'var(--surface)',
-  border: '1px solid var(--border2)',
-  borderRadius: 6,
-  color: 'var(--text)',
-  fontSize: 11,
-}
-
-const EJE = { fontSize: 10, fill: 'var(--text2)' }

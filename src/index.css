@@ -547,6 +547,101 @@ a { color: var(--cyan); }
 .ranking-barra { background: var(--border); border-radius: 2px; height: 3px; overflow: hidden; }
 .ranking-barra > div { background: var(--cyan); height: 100%; transition: width .4s ease; }
 
+/* De qué tenant salió la fila. Solo aparece en el tablero global, donde hay varios a la vez. */
+.ranking-donde {
+  align-items: center;
+  color: var(--text3);
+  display: flex;
+  font-size: 10px;
+  gap: 5px;
+  margin: 3px 0 4px;
+  min-width: 0;
+}
+.ranking-donde > span:not([class]) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ─── Tablero global ──────────────────────────────────────── */
+
+.avatar {
+  align-items: center;
+  border-radius: 50%;
+  display: inline-flex;
+  flex-shrink: 0;
+  font-weight: 700;
+  justify-content: center;
+  letter-spacing: .02em;
+  line-height: 1;
+}
+
+.env-badge {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  border-radius: 4px;
+  color: var(--accent);
+  flex-shrink: 0;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  padding: 1px 5px;
+}
+.env-badge.prod {
+  background: color-mix(in srgb, var(--green) 18%, transparent);
+  border-color: color-mix(in srgb, var(--green) 35%, transparent);
+  color: var(--green);
+}
+
+.filtro-conexiones {
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  display: flex;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 10px 13px;
+}
+.filtro-titulo {
+  color: var(--text2);
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+.filtro-conexiones .chips { flex: 1; min-width: 0; }
+
+.chip-conexion { gap: 6px; }
+.chip-conexion.active { background: var(--accent-bg-soft); border-color: var(--accent-border-soft); color: var(--accent); }
+
+.laminas { align-items: center; display: flex; flex-shrink: 0; gap: 8px; }
+.laminas-pills { display: flex; flex: 1; gap: 6px; min-width: 0; overflow-x: auto; padding-bottom: 2px; }
+
+.fila-conexion { align-items: center; display: flex; gap: 11px; padding: 9px 0; }
+.fila-conexion-que { flex: 1; min-width: 0; }
+.fila-conexion-tipo { align-items: center; color: var(--text3); display: flex; font-size: 10px; gap: 5px; margin-top: 2px; }
+
+.estado-conexion {
+  align-items: center;
+  display: flex;
+  flex-shrink: 0;
+  font-size: 10.5px;
+  font-weight: 600;
+  gap: 5px;
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mini-stats { align-items: center; color: var(--text2); display: flex; flex-shrink: 0; font-size: 11px; gap: 10px; }
+.mini-total { color: var(--text); font-weight: 600; }
+
+@media (max-width: 720px) {
+  /* En pantalla angosta la fila de una conexión se apila en vez de comprimirse hasta ser ilegible. */
+  .fila-conexion { align-items: flex-start; flex-wrap: wrap; }
+  .mini-stats { flex-wrap: wrap; width: 100%; }
+}
+
 /* ─── Árbol de proyectos y tareas ─────────────────────────── */
 
 .tree {

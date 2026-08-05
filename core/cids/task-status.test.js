@@ -13,6 +13,7 @@ import {
   isTerminal,
   isWarning,
   statusMeta,
+  successRate,
 } from './task-status.js'
 
 describe('la tabla de estados', () => {
@@ -119,5 +120,43 @@ describe('grupos de estado para los tableros', () => {
     for (const codigo of [...QUEUED_STATUSES, ...WARNING_STATUSES, ...FAILED_STATUSES]) {
       expect(TASK_STATUS).toHaveProperty(codigo)
     }
+  })
+})
+
+describe('successRate', () => {
+  it('cuenta como éxito la correcta con errores: terminó y dejó el dato', () => {
+    expect(successRate(['SUCCESS', 'SUCCESS_WITH_ERRORS_D'])).toBe(100)
+  })
+
+  // Los dos topes son la razón de que esta función exista.
+  it('NO redondea a 100 si hay aunque sea una que no salió bien', () => {
+    const cuatrocientasBien = Array(400).fill('SUCCESS')
+    expect(successRate([...cuatrocientasBien, 'ERROR'])).toBe(99)
+  })
+
+  it('NO redondea a 0 si hay aunque sea una que sí salió bien', () => {
+    const cuatrocientasMal = Array(400).fill('ERROR')
+    expect(successRate([...cuatrocientasMal, 'SUCCESS'])).toBe(1)
+  })
+
+  it('da 100 solo cuando de verdad salieron todas bien', () => {
+    expect(successRate(['SUCCESS', 'SUCCESS'])).toBe(100)
+  })
+
+  it('da 0 solo cuando de verdad no salió ninguna', () => {
+    expect(successRate(['ERROR', 'TERMINATED'])).toBe(0)
+  })
+
+  it('redondea normal en el medio', () => {
+    expect(successRate(['SUCCESS', 'SUCCESS', 'SUCCESS', 'ERROR'])).toBe(75)
+  })
+
+  // null y no 0: sin ejecuciones no hay tasa que mostrar, y 0% diría que todo falló.
+  it('sin ejecuciones devuelve null, no cero', () => {
+    expect(successRate([])).toBeNull()
+  })
+
+  it('una en ejecución todavía no es un éxito', () => {
+    expect(successRate(['SUCCESS', 'RUNNING'])).toBe(50)
   })
 })

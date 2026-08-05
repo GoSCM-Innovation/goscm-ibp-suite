@@ -66,6 +66,28 @@ export function isFailed(statusCode) {
   return FAILED_STATUSES.includes(statusCode)
 }
 
+/**
+ * Tasa de éxito de un conjunto de ejecuciones, en porcentaje entero. `null` si no hay ninguna.
+ *
+ * Una tarea correcta con errores cuenta como éxito: terminó y dejó el dato.
+ *
+ * Los dos topes son lo importante y vienen del resumen global de v9: **no se redondea a 100 si hay
+ * aunque sea una que no salió bien, ni a 0 si hay aunque sea una que sí**. Mostrar "100%" con
+ * cuatrocientas correctas y una fallida esconde justo la que hay que mirar.
+ *
+ * El otro resumen de v9 usaba un redondeo pelado y por eso mostraba números distintos para los
+ * mismos datos. Aquí está una vez.
+ */
+export function successRate(statusCodes) {
+  const total = statusCodes.length
+  if (total === 0) return null
+
+  const bien = statusCodes.filter((codigo) => codigo === 'SUCCESS' || isWarning(codigo)).length
+  if (bien === total) return 100
+  if (bien === 0) return 0
+  return Math.min(99, Math.max(1, Math.round((bien / total) * 100)))
+}
+
 export function isTerminal(statusCode) {
   return TERMINAL_STATUSES.includes(statusCode)
 }

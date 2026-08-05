@@ -43,4 +43,5 @@ export {
   isTerminal,
   isWarning,
   statusMeta,
+  successRate,
 } from './task-status.js'

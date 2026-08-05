@@ -13,10 +13,16 @@ import TaskLauncher from './TaskLauncher.jsx'
 // gráficos, y esa librería pesa más que todo el resto de la aplicación junta: dejarla en el paquete
 // principal se la haría descargar hasta a quien solo entra a ver el monitor.
 const Summary = lazy(() => import('./Summary.jsx'))
+const GlobalSummary = lazy(() => import('./GlobalSummary.jsx'))
 
 // El orden es el de v9: se entra por el resumen, que es la pantalla que contesta "¿cómo venimos?"
 // antes de que nadie tenga que buscar una ejecución concreta.
+//
+// El tablero global mira TODAS las conexiones, así que el selector de conexión no le aplica y se
+// esconde mientras está abierto. Y solo aparece con dos o más conexiones: con una sola sería lo
+// mismo que el resumen del tenant.
 const HERRAMIENTAS = [
+  { id: 'global', label: 'Global', soloConVarias: true },
   { id: 'resumen', label: 'Resumen' },
   { id: 'monitor', label: 'Monitor de tareas' },
   { id: 'tareas', label: 'Proyectos y tareas' },
@@ -82,30 +88,37 @@ export default function CidsTools() {
       <div className="module-head">
         <div>
           <div className="page-title">CI-DS Tools</div>
-          <div className="page-hint">Ejecuciones, proyectos y tareas del tenant.</div>
+          <div className="page-hint">
+            {herramienta === 'global'
+              ? 'Todas las conexiones de CI-DS a la vez.'
+              : 'Ejecuciones, proyectos y tareas del tenant.'}
+          </div>
         </div>
 
-        <div className="monitor-bar">
-          {conexiones.length > 1 ? (
-            <select
-              className="select input-sm"
-              value={elegida}
-              onChange={(evento) => setElegida(evento.target.value)}
-              aria-label="Conexión de CI-DS"
-            >
-              {conexiones.map((conexion) => (
-                <option key={conexion.id} value={conexion.id}>{conexion.name}</option>
-              ))}
-            </select>
-          ) : (
-            <span className="tag">{activa?.name}</span>
-          )}
-          {activa?.isProduction && <span className="tag tag-accent">Productivo</span>}
-        </div>
+        {/* El tablero global mira todas las conexiones, así que elegir una no significa nada ahí. */}
+        {herramienta !== 'global' && (
+          <div className="monitor-bar">
+            {conexiones.length > 1 ? (
+              <select
+                className="select input-sm"
+                value={elegida}
+                onChange={(evento) => setElegida(evento.target.value)}
+                aria-label="Conexión de CI-DS"
+              >
+                {conexiones.map((conexion) => (
+                  <option key={conexion.id} value={conexion.id}>{conexion.name}</option>
+                ))}
+              </select>
+            ) : (
+              <span className="tag">{activa?.name}</span>
+            )}
+            {activa?.isProduction && <span className="tag tag-accent">Productivo</span>}
+          </div>
+        )}
       </div>
 
       <div className="tabs">
-        {HERRAMIENTAS.map((una) => (
+        {HERRAMIENTAS.filter((una) => !una.soloConVarias || conexiones.length > 1).map((una) => (
           <button
             key={una.id}
             type="button"
@@ -124,6 +137,11 @@ export default function CidsTools() {
           Cada herramienta se monta y se desmonta al cambiar de pestaña, igual que en v9. La
           alternativa —dejarlas montadas y solo esconderlas— haría que el monitor y el resumen
           siguieran consultando a SAP en sus relojes mientras mirás otra cosa. */}
+      {herramienta === 'global' && (
+        <Suspense fallback={<div className="page-hint">Cargando el tablero…</div>}>
+          <GlobalSummary conexiones={conexiones} />
+        </Suspense>
+      )}
       {herramienta === 'resumen' && (
         <Suspense fallback={<div className="page-hint">Cargando el tablero…</div>}>
           <Summary key={`resumen-${elegida}`} connectionId={elegida} />
