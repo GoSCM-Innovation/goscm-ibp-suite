@@ -95,21 +95,6 @@ export default function ConnectionsTab({ clientId }) {
     })
   }
 
-  // Las candidatas a contraparte: del mismo tipo, productivas, y no ella misma.
-  const productivasDelMismoTipo = detail
-    ? connections.filter((c) => c.kind === detail.kind && c.isProduction && c.id !== detail.id)
-    : []
-
-  const saveCounterpart = (productionCounterpartId) => run(async () => {
-    const data = await api.patch('/api/admin/connections', {
-      clientId,
-      connectionId: detail.id,
-      productionCounterpartId: productionCounterpartId || null,
-    })
-    setDetail({ ...detail, productionCounterpartId: data.connection.productionCounterpartId })
-    recargar()
-  })
-
   const removeAgreement = (agreementId) => run(async () => {
     await api.del('/api/admin/connections', { clientId, agreementId })
     const data = await api.get('/api/admin/connections', { ...(params ?? {}), id: detail.id })
@@ -254,41 +239,6 @@ export default function ConnectionsTab({ clientId }) {
               {detail.kind === 'cids' ? 'Guardar credenciales' : 'Guardar acuerdo'}
             </button>
           </form>
-        </div>
-      )}
-
-      {/* Solo tiene sentido en una conexión de CI-DS que NO sea la productiva: es la que se compara
-          contra producción. En la productiva no hay con qué comparar. */}
-      {detail && detail.kind === 'cids' && !detail.isProduction && (
-        <div className="card">
-          <div className="card-title">Contraparte productiva · {detail.name}</div>
-          <p className="card-hint" style={{ marginTop: 4 }}>
-            Al declararla, CI-DS Tools marca en este tenant las tareas que ya existen en producción,
-            o sea las que están transportadas. Se declara y no se adivina: si un cliente tiene dos
-            tenants productivos, adivinar marcaría tareas equivocadas sin que nadie lo notara.
-          </p>
-
-          <div className="field" style={{ marginTop: 12, maxWidth: 340 }}>
-            <label htmlFor="counterpart">Tenant productivo a comparar</label>
-            <select
-              id="counterpart"
-              className="select"
-              disabled={busy}
-              value={detail.productionCounterpartId ?? ''}
-              onChange={(e) => saveCounterpart(e.target.value)}
-            >
-              <option value="">— Sin comparar —</option>
-              {productivasDelMismoTipo.map((connection) => (
-                <option key={connection.id} value={connection.id}>{connection.name}</option>
-              ))}
-            </select>
-          </div>
-
-          {productivasDelMismoTipo.length === 0 && (
-            <p className="card-hint" style={{ marginTop: 8 }}>
-              Todavía no hay ninguna conexión de CI-DS marcada como productiva para este cliente.
-            </p>
-          )}
         </div>
       )}
 

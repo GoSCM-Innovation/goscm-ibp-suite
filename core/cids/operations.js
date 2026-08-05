@@ -41,13 +41,20 @@ export function isWriteOperation(operation) {
  * segunda también falla, el problema no es la sesión y reintentar en bucle solo esconde el
  * error de verdad.
  */
-export async function runCidsOperation({ clientId, connectionId, operation, params = {}, debug = false }) {
+export async function runCidsOperation({
+  clientId,
+  connectionId,
+  operation,
+  params = {},
+  debug = false,
+  production = false,
+}) {
   if (!ALLOWED_OPERATIONS.includes(operation)) {
     throw new Error(`Operación no permitida: "${operation}".`)
   }
 
   const target = await getCidsTarget(clientId, connectionId)
-  let sessionId = await getCidsSession(clientId, connectionId)
+  let sessionId = await getCidsSession(clientId, connectionId, { production })
 
   const ejecutar = () => callOperation({
     serviceUrl: target.baseUrl,
@@ -61,8 +68,8 @@ export async function runCidsOperation({ clientId, connectionId, operation, para
     return await ejecutar()
   } catch (error) {
     if (!(error instanceof SoapSessionExpiredError)) throw error
-    await forgetCidsSession(clientId, connectionId)
-    sessionId = await getCidsSession(clientId, connectionId, { force: true })
+    await forgetCidsSession(clientId, connectionId, { production })
+    sessionId = await getCidsSession(clientId, connectionId, { force: true, production })
     return ejecutar()
   }
 }

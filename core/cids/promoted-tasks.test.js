@@ -22,15 +22,9 @@ vi.mock('./operations.js', () => ({ runCidsOperation: vi.fn() }))
 
 const CLIENTE = 'c-1'
 const PRUEBAS = 'conn-qa'
-const PRODUCTIVA = 'conn-prd'
 
-const DESTINO_QA = {
-  id: PRUEBAS,
-  kind: 'cids',
-  name: 'CI-DS QA',
-  isProduction: false,
-  productionCounterpartId: PRODUCTIVA,
-}
+// Una sola conexión: el repositorio productivo es el de ella misma, con otra bandera en el logon.
+const DESTINO_QA = { id: PRUEBAS, kind: 'cids', name: 'CI-DS', isProduction: false }
 
 /** Responde getProjects y getProjectTasks con un tenant de dos proyectos. */
 function tenantConDosProyectos() {
@@ -68,24 +62,21 @@ describe('getPromotedTaskNames', () => {
     expect(await getPromotedTaskNames(CLIENTE, PRUEBAS)).toEqual(['CARGA_DIARIA', 'CARGA_MENSUAL', 'MAESTROS'])
   })
 
-  it('consulta al tenant productivo, no al que se está mirando', async () => {
+  // El punto de todo el modulo: es la MISMA conexion, pedida con la bandera del logon puesta.
+  it('consulta la misma conexión pero contra el repositorio productivo', async () => {
     tenantConDosProyectos()
 
     await getPromotedTaskNames(CLIENTE, PRUEBAS)
 
-    const consultadas = new Set(runCidsOperation.mock.calls.map(([{ connectionId }]) => connectionId))
-    expect([...consultadas]).toEqual([PRODUCTIVA])
+    expect(runCidsOperation).toHaveBeenCalled()
+    for (const [argumentos] of runCidsOperation.mock.calls) {
+      expect(argumentos.connectionId).toBe(PRUEBAS)
+      expect(argumentos.production).toBe(true)
+    }
   })
 
   // La diferencia entre "no aplica" y "ninguna está transportada" importa: con una lista vacía la
   // interfaz afirmaría algo que no sabe.
-  it('devuelve null si la conexión no declaró su contraparte, sin consultar nada', async () => {
-    getCidsTarget.mockResolvedValue({ ...DESTINO_QA, productionCounterpartId: null })
-
-    expect(await getPromotedTaskNames(CLIENTE, PRUEBAS)).toBeNull()
-    expect(runCidsOperation).not.toHaveBeenCalled()
-  })
-
   it('devuelve null si ya se está mirando el productivo', async () => {
     getCidsTarget.mockResolvedValue({ ...DESTINO_QA, isProduction: true })
 

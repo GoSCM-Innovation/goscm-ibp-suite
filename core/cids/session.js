@@ -17,7 +17,17 @@ import { logon } from '../soap/client.js'
 
 export const CACHED_SESSION_SECONDS = 20 * 60
 
-const sessionKey = (clientId, connectionId) => tenantKey(clientId, 'cids-session', connectionId)
+/**
+ * Una conexión de CI-DS da acceso a DOS repositorios, no a uno.
+ *
+ * `isProduction` es un campo del logon, no de la conexión: con la misma dirección, la misma
+ * organización y las mismas credenciales, la bandera decide si entrás al repositorio de pruebas o
+ * al productivo. Por eso hay dos sesiones posibles por conexión y cada una se guarda por separado —
+ * mezclarlas daría datos del repositorio equivocado.
+ */
+const sessionKey = (clientId, connectionId, production) => (
+  tenantKey(clientId, production ? 'cids-session-prd' : 'cids-session', connectionId)
+)
 
 /** La conexión de CI-DS, comprobando que sea de ese tipo antes de intentar nada. */
 export async function getCidsTarget(clientId, connectionId) {
@@ -30,11 +40,16 @@ export async function getCidsTarget(clientId, connectionId) {
 
 /**
  * Identificador de sesión con CI-DS, reutilizando el guardado si sigue vigente.
- * Con `force` se descarta el guardado y se vuelve a identificar.
+ *
+ * Con `force` se descarta el guardado y se vuelve a identificar. Con `production` se entra al
+ * repositorio productivo aunque la conexión sea de pruebas, que es lo que hace falta para saber qué
+ * tareas ya están transportadas.
+ *
+ * La conexión se lee solo cuando hay que identificarse: con la sesión guardada no se toca la base.
  */
-export async function getCidsSession(clientId, connectionId, { force = false } = {}) {
+export async function getCidsSession(clientId, connectionId, { force = false, production = false } = {}) {
   const redis = getRedis()
-  const key = sessionKey(clientId, connectionId)
+  const key = sessionKey(clientId, connectionId, production)
 
   if (!force) {
     const cached = await redis.get(key)
@@ -49,14 +64,19 @@ export async function getCidsSession(clientId, connectionId, { force = false } =
     orgName: target.organization,
     user,
     password,
-    isProduction: target.isProduction,
+    // Pedir el productivo manda; si no se pide, se usa el repositorio propio de la conexión.
+    isProduction: production || target.isProduction,
   })
 
   await redis.set(key, sessionId, { ex: CACHED_SESSION_SECONDS })
   return sessionId
 }
 
-/** Olvida la sesión guardada. Se llama cuando SAP la rechaza. */
-export async function forgetCidsSession(clientId, connectionId) {
-  await getRedis().del(sessionKey(clientId, connectionId))
+/**
+ * Olvida la sesión guardada. Se llama cuando SAP la rechaza.
+ * Hay que olvidar la MISMA que se estaba usando: borrar la de pruebas no arregla nada si la que
+ * venció era la del productivo.
+ */
+export async function forgetCidsSession(clientId, connectionId, { production = false } = {}) {
+  await getRedis().del(sessionKey(clientId, connectionId, production))
 }

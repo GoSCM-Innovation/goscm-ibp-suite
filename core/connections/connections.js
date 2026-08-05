@@ -46,7 +46,6 @@ const toConnection = (row) => row && ({
   baseUrl: row.base_url,
   organization: row.organization,
   isProduction: row.is_production,
-  productionCounterpartId: row.production_counterpart_id ?? null,
   createdAt: row.created_at,
   ...(row.agreement_count === undefined ? {} : { agreementCount: row.agreement_count }),
 })
@@ -74,8 +73,7 @@ export async function listConnections(clientId, { kind = null } = {}) {
   if (kind !== null) assertKind(kind)
   const rows = await queryScoped(
     clientId,
-    `select c.id, c.kind, c.name, c.base_url, c.organization, c.is_production,
-            c.production_counterpart_id, c.created_at,
+    `select c.id, c.kind, c.name, c.base_url, c.organization, c.is_production, c.created_at,
             count(a.id)::int as agreement_count
      from connections c
      left join connection_agreements a on a.connection_id = c.id and a.client_id = c.client_id
@@ -91,7 +89,7 @@ export async function listConnections(clientId, { kind = null } = {}) {
 export async function getConnection(clientId, connectionId) {
   const connection = await queryOneScoped(
     clientId,
-    `select id, kind, name, base_url, organization, is_production, production_counterpart_id, created_at
+    `select id, kind, name, base_url, organization, is_production, created_at
      from connections where id = $1 and client_id = $2`,
     [connectionId, clientId],
   )
@@ -121,58 +119,8 @@ export async function createConnection(clientId, { kind, name, baseUrl, organiza
     clientId,
     `insert into connections (client_id, kind, name, base_url, organization, is_production)
      values ($1, $2, $3, $4, $5, $6)
-     returning id, kind, name, base_url, organization, is_production, production_counterpart_id, created_at`,
+     returning id, kind, name, base_url, organization, is_production, created_at`,
     [clientId, kind, name.trim(), baseUrl.trim(), organization, Boolean(isProduction)],
-  ))
-}
-
-/**
- * Declara cuál es la conexión productiva que le corresponde a una de pruebas.
- *
- * Sirve para saber qué tareas de un tenant de pruebas existen ADEMÁS en producción, o sea qué está
- * ya transportado. Se declara y no se deduce: buscar "la productiva del cliente" acierta mientras
- * haya una sola, y el día que haya dos elegiría mal en silencio.
- *
- * Con `counterpartId` en nulo se borra el enlace. Las cuatro guardas son las que evitan un enlace
- * que parezca válido y no lo sea; la de "no a sí misma" la sostiene también la base.
- */
-export async function setProductionCounterpart(clientId, connectionId, counterpartId) {
-  const connection = await queryOneScoped(
-    clientId,
-    'select id, kind, is_production from connections where id = $1 and client_id = $2',
-    [connectionId, clientId],
-  )
-  if (!connection) throw new Error('La conexión no existe para este cliente.')
-
-  if (counterpartId) {
-    if (counterpartId === connectionId) {
-      throw new Error('Una conexión no puede ser su propia contraparte productiva.')
-    }
-    if (connection.is_production) {
-      throw new Error('Una conexión productiva no tiene contraparte productiva.')
-    }
-
-    const counterpart = await queryOneScoped(
-      clientId,
-      'select id, kind, is_production from connections where id = $1 and client_id = $2',
-      [counterpartId, clientId],
-    )
-    // Mismo mensaje que si no existiera: una conexión de otro cliente no se confirma que exista.
-    if (!counterpart) throw new Error('La conexión productiva indicada no existe para este cliente.')
-    if (counterpart.kind !== connection.kind) {
-      throw new Error('La contraparte productiva tiene que ser del mismo tipo de conexión.')
-    }
-    if (!counterpart.is_production) {
-      throw new Error('La conexión indicada como contraparte no está marcada como productiva.')
-    }
-  }
-
-  return toConnection(await queryOneScoped(
-    clientId,
-    `update connections set production_counterpart_id = $1
-     where id = $2 and client_id = $3
-     returning id, kind, name, base_url, organization, is_production, production_counterpart_id, created_at`,
-    [counterpartId || null, connectionId, clientId],
   ))
 }
 

@@ -93,9 +93,69 @@ describe('getCidsSession', () => {
     await getCidsSession(CLIENTE, CONEXION)
     expect(logon).toHaveBeenCalledTimes(2)
   })
+
+  // Una conexión de CI-DS da acceso a DOS repositorios: `isProduction` es un campo del logon, no de
+  // la conexión. Misma dirección, misma organización, mismas credenciales, otro repositorio.
+  describe('los dos repositorios de una misma conexión', () => {
+    beforeEach(() => {
+      getConnectionTarget.mockResolvedValue({ ...DESTINO, isProduction: false })
+    })
+
+    it('sin pedir nada se usa el repositorio propio de la conexión', async () => {
+      await getCidsSession(CLIENTE, CONEXION)
+      expect(logon).toHaveBeenCalledWith(expect.objectContaining({ isProduction: false }))
+    })
+
+    it('pide el productivo con la misma dirección y las mismas credenciales', async () => {
+      await getCidsSession(CLIENTE, CONEXION, { production: true })
+      expect(logon).toHaveBeenCalledWith({
+        serviceUrl: DESTINO.baseUrl,
+        orgName: 'ORG',
+        user: 'usuario',
+        password: 'clave',
+        isProduction: true,
+      })
+    })
+
+    // Si se guardaran juntas, una consulta al productivo podría contestar con datos de pruebas.
+    it('guarda las dos por separado y reutiliza cada una', async () => {
+      logon.mockResolvedValueOnce('sesion-pruebas')
+      await expect(getCidsSession(CLIENTE, CONEXION)).resolves.toBe('sesion-pruebas')
+      logon.mockResolvedValueOnce('sesion-productiva')
+      await expect(getCidsSession(CLIENTE, CONEXION, { production: true })).resolves.toBe('sesion-productiva')
+      expect(logon).toHaveBeenCalledTimes(2)
+
+      await expect(getCidsSession(CLIENTE, CONEXION)).resolves.toBe('sesion-pruebas')
+      await expect(getCidsSession(CLIENTE, CONEXION, { production: true })).resolves.toBe('sesion-productiva')
+      expect(logon).toHaveBeenCalledTimes(2)
+    })
+
+    it('olvidar la del productivo no toca la de pruebas', async () => {
+      await getCidsSession(CLIENTE, CONEXION)
+      await getCidsSession(CLIENTE, CONEXION, { production: true })
+      logon.mockClear()
+
+      await forgetCidsSession(CLIENTE, CONEXION, { production: true })
+
+      await getCidsSession(CLIENTE, CONEXION)
+      expect(logon).not.toHaveBeenCalled()
+      await getCidsSession(CLIENTE, CONEXION, { production: true })
+      expect(logon).toHaveBeenCalledTimes(1)
+    })
+  })
 })
 
 describe('runCidsOperation', () => {
+  it('con production ejecuta contra el repositorio productivo de la misma conexión', async () => {
+    getConnectionTarget.mockResolvedValue({ ...DESTINO, isProduction: false })
+
+    await runCidsOperation({
+      clientId: CLIENTE, connectionId: CONEXION, operation: 'getProjects', production: true,
+    })
+
+    expect(logon).toHaveBeenCalledWith(expect.objectContaining({ isProduction: true }))
+  })
+
   it('ejecuta la operación con la sesión y la dirección de la conexión', async () => {
     const resultado = await runCidsOperation({ clientId: CLIENTE, connectionId: CONEXION, operation: 'getProjects' })
 
