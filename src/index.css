@@ -243,18 +243,9 @@ a { color: var(--cyan); }
   top: 0;
   z-index: 50;
 }
-.header-brand { align-items: center; display: flex; font-weight: 700; gap: 9px; letter-spacing: -.01em; }
-.header-brand-mark {
-  background: linear-gradient(135deg, var(--accent) 0%, var(--accent2) 100%);
-  border-radius: 7px;
-  color: #fff;
-  display: grid;
-  font-size: 12px;
-  font-weight: 700;
-  height: 26px;
-  place-items: center;
-  width: 26px;
-}
+.header-brand { align-items: center; display: flex; font-weight: 700; gap: 12px; letter-spacing: -.01em; }
+.header-logo { flex-shrink: 0; height: 30px; object-fit: contain; width: auto; }
+.login-logo { display: block; height: 40px; object-fit: contain; width: auto; }
 .header-sep { background: var(--divider); height: 20px; width: 1px; }
 .header-context { color: var(--text2); font-size: 12px; }
 

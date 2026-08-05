@@ -13,8 +13,10 @@ export default function Shell({ user, modules, theme, onToggleTheme, onSignOut, 
   return (
     <>
       <header className="header">
+        {/* Logo, separador y título: el mismo patrón de la cabecera de v8. */}
         <div className="header-brand">
-          <span className="header-brand-mark">GS</span>
+          <img src="/logo-goscm.png" alt="GoSCM" className="header-logo" />
+          <div className="header-sep" />
           <span>Suite IBP</span>
         </div>
         <div className="header-sep" />

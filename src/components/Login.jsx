@@ -49,12 +49,10 @@ export default function Login({ onSignedIn }) {
   return (
     <div className="login-screen">
       <div className="login-card">
-        <div style={{ alignItems: 'center', display: 'flex', gap: 10, marginBottom: 22 }}>
-          <span className="header-brand-mark">GS</span>
-          <div>
-            <div style={{ fontSize: 15, fontWeight: 700 }}>Suite IBP</div>
-            <div style={{ color: 'var(--text3)', fontSize: 11 }}>GoSCM</div>
-          </div>
+        <div style={{ marginBottom: 24 }}>
+          <img src="/logo-goscm.png" alt="GoSCM" className="login-logo" />
+          <div style={{ fontSize: 15, fontWeight: 700, marginTop: 14 }}>Suite IBP</div>
+          <div style={{ color: 'var(--text3)', fontSize: 11.5 }}>SAP IBP y CI-DS en un solo sitio</div>
         </div>
 
         {step === 'email' ? (
