@@ -1,4 +1,4 @@
-// POST /api/cids/call — { connectionId, operation, params }
+// POST /api/cids/call — { connectionId, operation, params, production }
 //
 // El único camino del navegador hacia CI-DS. Tres guardas antes de tocar nada: hay sesión, el
 // módulo está contratado, y la conexión es de ese cliente (lo comprueba `core/connections`,
@@ -6,6 +6,10 @@
 //
 // La lista de operaciones permitidas vive en core/cids, no aquí: así vale igual para el
 // asistente de IA cuando llegue.
+//
+// `production` elige a cuál de los dos repositorios de la conexión se va. No es un permiso: son la
+// misma dirección y las mismas credenciales, y las dos ya pasaron las tres guardas. Es qué está
+// mirando el usuario.
 
 import { requireModule } from '../../core/auth/guards.js'
 import { runCidsOperation } from '../../core/cids/operations.js'
@@ -17,7 +21,7 @@ export default async function handler(req, res) {
   const session = await requireModule(req, res, 'cids')
   if (!session) return
 
-  const { connectionId, operation, params } = req.body ?? {}
+  const { connectionId, operation, params, production } = req.body ?? {}
   if (!connectionId) return res.status(400).json({ error: 'Falta la conexión.' })
   if (!operation) return res.status(400).json({ error: 'Falta la operación.' })
 
@@ -27,6 +31,7 @@ export default async function handler(req, res) {
       connectionId,
       operation,
       params: params ?? {},
+      production: Boolean(production),
     })
     return res.status(200).json({ result })
   } catch (error) {

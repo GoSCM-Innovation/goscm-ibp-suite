@@ -128,7 +128,14 @@ export default function ConnectionsTab({ clientId }) {
                 <tr key={connection.id} onClick={() => open(connection)} style={{ cursor: 'pointer' }}>
                   <td style={{ fontWeight: 600 }}>
                     {connection.name}
-                    {connection.isProduction && <span className="tag tag-accent" style={{ marginLeft: 8 }}>Productivo</span>}
+                    {/* Para CI-DS no se muestra: la conexión no es de pruebas ni productiva, es las
+                        dos, y la marca de la fila solo confundiría. */}
+                    {connection.kind !== 'cids' && connection.isProduction && (
+                      <span className="tag tag-accent" style={{ marginLeft: 8 }}>Productivo</span>
+                    )}
+                    {connection.kind === 'cids' && (
+                      <span className="tag tag-muted" style={{ marginLeft: 8 }}>Pruebas + Productivo</span>
+                    )}
                   </td>
                   <td><span className="tag">{connection.kind === 'ibp' ? 'SAP IBP' : 'CI-DS'}</span></td>
                   <td className="mono" style={{ color: 'var(--text2)', maxWidth: 320, overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -290,14 +297,19 @@ export default function ConnectionsTab({ clientId }) {
               />
             </div>
           )}
-          <label style={{ alignItems: 'center', alignSelf: 'flex-end', display: 'flex', gap: 7, paddingBottom: 9 }}>
-            <input
-              type="checkbox"
-              checked={nueva.isProduction}
-              onChange={(e) => setNueva({ ...nueva, isProduction: e.target.checked })}
-            />
-            Productivo
-          </label>
+          {/* Solo para IBP: allí el tenant de calidad y el productivo son direcciones distintas, así
+              que hay que decir cuál es esta. En CI-DS no se pregunta porque no tiene respuesta —una
+              conexión da acceso a los DOS repositorios y se elige al usarla. */}
+          {nueva.kind !== 'cids' && (
+            <label style={{ alignItems: 'center', alignSelf: 'flex-end', display: 'flex', gap: 7, paddingBottom: 9 }}>
+              <input
+                type="checkbox"
+                checked={nueva.isProduction}
+                onChange={(e) => setNueva({ ...nueva, isProduction: e.target.checked })}
+              />
+              Productivo
+            </label>
+          )}
           <button className="btn btn-primary" type="submit" disabled={busy} style={{ alignSelf: 'flex-end' }}>
             Crear conexión
           </button>

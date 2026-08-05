@@ -51,7 +51,7 @@ describe('getCidsSession', () => {
       orgName: 'ORG',
       user: 'usuario',
       password: 'clave',
-      isProduction: true,
+      isProduction: false,
     })
   })
 
@@ -101,8 +101,18 @@ describe('getCidsSession', () => {
       getConnectionTarget.mockResolvedValue({ ...DESTINO, isProduction: false })
     })
 
-    it('sin pedir nada se usa el repositorio propio de la conexión', async () => {
+    it('sin pedir nada se entra al repositorio de pruebas', async () => {
       await getCidsSession(CLIENTE, CONEXION)
+      expect(logon).toHaveBeenCalledWith(expect.objectContaining({ isProduction: false }))
+    })
+
+    // Para CI-DS la columna is_production no significa nada: la conexión es las dos cosas. Leerla
+    // haría que pedir pruebas devolviera producción, y los datos parecerían correctos.
+    it('NO mira la marca de la conexión: manda solo el repositorio pedido', async () => {
+      getConnectionTarget.mockResolvedValue({ ...DESTINO, isProduction: true })
+
+      await getCidsSession(CLIENTE, CONEXION)
+
       expect(logon).toHaveBeenCalledWith(expect.objectContaining({ isProduction: false }))
     })
 

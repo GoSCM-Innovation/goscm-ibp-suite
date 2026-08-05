@@ -115,6 +115,22 @@ describe('createConnection', () => {
     await expect(createConnection(CLIENTE, { kind: 'ibp', name: 'X' })).rejects.toThrow(/dirección/)
   })
 
+  // En CI-DS el repositorio se elige en el logon: la conexión es pruebas Y producción a la vez, así
+  // que guardar una marca solo podría mentir.
+  it('en CI-DS ignora la marca de productiva', async () => {
+    queryOneScoped.mockResolvedValue({ id: CONEXION })
+    await createConnection(CLIENTE, {
+      kind: 'cids', name: 'CI-DS', baseUrl: 'https://x.hana.ondemand.com/', isProduction: true,
+    })
+    expect(queryOneScoped.mock.calls[0][2].at(-1)).toBe(false)
+  })
+
+  it('en IBP la respeta, porque ahí el tenant productivo es otra dirección', async () => {
+    queryOneScoped.mockResolvedValue({ id: CONEXION })
+    await createConnection(CLIENTE, { ...nueva, isProduction: true })
+    expect(queryOneScoped.mock.calls[0][2].at(-1)).toBe(true)
+  })
+
   it('guarda con el cliente en la propia fila', async () => {
     queryOneScoped.mockResolvedValue({ id: CONEXION })
     await createConnection(CLIENTE, nueva)

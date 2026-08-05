@@ -38,7 +38,7 @@ const colorDeAgente = (estado) => {
   return 'var(--text3)'
 }
 
-export default function Summary({ connectionId }) {
+export default function Summary({ destino }) {
   const fechas = useDateRange({ maxDays: MAX_DAYS })
   const { zona, rangoIncompleto, rangoExcedido, rangoValido, startDateFrom, startDateTo } = fechas
 
@@ -56,8 +56,8 @@ export default function Summary({ connectionId }) {
     try {
       // Las dos consultas son independientes, así que salen juntas. Como en v9.
       const [tareas, grupos] = await Promise.all([
-        cidsCall(connectionId, 'getAllExecutedTasks2', { startDateFrom, startDateTo }),
-        cidsCall(connectionId, 'getAgents', { activeOnly: false }),
+        cidsCall(destino, 'getAllExecutedTasks2', { startDateFrom, startDateTo }),
+        cidsCall(destino, 'getAgents', { activeOnly: false }),
       ])
       setEjecuciones(Array.isArray(tareas) ? tareas : [])
       setAgentes((Array.isArray(grupos) ? grupos : []).flatMap((grupo) => grupo.agents ?? []))
@@ -67,7 +67,7 @@ export default function Summary({ connectionId }) {
     } finally {
       setCargando(false)
     }
-  }, [connectionId, startDateFrom, startDateTo])
+  }, [destino, startDateFrom, startDateTo])
 
   // Por temporizador y no llamando a `cargar` en el efecto: un efecto no debe cambiar el estado en
   // el acto. Mismo patrón que el monitor.

@@ -42,11 +42,14 @@ export const normalizeTaskName = (taskName) => String(taskName ?? '').trim().toU
  * ya apunta al productivo. La diferencia importa: con `null` la interfaz no muestra nada, mientras
  * que con una lista vacía diría "ninguna tarea está transportada", que es una afirmación distinta.
  */
-export async function getPromotedTaskNames(clientId, connectionId) {
-  const target = await getCidsTarget(clientId, connectionId)
+export async function getPromotedTaskNames(clientId, connectionId, { production = false } = {}) {
+  // Mirando el productivo no hay con qué comparar: todo lo que se ve ya está ahí. `production` es el
+  // repositorio que se está mirando, no una propiedad de la conexión — una conexión de CI-DS da
+  // acceso a los dos.
+  if (production) return null
 
-  // Mirando el productivo no hay con qué comparar: todo lo que se ve ya está ahí.
-  if (target.isProduction) return null
+  // Se comprueba que la conexión exista y sea de CI-DS antes de tocar la caché.
+  await getCidsTarget(clientId, connectionId)
 
   const redis = getRedis()
   const key = promotedKey(clientId, connectionId)

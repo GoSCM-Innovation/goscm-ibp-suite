@@ -1,7 +1,7 @@
-// GET /api/cids/promoted?connectionId=… — qué tareas de este tenant ya están en producción.
+// GET /api/cids/promoted?connectionId=…&production=… — qué tareas ya están en producción.
 //
-// Devuelve `names: null` cuando la comparación no aplica, y eso NO es un error: significa que la
-// conexión ya apunta al repositorio productivo. La interfaz simplemente no muestra nada. Contestar
+// Devuelve `names: null` cuando la comparación no aplica, y eso NO es un error: significa que lo que
+// se está mirando YA es el repositorio productivo. La interfaz simplemente no muestra nada. Contestar
 // una lista vacía diría "ninguna tarea está transportada", que es una afirmación distinta.
 //
 // Si el repositorio productivo no contesta, también se devuelve `names: null` con éxito, no un
@@ -23,7 +23,9 @@ export default async function handler(req, res) {
   if (!connectionId) return res.status(400).json({ error: 'Falta la conexión.' })
 
   try {
-    const names = await getPromotedTaskNames(session.clientId, connectionId)
+    const names = await getPromotedTaskNames(session.clientId, connectionId, {
+      production: req.query?.production === 'true',
+    })
     return res.status(200).json({ names })
   } catch (error) {
     // `SoapSessionExpiredError` hereda de `SoapError`, así que las dos entran por aquí.

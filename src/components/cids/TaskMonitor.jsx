@@ -45,7 +45,7 @@ const MAX_DAYS = 90
  * al lanzar una tarea se salte al monitor ya filtrado por ella sin que este componente sepa que el
  * lanzador existe, y sin un efecto que copie una prop al estado.
  */
-export default function TaskMonitor({ connectionId, busqueda, onBuscar, transportadas }) {
+export default function TaskMonitor({ destino, busqueda, onBuscar, transportadas }) {
   // El rango, la zona y sus tres reglas viven en el gancho: los tableros usan el mismo.
   const fechas = useDateRange({ maxDays: MAX_DAYS })
   const { zona, rangoIncompleto, rangoExcedido, rangoValido, startDateFrom, startDateTo } = fechas
@@ -87,7 +87,7 @@ export default function TaskMonitor({ connectionId, busqueda, onBuscar, transpor
     setCargando(true)
     setError('')
     try {
-      const filas = await cidsCall(connectionId, 'getAllExecutedTasks2', { startDateFrom, startDateTo })
+      const filas = await cidsCall(destino, 'getAllExecutedTasks2', { startDateFrom, startDateTo })
       setEjecuciones(Array.isArray(filas) ? filas : [])
       setUltimoRefresco(new Date())
     } catch (fallo) {
@@ -95,7 +95,7 @@ export default function TaskMonitor({ connectionId, busqueda, onBuscar, transpor
     } finally {
       setCargando(false)
     }
-  }, [connectionId, startDateFrom, startDateTo])
+  }, [destino, startDateFrom, startDateTo])
 
   // La lista la trae un reloj: la primera vuelta sale enseguida y después cada REFRESH_MS. Va por
   // temporizador y no llamando a `cargar` aquí mismo porque el efecto no debe cambiar el estado
@@ -162,7 +162,7 @@ export default function TaskMonitor({ connectionId, busqueda, onBuscar, transpor
 
     let abandonado = false
     setCargandoDetalles(true)
-    fetchTaskDetails(connectionId, pendientes, { shouldStop: () => abandonado })
+    fetchTaskDetails(destino, pendientes, { shouldStop: () => abandonado })
       .then((nuevos) => { if (!abandonado) setDetalles((previos) => ({ ...previos, ...nuevos })) })
       .catch(() => {
         // No se pinta como error de pantalla: la lista está bien y solo faltan dos columnas. Si
@@ -172,7 +172,7 @@ export default function TaskMonitor({ connectionId, busqueda, onBuscar, transpor
 
     return () => { abandonado = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clavePagina, connectionId, ultimoRefresco])
+  }, [clavePagina, destino, ultimoRefresco])
 
   const elegida = runElegido ? ejecuciones.find((fila) => fila.runId === runElegido) ?? null : null
   const sePuedeCancelar = elegida !== null && isCancelable(elegida.statusCode)
@@ -187,7 +187,7 @@ export default function TaskMonitor({ connectionId, busqueda, onBuscar, transpor
     setCancelando(true)
     setAvisoCancelar(null)
     try {
-      const respuesta = await cidsCall(connectionId, 'cancelTask', { runId: elegida.runId })
+      const respuesta = await cidsCall(destino, 'cancelTask', { runId: elegida.runId })
       // Se muestra lo que contestó SAP si contestó algo: es más útil que un mensaje nuestro, y no
       // afirma nada sobre cuándo se detiene de verdad, que eso lo decide el tenant.
       setAvisoCancelar({ ok: true, texto: respuesta?.message || 'Cancelación enviada.' })
@@ -396,7 +396,7 @@ export default function TaskMonitor({ connectionId, busqueda, onBuscar, transpor
       )}
 
       {registrosDe && (
-        <TaskLogsModal connectionId={connectionId} run={registrosDe} onClose={() => setRegistrosDe(null)} />
+        <TaskLogsModal destino={destino} run={registrosDe} onClose={() => setRegistrosDe(null)} />
       )}
 
       {confirmarCancelar && elegida && (

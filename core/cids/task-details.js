@@ -45,7 +45,7 @@ const soloDigitos = (valor) => String(valor || '').replace(/\D/g, '') || null
  * llegan igual. Con cincuenta filas en pantalla, dejar la página en blanco porque una ejecución
  * dio problema sería peor que no mostrar su duración.
  */
-export async function fetchTaskDetails({ clientId, connectionId, runIds }) {
+export async function fetchTaskDetails({ clientId, connectionId, runIds, production = false }) {
   if (!Array.isArray(runIds)) throw new Error('Hay que indicar qué ejecuciones consultar.')
 
   // Sin duplicados y sin vacíos: repetir un runId sería pagarle a SAP dos veces lo mismo.
@@ -63,6 +63,7 @@ export async function fetchTaskDetails({ clientId, connectionId, runIds }) {
         connectionId,
         operation: 'getTaskStatusByRunId2',
         params: { runId },
+        production,
       })
       detalles[runId] = {
         endTime: soloDigitos(respuesta.endTime),

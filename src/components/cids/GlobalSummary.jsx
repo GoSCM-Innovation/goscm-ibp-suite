@@ -1,4 +1,4 @@
-// El tablero de todos los tenants a la vez.
+// El tablero de todos los repositorios a la vez.
 //
 // Portado de `src/components/Resumen/GlobalResumen.jsx` de v9. Es la pantalla del consultor que
 // atiende varios clientes: los indicadores sumados, el estado de cada conexión, y los gráficos que
@@ -9,8 +9,13 @@
 // contra cada tenant. Aquí la sesión la abre el servidor cuando hace falta, así que una conexión solo
 // puede estar cargando, bien, o con un error que hay que leer.
 //
-// Cada conexión se pide por separado y en paralelo, como en v9: un tenant lento o caído no debe
-// impedir ver los demás, y así se van llenando las filas a medida que contestan.
+// Cada destino se pide por separado y en paralelo, como en v9: uno lento o caído no debe impedir ver
+// los demás, y así se van llenando las filas a medida que contestan.
+//
+// "Destino" es una conexión y uno de sus dos repositorios, así que cada conexión aporta DOS filas:
+// pruebas y productivo. Es el doble de consultas que si fuera una sola, y es el precio de que el
+// tablero diga la verdad — los dos repositorios existen y tienen ejecuciones distintas. El filtro de
+// arriba está justamente para acotar cuando no querés verlos todos.
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { isFailed, isQueued, isWarning, statusMeta, successRate } from '../../../core/cids/task-status.js'
@@ -30,43 +35,40 @@ const REFRESH_MS = 5 * 60 * 1000
 /** El mismo tope de SAP CI-DS que el resto del módulo. */
 const MAX_DAYS = 90
 
-export default function GlobalSummary({ conexiones }) {
+export default function GlobalSummary({ destinos }) {
   const fechas = useDateRange({ maxDays: MAX_DAYS })
   const { zona, rangoIncompleto, rangoExcedido, rangoValido, startDateFrom, startDateTo } = fechas
 
-  // Por conexión: { estado: 'cargando' | 'ok' | 'error', ejecuciones, agentes, error }
-  const [porConexion, setPorConexion] = useState({})
+  // Por destino: { estado: 'cargando' | 'ok' | 'error', ejecuciones, agentes, error }
+  const [porDestino, setPorDestino] = useState({})
   const [cargando, setCargando] = useState(true)
   const [ultimoRefresco, setUltimoRefresco] = useState(null)
 
-  // Conjunto vacío = sin filtro, se ve todo. Con algo dentro = solo esas. Es el criterio de v9.
-  const [filtradas, setFiltradas] = useState(() => new Set())
+  // Conjunto vacío = sin filtro, se ve todo. Con algo dentro = solo esos. Es el criterio de v9.
+  const [filtrados, setFiltrados] = useState(() => new Set())
   const [laminaActiva, setLaminaActiva] = useState(0)
 
-  // Clave estable: cambia solo si cambia el conjunto de conexiones, no si se reordenan.
-  const claveConexiones = useMemo(
-    () => conexiones.map((conexion) => conexion.id).sort().join('|'),
-    [conexiones],
-  )
+  // Clave estable: cambia solo si cambia el conjunto de destinos, no si se reordenan.
+  const claveDestinos = useMemo(() => destinos.map((uno) => uno.id).sort().join('|'), [destinos])
 
   const cargar = useCallback(async () => {
     if (!startDateFrom || !startDateTo) return
     setCargando(true)
 
-    const pedirUna = async (conexion) => {
-      setPorConexion((previo) => ({
+    const pedirUno = async (destino) => {
+      setPorDestino((previo) => ({
         ...previo,
         // Se conserva lo que ya había mientras se recarga: si no, la tabla parpadearía en vacío.
-        [conexion.id]: { ...(previo[conexion.id] ?? { ejecuciones: [], agentes: [] }), estado: 'cargando', error: null },
+        [destino.id]: { ...(previo[destino.id] ?? { ejecuciones: [], agentes: [] }), estado: 'cargando', error: null },
       }))
       try {
         const [tareas, grupos] = await Promise.all([
-          cidsCall(conexion.id, 'getAllExecutedTasks2', { startDateFrom, startDateTo }),
-          cidsCall(conexion.id, 'getAgents', { activeOnly: false }),
+          cidsCall(destino, 'getAllExecutedTasks2', { startDateFrom, startDateTo }),
+          cidsCall(destino, 'getAgents', { activeOnly: false }),
         ])
-        setPorConexion((previo) => ({
+        setPorDestino((previo) => ({
           ...previo,
-          [conexion.id]: {
+          [destino.id]: {
             estado: 'ok',
             ejecuciones: Array.isArray(tareas) ? tareas : [],
             agentes: (Array.isArray(grupos) ? grupos : []).flatMap((grupo) => grupo.agents ?? []),
@@ -74,20 +76,20 @@ export default function GlobalSummary({ conexiones }) {
           },
         }))
       } catch (fallo) {
-        setPorConexion((previo) => ({
+        setPorDestino((previo) => ({
           ...previo,
-          [conexion.id]: { estado: 'error', ejecuciones: [], agentes: [], error: fallo.message },
+          [destino.id]: { estado: 'error', ejecuciones: [], agentes: [], error: fallo.message },
         }))
       }
     }
 
-    // allSettled y no all: una conexión que falla no debe cortar las demás.
-    await Promise.allSettled(conexiones.map(pedirUna))
+    // allSettled y no all: un destino que falla no debe cortar los demás.
+    await Promise.allSettled(destinos.map(pedirUno))
     setCargando(false)
     setUltimoRefresco(new Date())
-    // `conexiones` entra por su clave estable: reordenarlas no tiene que disparar una recarga.
+    // `destinos` entra por su clave estable: reordenarlos no tiene que disparar una recarga.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [claveConexiones, startDateFrom, startDateTo])
+  }, [claveDestinos, startDateFrom, startDateTo])
 
   useEffect(() => {
     const primera = setTimeout(cargar, 0)
@@ -95,13 +97,13 @@ export default function GlobalSummary({ conexiones }) {
     return () => { clearTimeout(primera); clearInterval(reloj) }
   }, [cargar])
 
-  const hayFiltro = filtradas.size > 0
-  const visibles = conexiones.filter((conexion) => !hayFiltro || filtradas.has(conexion.id))
-  const conDatos = visibles.filter((conexion) => porConexion[conexion.id]?.estado === 'ok')
+  const hayFiltro = filtrados.size > 0
+  const visibles = destinos.filter((uno) => !hayFiltro || filtrados.has(uno.id))
+  const conDatos = visibles.filter((uno) => porDestino[uno.id]?.estado === 'ok')
 
   function alternarFiltro(id) {
-    setFiltradas((previas) => {
-      const siguientes = new Set(previas)
+    setFiltrados((previos) => {
+      const siguientes = new Set(previos)
       if (siguientes.has(id)) siguientes.delete(id)
       else siguientes.add(id)
       return siguientes
@@ -110,10 +112,10 @@ export default function GlobalSummary({ conexiones }) {
   }
 
   const global = useMemo(() => {
-    // Cada ejecución se queda con la conexión de la que vino: hace falta para separar la misma
-    // tarea de dos tenants y para decir de dónde salió una fallida.
-    const todas = conDatos.flatMap((conexion) => (
-      porConexion[conexion.id].ejecuciones.map((fila) => ({ ...fila, conexion }))
+    // Cada ejecución se queda con el destino del que vino: hace falta para separar la misma tarea de
+    // dos repositorios y para decir de dónde salió una fallida.
+    const todas = conDatos.flatMap((destino) => (
+      porDestino[destino.id].ejecuciones.map((fila) => ({ ...fila, destino }))
     ))
 
     return {
@@ -124,18 +126,18 @@ export default function GlobalSummary({ conexiones }) {
       correctas: todas.filter((fila) => fila.statusCode === 'SUCCESS').length,
       falladas: todas.filter((fila) => isFailed(fila.statusCode)).length,
       tasaExito: successRate(todas.map((fila) => fila.statusCode)),
-      masEjecutadas: topTasks(todas, { claveExtra: (fila) => fila.conexion.id }),
+      masEjecutadas: topTasks(todas, { claveExtra: (fila) => fila.destino.id }),
       ultimasFalladas: latestFailed(todas),
     }
-  }, [conDatos, porConexion])
+  }, [conDatos, porDestino])
 
   // Lámina 0 = todo junto; 1..N = una conexión.
   const lamina = Math.min(laminaActiva, conDatos.length)
   const deLaLamina = lamina === 0
     ? global.todas
-    : porConexion[conDatos[lamina - 1]?.id]?.ejecuciones ?? []
+    : porDestino[conDatos[lamina - 1]?.id]?.ejecuciones ?? []
 
-  const conError = visibles.filter((c) => porConexion[c.id]?.estado === 'error').length
+  const conError = visibles.filter((uno) => porDestino[uno.id]?.estado === 'error').length
 
   return (
     <div className="monitor">
@@ -144,8 +146,8 @@ export default function GlobalSummary({ conexiones }) {
       <div className="monitor-head">
         <div className="monitor-meta">
           {hayFiltro
-            ? `${filtradas.size} de ${conexiones.length} conexiones · filtro activo · ${global.total} ejecuciones`
-            : `${conexiones.length} conexiones · ${global.total} ejecuciones`}
+            ? `${filtrados.size} de ${destinos.length} repositorios · filtro activo · ${global.total} ejecuciones`
+            : `${destinos.length} repositorios · ${global.total} ejecuciones`}
           {ultimoRefresco && !cargando && (
             <span><span className="sep">·</span>{ultimoRefresco.toLocaleTimeString()}</span>
           )}
@@ -166,30 +168,30 @@ export default function GlobalSummary({ conexiones }) {
         </div>
       </div>
 
-      {conexiones.length > 1 && (
+      {destinos.length > 1 && (
         <div className="filtro-conexiones">
-          <span className="filtro-titulo">Filtrar por cliente</span>
+          <span className="filtro-titulo">Filtrar</span>
           <div className="chips">
-            {conexiones.map((conexion) => {
-              const activa = !hayFiltro || filtradas.has(conexion.id)
+            {destinos.map((uno) => {
+              const activo = !hayFiltro || filtrados.has(uno.id)
               return (
                 <button
-                  key={conexion.id}
+                  key={uno.id}
                   type="button"
-                  className={`chip chip-conexion${activa ? ' active' : ''}`}
-                  onClick={() => alternarFiltro(conexion.id)}
-                  aria-pressed={activa}
+                  className={`chip chip-conexion${activo ? ' active' : ''}`}
+                  onClick={() => alternarFiltro(uno.id)}
+                  aria-pressed={activo}
                 >
-                  <ConnectionAvatar name={conexion.name} size={16} />
-                  {conexion.name}
-                  <EnvBadge isProduction={conexion.isProduction} />
+                  <ConnectionAvatar name={uno.name} size={16} />
+                  {uno.name}
+                  <EnvBadge isProduction={uno.production} />
                 </button>
               )
             })}
           </div>
           {hayFiltro && (
-            <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setFiltradas(new Set()); setLaminaActiva(0) }}>
-              Limpiar ({filtradas.size})
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setFiltrados(new Set()); setLaminaActiva(0) }}>
+              Limpiar ({filtrados.size})
             </button>
           )}
         </div>
@@ -198,7 +200,7 @@ export default function GlobalSummary({ conexiones }) {
       {rangoIncompleto && (
         <div className="notice notice-info">
           Elegí las dos fechas. Sin rango, CI-DS devuelve todas las ejecuciones que existan en cada
-          tenant.
+          repositorio.
         </div>
       )}
       {rangoExcedido && (
@@ -208,7 +210,7 @@ export default function GlobalSummary({ conexiones }) {
       )}
       {conError > 0 && !cargando && (
         <div className="notice notice-error">
-          {conError === 1 ? 'Una conexión no contestó' : `${conError} conexiones no contestaron`}.
+          {conError === 1 ? 'Un repositorio no contestó' : `${conError} repositorios no contestaron`}.
           El detalle está en la tabla de abajo; los números de arriba solo cuentan las que sí.
         </div>
       )}
@@ -229,15 +231,15 @@ export default function GlobalSummary({ conexiones }) {
 
         <div className="card">
           <div className="card-label">
-            Estado por conexión{hayFiltro ? ' · filtrado' : ''}
+            Estado por repositorio{hayFiltro ? ' · filtrado' : ''}
           </div>
           {visibles.length === 0 ? (
-            <div className="sin-datos">Ninguna conexión en el filtro.</div>
-          ) : visibles.map((conexion) => (
-            <FilaConexion
-              key={conexion.id}
-              conexion={conexion}
-              estado={porConexion[conexion.id] ?? { estado: 'cargando', ejecuciones: [] }}
+            <div className="sin-datos">Ningún repositorio en el filtro.</div>
+          ) : visibles.map((uno) => (
+            <FilaDestino
+              key={uno.id}
+              destino={uno}
+              estado={porDestino[uno.id] ?? { estado: 'cargando', ejecuciones: [] }}
             />
           ))}
         </div>
@@ -264,17 +266,18 @@ export default function GlobalSummary({ conexiones }) {
                   Global
                   <span className="chip-count">{global.todas.length}</span>
                 </button>
-                {conDatos.map((conexion, i) => (
+                {conDatos.map((uno, i) => (
                   <button
-                    key={conexion.id}
+                    key={uno.id}
                     type="button"
                     className={`chip chip-conexion${lamina === i + 1 ? ' active' : ''}`}
                     onClick={() => setLaminaActiva(i + 1)}
                     aria-pressed={lamina === i + 1}
                   >
-                    <ConnectionAvatar name={conexion.name} size={16} />
-                    {conexion.name}
-                    <span className="chip-count">{porConexion[conexion.id].ejecuciones.length}</span>
+                    <ConnectionAvatar name={uno.name} size={16} />
+                    {uno.name}
+                    <EnvBadge isProduction={uno.production} />
+                    <span className="chip-count">{porDestino[uno.id].ejecuciones.length}</span>
                   </button>
                 ))}
               </div>
@@ -293,7 +296,7 @@ export default function GlobalSummary({ conexiones }) {
             <div className="grid-charts" key={lamina}>
               <div className="card">
                 <div className="card-label">
-                  Distribución por estado · {lamina === 0 ? 'todas' : conDatos[lamina - 1].name}
+                  Distribución por estado · {lamina === 0 ? 'todos' : conDatos[lamina - 1].label}
                 </div>
                 <StatusDonut porEstado={statusBreakdown(deLaLamina, statusMeta)} />
               </div>
@@ -316,9 +319,9 @@ export default function GlobalSummary({ conexiones }) {
                       <span className="ranking-veces">{tarea.veces}</span>
                     </div>
                     <div className="ranking-donde">
-                      <ConnectionAvatar name={tarea.fila.conexion.name} size={12} />
-                      <span>{tarea.fila.conexion.name}</span>
-                      <EnvBadge isProduction={tarea.fila.conexion.isProduction} />
+                      <ConnectionAvatar name={tarea.fila.destino.name} size={12} />
+                      <span>{tarea.fila.destino.name}</span>
+                      <EnvBadge isProduction={tarea.fila.destino.production} />
                     </div>
                     <div className="ranking-barra">
                       <div style={{ width: `${(tarea.veces / global.masEjecutadas[0].veces) * 100}%` }} />
@@ -332,13 +335,13 @@ export default function GlobalSummary({ conexiones }) {
                 {global.ultimasFalladas.length === 0
                   ? <div className="todo-bien">✓ Sin fallos en el período</div>
                   : global.ultimasFalladas.map((fila) => (
-                    <div className="lista-fila" key={`${fila.conexion.id}-${fila.runId}`}>
+                    <div className="lista-fila" key={`${fila.destino.id}-${fila.runId}`}>
                       <div className="lista-nombre" style={{ color: 'var(--red)' }} title={fila.taskName || ''}>
                         {fila.taskName || '—'}
                       </div>
                       <div className="ranking-donde">
-                        <span>{fila.conexion.name}</span>
-                        <EnvBadge isProduction={fila.conexion.isProduction} />
+                        <span>{fila.destino.name}</span>
+                        <EnvBadge isProduction={fila.destino.production} />
                       </div>
                     </div>
                   ))}
@@ -351,7 +354,7 @@ export default function GlobalSummary({ conexiones }) {
   )
 }
 
-function FilaConexion({ conexion, estado }) {
+function FilaDestino({ destino, estado }) {
   const suyas = estado.ejecuciones ?? []
   const tasa = estado.estado === 'ok' ? successRate(suyas.map((fila) => fila.statusCode)) : null
   const enEjecucion = suyas.filter((fila) => fila.statusCode === 'RUNNING').length
@@ -360,12 +363,12 @@ function FilaConexion({ conexion, estado }) {
 
   return (
     <div className="lista-fila fila-conexion">
-      <ConnectionAvatar name={conexion.name} size={28} />
+      <ConnectionAvatar name={destino.name} size={28} />
       <div className="fila-conexion-que">
-        <div className="lista-nombre">{conexion.name}</div>
+        <div className="lista-nombre">{destino.name}</div>
         <div className="fila-conexion-tipo">
-          {conexion.isProduction ? 'Producción' : 'Pruebas'}
-          <EnvBadge isProduction={conexion.isProduction} />
+          {destino.production ? 'Repositorio productivo' : 'Repositorio de pruebas'}
+          <EnvBadge isProduction={destino.production} />
         </div>
       </div>
 

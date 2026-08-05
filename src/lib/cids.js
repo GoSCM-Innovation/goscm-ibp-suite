@@ -13,9 +13,19 @@ import { api } from './api.js'
  */
 export const RUNS_PER_BATCH = 15
 
-/** Una operación de CI-DS. Devuelve ya el resultado, sin la envoltura de la respuesta. */
-export async function cidsCall(connectionId, operation, params = {}) {
-  const { result } = await api.post('/api/cids/call', { connectionId, operation, params })
+/**
+ * Una operación de CI-DS. Devuelve ya el resultado, sin la envoltura de la respuesta.
+ *
+ * `destino` es una conexión Y uno de sus dos repositorios: en CI-DS la misma conexión da acceso al de
+ * pruebas y al productivo, y lo decide una bandera del logon.
+ */
+export async function cidsCall(destino, operation, params = {}) {
+  const { result } = await api.post('/api/cids/call', {
+    connectionId: destino.connectionId,
+    production: destino.production,
+    operation,
+    params,
+  })
   return result
 }
 
@@ -26,12 +36,41 @@ export async function listCidsConnections() {
 }
 
 /**
+ * Cada conexión de CI-DS rinde DOS destinos: su repositorio de pruebas y su productivo.
+ *
+ * No es una comodidad de la interfaz, es cómo funciona el servicio: no hay dos conexiones que dar de
+ * alta ni nada que enlazar. Con la misma dirección, la misma organización y las mismas credenciales,
+ * `isProduction` en el logon decide a cuál de los dos entrás.
+ */
+export function cidsTargets(conexiones) {
+  return conexiones.flatMap((conexion) => [
+    {
+      id: `${conexion.id}:sandbox`,
+      connectionId: conexion.id,
+      production: false,
+      name: conexion.name,
+      label: `${conexion.name} · Pruebas`,
+    },
+    {
+      id: `${conexion.id}:production`,
+      connectionId: conexion.id,
+      production: true,
+      name: conexion.name,
+      label: `${conexion.name} · Productivo`,
+    },
+  ])
+}
+
+/**
  * Los nombres de tarea que este tenant ya tiene en producción, como conjunto para consultarlo
  * rápido. `null` significa que la comparación no aplica —esta conexión es la productiva o no
  * declaró su contraparte— y NO que no haya ninguna transportada.
  */
-export async function fetchPromotedTaskNames(connectionId) {
-  const { names } = await api.get('/api/cids/promoted', { connectionId })
+export async function fetchPromotedTaskNames(destino) {
+  const { names } = await api.get('/api/cids/promoted', {
+    connectionId: destino.connectionId,
+    production: String(destino.production),
+  })
   return Array.isArray(names) ? new Set(names) : null
 }
 
@@ -51,13 +90,16 @@ export function isTaskPromoted(promoted, taskName) {
  * `shouldStop` se consulta antes de cada tanda: si el usuario ya cambió de página, las que
  * quedan no se piden.
  */
-export async function fetchTaskDetails(connectionId, runIds, { shouldStop = () => false } = {}) {
+export async function fetchTaskDetails(destino, runIds, { shouldStop = () => false } = {}) {
   const detalles = {}
 
   for (let desde = 0; desde < runIds.length; desde += RUNS_PER_BATCH) {
     if (shouldStop()) break
-    const tanda = runIds.slice(desde, desde + RUNS_PER_BATCH)
-    const { details } = await api.post('/api/cids/task-details', { connectionId, runIds: tanda })
+    const { details } = await api.post('/api/cids/task-details', {
+      connectionId: destino.connectionId,
+      production: destino.production,
+      runIds: runIds.slice(desde, desde + RUNS_PER_BATCH),
+    })
     Object.assign(detalles, details)
   }
 

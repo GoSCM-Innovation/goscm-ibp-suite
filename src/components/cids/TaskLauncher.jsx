@@ -13,26 +13,26 @@ import PromotedBadge from './PromotedBadge.jsx'
 import RunTaskModal from './RunTaskModal.jsx'
 
 /** Los proyectos fijados se recuerdan por conexión: los de un tenant no son los de otro. */
-const claveFijados = (connectionId) => `ibp.cids.pins.${connectionId}`
+const claveFijados = (destinoId) => `ibp.cids.pins.${destinoId}`
 
-function leerFijados(connectionId) {
+function leerFijados(destinoId) {
   try {
-    const guardado = JSON.parse(localStorage.getItem(claveFijados(connectionId)) || '[]')
+    const guardado = JSON.parse(localStorage.getItem(claveFijados(destinoId)) || '[]')
     return new Set(Array.isArray(guardado) ? guardado : [])
   } catch {
     return new Set()
   }
 }
 
-function guardarFijados(connectionId, fijados) {
+function guardarFijados(destinoId, fijados) {
   try {
-    localStorage.setItem(claveFijados(connectionId), JSON.stringify([...fijados]))
+    localStorage.setItem(claveFijados(destinoId), JSON.stringify([...fijados]))
   } catch {
     // Almacenamiento bloqueado: los fijados valen para esta visita y no se recuerdan.
   }
 }
 
-export default function TaskLauncher({ connectionId, onTaskLanzada, transportadas }) {
+export default function TaskLauncher({ destino, onTaskLanzada, transportadas }) {
   const [proyectos, setProyectos] = useState([])
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState('')
@@ -43,13 +43,13 @@ export default function TaskLauncher({ connectionId, onTaskLanzada, transportada
   const [cargandoTareas, setCargandoTareas] = useState({})
 
   const [busqueda, setBusqueda] = useState('')
-  const [fijados, setFijados] = useState(() => leerFijados(connectionId))
+  const [fijados, setFijados] = useState(() => leerFijados(destino.id))
   const [soloFijados, setSoloFijados] = useState(false)
   const [lanzar, setLanzar] = useState(null)
 
   useEffect(() => {
     let abandonado = false
-    cidsCall(connectionId, 'getProjects')
+    cidsCall(destino, 'getProjects')
       .then((lista) => {
         if (abandonado) return
         setProyectos(Array.isArray(lista) ? lista : [])
@@ -62,7 +62,7 @@ export default function TaskLauncher({ connectionId, onTaskLanzada, transportada
         setCargando(false)
       })
     return () => { abandonado = true }
-  }, [connectionId, intento])
+  }, [destino, intento])
 
   function refrescar() {
     setCargando(true)
@@ -74,7 +74,7 @@ export default function TaskLauncher({ connectionId, onTaskLanzada, transportada
       const siguientes = new Set(previos)
       if (siguientes.has(guid)) siguientes.delete(guid)
       else siguientes.add(guid)
-      guardarFijados(connectionId, siguientes)
+      guardarFijados(destino.id, siguientes)
       return siguientes
     })
   }
@@ -82,7 +82,7 @@ export default function TaskLauncher({ connectionId, onTaskLanzada, transportada
   function limpiarFijados() {
     setFijados(new Set())
     setSoloFijados(false)
-    guardarFijados(connectionId, new Set())
+    guardarFijados(destino.id, new Set())
   }
 
   function abrir(proyecto) {
@@ -95,7 +95,7 @@ export default function TaskLauncher({ connectionId, onTaskLanzada, transportada
     if (tareas[guid]) return
 
     setCargandoTareas((previos) => ({ ...previos, [guid]: true }))
-    cidsCall(connectionId, 'getProjectTasks', { projectGuid: guid })
+    cidsCall(destino, 'getProjectTasks', { projectGuid: guid })
       .then((lista) => setTareas((previos) => ({ ...previos, [guid]: Array.isArray(lista) ? lista : [] })))
       // Un proyecto que falla queda como vacío y no rompe el árbol: los otros se siguen usando.
       .catch(() => setTareas((previos) => ({ ...previos, [guid]: [] })))
@@ -191,7 +191,7 @@ export default function TaskLauncher({ connectionId, onTaskLanzada, transportada
 
       {lanzar && (
         <RunTaskModal
-          connectionId={connectionId}
+          destino={destino}
           task={lanzar}
           onClose={() => setLanzar(null)}
           onLanzada={(nombre) => { setLanzar(null); onTaskLanzada(nombre) }}

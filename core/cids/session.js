@@ -21,9 +21,10 @@ export const CACHED_SESSION_SECONDS = 20 * 60
  * Una conexión de CI-DS da acceso a DOS repositorios, no a uno.
  *
  * `isProduction` es un campo del logon, no de la conexión: con la misma dirección, la misma
- * organización y las mismas credenciales, la bandera decide si entrás al repositorio de pruebas o
- * al productivo. Por eso hay dos sesiones posibles por conexión y cada una se guarda por separado —
- * mezclarlas daría datos del repositorio equivocado.
+ * organización y las mismas credenciales, la bandera decide si entrás al repositorio de pruebas o al
+ * productivo. Por eso una conexión no "es" de pruebas ni de producción —es las dos cosas— y hay dos
+ * sesiones posibles, cada una guardada por separado. Mezclarlas daría datos del repositorio
+ * equivocado, que es el peor error posible aquí: parecerían correctos.
  */
 const sessionKey = (clientId, connectionId, production) => (
   tenantKey(clientId, production ? 'cids-session-prd' : 'cids-session', connectionId)
@@ -64,8 +65,10 @@ export async function getCidsSession(clientId, connectionId, { force = false, pr
     orgName: target.organization,
     user,
     password,
-    // Pedir el productivo manda; si no se pide, se usa el repositorio propio de la conexión.
-    isProduction: production || target.isProduction,
+    // Manda SOLO lo que se pidió. No se mira `target.isProduction`: para CI-DS esa columna no
+    // significa nada —la conexión es las dos cosas— y leerla haría que pedir pruebas devolviera
+    // producción en cualquier conexión que la tuviera marcada.
+    isProduction: production,
   })
 
   await redis.set(key, sessionId, { ex: CACHED_SESSION_SECONDS })

@@ -14,7 +14,7 @@ import Modal from '../ui/Modal.jsx'
 /** SAP prefija el estado de un agente con "AGENT:". Se quita solo para mostrarlo, como en v9. */
 const estadoAgente = (valor) => String(valor || '').replace(/^AGENT:/, '')
 
-export default function RunTaskModal({ connectionId, task, onClose, onLanzada }) {
+export default function RunTaskModal({ destino, task, onClose, onLanzada }) {
   const [paso, setPaso] = useState('cargando')
   const [variables, setVariables] = useState([])
   const [agentes, setAgentes] = useState([])
@@ -32,9 +32,9 @@ export default function RunTaskModal({ connectionId, task, onClose, onLanzada })
     let abandonado = false
 
     Promise.all([
-      cidsCall(connectionId, 'getTaskInfo', { taskGuid: task.taskGuid }),
-      cidsCall(connectionId, 'getAgents', { activeOnly: true }),
-      cidsCall(connectionId, 'getSystemConfigurations'),
+      cidsCall(destino, 'getTaskInfo', { taskGuid: task.taskGuid }),
+      cidsCall(destino, 'getAgents', { activeOnly: true }),
+      cidsCall(destino, 'getSystemConfigurations'),
     ])
       .then(([info, grupos, configs]) => {
         if (abandonado) return
@@ -53,7 +53,7 @@ export default function RunTaskModal({ connectionId, task, onClose, onLanzada })
       })
 
     return () => { abandonado = true }
-  }, [connectionId, task.taskGuid, intento])
+  }, [destino, task.taskGuid, intento])
 
   async function ejecutar() {
     setPaso('enviando')
@@ -64,7 +64,7 @@ export default function RunTaskModal({ connectionId, task, onClose, onLanzada })
         .filter(([, valor]) => valor !== '')
         .map(([name, value]) => ({ name, value }))
 
-      const respuesta = await cidsCall(connectionId, 'runTask', {
+      const respuesta = await cidsCall(destino, 'runTask', {
         taskName: task.taskName,
         ...(agente ? { agentName: agente } : {}),
         ...(configuracion ? { profileName: configuracion } : {}),

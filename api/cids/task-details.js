@@ -1,4 +1,4 @@
-// POST /api/cids/task-details — { connectionId, runIds } → fin y duración de cada ejecución.
+// POST /api/cids/task-details — { connectionId, runIds, production } → fin y duración.
 //
 // Existe para no hacer una petición por fila. La lista de ejecuciones no trae el fin ni la
 // duración, así que hacen falta tantas consultas a SAP como filas en pantalla; lo que este
@@ -17,7 +17,7 @@ export default async function handler(req, res) {
   const session = await requireModule(req, res, 'cids')
   if (!session) return
 
-  const { connectionId, runIds } = req.body ?? {}
+  const { connectionId, runIds, production } = req.body ?? {}
   if (!connectionId) return res.status(400).json({ error: 'Falta la conexión.' })
 
   try {
@@ -25,6 +25,7 @@ export default async function handler(req, res) {
       clientId: session.clientId,
       connectionId,
       runIds: runIds ?? [],
+      production: Boolean(production),
     })
     return res.status(200).json({ details })
   } catch (error) {

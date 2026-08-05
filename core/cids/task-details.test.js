@@ -32,7 +32,16 @@ describe('fetchTaskDetails', () => {
       connectionId: CONEXION,
       operation: 'getTaskStatusByRunId2',
       params: { runId: 'r-1' },
+      production: false,
     })
+  })
+
+  // La ejecución que se está mirando vive en uno de los dos repositorios de la conexión: preguntar
+  // por ella en el otro no la encontraría.
+  it('consulta el repositorio que se le pida', async () => {
+    await fetchTaskDetails({ clientId: CLIENTE, connectionId: CONEXION, runIds: ['r-1'], production: true })
+
+    expect(runCidsOperation).toHaveBeenCalledWith(expect.objectContaining({ production: true }))
   })
 
   it('quita los separadores del fin, vengan como vengan del tenant', async () => {

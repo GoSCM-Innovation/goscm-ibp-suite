@@ -24,7 +24,7 @@ const CLIENTE = 'c-1'
 const PRUEBAS = 'conn-qa'
 
 // Una sola conexión: el repositorio productivo es el de ella misma, con otra bandera en el logon.
-const DESTINO_QA = { id: PRUEBAS, kind: 'cids', name: 'CI-DS', isProduction: false }
+const DESTINO_QA = { id: PRUEBAS, kind: 'cids', name: 'CI-DS' }
 
 /** Responde getProjects y getProjectTasks con un tenant de dos proyectos. */
 function tenantConDosProyectos() {
@@ -77,11 +77,17 @@ describe('getPromotedTaskNames', () => {
 
   // La diferencia entre "no aplica" y "ninguna está transportada" importa: con una lista vacía la
   // interfaz afirmaría algo que no sabe.
-  it('devuelve null si ya se está mirando el productivo', async () => {
-    getCidsTarget.mockResolvedValue({ ...DESTINO_QA, isProduction: true })
-
-    expect(await getPromotedTaskNames(CLIENTE, PRUEBAS)).toBeNull()
+  it('devuelve null si ya se está mirando el repositorio productivo', async () => {
+    expect(await getPromotedTaskNames(CLIENTE, PRUEBAS, { production: true })).toBeNull()
     expect(runCidsOperation).not.toHaveBeenCalled()
+  })
+
+  // La marca de la conexión no decide nada: lo que decide es qué repositorio se está mirando.
+  it('no mira la marca de la conexión', async () => {
+    getCidsTarget.mockResolvedValue({ ...DESTINO_QA, isProduction: true })
+    tenantConDosProyectos()
+
+    expect(await getPromotedTaskNames(CLIENTE, PRUEBAS)).toEqual(['CARGA_DIARIA', 'CARGA_MENSUAL', 'MAESTROS'])
   })
 
   it('descarta un proyecto cuya consulta falla y se queda con los demás', async () => {

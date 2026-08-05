@@ -17,7 +17,7 @@ const PESTANIAS = [
   { key: 'errorLog', label: 'Error' },
 ]
 
-export default function TaskLogsModal({ connectionId, run, onClose }) {
+export default function TaskLogsModal({ destino, run, onClose }) {
   const [activa, setActiva] = useState('monitorLog')
   const [registros, setRegistros] = useState(null)
   const [error, setError] = useState('')
@@ -25,7 +25,7 @@ export default function TaskLogsModal({ connectionId, run, onClose }) {
 
   useEffect(() => {
     let abandonado = false
-    cidsCall(connectionId, 'getTaskLogs', {
+    cidsCall(destino, 'getTaskLogs', {
       runId: run.runId,
       traceLog: { getLog: true },
       monitorLog: { getLog: true },
@@ -34,7 +34,7 @@ export default function TaskLogsModal({ connectionId, run, onClose }) {
       .then((datos) => { if (!abandonado) setRegistros(datos) })
       .catch((fallo) => { if (!abandonado) setError(fallo.message) })
     return () => { abandonado = true }
-  }, [connectionId, run.runId])
+  }, [destino, run.runId])
 
   const registro = registros?.[activa]
   const lineas = registro?.messageLines ?? []

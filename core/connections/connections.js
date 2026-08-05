@@ -111,6 +111,12 @@ export async function createConnection(clientId, { kind, name, baseUrl, organiza
   if (!name?.trim()) throw new Error('La conexión necesita un nombre.')
   if (!baseUrl?.trim()) throw new Error('La conexión necesita una dirección.')
 
+  // En CI-DS una conexión NO es de pruebas ni de producción: es las dos. El repositorio se elige en
+  // el logon, así que guardar una marca aquí solo puede mentir. Se ignora lo que venga.
+  //
+  // En IBP sí es real: el tenant de calidad y el productivo son direcciones distintas.
+  const esProductiva = kind === 'cids' ? false : Boolean(isProduction)
+
   // Se valida al guardar, no solo al llamar: un error de escritura se descubre ahora, con el
   // administrador delante, y no dentro de meses cuando alguien intente usar la conexión.
   await assertSapHost(baseUrl, { kind })
@@ -120,7 +126,7 @@ export async function createConnection(clientId, { kind, name, baseUrl, organiza
     `insert into connections (client_id, kind, name, base_url, organization, is_production)
      values ($1, $2, $3, $4, $5, $6)
      returning id, kind, name, base_url, organization, is_production, created_at`,
-    [clientId, kind, name.trim(), baseUrl.trim(), organization, Boolean(isProduction)],
+    [clientId, kind, name.trim(), baseUrl.trim(), organization, esProductiva],
   ))
 }
 
