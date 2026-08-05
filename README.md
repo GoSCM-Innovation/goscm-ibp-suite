@@ -12,7 +12,24 @@ Cada cliente contrata los módulos que necesita; los no contratados aparecen blo
 
 ## Estado
 
-**Fase 1 — esqueleto.** El plan completo y el inventario del que nace esta arquitectura están en [`docs/FASE-0-LEVANTAMIENTO.md`](docs/FASE-0-LEVANTAMIENTO.md).
+**Fase 1 completa — los cimientos funcionan de punta a punta.** Se puede entrar con un código
+enviado al correo, moverse por la aplicación y administrar clientes, personas, suscripciones y
+conexiones a SAP desde el navegador. Los tres módulos existen en el menú como sitios
+reservados: sus pantallas llegan en las fases siguientes.
+
+El plan completo y el inventario del que nace esta arquitectura están en
+[`docs/FASE-0-LEVANTAMIENTO.md`](docs/FASE-0-LEVANTAMIENTO.md); el estado de cada módulo de la
+capa transversal, en [`core/README.md`](core/README.md).
+
+Puesta en marcha desde cero:
+
+```bash
+npm install
+cp .env.example .env       # rellenar credenciales
+npm run db:migrate         # crea el esquema
+npm run db:seed -- --cliente "Mi empresa" --slug miempresa --correo yo@miempresa.com
+npm run dev
+```
 
 Sustituye a tres proyectos previos (`ibp-bom-v7`, `ibp-bom-v8`, `ibp-bom-v9`), que siguen operativos durante la transición para poder verificar paridad de funcionalidad y rendimiento módulo por módulo.
 
@@ -57,6 +74,8 @@ npm run dev             # frontend + /api en http://localhost:5173
 | `npm run preview` | Sirve el build localmente |
 | `npm run lint` | ESLint sobre todo el repo |
 | `npm test` | Tests (Vitest) |
+| `npm run db:migrate` | Aplica las migraciones pendientes a Postgres |
+| `npm run db:seed` | Crea el primer cliente y su administrador de plataforma |
 | `npm run gen:secret` | Genera un secreto aleatorio de 32 bytes |
 
 ## Requisitos
