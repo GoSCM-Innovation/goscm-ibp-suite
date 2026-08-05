@@ -14,3 +14,13 @@ export {
   isWriteOperation,
   runCidsOperation,
 } from './operations.js'
+
+export {
+  CANCELABLE_STATUSES,
+  TASK_STATUS,
+  TERMINAL_STATUSES,
+  formatDuration,
+  isCancelable,
+  isTerminal,
+  statusMeta,
+} from './task-status.js'
