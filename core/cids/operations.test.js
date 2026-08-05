@@ -140,6 +140,19 @@ describe('getCidsSession', () => {
       expect(logon).toHaveBeenCalledTimes(2)
     })
 
+    // Las dos van bajo claves distintas y las dos llevan el prefijo del cliente. La clave incluye
+    // además una versión: si alguna vez cambia lo que significa lo guardado, subirla deja huérfanas a
+    // las viejas en vez de que sigan contestando algo que ya no es cierto.
+    it('cada repositorio se guarda bajo su propia clave, dentro del cliente', async () => {
+      await getCidsSession(CLIENTE, CONEXION)
+      await getCidsSession(CLIENTE, CONEXION, { production: true })
+
+      const claves = entorno.redis.keys()
+      expect(claves).toHaveLength(2)
+      expect(new Set(claves).size).toBe(2)
+      expect(claves.every((clave) => clave.startsWith(`c:${CLIENTE}:`))).toBe(true)
+    })
+
     it('olvidar la del productivo no toca la de pruebas', async () => {
       await getCidsSession(CLIENTE, CONEXION)
       await getCidsSession(CLIENTE, CONEXION, { production: true })

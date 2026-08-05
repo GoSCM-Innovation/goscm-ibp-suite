@@ -26,8 +26,25 @@ export const CACHED_SESSION_SECONDS = 20 * 60
  * sesiones posibles, cada una guardada por separado. Mezclarlas daría datos del repositorio
  * equivocado, que es el peor error posible aquí: parecerían correctos.
  */
-const sessionKey = (clientId, connectionId, production) => (
-  tenantKey(clientId, production ? 'cids-session-prd' : 'cids-session', connectionId)
+/**
+ * Versión de la clave. Se sube cuando cambia **el significado** de lo que hay guardado.
+ *
+ * Pasó una vez y conviene que quede escrito: antes se entraba al repositorio productivo si la
+ * conexión estaba marcada como productiva, así que bajo la clave de "pruebas" podía haber una sesión
+ * de producción. Al arreglar cómo se crea, las que ya estaban guardadas siguieron mintiendo hasta
+ * vencer —el monitor mostraba ejecuciones de producción creyendo que eran de pruebas, con los mismos
+ * números en las dos pestañas y ningún error a la vista.
+ *
+ * Subir el número deja huérfanas a las viejas: nadie las lee y Redis las borra solas al vencer. Es la
+ * alternativa a pedirle a alguien que vacíe una caché a mano después de publicar, que es justo lo que
+ * nadie se acuerda de hacer.
+ */
+const SESSION_KEY_VERSION = 'v2'
+
+const sessionKey = (clientId, connectionId, production) => tenantKey(
+  clientId,
+  production ? `cids-session-prd-${SESSION_KEY_VERSION}` : `cids-session-${SESSION_KEY_VERSION}`,
+  connectionId,
 )
 
 /** La conexión de CI-DS, comprobando que sea de ese tipo antes de intentar nada. */
