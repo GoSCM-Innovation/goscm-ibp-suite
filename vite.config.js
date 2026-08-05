@@ -39,6 +39,39 @@ function decorateRes(res) {
   return res
 }
 
+/**
+ * Carga un handler de `api/` **en su versión actual**, no en la que se cargó al arrancar.
+ *
+ * Esto existe por un fallo que costó una tarde de diagnóstico. `import()` de Node memoriza cada
+ * módulo por su dirección y no lo suelta nunca en la vida del proceso. Así que el dev server servía
+ * el backend con el que arrancó: se editaba un endpoint o algo de `core/`, el archivo cambiaba en el
+ * disco, y el servidor seguía ejecutando el viejo. Y en silencio — el frontend SÍ se recargaba solo,
+ * así que quedaba una mezcla de frontend nuevo con backend viejo, que es lo peor de los dos mundos:
+ * la pantalla se ve como esperás y los datos vienen de otro código.
+ *
+ * `ssrLoadModule` de Vite sí sabe qué archivos cambiaron —lleva el grafo de módulos y lo invalida al
+ * guardar—, así que recarga el handler y todo lo que importa de `core/`.
+ *
+ * Con respaldo a `import()` a propósito: si una versión de Vite deja de ofrecer ese cargador,
+ * preferible un dev server que necesite reiniciarse a mano que uno que no arranca. Cuando cae en el
+ * respaldo lo avisa, para que nadie vuelva a perder la tarde.
+ */
+let avisoDeRespaldoDado = false
+
+async function cargarHandler(server, file) {
+  if (typeof server.ssrLoadModule === 'function') {
+    return server.ssrLoadModule(file)
+  }
+  if (!avisoDeRespaldoDado) {
+    avisoDeRespaldoDado = true
+    server.config.logger.warn(
+      '[dev-api] Esta versión de Vite no ofrece ssrLoadModule: los cambios en api/ y core/ NO se '
+      + 'recargan solos. Reiniciá `npm run dev` después de editarlos.',
+    )
+  }
+  return import(pathToFileURL(file).href)
+}
+
 // Plugin SOLO de desarrollo: monta los handlers de api/*.js en el dev server de Vite para
 // que `npm run dev` sirva frontend + /api en un único puerto. En producción se usan las
 // funciones de Vercel; este plugin no participa del build (apply: 'serve').
@@ -96,7 +129,7 @@ function devApiPlugin() {
           if (pathParam) req.query.id = pathParam
 
           decorateRes(res)
-          const mod = await import(pathToFileURL(file).href)
+          const mod = await cargarHandler(server, file)
           await mod.default(req, res)
         } catch (err) {
           server.config.logger.error(`[dev-api] ${name}: ${err.stack || err.message}`)
