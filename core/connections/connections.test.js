@@ -47,6 +47,19 @@ describe('listConnections', () => {
     const sql = queryScoped.mock.calls[0][1]
     expect(sql).not.toMatch(/secret_/)
   })
+
+  it('filtra por tipo cuando se lo piden, sin soltar el filtro de cliente', async () => {
+    await listConnections(CLIENTE, { kind: 'cids' })
+    const [, sql, params] = queryScoped.mock.calls[0]
+    expect(sql).toContain('c.client_id = $1')
+    expect(sql).toContain('c.kind = $2')
+    expect(params).toEqual([CLIENTE, 'cids'])
+  })
+
+  it('rechaza un tipo que no existe en vez de devolver la lista entera', async () => {
+    await expect(listConnections(CLIENTE, { kind: 'sqlserver' })).rejects.toThrow(/desconocido/)
+    expect(queryScoped).not.toHaveBeenCalled()
+  })
 })
 
 describe('getConnection', () => {

@@ -12,6 +12,7 @@ import Login from './components/Login.jsx'
 import Shell from './components/Shell.jsx'
 import ModuleLocked from './components/ModuleLocked.jsx'
 import ModulePlaceholder from './components/ModulePlaceholder.jsx'
+import CidsTools from './components/cids/CidsTools.jsx'
 import AdminPanel from './components/admin/AdminPanel.jsx'
 
 const RUTAS_VALIDAS = new Set([...MODULES.map((m) => m.id), 'admin'])
@@ -96,9 +97,10 @@ export default function App() {
       return <AdminPanel user={user} />
     }
     const module = moduleById(activa) ?? MODULES[0]
-    return modules.includes(module.id)
-      ? <ModulePlaceholder module={module} />
-      : <ModuleLocked module={module} />
+    if (!modules.includes(module.id)) return <ModuleLocked module={module} />
+    // Los módulos que ya están escritos se montan; el resto sigue con su presentación.
+    if (module.id === 'cids') return <CidsTools />
+    return <ModulePlaceholder module={module} />
   }
 
   return (

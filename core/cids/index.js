@@ -16,6 +16,12 @@ export {
 } from './operations.js'
 
 export {
+  DETAIL_CONCURRENCY,
+  MAX_RUNS_PER_BATCH,
+  fetchTaskDetails,
+} from './task-details.js'
+
+export {
   CANCELABLE_STATUSES,
   TASK_STATUS,
   TERMINAL_STATUSES,

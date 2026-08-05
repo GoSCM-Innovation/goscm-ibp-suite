@@ -64,18 +64,23 @@ function assertKind(kind) {
   }
 }
 
-/** Las conexiones de un cliente, sin secretos y con cuántos acuerdos tiene cada una. */
-export async function listConnections(clientId) {
+/**
+ * Las conexiones de un cliente, sin secretos y con cuántos acuerdos tiene cada una.
+ * Con `kind` se limita a un tipo, que es lo que pide un módulo: el monitor de CI-DS no tiene
+ * nada que hacer con las conexiones de IBP.
+ */
+export async function listConnections(clientId, { kind = null } = {}) {
+  if (kind !== null) assertKind(kind)
   const rows = await queryScoped(
     clientId,
     `select c.id, c.kind, c.name, c.base_url, c.organization, c.is_production, c.created_at,
             count(a.id)::int as agreement_count
      from connections c
      left join connection_agreements a on a.connection_id = c.id and a.client_id = c.client_id
-     where c.client_id = $1
+     where c.client_id = $1${kind === null ? '' : ' and c.kind = $2'}
      group by c.id
      order by c.name`,
-    [clientId],
+    kind === null ? [clientId] : [clientId, kind],
   )
   return rows.map(toConnection)
 }
