@@ -9,7 +9,7 @@
 // así que dar de alta una conexión ya habilita los dos y no hay nada que configurar por separado.
 
 import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
-import { cidsTargets, fetchPromotedTaskNames, listCidsConnections } from '../../lib/cids.js'
+import { cidsTargets, fetchPromotedTaskNames, listCidsConnections, promotedForTarget } from '../../lib/cids.js'
 import TaskMonitor from './TaskMonitor.jsx'
 import TaskLauncher from './TaskLauncher.jsx'
 
@@ -78,8 +78,6 @@ export default function CidsTools() {
     return () => { abandonado = true }
   }, [destino])
 
-  const transportadasDelDestino = transportadas?.destinoId === destino?.id ? transportadas.nombres : null
-
   if (conexiones === null) return <div className="page-hint">Cargando conexiones…</div>
   if (error) return <div className="notice notice-error">✕ {error}</div>
 
@@ -91,6 +89,10 @@ export default function CidsTools() {
       </div>
     )
   }
+
+  // La regla de qué marca aplica a qué destino vive en la librería y tiene tests: escrita aquí como
+  // expresión suelta tenía un caso que reventaba la pantalla entera en el primer pintado.
+  const transportadasDelDestino = promotedForTarget(transportadas, destino)
 
   function verEnMonitor(taskName) {
     setBusqueda(taskName)

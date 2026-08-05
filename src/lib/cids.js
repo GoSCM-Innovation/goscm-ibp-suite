@@ -80,6 +80,22 @@ export function isTaskPromoted(promoted, taskName) {
 }
 
 /**
+ * Qué marca de "ya transportada" corresponde al destino que se está mirando.
+ *
+ * La lista se pide por destino y tarda, así que hay momentos en los que la guardada es de otro: al
+ * cambiar de repositorio, o antes de que llegue la primera. En esos casos no aplica ninguna, y
+ * mostrar la anterior diría que una tarea está transportada cuando no se sabe.
+ *
+ * Está aquí y no dentro del componente porque es una decisión, no pintado — y porque escrita como
+ * expresión suelta tenía un caso mortal: con las dos cosas en nulo, comparar sus identificadores daba
+ * `undefined === undefined`, salía verdadero, y leer la lista de `null` reventaba la pantalla entera.
+ */
+export function promotedForTarget(guardadas, destino) {
+  if (!destino || !guardadas) return null
+  return guardadas.destinoId === destino.id ? guardadas.nombres : null
+}
+
+/**
  * Fin y duración de un puñado de ejecuciones, en tandas.
  *
  * Las tandas van **una tras otra, no en paralelo**. Si salieran a la vez, cada una consultaría a
