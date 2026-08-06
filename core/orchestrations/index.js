@@ -10,6 +10,13 @@ export {
 } from './orchestrations.js'
 
 export {
+  DONE_STEP_STATUSES,
+  isRetryDue,
+  isStepDone,
+  nextStepState,
+} from './step-outcome.js'
+
+export {
   ERROR_STRATEGIES,
   EXECUTION_MODES,
   MAX_RETRIES_LIMIT,
