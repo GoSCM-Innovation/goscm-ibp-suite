@@ -20,6 +20,10 @@ import Orchestrations from './orchestrations/Orchestrations.jsx'
 const Summary = lazy(() => import('./Summary.jsx'))
 const GlobalSummary = lazy(() => import('./GlobalSummary.jsx'))
 
+// El explorador trabaja sobre archivos del equipo, no contra SAP. Se carga aparte porque arrastra el
+// lector de ZIP, que no hace falta para nada más.
+const IntegrationExplorer = lazy(() => import('./explorer/IntegrationExplorer.jsx'))
+
 // El orden es el de v9: se entra por el resumen, que es la pantalla que contesta "¿cómo venimos?"
 // antes de que nadie tenga que buscar una ejecución concreta.
 //
@@ -32,7 +36,12 @@ const HERRAMIENTAS = [
   { id: 'monitor', label: 'Monitor de tareas' },
   { id: 'tareas', label: 'Proyectos y tareas' },
   { id: 'orquestaciones', label: 'Orquestaciones' },
+  { id: 'explorador', label: 'Explorador de integraciones' },
 ]
+
+// El explorador lee los ZIP del equipo: no consulta ningún repositorio, así que el selector de
+// destino no le dice nada. Lo único que toma de la conexión es qué tareas ya están en el productivo.
+const SIN_DESTINO = new Set(['global', 'explorador'])
 
 export default function CidsTools() {
   const [conexiones, setConexiones] = useState(null)
@@ -107,14 +116,15 @@ export default function CidsTools() {
         <div>
           <div className="page-title">CI-DS Tools</div>
           <div className="page-hint">
-            {herramienta === 'global'
-              ? 'Todos los repositorios de CI-DS a la vez.'
-              : 'Ejecuciones, tareas y orquestaciones del repositorio elegido.'}
+            {herramienta === 'global' && 'Todos los repositorios de CI-DS a la vez.'}
+            {herramienta === 'explorador' && 'Los exports de tus proyectos, leídos en tu navegador.'}
+            {!SIN_DESTINO.has(herramienta) && 'Ejecuciones, tareas y orquestaciones del repositorio elegido.'}
           </div>
         </div>
 
-        {/* El tablero global mira todos los destinos, así que elegir uno no significa nada ahí. */}
-        {herramienta !== 'global' && (
+        {/* Hay pantallas a las que elegir un destino no les dice nada: el tablero global los mira
+            todos y el explorador no mira ninguno. */}
+        {!SIN_DESTINO.has(herramienta) && (
           <div className="monitor-bar">
             <select
               className="select input-sm"
@@ -172,6 +182,11 @@ export default function CidsTools() {
       )}
       {herramienta === 'orquestaciones' && destino && (
         <Orchestrations key={`orq-${destino.id}`} destino={destino} />
+      )}
+      {herramienta === 'explorador' && (
+        <Suspense fallback={<div className="page-hint">Cargando el explorador…</div>}>
+          <IntegrationExplorer transportadas={transportadasDelDestino} />
+        </Suspense>
       )}
       {herramienta === 'tareas' && destino && (
         <TaskLauncher
