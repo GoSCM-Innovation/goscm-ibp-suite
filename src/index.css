@@ -728,6 +728,179 @@ a { color: var(--cyan); }
   .orq-lista { border-bottom: 1px solid var(--border); border-right: none; max-height: 45%; width: 100%; }
 }
 
+/* ─── Lienzo de orquestaciones ────────────────────────────── */
+
+.lienzo { display: flex; flex: 1; flex-direction: column; min-width: 0; }
+.lienzo-barra {
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex-shrink: 0;
+  gap: 10px;
+  padding: 8px 12px;
+}
+.lienzo-nombre { font-size: 13px; font-weight: 600; }
+.lienzo-cuenta { color: var(--text3); font-size: 11px; }
+.lienzo-sucio { color: var(--accent); font-weight: 600; }
+.lienzo-error { border-radius: 0; border-left-width: 0; border-top-width: 0; }
+
+.lienzo-cuerpo { display: flex; flex: 1; min-height: 0; }
+.lienzo-dibujo { flex: 1; min-width: 0; position: relative; }
+
+/* El aviso de lienzo vacío va encima del dibujo, sin taparlo para el ratón: se puede seguir
+   arrastrando y haciendo zoom por debajo del texto. */
+.lienzo-vacio {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  inset: 0;
+  justify-content: center;
+  padding: 24px;
+  pointer-events: none;
+  position: absolute;
+  text-align: center;
+}
+.lienzo-vacio .page-hint { max-width: 360px; }
+
+/* La librería del lienzo trae sus colores; se los cambiamos por los del tema. */
+.react-flow { background: var(--bg); }
+.react-flow__background { color: var(--border); }
+.react-flow__edge-path { stroke: var(--border2); stroke-width: 2; }
+.react-flow__edge.selected .react-flow__edge-path { stroke: var(--accent); }
+.react-flow__handle { background: var(--text3); border: none; height: 8px; width: 8px; }
+.react-flow__handle:hover { background: var(--accent); }
+.react-flow__controls-button {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  fill: var(--text2);
+}
+.react-flow__controls-button:hover { background: var(--bg3); }
+.react-flow__attribution { background: transparent; font-size: 9px; }
+.react-flow__attribution a { color: var(--text3); }
+
+.nodo-tarea {
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: 8px;
+  min-width: 180px;
+  max-width: 240px;
+  padding: 9px 11px;
+}
+.nodo-tarea.seleccionado { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-bg-soft); }
+.nodo-tarea-nombre {
+  font-size: 12px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.nodo-tarea-pie {
+  color: var(--text3);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 9.5px;
+  gap: 3px 8px;
+  margin-top: 4px;
+}
+.nodo-aviso { color: var(--accent); font-weight: 600; }
+.nodo-estado {
+  border-top: 1px solid var(--border);
+  font-size: 10px;
+  font-weight: 600;
+  margin-top: 6px;
+  padding-top: 5px;
+}
+
+/* ─── Paleta de tareas y panel de configuración ───────────── */
+
+.paleta, .config-panel {
+  background: var(--bg2);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  width: 230px;
+}
+.paleta { border-right: 1px solid var(--border); }
+.config-panel { border-left: 1px solid var(--border); width: 270px; }
+
+.paleta-cabeza, .config-cabeza {
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex-shrink: 0;
+  justify-content: space-between;
+  padding: 9px 8px 9px 13px;
+}
+.paleta-buscar { border-bottom: 1px solid var(--border); padding: 8px 10px; }
+.paleta-buscar .input { width: 100%; }
+.paleta-cuerpo, .config-cuerpo { flex: 1; min-height: 0; overflow-y: auto; }
+.config-cuerpo { display: flex; flex-direction: column; gap: 13px; padding: 12px; }
+
+.paleta-proyecto {
+  align-items: center;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  gap: 7px;
+  padding: 8px 10px;
+  text-align: left;
+  width: 100%;
+}
+.paleta-proyecto:hover { background: var(--surface-glass-soft); }
+.paleta-proyecto.open { background: var(--accent-bg-soft); }
+.paleta-proyecto-nombre {
+  font-size: 12px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.paleta-tareas { border-bottom: 1px solid var(--border); }
+.paleta-tarea {
+  align-items: center;
+  background: var(--bg);
+  border: none;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  gap: 7px;
+  padding: 7px 10px 7px 22px;
+  text-align: left;
+  width: 100%;
+}
+.paleta-tarea:last-child { border-bottom: none; }
+.paleta-tarea:hover { background: var(--surface-glass); }
+.paleta-tarea-nombre {
+  flex: 1;
+  font-size: 11px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.paleta-mas { color: var(--accent); flex-shrink: 0; font-size: 14px; font-weight: 700; }
+
+.config-tarea {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow-wrap: anywhere;
+  padding: 7px 9px;
+}
+.config-fila { display: flex; gap: 10px; }
+.config-fila .field { flex: 1; min-width: 0; }
+.config-variable { align-items: center; display: flex; gap: 5px; }
+.config-variable .input { flex: 1; min-width: 0; }
+
+@media (max-width: 900px) {
+  /* Con poco ancho, tres columnas dejan el dibujo en una franja inservible. La paleta y la
+     configuración pasan a ocupar todo el alto disponible, una a la vez. */
+  .paleta { width: 170px; }
+  .config-panel { width: 210px; }
+}
+
 /* ─── Árbol de proyectos y tareas ─────────────────────────── */
 
 .tree {

@@ -1,17 +1,22 @@
 // Orquestaciones: la lista a la izquierda y el editor a la derecha.
 //
-// Portada de `Orchestrations.jsx` de v9. El lienzo todavía no está —viene en la sesión siguiente— y
-// mientras tanto el panel de la derecha dice qué falta en vez de fingir que no hay nada.
+// Portada de `Orchestrations.jsx` de v9. Sin nada abierto, el panel de la derecha dice qué hacer en
+// vez de quedarse en blanco como si estuviera roto.
 
-import { useEffect, useState } from 'react'
+import { Suspense, lazy, useEffect, useState } from 'react'
 import {
   createOrchestration,
   deleteOrchestration,
   duplicateOrchestration,
   listOrchestrations,
+  saveOrchestration,
 } from '../../../lib/orchestrations.js'
 import Modal from '../../ui/Modal.jsx'
 import OrchestrationList from './OrchestrationList.jsx'
+
+// El lienzo se carga aparte: su librería de dibujo pesa tanto como la de gráficos, y quien solo
+// viene a mirar la lista no tiene por qué descargarla.
+const OrchestrationCanvas = lazy(() => import('./OrchestrationCanvas.jsx'))
 
 export default function Orchestrations({ destino }) {
   const [orquestaciones, setOrquestaciones] = useState([])
@@ -20,6 +25,8 @@ export default function Orchestrations({ destino }) {
   const [elegida, setElegida] = useState(null)
   const [aBorrar, setABorrar] = useState(null)
   const [recarga, setRecarga] = useState(0)
+  const [guardando, setGuardando] = useState(false)
+  const [errorAlGuardar, setErrorAlGuardar] = useState('')
 
   useEffect(() => {
     let abandonado = false
@@ -65,6 +72,25 @@ export default function Orchestrations({ destino }) {
 
   const abierta = orquestaciones.find((una) => una.id === elegida) ?? null
 
+  /**
+   * Guarda el grafo. El error NO se muestra arriba con los de la lista: es del lienzo y hay que
+   * leerlo ahí, porque dice qué pasos forman el ciclo o a qué nodo apunta una conexión rota.
+   */
+  async function guardar(grafo) {
+    setGuardando(true)
+    setErrorAlGuardar('')
+    try {
+      const guardada = await saveOrchestration(abierta.id, grafo)
+      setOrquestaciones((previas) => previas.map((una) => (una.id === guardada.id ? guardada : una)))
+    } catch (fallo) {
+      setErrorAlGuardar(fallo.message)
+      // Se relanza para que el lienzo no dé por guardados unos cambios que no entraron.
+      throw fallo
+    } finally {
+      setGuardando(false)
+    }
+  }
+
   return (
     <div className="orq">
       {error && <div className="notice notice-error orq-error">✕ {error}</div>}
@@ -83,13 +109,16 @@ export default function Orchestrations({ destino }) {
 
         <div className="orq-editor">
           {abierta ? (
-            <div className="orq-vacio">
-              <div className="orq-vacio-titulo">{abierta.name}</div>
-              <p className="page-hint">
-                El lienzo para dibujar los pasos todavía no está: es lo que viene ahora. La
-                orquestación ya está creada y guardada, así que no vas a perder nada.
-              </p>
-            </div>
+            <Suspense fallback={<div className="page-hint" style={{ padding: 24 }}>Cargando el lienzo…</div>}>
+              <OrchestrationCanvas
+                key={abierta.id}
+                destino={destino}
+                orquestacion={abierta}
+                onGuardar={guardar}
+                guardando={guardando}
+                error={errorAlGuardar}
+              />
+            </Suspense>
           ) : (
             <div className="orq-vacio">
               <div className="orq-vacio-titulo">Ninguna orquestación abierta</div>
