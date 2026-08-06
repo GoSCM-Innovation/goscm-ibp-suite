@@ -21,8 +21,10 @@ import {
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import NodeConfigPanel from './NodeConfigPanel.jsx'
+import RunBar from './RunBar.jsx'
 import TaskNode from './TaskNode.jsx'
 import TaskPalette from './TaskPalette.jsx'
+import { useOrchestrationRun } from './useOrchestrationRun.js'
 
 /** Dónde cae un paso nuevo. En cascada, para que no se apilen uno encima de otro. */
 const POSICION_INICIAL = { x: 80, y: 60 }
@@ -35,6 +37,7 @@ export default function OrchestrationCanvas({ destino, orquestacion, onGuardar, 
   const [aristas, setAristas] = useState(orquestacion.edges ?? [])
   const [elegido, setElegido] = useState(null)
   const [sucio, setSucio] = useState(false)
+  const ejecucion = useOrchestrationRun(orquestacion.id)
 
   // No hay efecto que copie la orquestación al estado: quien monta este componente le pone una clave
   // con su identificador, así que cambiar de orquestación lo remonta y el estado nace del grafo
@@ -101,6 +104,24 @@ export default function OrchestrationCanvas({ destino, orquestacion, onGuardar, 
 
   const nodoElegido = useMemo(() => nodos.find((nodo) => nodo.id === elegido) ?? null, [nodos, elegido])
 
+  /**
+   * Los nodos que se dibujan llevan pegado su estado de ejecución, si hay una.
+   *
+   * Va aquí y no guardado en el nodo a propósito: el estado de una ejecución es efímero y no forma
+   * parte del dibujo. Mezclarlos haría que al guardar se escribiera en la base cómo fue una corrida.
+   */
+  const nodosDibujados = useMemo(() => {
+    if (!ejecucion.run) return nodos
+    return nodos.map((nodo) => {
+      const paso = ejecucion.run.nodes?.[nodo.id]
+      return paso ? { ...nodo, data: { ...nodo.data, runStep: paso } } : nodo
+    })
+  }, [nodos, ejecucion.run])
+
+  // Mientras corre no se edita: mover o borrar un paso a mitad de camino dejaría el dibujo y la
+  // ejecución hablando de cosas distintas.
+  const editable = !ejecucion.enMarcha
+
   return (
     <div className="lienzo">
       <div className="lienzo-barra">
@@ -114,25 +135,40 @@ export default function OrchestrationCanvas({ destino, orquestacion, onGuardar, 
           type="button"
           className="btn btn-primary btn-sm"
           onClick={() => onGuardar({ nodes: nodos, edges: aristas }).then(() => setSucio(false))}
-          disabled={guardando || !sucio}
+          disabled={guardando || !sucio || !editable}
+          title={editable ? '' : 'No se puede guardar mientras la orquestación está corriendo'}
         >
           {guardando ? 'Guardando…' : 'Guardar'}
         </button>
       </div>
 
+      <RunBar
+        run={ejecucion.run}
+        error={ejecucion.error}
+        ocupado={ejecucion.ocupado}
+        enMarcha={ejecucion.enMarcha}
+        sinGuardar={sucio}
+        onArrancar={ejecucion.arrancar}
+        onCortar={ejecucion.cortar}
+        onRetomar={ejecucion.retomar}
+      />
+
       {error && <div className="notice notice-error lienzo-error">✕ {error}</div>}
 
       <div className="lienzo-cuerpo">
-        <TaskPalette destino={destino} onAgregar={agregarTarea} />
+        {editable && <TaskPalette destino={destino} onAgregar={agregarTarea} />}
 
         <div className="lienzo-dibujo">
           <ReactFlow
-            nodes={nodos}
+            nodes={nodosDibujados}
             edges={aristas}
             nodeTypes={nodeTypes}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
+            nodesDraggable={editable}
+            nodesConnectable={editable}
+            elementsSelectable
             onSelectionChange={({ nodes: elegidos }) => setElegido(elegidos?.[0]?.id ?? null)}
             fitView
             proOptions={{ hideAttribution: false }}
@@ -152,7 +188,7 @@ export default function OrchestrationCanvas({ destino, orquestacion, onGuardar, 
           )}
         </div>
 
-        {nodoElegido && (
+        {nodoElegido && editable && (
           <NodeConfigPanel
             destino={destino}
             nodo={nodoElegido}

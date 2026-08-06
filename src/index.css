@@ -1146,3 +1146,18 @@ a { color: var(--cyan); }
   .nav-label { flex: none; }
   .content { padding: 16px 14px; }
 }
+
+/* ─── Barra de ejecución de una orquestación ──────────────── */
+
+.run-bar {
+  align-items: center;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 7px 12px;
+}
+.run-estado { font-size: 11.5px; font-weight: 700; }
+.run-cuenta { color: var(--text2); display: flex; flex-wrap: wrap; font-size: 11px; gap: 10px; }
