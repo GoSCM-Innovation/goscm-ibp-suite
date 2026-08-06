@@ -15,6 +15,7 @@ export {
   TERMINAL_RUN_STATUSES,
   cancelRun,
   getRun,
+  listActiveRuns,
   resumeRun,
   startRun,
   tickRun,

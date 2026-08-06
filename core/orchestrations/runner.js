@@ -11,7 +11,7 @@
 // que además es lo que evita que se arreglen bugs en una copia y no en la otra.
 
 import { randomUUID } from 'node:crypto'
-import { getRedis, tenantKey } from '../persistence/redis.js'
+import { getRedis, globalKey, tenantKey } from '../persistence/redis.js'
 import { runCidsOperation } from '../cids/operations.js'
 import { getOrchestration } from './orchestrations.js'
 import { decideForPending, directPredecessors, initRunState, resetForResume, runOutcome } from './run-state.js'
@@ -38,6 +38,39 @@ export const RUN_LOCK_SECONDS = 15
 const runKey = (clientId, orchestrationId) => tenantKey(clientId, 'orch-run', orchestrationId)
 const lockKey = (clientId, orchestrationId) => tenantKey(clientId, 'orch-run-lock', orchestrationId)
 
+/**
+ * Índice de las ejecuciones en marcha, para que el reloj sepa a cuáles avanzar.
+ *
+ * Es global a propósito —no es de ningún cliente— y por eso lleva el cliente dentro de cada entrada.
+ * Es de lo que `globalKey` está pensado para guardar: estado de infraestructura, no dato de nadie.
+ *
+ * La alternativa era que el reloj recorriera todas las orquestaciones de la base y preguntara por
+ * cada una si está corriendo, que es lo que hacía v9. Con este índice el trabajo es proporcional a
+ * las que de verdad están en marcha, no a las que existen.
+ */
+const ACTIVE_RUNS_KEY = globalKey('cids-active-runs')
+
+const entradaActiva = (clientId, orchestrationId) => `${clientId}|${orchestrationId}`
+
+async function marcarActiva(clientId, orchestrationId) {
+  await getRedis().sadd(ACTIVE_RUNS_KEY, entradaActiva(clientId, orchestrationId))
+}
+
+async function desmarcarActiva(clientId, orchestrationId) {
+  await getRedis().srem(ACTIVE_RUNS_KEY, entradaActiva(clientId, orchestrationId))
+}
+
+/** Qué ejecuciones hay en marcha, como `{ clientId, orchestrationId }`. Lo usa el reloj. */
+export async function listActiveRuns() {
+  const entradas = await getRedis().smembers(ACTIVE_RUNS_KEY)
+  return entradas
+    .map((entrada) => {
+      const [clientId, orchestrationId] = String(entrada).split('|')
+      return clientId && orchestrationId ? { clientId, orchestrationId } : null
+    })
+    .filter(Boolean)
+}
+
 /** Estados en los que una ejecución ya no avanza más. */
 export const TERMINAL_RUN_STATUSES = Object.freeze(['success', 'error', 'cancelled'])
 
@@ -53,6 +86,10 @@ export async function getRun(clientId, orchestrationId) {
 
 async function guardarRun(clientId, orchestrationId, run) {
   await getRedis().set(runKey(clientId, orchestrationId), run, { ex: RUN_STATE_SECONDS })
+  // El índice se mantiene aquí y no en cada sitio que cambia el estado: así no se puede olvidar en
+  // uno de ellos y dejar una ejecución que el reloj nunca vuelve a mirar.
+  if (esTerminal(run.status)) await desmarcarActiva(clientId, orchestrationId)
+  else await marcarActiva(clientId, orchestrationId)
   return run
 }
 
@@ -180,7 +217,12 @@ async function avanzarNivel({ nodos, aristas, estados, destino, porOmision, ahor
 export async function tickRun(clientId, orchestrationId, ahora = Date.now()) {
   const avanzado = await conCerrojo(clientId, orchestrationId, async () => {
     const run = await getRun(clientId, orchestrationId)
-    if (!run || esTerminal(run.status)) return run
+    if (!run || esTerminal(run.status)) {
+      // Venció el estado guardado, o ya terminó y el índice quedó atrasado. En los dos casos el
+      // reloj no tiene nada que hacer con ella nunca más.
+      await desmarcarActiva(clientId, orchestrationId)
+      return run
+    }
 
     const orquestacion = await getOrchestration(clientId, orchestrationId)
     if (!orquestacion) {

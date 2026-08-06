@@ -30,3 +30,5 @@ export {
   requireSession,
 } from './guards.js'
 export { setCodeSender, resetCodeSender } from './delivery.js'
+
+export { bearerMatches, sameSecret } from './secrets.js'

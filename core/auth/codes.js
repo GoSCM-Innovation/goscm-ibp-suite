@@ -17,7 +17,8 @@
 // de seis cifras no resiste nada — la protección real es el límite de intentos. Lo que sí
 // evita es que un volcado de Redis, por sí solo, entregue códigos utilizables.
 
-import { createHash, createHmac, randomInt, timingSafeEqual } from 'node:crypto'
+import { createHash, createHmac, randomInt } from 'node:crypto'
+import { sameSecret } from './secrets.js'
 import { getRedis, globalKey } from '../persistence/redis.js'
 import { findUserForLogin } from './identity.js'
 import { deliverCode } from './delivery.js'
@@ -48,14 +49,6 @@ function fingerprint(email, code) {
 /** Seis dígitos con entropía criptográfica. `Math.random` no sirve para esto. */
 export function generateCode() {
   return String(randomInt(0, 1_000_000)).padStart(6, '0')
-}
-
-/** Comparación de huellas resistente a temporización. */
-function sameFingerprint(a, b) {
-  const left = Buffer.from(String(a), 'utf8')
-  const right = Buffer.from(String(b), 'utf8')
-  if (left.length !== right.length) return false
-  return timingSafeEqual(left, right)
 }
 
 async function withinLimit(key, max) {
@@ -128,7 +121,7 @@ export async function verifyCode({ email, code }) {
     return { ok: false, reason: 'demasiados intentos' }
   }
 
-  if (!sameFingerprint(record.fingerprint, fingerprint(normalized, String(code ?? '').trim()))) {
+  if (!sameSecret(record.fingerprint, fingerprint(normalized, String(code ?? '').trim()))) {
     return { ok: false, reason: 'código incorrecto' }
   }
 
