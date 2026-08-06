@@ -1559,3 +1559,9 @@ a { color: var(--cyan); }
 /* Los conectores existen para que la librería sepa por dónde tirar la flecha, pero acá nadie
    conecta nada a mano: se dejan invisibles. */
 .exp-handle { background: transparent; border: none; height: 1px; min-height: 0; min-width: 0; width: 1px; }
+
+/* ── Documentador de mapeos ── */
+.exp-dropzone-block { display: flex; flex-direction: column; gap: 10px; }
+.doc-list { border: 1px solid var(--border); border-radius: 10px; max-height: 62vh; overflow-y: auto; }
+.doc-check { text-align: center; width: 34px; }
+.table-dense .tag { margin-left: 6px; }

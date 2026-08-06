@@ -4,7 +4,8 @@
 // plantilla que se usa con los clientes (`plantilla_documentador.xlsx`), así que se dejan tal cual:
 // el entregable tiene que verse igual que el que ya reciben hoy.
 
-import { SheetBuilder, assembleXlsx } from './xlsx.js'
+import { analyzeZips } from './integration-index.js'
+import { SheetBuilder, assembleXlsx, uniqueSheetName } from './xlsx.js'
 
 /** Cómo se llama la hoja índice. Los enlaces de "volver" la nombran, así que es una sola constante. */
 export const HOJA_INDICE = 'Parámetros'
@@ -264,6 +265,50 @@ export function buildIntegrationSheet(integracion) {
 
   hoja.setColWidths([4.6, 22.4, 29.1, 62.3, 41.7, 41.7, 40.4, 18, 30])
   return hoja
+}
+
+/**
+ * Lee los ZIP y prepara una entrada por dataflow, lista para documentar.
+ *
+ * Cada una recibe el nombre de su hoja, que tiene que ser único en todo el documento: Excel rechaza
+ * el archivo entero si dos hojas se llaman igual. Cuando una tarea tiene varios dataflows se le
+ * agrega la tabla destino, que es lo que los distingue.
+ */
+export async function scanForDocument(archivos) {
+  const { integraciones, errores } = await analyzeZips(archivos)
+
+  const cuantosPorTarea = new Map()
+  for (const una of integraciones) {
+    cuantosPorTarea.set(una.jobName, (cuantosPorTarea.get(una.jobName) ?? 0) + 1)
+  }
+
+  const usados = new Set()
+
+  const entradas = integraciones.map((parsed) => {
+    const base = cuantosPorTarea.get(parsed.jobName) > 1
+      ? `${parsed.jobName}_${parsed.targetTable}`
+      : parsed.jobName
+
+    const sheetName = uniqueSheetName(base || parsed.dataflowName, usados)
+
+    return {
+      sheetName,
+      parsed,
+      paramRow: {
+        sheetName,
+        tipoIntegracion: parsed.tipoIntegracion,
+        jobName: parsed.jobName,
+        jobDesc: parsed.jobDesc,
+        dataflowName: parsed.dataflowName,
+        srcDS: parsed.srcDSName,
+        dstDS: parsed.dstDSName,
+        atlSession: '',
+        atlGroup: '',
+      },
+    }
+  })
+
+  return { entradas, errores }
 }
 
 /**

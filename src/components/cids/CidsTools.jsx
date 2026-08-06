@@ -23,6 +23,7 @@ const GlobalSummary = lazy(() => import('./GlobalSummary.jsx'))
 // El explorador trabaja sobre archivos del equipo, no contra SAP. Se carga aparte porque arrastra el
 // lector de ZIP, que no hace falta para nada más.
 const IntegrationExplorer = lazy(() => import('./explorer/IntegrationExplorer.jsx'))
+const MappingDocumenter = lazy(() => import('./documenter/MappingDocumenter.jsx'))
 
 // El orden es el de v9: se entra por el resumen, que es la pantalla que contesta "¿cómo venimos?"
 // antes de que nadie tenga que buscar una ejecución concreta.
@@ -37,11 +38,13 @@ const HERRAMIENTAS = [
   { id: 'tareas', label: 'Proyectos y tareas' },
   { id: 'orquestaciones', label: 'Orquestaciones' },
   { id: 'explorador', label: 'Explorador de integraciones' },
+  { id: 'documentador', label: 'Documentador de mapeos' },
 ]
 
-// El explorador lee los ZIP del equipo: no consulta ningún repositorio, así que el selector de
-// destino no le dice nada. Lo único que toma de la conexión es qué tareas ya están en el productivo.
-const SIN_DESTINO = new Set(['global', 'explorador'])
+// El explorador y el documentador leen los ZIP del equipo: no consultan ningún repositorio, así que
+// el selector de destino no les dice nada. Lo único que el explorador toma de la conexión es qué
+// tareas ya están en el productivo.
+const SIN_DESTINO = new Set(['global', 'explorador', 'documentador'])
 
 export default function CidsTools() {
   const [conexiones, setConexiones] = useState(null)
@@ -118,6 +121,7 @@ export default function CidsTools() {
           <div className="page-hint">
             {herramienta === 'global' && 'Todos los repositorios de CI-DS a la vez.'}
             {herramienta === 'explorador' && 'Los exports de tus proyectos, leídos en tu navegador.'}
+            {herramienta === 'documentador' && 'De los exports de un proyecto a un Excel para entregar.'}
             {!SIN_DESTINO.has(herramienta) && 'Ejecuciones, tareas y orquestaciones del repositorio elegido.'}
           </div>
         </div>
@@ -186,6 +190,11 @@ export default function CidsTools() {
       {herramienta === 'explorador' && (
         <Suspense fallback={<div className="page-hint">Cargando el explorador…</div>}>
           <IntegrationExplorer transportadas={transportadasDelDestino} />
+        </Suspense>
+      )}
+      {herramienta === 'documentador' && (
+        <Suspense fallback={<div className="page-hint">Cargando el documentador…</div>}>
+          <MappingDocumenter />
         </Suspense>
       )}
       {herramienta === 'tareas' && destino && (
