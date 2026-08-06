@@ -10,6 +10,14 @@ export {
 } from './orchestrations.js'
 
 export {
+  decideForPending,
+  directPredecessors,
+  initRunState,
+  resetForResume,
+  runOutcome,
+} from './run-state.js'
+
+export {
   DONE_STEP_STATUSES,
   isRetryDue,
   isStepDone,

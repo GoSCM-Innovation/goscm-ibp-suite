@@ -16,7 +16,16 @@
 /** Qué hacer cuando un paso falla. Los tres de v9. */
 export const ERROR_STRATEGIES = Object.freeze(['stop', 'continue', 'retry'])
 
-/** Cómo corren los hijos de un grupo. */
+/**
+ * Cómo corren los hijos de un grupo.
+ *
+ * OJO: **nadie lo lee**. Se guarda porque estaba en el modelo de v9, pero allí tampoco lo leía ni el
+ * motor ni la interfaz — comprobado sobre `origin/master`. El orden real de los hijos lo dan las
+ * conexiones entre ellos: sin conexiones corren a la vez, y encadenados corren en fila.
+ *
+ * Queda anotado para que nadie lo lea como una función que existe. Si alguna vez se usa, lo natural
+ * es que sea un atajo de la interfaz para dibujar esas conexiones sola, no una regla del motor.
+ */
 export const EXECUTION_MODES = Object.freeze(['parallel', 'serial'])
 
 /** Tipos de nodo. Un `group` agrupa a otros; un `task` es una tarea de CI-DS. */
