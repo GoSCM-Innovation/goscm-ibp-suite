@@ -10,6 +10,17 @@ export {
 } from './orchestrations.js'
 
 export {
+  RUN_LOCK_SECONDS,
+  RUN_STATE_SECONDS,
+  TERMINAL_RUN_STATUSES,
+  cancelRun,
+  getRun,
+  resumeRun,
+  startRun,
+  tickRun,
+} from './runner.js'
+
+export {
   decideForPending,
   directPredecessors,
   initRunState,
