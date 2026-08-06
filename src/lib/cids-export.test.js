@@ -6,12 +6,20 @@
 import { describe, it, expect } from 'vitest'
 import {
   buildDatastoreIndex,
+  buildFileFormatIndex,
   buildSchemaMap,
+  buildSchemaMapFull,
   datastoreFromRef,
+  extractFilters,
+  extractLookups,
+  findWriter,
   getProp,
   integrationType,
   isFileTarget,
   parseBatchCsv,
+  parseDataflow,
+  parseDataflowDiagram,
+  parseIntegration,
   parseJobMetadata,
   parseTransforms,
   parseXml,
@@ -286,5 +294,252 @@ describe('parseJobMetadata', () => {
 
   it('sin trabajo devuelve null: no es una integración', () => {
     expect(parseJobMetadata(parseXml('<p><DataStore name="ERP"/></p>'))).toBeNull()
+  })
+})
+
+/** Un XML de integraciÃ³n con un lector de tabla, una Query y un escritor. */
+const XML_TABLA = `<p xmlns:xmi="http://www.omg.org/XMI">
+  <DataStore name="ERP"/>
+  <DataStore name="IBP"/>
+  <Job name="GOSCM_MD_PRODUCTO">
+    <globalVariables name="$G_PLAN_AREA" defaultValue="'SAPIBP1'"/>
+  </Job>
+  <DataFlow name="DF_PRODUCTO" guid="G-1">
+    <elements xmi:type="dataflow:TableReader" displayName="MARA_R" tableName="MARA"
+              referencedDataStore="//@DataStore/0" location="[10,20]"/>
+    <elements xmi:type="dataflow:QueryTransform" displayName="Target_Query" location="[100,20]">
+      <outputSchema filterExpression="MARA_R.MTART = 'FERT'">
+        <inputSchemas schemaName="MARA_R"/>
+        <schemaNodes name="PRDID" projectionExpression="MARA_R.MATNR"/>
+        <schemaNodes name="TXT" description="Texto" projectionExpression="upper(MARA_R.MAKTX)"/>
+        <schemaNodes name="LOC" projectionExpression="lookup(DS.T1, LOCID, 'X', MARA_R.WERKS)"/>
+      </outputSchema>
+    </elements>
+    <elements xmi:type="dataflow:TableLoader" displayName="Cargar" tableName="PRODUCT"
+              referencedDataStore="//@DataStore/1" location="[200,20]"/>
+    <connections sourceElement="/2/@elements.0" targetElement="/2/@elements.1" schemaName="MARA_R"/>
+    <connections sourceElement="/2/@elements.1" targetElement="/2/@elements.2"/>
+  </DataFlow>
+</p>`
+
+/** El primer `DataFlow` de un XML, que es lo que reciben las funciones de este bloque. */
+const dataflowDe = (xml) => {
+  for (const hijo of parseXml(xml).children) if (hijo.localName === 'DataFlow') return hijo
+  return null
+}
+
+describe('buildFileFormatIndex', () => {
+  it('indexa por la posiciÃ³n entre TODOS los hijos, no entre los formatos', () => {
+    const raiz = parseXml('<p><DataStore name="ERP"/><FlatFileFormat name="SALIDA"/><DelimitedFileFormat name="CSV"/></p>')
+    expect(buildFileFormatIndex(raiz)).toEqual({ 1: 'SALIDA', 2: 'CSV' })
+  })
+
+  it('un formato sin nombre igual ocupa su lugar', () => {
+    expect(buildFileFormatIndex(parseXml('<p><FixedWidthFileFormat/></p>'))).toEqual({ 0: 'FILE_0' })
+  })
+})
+
+describe('buildSchemaMapFull', () => {
+  it('agrega los lectores de archivo, que `buildSchemaMap` deja fuera', () => {
+    const df = dataflowDe(`<p xmlns:xmi="http://www.omg.org/XMI"><DataFlow>
+      <elements xmi:type="dataflow:FileReader" displayName="Lector" outputSchemaName="VENTAS"/>
+    </DataFlow></p>`)
+
+    expect(buildSchemaMap(df, {})).toEqual({})
+    expect(buildSchemaMapFull(df, {})).toEqual({
+      Lector: { table: 'VENTAS', ds: 'FILE' },
+      VENTAS: { table: 'VENTAS', ds: 'FILE' },
+    })
+  })
+
+  it('sigue trayendo los lectores de tabla', () => {
+    expect(buildSchemaMapFull(dataflowDe(XML_TABLA), { 0: 'ERP', 1: 'IBP' }).MARA_R)
+      .toEqual({ table: 'MARA', ds: 'ERP' })
+  })
+})
+
+describe('findWriter', () => {
+  it('encuentra el escritor de tabla y su datastore', () => {
+    expect(findWriter(dataflowDe(XML_TABLA), { 0: 'ERP', 1: 'IBP' }, {}, ''))
+      .toEqual({ targetTable: 'PRODUCT', targetDS: 'IBP', fileLoaderFileName: '' })
+  })
+
+  // Un dataflow puede tener los dos; la tabla es el destino que interesa documentar.
+  it('prefiere la tabla aunque el archivo venga primero', () => {
+    const df = dataflowDe(`<p xmlns:xmi="http://www.omg.org/XMI"><DataFlow>
+      <elements xmi:type="dataflow:FileLoader" displayName="Archivo"/>
+      <elements xmi:type="dataflow:TableLoader" tableName="PRODUCT"/>
+    </DataFlow></p>`)
+    expect(findWriter(df, {}, {}, '').targetTable).toBe('PRODUCT')
+  })
+
+  it('resuelve el archivo por su formato y guarda el nombre del archivo', () => {
+    const df = dataflowDe(`<p xmlns:xmi="http://www.omg.org/XMI"><DataFlow>
+      <elements xmi:type="dataflow:FileLoader" displayName="Escribir" referencedFileFormat="//@FlatFileFormat/2">
+        <properties name="file_name" value="ventas.csv"/>
+      </elements>
+    </DataFlow></p>`)
+    expect(findWriter(df, {}, { 2: 'SALIDA' }, ''))
+      .toEqual({ targetTable: 'SALIDA', targetDS: 'FILE_DC', fileLoaderFileName: 'ventas.csv' })
+  })
+
+  it('sin escritor no hay destino', () => {
+    const df = dataflowDe('<p xmlns:xmi="http://www.omg.org/XMI"><DataFlow><elements xmi:type="dataflow:TableReader"/></DataFlow></p>')
+    expect(findWriter(df, {}, {}, '')).toBeNull()
+  })
+})
+
+describe('extractLookups', () => {
+  it('se queda con la llamada entera, no con el primer parÃ©ntesis que cierra', () => {
+    const transformaciones = {
+      Q: { fields: [{ name: 'X', proj: "lookup(DS.T, C, 'X', substr(A.B, 1, 3)) + 1" }] },
+    }
+    expect(extractLookups(transformaciones))
+      .toEqual([{ func: "lookup(DS.T, C, 'X', substr(A.B, 1, 3))", transform: 'Q' }])
+  })
+
+  it('encuentra dos lookups en la misma expresiÃ³n', () => {
+    const transformaciones = { Q: { fields: [{ name: 'X', proj: 'lookup(a) || lookup(b)' }] } }
+    expect(extractLookups(transformaciones).map((uno) => uno.func)).toEqual(['lookup(a)', 'lookup(b)'])
+  })
+
+  it('sin lookups no devuelve nada', () => {
+    expect(extractLookups({ Q: { fields: [{ name: 'X', proj: 'A.B' }] } })).toEqual([])
+  })
+})
+
+describe('extractFilters', () => {
+  it('lista la tabla real del filtro, no el nombre del lector', () => {
+    const df = dataflowDe(XML_TABLA)
+    const filtros = extractFilters(df, parseTransforms(df), buildSchemaMapFull(df, { 0: 'ERP', 1: 'IBP' }))
+
+    expect(filtros).toHaveLength(1)
+    expect(filtros[0].sourceTable).toBe('MARA')
+    expect(filtros[0].expression).toBe("MARA_R.MTART = 'FERT'")
+  })
+
+  it('trae tambiÃ©n las condiciones de uniÃ³n', () => {
+    const df = dataflowDe(`<p xmlns:xmi="http://www.omg.org/XMI"><DataFlow>
+      <elements xmi:type="dataflow:QueryTransform" displayName="Q">
+        <outputSchema>
+          <joins expression="A.ID = B.ID"/>
+        </outputSchema>
+      </elements>
+    </DataFlow></p>`)
+    expect(extractFilters(df, parseTransforms(df), {}).map((uno) => uno.expression)).toEqual(['A.ID = B.ID'])
+  })
+
+  // La misma expresiÃ³n reaparece en cada transformaciÃ³n encadenada; documentarla cinco veces no sirve.
+  it('no repite la misma expresiÃ³n', () => {
+    const transformaciones = {
+      Q1: { fields: [], filterExpr: 'A.X = 1' },
+      Q2: { fields: [], filterExpr: 'A.X = 1' },
+    }
+    expect(extractFilters(dataflowDe('<p><DataFlow/></p>'), transformaciones, {})).toHaveLength(1)
+  })
+})
+
+describe('parseDataflowDiagram', () => {
+  const diagrama = parseDataflowDiagram(dataflowDe(XML_TABLA), { 0: 'ERP', 1: 'IBP' })
+
+  it('numera los nodos por su posiciÃ³n, que es como los referencian las conexiones', () => {
+    expect(diagrama.nodes.map((uno) => uno.id)).toEqual([0, 1, 2])
+    expect(diagrama.edges).toEqual([
+      { from: 0, to: 1, schemaName: 'MARA_R' },
+      { from: 1, to: 2, schemaName: '' },
+    ])
+  })
+
+  it('quita el prefijo del tipo XMI y lee la posiciÃ³n en el lienzo', () => {
+    expect(diagrama.nodes[0].xmiType).toBe('TableReader')
+    expect(diagrama.nodes[0].location).toEqual({ x: 10, y: 20 })
+  })
+
+  it('a un lector de tabla le pone su tabla y su datastore', () => {
+    expect(diagrama.nodes[0].tableName).toBe('MARA')
+    expect(diagrama.nodes[0].dsName).toBe('ERP')
+  })
+
+  it('a una transformaciÃ³n le guarda el paso a paso', () => {
+    expect(diagrama.nodes[1].inputSchemas).toEqual(['MARA_R'])
+    expect(diagrama.nodes[1].filterExpression).toBe("MARA_R.MTART = 'FERT'")
+    expect(diagrama.nodes[1].fields.map((uno) => uno.name)).toEqual(['PRDID', 'TXT', 'LOC'])
+  })
+
+  it('una conexiÃ³n que no apunta a un elemento se descarta', () => {
+    const df = dataflowDe('<p><DataFlow><connections sourceElement="basura" targetElement="basura"/></DataFlow></p>')
+    expect(parseDataflowDiagram(df, {}).edges).toEqual([])
+  })
+})
+
+describe('parseDataflow', () => {
+  const resultado = parseDataflow(dataflowDe(XML_TABLA), { 0: 'ERP', 1: 'IBP' }, {}, '', '')
+
+  it('mapea cada campo destino hasta su tabla de origen', () => {
+    expect(resultado.mappings[0]).toEqual({
+      srcDS: 'ERP',
+      srcTable: 'MARA_R',
+      srcField: 'MATNR',
+      dstDS: 'IBP',
+      dstTable: 'PRODUCT',
+      dstField: 'PRDID',
+      dstDesc: 'Id de producto',
+      ops: '',
+    })
+  })
+
+  // `ops` solo se llena cuando de verdad se le hace algo al campo.
+  it('muestra la operaciÃ³n solo cuando el campo no se copia tal cual', () => {
+    expect(resultado.mappings[1].ops).toBe('upper(MARA_R.MAKTX)')
+    expect(resultado.mappings[1].dstDesc).toBe('Texto')
+  })
+
+  it('trae los filtros, los lookups y el diagrama en el mismo recorrido', () => {
+    expect(resultado.filters).toHaveLength(1)
+    expect(resultado.lookups).toHaveLength(1)
+    expect(resultado.diagram.nodes).toHaveLength(3)
+    expect(resultado.dataflowName).toBe('DF_PRODUCTO')
+    expect(resultado.dataflowGuid).toBe('G-1')
+  })
+
+  it('un dataflow sin escritor no es una integraciÃ³n', () => {
+    expect(parseDataflow(dataflowDe('<p><DataFlow/></p>'), {}, {}, '', '')).toBeNull()
+  })
+})
+
+describe('parseIntegration', () => {
+  it('devuelve el trabajo con su dataflow y el Ã¡rea sin las comillas del XMI', () => {
+    const [integracion] = parseIntegration(XML_TABLA)
+    expect(integracion.jobName).toBe('GOSCM_MD_PRODUCTO')
+    expect(integracion.planArea).toBe('SAPIBP1')
+    expect(integracion.tipoIntegracion).toBe('MD')
+    expect(integracion.targetTable).toBe('PRODUCT')
+  })
+
+  it('completa los datastores que el XML no dijo con lo que trae el batch.csv', () => {
+    const sinDatastore = XML_TABLA.replace(' referencedDataStore="//@DataStore/0"', '')
+    const [integracion] = parseIntegration(sinDatastore, {
+      src_datastore_Name: 'ERP_CSV',
+      target_datastorename: 'IBP_CSV',
+    })
+
+    expect(integracion.mappings[0].srcDS).toBe('ERP_CSV')
+    expect(integracion.dstDSName).toBe('IBP_CSV')
+  })
+
+  // v9 fusionaba los dataflows de un XML en uno solo y se perdÃ­an destinos sin avisar.
+  it('un XML con dos dataflows da dos integraciones', () => {
+    const uno = XML_TABLA.slice(XML_TABLA.indexOf('<DataFlow'), XML_TABLA.indexOf('</DataFlow>') + 11)
+    const dos = XML_TABLA.replace('</p>', `${uno.replace('DF_PRODUCTO', 'DF_CLIENTE').replace('"PRODUCT"', '"CUSTOMER"')}</p>`)
+
+    expect(parseIntegration(dos).map((una) => una.targetTable)).toEqual(['PRODUCT', 'CUSTOMER'])
+  })
+
+  it('sin trabajo no hay integraciÃ³n que documentar', () => {
+    expect(parseIntegration('<p><DataFlow/></p>')).toEqual([])
+  })
+
+  it('un XML roto no revienta', () => {
+    expect(parseIntegration('<p><sin cerrar')).toEqual([])
   })
 })

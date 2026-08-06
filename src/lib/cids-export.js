@@ -11,6 +11,8 @@
 // Todo pasa en el navegador: el ZIP no sale del equipo. Un export de CI-DS lleva las definiciones de
 // integración del cliente y conviene que siga así.
 
+import { analizarCampo, expandirExpresion } from './cids-expression.js'
+
 /**
  * El tipo XMI de un elemento.
  *
@@ -208,4 +210,379 @@ export function parseXml(texto) {
   // El parser del navegador no lanza: mete un elemento `parsererror` dentro del resultado.
   if (documento.getElementsByTagName('parsererror').length > 0) return null
   return documento.documentElement
+}
+
+/**
+ * Los formatos de archivo plano por posición, igual que los datastores.
+ *
+ * Hace falta para resolver a qué archivo escribe un dataflow que no escribe a una tabla: la
+ * referencia apunta por índice a esta lista y no trae el nombre.
+ */
+export function buildFileFormatIndex(raiz) {
+  const porIndice = {}
+  let i = 0
+  for (const hijo of raiz.children) {
+    const nombre = hijo.localName
+    if (nombre === 'FlatFileFormat' || nombre === 'DelimitedFileFormat'
+      || nombre === 'FixedWidthFileFormat' || nombre.includes('FileFormat')) {
+      porIndice[i] = hijo.getAttribute('name') || `FILE_${i}`
+    }
+    i += 1
+  }
+  return porIndice
+}
+
+/**
+ * Como `buildSchemaMap`, pero incluyendo los lectores de ARCHIVO además de los de tabla.
+ *
+ * Un dataflow puede leer de un archivo plano, y sin esto esas columnas quedarían sin origen. El
+ * datastore se marca como FILE porque un archivo no pertenece a ninguno.
+ */
+export function buildSchemaMapFull(dataflow, porIndice) {
+  const mapa = buildSchemaMap(dataflow, porIndice)
+
+  for (const elemento of dataflow.children) {
+    if (elemento.localName !== 'elements') continue
+    if (!xmiType(elemento).includes('FileReader')) continue
+
+    const mostrado = elemento.getAttribute('displayName') || ''
+    const alias = elemento.getAttribute('outputSchemaName') || mostrado
+    mapa[mostrado] = { table: alias, ds: 'FILE' }
+    if (alias && alias !== mostrado) mapa[alias] = { table: alias, ds: 'FILE' }
+  }
+
+  return mapa
+}
+
+/**
+ * Descripciones de los campos que SAP siempre deja sin describir en el XMI.
+ *
+ * Son las claves de IBP, que aparecen en casi toda integración. Portado de v9 tal cual.
+ */
+const DESCRIPCION_POR_OMISION = {
+  PRDID: 'Id de producto',
+  CUSTID: 'Id de cliente',
+  LOCID: 'Id de centro',
+  CURRID: 'Id de divisa',
+  ID: 'Id interno',
+  KEYFIGUREDATE: 'Fecha',
+  DATE: 'Fecha',
+}
+
+/**
+ * Todas las llamadas `lookup(...)` de un dataflow, con la expresión completa.
+ *
+ * Se cuentan paréntesis en vez de cortar con una expresión regular porque un lookup puede llevar
+ * llamadas anidadas dentro: parar en el primer paréntesis que cierra partiría la expresión al medio.
+ */
+export function extractLookups(transformaciones) {
+  const encontrados = []
+
+  for (const [nombre, transformacion] of Object.entries(transformaciones)) {
+    for (const campo of transformacion.fields) {
+      if (!campo.proj || !/\blookup\s*\(/i.test(campo.proj)) continue
+
+      const proyeccion = campo.proj
+      const enMinuscula = proyeccion.toLowerCase()
+      let desde = 0
+
+      for (;;) {
+        const inicio = enMinuscula.indexOf('lookup(', desde)
+        if (inicio === -1) break
+
+        let profundidad = 0
+        let i = inicio + 'lookup('.length - 1
+        for (; i < proyeccion.length; i += 1) {
+          if (proyeccion[i] === '(') profundidad += 1
+          else if (proyeccion[i] === ')') {
+            profundidad -= 1
+            if (profundidad === 0) break
+          }
+        }
+
+        encontrados.push({ func: proyeccion.slice(inicio, i + 1), transform: nombre })
+        desde = i + 1
+      }
+    }
+  }
+
+  return encontrados
+}
+
+/**
+ * A dónde escribe un dataflow: a una tabla, o a un archivo plano.
+ *
+ * Se prefiere el escritor de tabla y se sigue buscando aunque ya se haya encontrado uno de archivo:
+ * un dataflow puede tener los dos, y la tabla es el destino que interesa documentar.
+ *
+ * Devuelve `null` si no escribe a ningún lado.
+ */
+export function findWriter(dataflow, porIndice, formatos, datastoreDestinoPorOmision) {
+  let escritor = null
+  let esArchivo = false
+
+  for (const elemento of dataflow.children) {
+    if (elemento.localName !== 'elements') continue
+    const tipo = xmiType(elemento)
+    if (tipo.includes('TableLoader')) { escritor = elemento; esArchivo = false; break }
+    if (tipo.includes('FileLoader')) { escritor = elemento; esArchivo = true }
+  }
+  if (!escritor) return null
+
+  if (!esArchivo) {
+    const tabla = escritor.getAttribute('tableName') || escritor.getAttribute('displayName') || ''
+    if (!tabla) return null
+    return {
+      targetTable: tabla,
+      targetDS: datastoreFromRef(escritor.getAttribute('referencedDataStore') || '', porIndice)
+        || datastoreDestinoPorOmision || '',
+      fileLoaderFileName: '',
+    }
+  }
+
+  const referencia = escritor.getAttribute('referencedFileFormat') || ''
+  const numero = referencia.match(/\/(\d+)/)
+  const tabla = (numero ? (formatos[+numero[1]] || referencia) : referencia)
+    || escritor.getAttribute('displayName') || ''
+  if (!tabla) return null
+
+  // El nombre del archivo va como propiedad, y hace falta para emparejar cadenas entre
+  // integraciones: una escribe un archivo y otra lo lee.
+  return {
+    targetTable: tabla,
+    targetDS: datastoreDestinoPorOmision || 'FILE_DC',
+    fileLoaderFileName: getProp(escritor, 'file_name'),
+  }
+}
+
+/**
+ * Los filtros de un dataflow: los de cada transformación y los de sus uniones.
+ *
+ * Cada expresión entra como UNA fila con el texto completo: partirla por condiciones perdería el
+ * sentido de un `and` de cinco líneas. Se listan las tablas reales que menciona, que es lo que se
+ * busca al leer la documentación.
+ *
+ * Se descartan las repetidas por sus primeros 120 caracteres, como en v9: la misma expresión
+ * reaparece en varias transformaciones encadenadas y documentarla cinco veces no aporta nada.
+ */
+export function extractFilters(dataflow, transformaciones, mapaDeEsquemas) {
+  const filtros = []
+  const vistos = new Set()
+
+  const agregar = (expresionCruda) => {
+    if (!expresionCruda) return
+    // El XMI escapa los saltos de línea; devolverlos hace legible una expresión larga.
+    const expresion = expandirExpresion(expresionCruda.replace(/&#xA;/g, '\n'), transformaciones)
+
+    const clave = expresion.substring(0, 120)
+    if (vistos.has(clave)) return
+    vistos.add(clave)
+
+    const tablas = new Set()
+    const { srcTable } = analizarCampo(expresion, transformaciones, mapaDeEsquemas)
+    for (const nombre of srcTable.split(', ').filter(Boolean)) {
+      tablas.add(mapaDeEsquemas[nombre]?.table || nombre)
+    }
+
+    filtros.push({
+      sourceTable: [...tablas].join(', '),
+      sourceField: '',
+      expression: expresion,
+      description: '',
+    })
+  }
+
+  for (const transformacion of Object.values(transformaciones)) agregar(transformacion.filterExpr)
+
+  for (const elemento of dataflow.children) {
+    if (elemento.localName !== 'elements') continue
+    if (!xmiType(elemento).includes('QueryTransform')) continue
+    for (const hijo of elemento.children) {
+      if (hijo.localName !== 'outputSchema') continue
+      for (const union of hijo.children) {
+        if (union.localName === 'joins') agregar(union.getAttribute('expression') || '')
+      }
+    }
+  }
+
+  return filtros
+}
+
+/**
+ * El diagrama del dataflow tal como se ve en CI-DS: sus cajas y las flechas que las unen.
+ *
+ * Es lo que permite mostrar el paso a paso en vez de solo el origen y el destino. Los nodos van
+ * identificados por su POSICIÓN entre los hijos `elements`, porque así es como las conexiones los
+ * referencian (`/2/@elements.4`).
+ */
+export function parseDataflowDiagram(dataflow, porIndice) {
+  const elementos = []
+  for (const hijo of dataflow.children) {
+    if (hijo.localName === 'elements') elementos.push(hijo)
+  }
+
+  const nodes = elementos.map((elemento, indice) => {
+    // "dataflow:TableReader" → "TableReader".
+    const tipo = xmiType(elemento).replace(/^[a-z]+:/i, '')
+
+    const posicion = (elemento.getAttribute('location') || '')
+      .match(/\[\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*\]/)
+
+    const nodo = {
+      id: indice,
+      xmiType: tipo,
+      displayName: elemento.getAttribute('displayName') || elemento.getAttribute('outputSchemaName') || '',
+      location: posicion ? { x: +posicion[1], y: +posicion[2] } : null,
+    }
+
+    if (tipo.includes('TableReader') || tipo.includes('TableLoader')) {
+      nodo.tableName = elemento.getAttribute('tableName') || ''
+      nodo.dsName = datastoreFromRef(elemento.getAttribute('referencedDataStore') || '', porIndice)
+    }
+    if (tipo.includes('FileReader') || tipo.includes('FileLoader')) {
+      nodo.dsName = datastoreFromRef(elemento.getAttribute('referencedDataStore') || '', porIndice)
+      nodo.fileName = getProp(elemento, 'file_name')
+    }
+    if (tipo.includes('RowGenerationTransform')) {
+      nodo.rowCount = elemento.getAttribute('rowCount') || ''
+    }
+
+    if (tipo.includes('QueryTransform') || tipo.includes('XMLMapTransform')) {
+      let esquemaSalida = null
+      for (const hijo of elemento.children) {
+        if (hijo.localName === 'outputSchema') { esquemaSalida = hijo; break }
+      }
+      if (esquemaSalida) {
+        nodo.filterExpression = (esquemaSalida.getAttribute('filterExpression') || '').replace(/&#xA;/g, '\n')
+        nodo.inputSchemas = []
+        nodo.joins = []
+        nodo.fields = []
+
+        for (const hijo of esquemaSalida.children) {
+          if (hijo.localName === 'inputSchemas') {
+            const nombre = hijo.getAttribute('schemaName') || ''
+            if (nombre) nodo.inputSchemas.push(nombre)
+          } else if (hijo.localName === 'joins') {
+            nodo.joins.push({
+              leftSchemaName: hijo.getAttribute('leftSchemaName') || '',
+              rightSchemaName: hijo.getAttribute('rightSchemaName') || '',
+              expression: (hijo.getAttribute('expression') || '').replace(/&#xA;/g, '\n'),
+            })
+          } else if (hijo.localName === 'schemaNodes') {
+            nodo.fields.push({
+              name: hijo.getAttribute('name') || '',
+              description: hijo.getAttribute('description') || '',
+              projectionExpression: (hijo.getAttribute('projectionExpression') || '').replace(/&#xA;/g, '\n'),
+            })
+          }
+        }
+      }
+    }
+
+    return nodo
+  })
+
+  const edges = []
+  for (const hijo of dataflow.children) {
+    if (hijo.localName !== 'connections') continue
+    const origen = (hijo.getAttribute('sourceElement') || '').match(/elements\.(\d+)/)
+    const destino = (hijo.getAttribute('targetElement') || '').match(/elements\.(\d+)/)
+    if (!origen || !destino) continue
+    edges.push({ from: +origen[1], to: +destino[1], schemaName: hijo.getAttribute('schemaName') || '' })
+  }
+
+  return { nodes, edges }
+}
+
+/**
+ * Un dataflow completo: a dónde escribe, qué mapea, qué filtra, qué busca y cómo se ve.
+ *
+ * Devuelve `null` si no escribe a ningún lado — un dataflow sin destino no es una integración que
+ * haya que documentar.
+ */
+export function parseDataflow(dataflow, porIndice, formatos, datastoreOrigenPorOmision, datastoreDestinoPorOmision) {
+  const destino = findWriter(dataflow, porIndice, formatos, datastoreDestinoPorOmision)
+  if (!destino) return null
+
+  const mapaDeEsquemas = buildSchemaMapFull(dataflow, porIndice)
+  const transformaciones = parseTransforms(dataflow)
+
+  // La última transformación es la que arma la fila que se escribe. `Target_Query` es el nombre que
+  // usan los proyectos cuando existe; si no, la última en el orden del XML.
+  const ultima = transformaciones.Target_Query ?? Object.values(transformaciones).at(-1) ?? null
+
+  const mappings = []
+  for (const campo of ultima?.fields ?? []) {
+    if (!campo.proj) continue
+    const origen = analizarCampo(campo.proj, transformaciones, mapaDeEsquemas)
+    mappings.push({
+      srcDS: origen.srcDS || datastoreOrigenPorOmision || '',
+      srcTable: origen.srcTable,
+      srcField: origen.srcField,
+      dstDS: destino.targetDS,
+      dstTable: destino.targetTable,
+      dstField: campo.name,
+      dstDesc: campo.desc || DESCRIPCION_POR_OMISION[campo.name] || '',
+      ops: origen.ops,
+    })
+  }
+
+  return {
+    ...destino,
+    mappings,
+    filters: extractFilters(dataflow, transformaciones, mapaDeEsquemas),
+    lookups: extractLookups(transformaciones),
+    dataflowName: dataflow.getAttribute('name') || dataflow.getAttribute('displayName') || '',
+    dataflowGuid: dataflow.getAttribute('guid') || '',
+    diagram: parseDataflowDiagram(dataflow, porIndice),
+  }
+}
+
+/**
+ * Una integración entera: su trabajo y TODOS los dataflows que escriben a algún lado.
+ *
+ * Devuelve una lista y no un solo resultado porque un XML puede traer varios dataflows que escriben
+ * a tablas distintas.
+ */
+export function parseIntegration(xmlTexto, entradaDeBatch = null) {
+  const raiz = parseXml(xmlTexto)
+  if (!raiz) return []
+
+  const trabajo = parseJobMetadata(raiz)
+  if (!trabajo?.jobName) return []
+
+  const porIndice = buildDatastoreIndex(raiz)
+  const formatos = buildFileFormatIndex(raiz)
+  const srcDSName = entradaDeBatch?.src_datastore_Name || ''
+  const dstDSName = entradaDeBatch?.target_datastorename || ''
+
+  const integraciones = []
+
+  for (const hijo of raiz.children) {
+    if (hijo.localName !== 'DataFlow') continue
+
+    const resultado = parseDataflow(hijo, porIndice, formatos, srcDSName, dstDSName)
+    if (!resultado?.targetTable) continue
+
+    const dstFinal = dstDSName || resultado.targetDS || ''
+
+    // Lo que el dataflow no supo resolver se completa con lo que dice el `batch.csv`.
+    for (const mapeo of resultado.mappings) {
+      if (!mapeo.srcDS && srcDSName) mapeo.srcDS = srcDSName
+      if (!mapeo.dstDS && dstFinal) mapeo.dstDS = dstFinal
+    }
+
+    integraciones.push({
+      ...resultado,
+      jobName: trabajo.jobName,
+      jobDesc: trabajo.jobDesc,
+      planArea: trabajo.planArea,
+      variables: trabajo.variables,
+      srcDSName,
+      dstDSName: dstFinal,
+      tipoIntegracion: integrationType(trabajo.jobName, isFileTarget(dstFinal)),
+    })
+  }
+
+  return integraciones
 }
