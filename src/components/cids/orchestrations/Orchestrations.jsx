@@ -11,6 +11,7 @@ import {
   listOrchestrations,
   saveOrchestration,
 } from '../../../lib/orchestrations.js'
+import { downloadFile, fromFile, toFile } from '../../../lib/orchestration-file.js'
 import Modal from '../../ui/Modal.jsx'
 import OrchestrationList from './OrchestrationList.jsx'
 
@@ -70,6 +71,37 @@ export default function Orchestrations({ destino }) {
     })
   }
 
+  function exportar() {
+    const fecha = new Date().toISOString().slice(0, 10)
+    downloadFile(toFile(orquestaciones), `orquestaciones-${destino.name}-${fecha}.json`)
+  }
+
+  /**
+   * Trae orquestaciones de un archivo. Cada una nace en ESTE destino, con nombre libre si choca.
+   *
+   * Se crean de a una y no todas juntas a propósito: si el servidor rechaza una —un ciclo, una
+   * conexión rota— las demás entran igual, y el error dice cuál falló en vez de perderse el lote.
+   */
+  const importar = (archivo) => hacer(async () => {
+    const leidas = fromFile(JSON.parse(await archivo.text()))
+    const usados = new Set(orquestaciones.map((una) => una.name))
+    const fallidas = []
+
+    for (const una of leidas) {
+      let nombre = una.name
+      for (let numero = 2; usados.has(nombre); numero += 1) nombre = `${una.name} (${numero})`
+      usados.add(nombre)
+      try {
+        await createOrchestration(destino, nombre)
+          .then((creada) => saveOrchestration(creada.id, { nodes: una.nodes, edges: una.edges }))
+      } catch (fallo) {
+        fallidas.push(`${una.name}: ${fallo.message}`)
+      }
+    }
+
+    if (fallidas.length > 0) throw new Error(`No se pudieron importar ${fallidas.length}. ${fallidas[0]}`)
+  })
+
   const abierta = orquestaciones.find((una) => una.id === elegida) ?? null
 
   /**
@@ -105,6 +137,8 @@ export default function Orchestrations({ destino }) {
           onCrear={crear}
           onDuplicar={duplicar}
           onBorrar={setABorrar}
+          onExportar={exportar}
+          onImportar={importar}
         />
 
         <div className="orq-editor">

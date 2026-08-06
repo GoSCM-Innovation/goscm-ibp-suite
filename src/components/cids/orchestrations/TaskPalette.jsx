@@ -12,7 +12,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { cidsCall } from '../../../lib/cids.js'
 
-export default function TaskPalette({ destino, onAgregar }) {
+export default function TaskPalette({ destino, onAgregar, onAgregarGrupo }) {
   const [proyectos, setProyectos] = useState([])
   const [tareas, setTareas] = useState({})
   const [abierto, setAbierto] = useState(null)
@@ -64,6 +64,16 @@ export default function TaskPalette({ destino, onAgregar }) {
     <div className="paleta">
       <div className="paleta-cabeza">
         <span className="filtro-titulo">Tareas</span>
+        {onAgregarGrupo && (
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={onAgregarGrupo}
+            title="Agregar un grupo: los pasos que metas dentro corren juntos"
+          >
+            + Grupo
+          </button>
+        )}
       </div>
 
       <div className="paleta-buscar">

@@ -20,6 +20,7 @@ import {
   applyNodeChanges,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
+import GroupNode from './GroupNode.jsx'
 import NodeConfigPanel from './NodeConfigPanel.jsx'
 import RunBar from './RunBar.jsx'
 import TaskNode from './TaskNode.jsx'
@@ -30,7 +31,10 @@ import { useOrchestrationRun } from './useOrchestrationRun.js'
 const POSICION_INICIAL = { x: 80, y: 60 }
 const DESPLAZAMIENTO = 40
 
-const nodeTypes = { task: TaskNode }
+const nodeTypes = { task: TaskNode, group: GroupNode }
+
+/** Tamaño con el que nace un grupo. Se agranda arrastrando su borde. */
+const TAMANIO_DEL_GRUPO = { width: 320, height: 220 }
 
 export default function OrchestrationCanvas({ destino, orquestacion, onGuardar, guardando, error }) {
   const [nodos, setNodos] = useState(orquestacion.nodes ?? [])
@@ -85,6 +89,60 @@ export default function OrchestrationCanvas({ destino, orquestacion, onGuardar, 
       },
     }])
     setElegido(id)
+    marcarSucio()
+  }
+
+  function agregarGrupo() {
+    const id = `g-${Date.now()}`
+    setNodos((previos) => [...previos, {
+      id,
+      type: 'group',
+      position: {
+        x: POSICION_INICIAL.x + previos.length * DESPLAZAMIENTO,
+        y: POSICION_INICIAL.y + previos.length * DESPLAZAMIENTO,
+      },
+      style: TAMANIO_DEL_GRUPO,
+      data: { label: 'Grupo', errorStrategy: 'stop', maxRetries: 0, retryDelaySeconds: 30, globalVariables: [] },
+    }])
+    setElegido(id)
+    marcarSucio()
+  }
+
+  /**
+   * Al soltar un paso encima de un grupo, entra en él; al soltarlo fuera, sale.
+   *
+   * La posición se recalcula relativa al grupo porque la librería del lienzo dibuja a los hijos
+   * respecto de su padre: sin convertirla, el paso saltaría lejos al entrar o al salir.
+   */
+  function alSoltarNodo(_evento, movido) {
+    if (movido.type === 'group') return
+
+    const grupos = nodos.filter((nodo) => nodo.type === 'group')
+    const absoluta = posicionAbsoluta(movido, nodos)
+    const contenedor = grupos.find((grupo) => dentroDe(absoluta, grupo))
+
+    const padreNuevo = contenedor?.id ?? null
+    if ((movido.parentId ?? null) === padreNuevo) return
+
+    setNodos((previos) => previos.map((nodo) => {
+      if (nodo.id !== movido.id) return nodo
+      if (!padreNuevo) {
+        // Salir de un grupo es quitarle el padre y el límite que lo ataba a su caja.
+        const sinPadre = { ...nodo, position: absoluta }
+        delete sinPadre.parentId
+        delete sinPadre.extent
+        return sinPadre
+      }
+      return {
+        ...nodo,
+        parentId: padreNuevo,
+        extent: 'parent',
+        position: { x: absoluta.x - contenedor.position.x, y: absoluta.y - contenedor.position.y },
+      }
+    }))
+    // Una conexión entre un paso de dentro y uno de fuera no significa nada para el motor: los hijos
+    // se ordenan entre ellos. Se quitan al entrar o salir, en vez de dejar una línea que no hace nada.
+    setAristas((previas) => previas.filter((arista) => arista.source !== movido.id && arista.target !== movido.id))
     marcarSucio()
   }
 
@@ -156,7 +214,7 @@ export default function OrchestrationCanvas({ destino, orquestacion, onGuardar, 
       {error && <div className="notice notice-error lienzo-error">✕ {error}</div>}
 
       <div className="lienzo-cuerpo">
-        {editable && <TaskPalette destino={destino} onAgregar={agregarTarea} />}
+        {editable && <TaskPalette destino={destino} onAgregar={agregarTarea} onAgregarGrupo={agregarGrupo} />}
 
         <div className="lienzo-dibujo">
           <ReactFlow
@@ -166,6 +224,7 @@ export default function OrchestrationCanvas({ destino, orquestacion, onGuardar, 
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
+            onNodeDragStop={alSoltarNodo}
             nodesDraggable={editable}
             nodesConnectable={editable}
             elementsSelectable
@@ -199,4 +258,22 @@ export default function OrchestrationCanvas({ destino, orquestacion, onGuardar, 
       </div>
     </div>
   )
+}
+
+/** Dónde está un nodo en el lienzo, sumando la posición de su grupo si está dentro de uno. */
+function posicionAbsoluta(nodo, nodos) {
+  if (!nodo.parentId) return nodo.position
+  const padre = nodos.find((otro) => otro.id === nodo.parentId)
+  if (!padre) return nodo.position
+  return { x: padre.position.x + nodo.position.x, y: padre.position.y + nodo.position.y }
+}
+
+/** ¿Cae este punto dentro de la caja de un grupo? */
+function dentroDe(punto, grupo) {
+  const ancho = grupo.style?.width ?? TAMANIO_DEL_GRUPO.width
+  const alto = grupo.style?.height ?? TAMANIO_DEL_GRUPO.height
+  return punto.x >= grupo.position.x
+    && punto.x <= grupo.position.x + ancho
+    && punto.y >= grupo.position.y
+    && punto.y <= grupo.position.y + alto
 }

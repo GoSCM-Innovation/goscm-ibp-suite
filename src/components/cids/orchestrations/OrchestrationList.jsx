@@ -34,6 +34,8 @@ export default function OrchestrationList({
   onCrear,
   onDuplicar,
   onBorrar,
+  onExportar,
+  onImportar,
 }) {
   const [favoritas, setFavoritas] = useState(() => leerFavoritas(destino.id))
   const [creando, setCreando] = useState(false)
@@ -71,14 +73,41 @@ export default function OrchestrationList({
     <div className="orq-lista">
       <div className="orq-lista-cabeza">
         <span className="filtro-titulo">Orquestaciones</span>
-        <button
-          type="button"
-          className="btn btn-ghost btn-sm"
-          onClick={() => setCreando((abierto) => !abierto)}
-          title="Nueva orquestación"
-        >
-          {creando ? '×' : '+'}
-        </button>
+        <div style={{ display: 'flex' }}>
+          {/* El campo de archivo va escondido detrás del botón: el que trae el navegador no se puede
+              estilar y desentonaría con todo lo demás. */}
+          <label className="btn btn-ghost btn-sm" title="Importar desde un archivo">
+            ↑
+            <input
+              type="file"
+              accept="application/json,.json"
+              style={{ display: 'none' }}
+              onChange={(evento) => {
+                const archivo = evento.target.files?.[0]
+                // Se limpia para que elegir el MISMO archivo dos veces vuelva a disparar el evento.
+                evento.target.value = ''
+                if (archivo) onImportar(archivo)
+              }}
+            />
+          </label>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={onExportar}
+            disabled={orquestaciones.length === 0}
+            title={orquestaciones.length === 0 ? 'No hay nada que exportar' : 'Exportar todas a un archivo'}
+          >
+            ↓
+          </button>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={() => setCreando((abierto) => !abierto)}
+            title="Nueva orquestación"
+          >
+            {creando ? '×' : '+'}
+          </button>
+        </div>
       </div>
 
       {/* El campo se lleva el foco solo: aparece porque acabás de pedirlo con el "+", así que el
