@@ -12,6 +12,7 @@ import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
 import { cidsTargets, fetchPromotedTaskNames, listCidsConnections, promotedForTarget } from '../../lib/cids.js'
 import TaskMonitor from './TaskMonitor.jsx'
 import TaskLauncher from './TaskLauncher.jsx'
+import Orchestrations from './orchestrations/Orchestrations.jsx'
 
 // Los tableros se cargan aparte, solo al abrir su pestaña. Son los únicos que usan la librería de
 // gráficos, y esa librería pesa más que todo el resto de la aplicación junta: dejarla en el paquete
@@ -30,6 +31,7 @@ const HERRAMIENTAS = [
   { id: 'resumen', label: 'Resumen' },
   { id: 'monitor', label: 'Monitor de tareas' },
   { id: 'tareas', label: 'Proyectos y tareas' },
+  { id: 'orquestaciones', label: 'Orquestaciones' },
 ]
 
 export default function CidsTools() {
@@ -107,7 +109,7 @@ export default function CidsTools() {
           <div className="page-hint">
             {herramienta === 'global'
               ? 'Todos los repositorios de CI-DS a la vez.'
-              : 'Ejecuciones, proyectos y tareas del repositorio elegido.'}
+              : 'Ejecuciones, tareas y orquestaciones del repositorio elegido.'}
           </div>
         </div>
 
@@ -167,6 +169,9 @@ export default function CidsTools() {
           onBuscar={setBusqueda}
           transportadas={transportadasDelDestino}
         />
+      )}
+      {herramienta === 'orquestaciones' && destino && (
+        <Orchestrations key={`orq-${destino.id}`} destino={destino} />
       )}
       {herramienta === 'tareas' && destino && (
         <TaskLauncher

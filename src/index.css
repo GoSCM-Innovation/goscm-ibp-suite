@@ -642,6 +642,92 @@ a { color: var(--cyan); }
   .mini-stats { flex-wrap: wrap; width: 100%; }
 }
 
+/* ─── Orquestaciones ──────────────────────────────────────── */
+
+.orq { display: flex; flex-direction: column; gap: 12px; height: 100%; min-height: 0; }
+.orq-error { flex-shrink: 0; }
+
+/* Lista a la izquierda, editor a la derecha. La lista no se encoge: es la navegación. */
+.orq-cuerpo {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: flex;
+  flex: 1;
+  min-height: 240px;
+  overflow: hidden;
+}
+
+.orq-lista {
+  background: var(--bg2);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  width: 240px;
+}
+.orq-lista-cabeza {
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex-shrink: 0;
+  justify-content: space-between;
+  padding: 8px 8px 8px 13px;
+}
+.orq-nueva { border-bottom: 1px solid var(--border); display: flex; gap: 6px; padding: 9px 10px; }
+.orq-nueva .input { flex: 1; min-width: 0; }
+.orq-lista-cuerpo { flex: 1; min-height: 0; overflow-y: auto; }
+
+.orq-item {
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  display: flex;
+  gap: 2px;
+  padding-right: 6px;
+  transition: background .15s ease;
+}
+.orq-item:hover { background: var(--surface-glass-soft); }
+.orq-item.active { background: var(--accent-bg-soft); box-shadow: inset 2px 0 0 var(--accent); }
+.orq-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+.orq-item-que { flex: 1; min-width: 0; padding: 9px 2px; }
+.orq-item-nombre {
+  font-size: 12.5px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.orq-item-pasos { color: var(--text3); font-size: 10.5px; margin-top: 2px; }
+
+/* Las acciones aparecen al pasar por encima: con veinte orquestaciones, cuarenta botones a la vista
+   son ruido. Se quedan visibles en la abierta y con el teclado, que si no serían inalcanzables. */
+.orq-item-acciones { display: flex; flex-shrink: 0; gap: 0; opacity: 0; transition: opacity .15s ease; }
+.orq-item:hover .orq-item-acciones,
+.orq-item:focus-within .orq-item-acciones,
+.orq-item.active .orq-item-acciones { opacity: 1; }
+
+.orq-editor { display: flex; flex: 1; min-width: 0; }
+.orq-vacio {
+  align-items: center;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+  justify-content: center;
+  padding: 32px;
+  text-align: center;
+}
+.orq-vacio-titulo { font-size: 14px; font-weight: 600; }
+.orq-vacio .page-hint { max-width: 420px; }
+
+@media (max-width: 720px) {
+  /* En pantalla angosta la lista va arriba y el editor debajo: 240px de barra lateral no dejan
+     espacio para nada más. */
+  .orq-cuerpo { flex-direction: column; }
+  .orq-lista { border-bottom: 1px solid var(--border); border-right: none; max-height: 45%; width: 100%; }
+}
+
 /* ─── Árbol de proyectos y tareas ─────────────────────────── */
 
 .tree {
