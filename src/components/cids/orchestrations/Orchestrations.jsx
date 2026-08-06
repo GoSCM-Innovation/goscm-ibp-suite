@@ -12,12 +12,18 @@ import {
   saveOrchestration,
 } from '../../../lib/orchestrations.js'
 import { downloadFile, fromFile, toFile } from '../../../lib/orchestration-file.js'
+import { useIsNarrow } from '../../../lib/useIsNarrow.js'
 import Modal from '../../ui/Modal.jsx'
 import OrchestrationList from './OrchestrationList.jsx'
 
 // El lienzo se carga aparte: su librería de dibujo pesa tanto como la de gráficos, y quien solo
 // viene a mirar la lista no tiene por qué descargarla.
 const OrchestrationCanvas = lazy(() => import('./OrchestrationCanvas.jsx'))
+
+// En pantalla angosta se usa el editor en lista, que no carga la librería de dibujo: en el teléfono
+// un lienzo con nodos que se arrastran es inservible, y bajar esa librería sería pagar por nada.
+const MobileEditor = lazy(() => import('./MobileEditor.jsx'))
+const TaskPalette = lazy(() => import('./TaskPalette.jsx'))
 
 export default function Orchestrations({ destino }) {
   const [orquestaciones, setOrquestaciones] = useState([])
@@ -28,6 +34,8 @@ export default function Orchestrations({ destino }) {
   const [recarga, setRecarga] = useState(0)
   const [guardando, setGuardando] = useState(false)
   const [errorAlGuardar, setErrorAlGuardar] = useState('')
+  const [eligiendoTarea, setEligiendoTarea] = useState(false)
+  const angosta = useIsNarrow()
 
   useEffect(() => {
     let abandonado = false
@@ -123,6 +131,37 @@ export default function Orchestrations({ destino }) {
     }
   }
 
+  /** Agrega un paso al final de la cadena. Solo lo usa el editor del teléfono. */
+  const agregarPasoAlFinal = (tarea) => hacer(async () => {
+    setEligiendoTarea(false)
+    const nodos = abierta.nodes ?? []
+    const aristas = abierta.edges ?? []
+    const id = `n-${Date.now()}`
+    // El último de la cadena es el que no tiene a nadie detrás.
+    const ultimo = nodos.find((nodo) => !aristas.some((arista) => arista.source === nodo.id))
+
+    const nuevos = [...nodos, {
+      id,
+      type: 'task',
+      position: { x: 80, y: 60 + nodos.length * 120 },
+      data: {
+        taskName: tarea.taskName,
+        taskGuid: tarea.taskGuid ?? null,
+        label: tarea.taskName,
+        globalVariables: [],
+        errorStrategy: 'stop',
+        maxRetries: 0,
+        retryDelaySeconds: 30,
+      },
+    }]
+    const nuevas = ultimo
+      ? [...aristas, { id: `e-${ultimo.id}-${id}`, source: ultimo.id, target: id }]
+      : aristas
+
+    const guardada = await saveOrchestration(abierta.id, { nodes: nuevos, edges: nuevas })
+    setOrquestaciones((previas) => previas.map((una) => (una.id === guardada.id ? guardada : una)))
+  })
+
   return (
     <div className="orq">
       {error && <div className="notice notice-error orq-error">✕ {error}</div>}
@@ -143,15 +182,26 @@ export default function Orchestrations({ destino }) {
 
         <div className="orq-editor">
           {abierta ? (
-            <Suspense fallback={<div className="page-hint" style={{ padding: 24 }}>Cargando el lienzo…</div>}>
-              <OrchestrationCanvas
-                key={abierta.id}
-                destino={destino}
-                orquestacion={abierta}
-                onGuardar={guardar}
-                guardando={guardando}
-                error={errorAlGuardar}
-              />
+            <Suspense fallback={<div className="page-hint" style={{ padding: 24 }}>Cargando el editor…</div>}>
+              {angosta ? (
+                <MobileEditor
+                  key={abierta.id}
+                  orquestacion={abierta}
+                  onGuardar={guardar}
+                  guardando={guardando}
+                  error={errorAlGuardar}
+                  onAgregarPaso={() => setEligiendoTarea(true)}
+                />
+              ) : (
+                <OrchestrationCanvas
+                  key={abierta.id}
+                  destino={destino}
+                  orquestacion={abierta}
+                  onGuardar={guardar}
+                  guardando={guardando}
+                  error={errorAlGuardar}
+                />
+              )}
             </Suspense>
           ) : (
             <div className="orq-vacio">
@@ -161,6 +211,16 @@ export default function Orchestrations({ destino }) {
           )}
         </div>
       </div>
+
+      {eligiendoTarea && (
+        <Modal title="Agregar un paso" onClose={() => setEligiendoTarea(false)}>
+          <Suspense fallback={<div className="page-hint">Cargando tareas…</div>}>
+            <div className="movil-paleta">
+              <TaskPalette destino={destino} onAgregar={agregarPasoAlFinal} />
+            </div>
+          </Suspense>
+        </Modal>
+      )}
 
       {aBorrar && (
         <Modal
