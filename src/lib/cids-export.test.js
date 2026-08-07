@@ -245,6 +245,27 @@ describe('integrationType', () => {
   it('un destino de archivo manda por encima del nombre', () => {
     expect(integrationType('CARGA_KF_VENTAS', true)).toBe('FILE')
   })
+
+  // La tabla de staging es de SAP y no admite interpretación; el nombre del trabajo es una
+  // convención que cada proyecto usa a su manera.
+  it('la tabla de staging manda por encima del nombre del trabajo', () => {
+    expect(integrationType('IBP_004_TD_Depletions', false, 'SOPDD_STAGING_KFTAB_SAPIBP1IBPBNT')).toBe('KF')
+    expect(integrationType('CARGA_KF_VENTAS', false, 'SOPMD_STAG_BNTPRODUCT')).toBe('MD')
+  })
+
+  // El caso real que lo motivó: un cliente llama `_TD_` a lo que carga key figures, y una de cada
+  // cuatro integraciones quedaba documentada como dato maestro.
+  it('un trabajo llamado _TD_ que escribe key figures es key figure', () => {
+    expect(integrationType('IBP_003_TD_ACTUALSREV', false, 'SOPDD_STAGING_KFTAB_SAPIBP1IBPBNT')).toBe('KF')
+  })
+
+  it('una tabla que no es de staging deja decidir al nombre', () => {
+    expect(integrationType('CARGA_KF_VENTAS', false, 'CUALQUIERA')).toBe('KF')
+  })
+
+  it('un destino de archivo sigue mandando por encima de la tabla', () => {
+    expect(integrationType('X', true, 'SOPDD_STAGING_KFTAB_X')).toBe('FILE')
+  })
 })
 
 describe('isFileTarget', () => {

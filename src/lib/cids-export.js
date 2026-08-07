@@ -151,19 +151,32 @@ export async function parseBatchCsv(zip) {
   return porArchivo
 }
 
+/** Cómo nombra CI-DS sus tablas de staging. Es de SAP, no una convención del proyecto. */
+const STAGING = { KF: /^SOPDD_STAGING_KFTAB_/, MD: /^SOPMD_STAG_/ }
+
 /**
  * De qué tipo es la integración: dato maestro, key figure, o archivo.
  *
- * Se deduce del nombre del trabajo porque el XML no lo dice en ningún lado. Es la convención de
- * nombres de los proyectos reales, portada tal cual de v9 — incluido que sin coincidencia se asuma
- * dato maestro, que es lo más común.
+ * Manda la TABLA DESTINO, que es donde SAP lo dice sin ambigüedad: una tabla
+ * `SOPDD_STAGING_KFTAB_*` es de key figures y una `SOPMD_STAG_*` es de dato maestro, siempre.
+ *
+ * El nombre del trabajo queda de reserva para cuando el destino no lo aclara, con la convención que
+ * traía v9. v9 se guiaba SOLO por el nombre, y en un proyecto real eso clasificaba mal una de cada
+ * cuatro integraciones: ese cliente llama `_TD_` (datos transaccionales) a lo que carga key figures,
+ * y quedaban documentadas como dato maestro y sin poder resolver su entidad en IBP.
  */
-export function integrationType(jobName, esArchivo) {
+export function integrationType(jobName, esArchivo, targetTable = '') {
   if (esArchivo) return 'FILE'
+
+  const destino = String(targetTable ?? '').toUpperCase()
+  if (STAGING.KF.test(destino)) return 'KF'
+  if (STAGING.MD.test(destino)) return 'MD'
+
   const nombre = String(jobName ?? '').toUpperCase()
   if (/_KF_/.test(nombre)) return 'KF'
   if (/_MD_|_DM_/.test(nombre)) return 'MD'
   if (/_FILE_/.test(nombre)) return 'FILE'
+  // Sin ninguna pista, dato maestro: es lo más común.
   return 'MD'
 }
 
@@ -580,7 +593,7 @@ export function parseIntegration(xmlTexto, entradaDeBatch = null) {
       variables: trabajo.variables,
       srcDSName,
       dstDSName: dstFinal,
-      tipoIntegracion: integrationType(trabajo.jobName, isFileTarget(dstFinal)),
+      tipoIntegracion: integrationType(trabajo.jobName, isFileTarget(dstFinal), resultado.targetTable),
     })
   }
 
