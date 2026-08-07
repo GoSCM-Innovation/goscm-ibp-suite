@@ -10,6 +10,7 @@ import { useMemo, useState } from 'react'
 import { Background, Controls, Handle, Position, ReactFlow } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 
+import Modal from '../../ui/Modal.jsx'
 import { layoutDataflow } from '../../../lib/dataflow-layout.js'
 
 /**
@@ -63,8 +64,9 @@ function NodoDelDataflow({ data }) {
 
 const nodeTypes = { paso: NodoDelDataflow }
 
-export default function DataflowDiagram({ diagrama }) {
+export default function DataflowDiagram({ diagrama, nombre = 'Dataflow' }) {
   const [elegido, setElegido] = useState(null)
+  const [aPantallaCompleta, setAPantallaCompleta] = useState(false)
 
   const { nodes, edges } = useMemo(() => {
     const posiciones = layoutDataflow(diagrama.nodes)
@@ -90,73 +92,101 @@ export default function DataflowDiagram({ diagrama }) {
 
   const detalle = elegido === null ? null : diagrama.nodes.find((uno) => uno.id === elegido)
 
-  return (
-    <div className="exp-df-wrap">
-      <div className="exp-df-canvas">
-        <ReactFlow
-          nodes={nodes}
-          edges={edges}
-          nodeTypes={nodeTypes}
-          fitView
-          nodesConnectable={false}
-          proOptions={{ hideAttribution: true }}
-          onNodeClick={(_, nodo) => setElegido(Number(nodo.id))}
-          onPaneClick={() => setElegido(null)}
-        >
-          <Background gap={20} />
-          <Controls showInteractive={false} />
-        </ReactFlow>
+  const lienzo = (
+    <div className="exp-df-canvas">
+      <ReactFlow
+        nodes={nodes}
+        edges={edges}
+        nodeTypes={nodeTypes}
+        fitView
+        nodesConnectable={false}
+        proOptions={{ hideAttribution: true }}
+        onNodeClick={(_, nodo) => setElegido(Number(nodo.id))}
+        onPaneClick={() => setElegido(null)}
+      >
+        <Background gap={20} />
+        <Controls showInteractive={false} />
+      </ReactFlow>
+    </div>
+  )
+
+  // El detalle del nodo elegido. Se arma aparte porque va tanto en la sección como en el diálogo.
+  const detalleDelNodo = detalle && (
+    <div className="exp-df-detail">
+      <div className="exp-df-detail-head">
+        <b>{detalle.displayName || detalle.xmiType}</b>
+        <span className="exp-df-node-type">{detalle.xmiType}</span>
       </div>
 
-      {detalle && (
-        <div className="exp-df-detail">
-          <div className="exp-df-detail-head">
-            <b>{detalle.displayName || detalle.xmiType}</b>
-            <span className="exp-df-node-type">{detalle.xmiType}</span>
-          </div>
+      {detalle.inputSchemas?.length > 0 && (
+        <div className="exp-df-detail-row">
+          <span className="exp-k">Entradas</span> {detalle.inputSchemas.join(', ')}
+        </div>
+      )}
 
-          {detalle.inputSchemas?.length > 0 && (
-            <div className="exp-df-detail-row">
-              <span className="exp-k">Entradas</span> {detalle.inputSchemas.join(', ')}
-            </div>
-          )}
+      {detalle.joins?.map((una, i) => (
+        <div className="exp-df-detail-row" key={`join-${i}`}>
+          <span className="exp-k">Unión</span> {una.leftSchemaName} ↔ {una.rightSchemaName}
+          <pre className="exp-expr">{una.expression}</pre>
+        </div>
+      ))}
 
-          {detalle.joins?.map((una, i) => (
-            <div className="exp-df-detail-row" key={`join-${i}`}>
-              <span className="exp-k">Unión</span> {una.leftSchemaName} ↔ {una.rightSchemaName}
-              <pre className="exp-expr">{una.expression}</pre>
-            </div>
-          ))}
+      {detalle.filterExpression && (
+        <div className="exp-df-detail-row">
+          <span className="exp-k">Filtro</span>
+          <pre className="exp-expr">{detalle.filterExpression}</pre>
+        </div>
+      )}
 
-          {detalle.filterExpression && (
-            <div className="exp-df-detail-row">
-              <span className="exp-k">Filtro</span>
-              <pre className="exp-expr">{detalle.filterExpression}</pre>
-            </div>
-          )}
-
-          {detalle.fields?.length > 0 && (
-            <div className="table-scroll exp-df-fields">
-              <table className="table-dense">
-                <thead>
-                  <tr><th>Campo</th><th>Expresión</th></tr>
-                </thead>
-                <tbody>
-                  {detalle.fields.map((uno, i) => (
-                    <tr key={`${uno.name}-${i}`}>
-                      <td>
-                        {uno.name}
-                        {uno.description && <div className="exp-sub">{uno.description}</div>}
-                      </td>
-                      <td><code>{uno.projectionExpression || '—'}</code></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+      {detalle.fields?.length > 0 && (
+        <div className="table-scroll exp-df-fields">
+          <table className="table-dense">
+            <thead>
+              <tr><th>Campo</th><th>Expresión</th></tr>
+            </thead>
+            <tbody>
+              {detalle.fields.map((uno, i) => (
+                <tr key={`${uno.name}-${i}`}>
+                  <td>
+                    {uno.name}
+                    {uno.description && <div className="exp-sub">{uno.description}</div>}
+                  </td>
+                  <td><code>{uno.projectionExpression || '—'}</code></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </div>
+  )
+
+  return (
+    <>
+      <div className="exp-df-wrap">
+        <div className="exp-df-canvas-wrap">
+          {lienzo}
+          <button
+            type="button"
+            className="btn btn-sm exp-df-fs"
+            onClick={() => setAPantallaCompleta(true)}
+            title="Ver en grande"
+          >
+            ⛶
+          </button>
+        </div>
+        {detalleDelNodo}
+      </div>
+
+      {/* El diálogo monta SU PROPIO lienzo, no mueve el de la sección: la librería mide el
+          contenedor al montarse, y arrastrar el mismo nodo del DOM a otro sitio lo deja sin medir
+          y sin dibujar ninguna flecha. */}
+      {aPantallaCompleta && (
+        <Modal title={nombre} subtitle={`${diagrama.nodes.length} pasos`} onClose={() => setAPantallaCompleta(false)} wide>
+          <div className="exp-df-grande">{lienzo}</div>
+          {detalleDelNodo}
+        </Modal>
+      )}
+    </>
   )
 }

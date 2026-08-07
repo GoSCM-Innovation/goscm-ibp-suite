@@ -202,7 +202,7 @@ export default function IntegrationDetail({
       {hayDiagrama && (
         <Seccion titulo="🗺️ Diagrama del dataflow" cantidad={integracion.diagram.nodes.length}>
           <Suspense fallback={<div className="page-hint">Cargando el diagrama…</div>}>
-            <DataflowDiagram diagrama={integracion.diagram} />
+            <DataflowDiagram diagrama={integracion.diagram} nombre={integracion.dataflowName || integracion.jobName} />
           </Suspense>
         </Seccion>
       )}

@@ -11,6 +11,8 @@ import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
 
 import { conConflicto, enrichWithAtl } from '../../../lib/atl-enrich.js'
 import { parseATL } from '../../../lib/cids-atl.js'
+import { copyText } from '../../../lib/clipboard.js'
+import { dimensionATsv, tareasATsv } from '../../../lib/explorer-copy.js'
 import { analyzeProject } from '../../../lib/integration-index.js'
 import { claveDeTarea, fetchTaskIndex, listIbpConnections } from '../../../lib/ibp.js'
 import {
@@ -20,6 +22,8 @@ import {
   filtrarIntegraciones,
   planAreaOptions,
 } from '../../../lib/integration-view.js'
+import { useResizableColumn } from '../../../lib/useResizableColumn.js'
+import AtlProcessMaster from './AtlProcessMaster.jsx'
 import DimensionDetail from './DimensionDetail.jsx'
 import ExplorerMaster from './ExplorerMaster.jsx'
 import IntegrationDetail from './IntegrationDetail.jsx'
@@ -67,6 +71,9 @@ export default function IntegrationExplorer({ transportadas }) {
   const [dimension, setDimension] = useState('integracion')
   const [texto, setTexto] = useState('')
   const [vista, setVista] = useState('lista')
+  const [copiado, setCopiado] = useState('')
+
+  const { contenedorRef, ancho, arrastrando, propiedadesDelBorde } = useResizableColumn()
 
   // La pila de navegación: el tope es lo que se está viendo y el fondo es desde dónde se empezó.
   // Es lo que permite saltar de una integración a la que la alimenta y poder volver.
@@ -114,12 +121,26 @@ export default function IntegrationExplorer({ transportadas }) {
     return pasan
   }, [integraciones, analisis, texto, filtros, soloConflictos, enConflicto, soloEnIbp, indiceDeJobs])
 
+  const esDeDimension = dimension !== 'integracion' && dimension !== 'atl-proceso'
+
   const entradas = useMemo(
-    () => (dimension === 'integracion'
+    () => (!esDeDimension
       ? []
       : entradasDeDimension(analisis?.indices, dimension, texto, new Set(visibles.map((una) => una._idx)))),
-    [analisis, dimension, texto, visibles],
+    [analisis, dimension, texto, visibles, esDeDimension],
   )
+
+  /** Copia al portapapeles lo que se está viendo, y avisa. */
+  async function copiarLoVisible() {
+    const texto2 = esDeDimension ? dimensionATsv(dimension, entradas) : tareasATsv(visibles)
+    const cuantos = esDeDimension ? entradas.length : visibles.length
+    if (cuantos === 0) { setCopiado('No hay nada que copiar.'); return }
+
+    const pudo = await copyText(texto2)
+    setCopiado(pudo
+      ? `${cuantos} ${cuantos === 1 ? 'fila copiada' : 'filas copiadas'}: pegalas en Excel.`
+      : 'No se pudo copiar.')
+  }
 
   const areas = useMemo(() => planAreaOptions(integraciones), [integraciones])
   const datastores = useMemo(() => datastoreOptions(integraciones), [integraciones])
@@ -163,12 +184,17 @@ export default function IntegrationExplorer({ transportadas }) {
     }
   }
 
-  /** Empezar a mirar una integración desde cero: la pila arranca de nuevo. */
+  /**
+   * Empezar a mirar una integración desde cero: la pila arranca de nuevo.
+   *
+   * La vista por proceso se conserva, porque también es una lista de integraciones: sacar de ahí a
+   * quien está recorriendo un proceso le haría perder el sitio.
+   */
   function irA(idx) {
     setPila([idx])
-    setDimension('integracion')
     setVista('lista')
     setClave(null)
+    if (esDeDimension) setDimension('integracion')
   }
 
   /** Saltar a una vecina sin perder de dónde se venía. */
@@ -180,6 +206,7 @@ export default function IntegrationExplorer({ transportadas }) {
     setDimension(id)
     setClave(null)
     setPila([])
+    setCopiado('')
     if (id !== 'integracion') setVista('lista')
   }
 
@@ -213,7 +240,7 @@ export default function IntegrationExplorer({ transportadas }) {
 
       <div className="exp-toolbar">
         <div className="exp-dims">
-          {DIMENSIONES.map((una) => (
+          {DIMENSIONES.filter((una) => !una.soloConAtl || atl).map((una) => (
             <button
               key={una.id}
               type="button"
@@ -253,17 +280,22 @@ export default function IntegrationExplorer({ transportadas }) {
           )}
 
           <span className="exp-counter">
-            {dimension === 'integracion'
-              ? `${visibles.length} de ${integraciones.length} dataflows`
-              : `${entradas.length} ${entradas.length === 1 ? 'resultado' : 'resultados'}`}
+            {esDeDimension
+              ? `${entradas.length} ${entradas.length === 1 ? 'resultado' : 'resultados'}`
+              : `${visibles.length} de ${integraciones.length} dataflows`}
             {' · '}
             {analisis.cadenas.length} {analisis.cadenas.length === 1 ? 'cadena' : 'cadenas'}
           </span>
 
+          <button type="button" className="btn btn-sm" onClick={copiarLoVisible} title="Copiar el listado para pegarlo en Excel">
+            ⧉ Copiar el listado
+          </button>
           <button type="button" className="btn btn-sm" onClick={() => setAnalisis(null)}>
             Cargar otro proyecto
           </button>
         </div>
+
+        {copiado && <div className="page-hint exp-copiado">{copiado}</div>}
 
         <Filtro
           titulo="Área"
@@ -332,8 +364,24 @@ export default function IntegrationExplorer({ transportadas }) {
           <ChainGraph integraciones={visibles} cadenas={analisis.cadenas} onElegir={irA} />
         </Suspense>
       ) : (
-        <div className="exp-split">
+        <div
+          className={`exp-split${arrastrando ? ' arrastrando' : ''}`}
+          ref={contenedorRef}
+          style={{ gridTemplateColumns: `${ancho}px 6px minmax(0, 1fr)` }}
+        >
           <div className="exp-master">
+            {dimension === 'atl-proceso' ? (
+              <AtlProcessMaster
+                atl={atl}
+                integraciones={integraciones}
+                visibles={visibles}
+                cadenas={analisis.cadenas}
+                enConflicto={enConflicto}
+                soloConflictos={soloConflictos}
+                seleccion={elegida?._idx ?? null}
+                onElegir={irA}
+              />
+            ) : (
             <ExplorerMaster
               dimension={dimension}
               integraciones={visibles}
@@ -346,10 +394,14 @@ export default function IntegrationExplorer({ transportadas }) {
               onElegirIntegracion={irA}
               onElegirClave={setClave}
             />
+            )}
           </div>
 
+          {/* El borde entre las dos columnas: se arrastra, o se mueve con las flechas. */}
+          <div className="exp-resizer" {...propiedadesDelBorde} />
+
           <div className="exp-detail-pane">
-            {dimension === 'integracion'
+            {!esDeDimension
               ? (elegida
                 ? (
                   <IntegrationDetail

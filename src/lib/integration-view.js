@@ -13,6 +13,8 @@ export const DIMENSIONES = [
   { id: 'src-field', label: 'Campo origen', icono: '📋', indice: 'bySrcField', fila: 'mIdx' },
   { id: 'filter-table', label: 'Tabla de filtro', icono: '🔍', indice: 'byFilterTable', fila: 'fIdx' },
   { id: 'filter-field', label: 'Campo de filtro', icono: '🎯', indice: 'byFilterField', fila: 'fIdx' },
+  // Solo aparece cuando hay ATL cargados: sin ellos no se sabe ningún proceso.
+  { id: 'atl-proceso', label: 'Proceso de CI-DS', icono: '🧩', soloConAtl: true },
 ]
 
 export const dimensionPorId = (id) => DIMENSIONES.find((una) => una.id === id) ?? DIMENSIONES[0]
