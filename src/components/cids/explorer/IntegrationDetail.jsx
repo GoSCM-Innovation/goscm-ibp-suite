@@ -13,6 +13,7 @@ import {
   NOMBRE_DE_VIA,
   vecinos,
 } from '../../../lib/integration-view.js'
+import AtlSection from './AtlSection.jsx'
 
 const DataflowDiagram = lazy(() => import('./DataflowDiagram.jsx'))
 
@@ -115,6 +116,7 @@ export default function IntegrationDetail({
   integraciones,
   cadenas,
   transportadas,
+  atl,
   puedeVolver,
   onVolver,
   onInicio,
@@ -190,6 +192,8 @@ export default function IntegrationDetail({
           )}
         </div>
       )}
+
+      {atl && <AtlSection idx={integracion._idx} atl={atl} integraciones={integraciones} />}
 
       {hayDiagrama && (
         <Seccion titulo="🗺️ Diagrama del dataflow" cantidad={integracion.diagram.nodes.length}>

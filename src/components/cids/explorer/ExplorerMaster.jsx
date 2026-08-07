@@ -49,7 +49,7 @@ function Cadenas({ cadenas, idxs }) {
 }
 
 /** Una integración suelta, o un dataflow dentro de una tarea con varios. */
-function Fila({ integracion, activa, esHija, transportada, cadenas, onElegir }) {
+function Fila({ integracion, activa, esHija, transportada, choca, cadenas, onElegir }) {
   const nombre = esHija ? (integracion.dataflowName || integracion.targetTable) : integracion.jobName
 
   return (
@@ -61,6 +61,7 @@ function Fila({ integracion, activa, esHija, transportada, cadenas, onElegir }) 
       <span className="exp-item-name">
         {!esHija && <Tipo tipo={integracion.tipoIntegracion} />}
         {transportada && <span className="exp-promoted" title="Ya está en el repositorio productivo">✓</span>}
+        {choca && <span className="exp-warn" title="Choca con el orden real de ejecución">⚠</span>}
         {esHija ? `↳ ${nombre}` : nombre}
         <Cadenas cadenas={cadenas} idxs={new Set([integracion._idx])} />
       </span>
@@ -73,7 +74,7 @@ function Fila({ integracion, activa, esHija, transportada, cadenas, onElegir }) 
 }
 
 /** Una tarea con varios dataflows: se abre y se cierra. */
-function Tarea({ tarea, seleccion, transportadas, cadenas, onElegir }) {
+function Tarea({ tarea, seleccion, transportadas, enConflicto, cadenas, onElegir }) {
   const contieneLaElegida = tarea.dataflows.some((una) => una._idx === seleccion)
   const [abierta, setAbierta] = useState(contieneLaElegida)
 
@@ -85,6 +86,7 @@ function Tarea({ tarea, seleccion, transportadas, cadenas, onElegir }) {
         activa={seleccion === unica._idx}
         esHija={false}
         transportada={transportadas?.has((unica.jobName || '').toUpperCase())}
+        choca={enConflicto?.has(unica._idx)}
         cadenas={cadenas}
         onElegir={onElegir}
       />
@@ -102,6 +104,9 @@ function Tarea({ tarea, seleccion, transportadas, cadenas, onElegir }) {
             <span className="exp-promoted" title="Ya está en el repositorio productivo">✓</span>
           )}
           {tarea.jobName}
+          {tarea.dataflows.some((una) => enConflicto?.has(una._idx)) && (
+            <span className="exp-warn" title="Alguno de sus dataflows choca con el orden real">⚠</span>
+          )}
           <span className="exp-count">{tarea.dataflows.length}</span>
           <Cadenas cadenas={cadenas} idxs={idxs} />
         </span>
@@ -115,6 +120,7 @@ function Tarea({ tarea, seleccion, transportadas, cadenas, onElegir }) {
           activa={seleccion === una._idx}
           esHija
           transportada={false}
+          choca={enConflicto?.has(una._idx)}
           cadenas={cadenas}
           onElegir={onElegir}
         />
@@ -124,7 +130,7 @@ function Tarea({ tarea, seleccion, transportadas, cadenas, onElegir }) {
 }
 
 /** Un proyecto: solo se dibuja su cabecera cuando hay más de uno cargado. */
-function Proyecto({ proyecto, unico, seleccion, transportadas, cadenas, onElegir }) {
+function Proyecto({ proyecto, unico, seleccion, transportadas, enConflicto, cadenas, onElegir }) {
   const contieneLaElegida = proyecto.tareas.some((una) => una.dataflows.some((otra) => otra._idx === seleccion))
   const [abierto, setAbierto] = useState(true)
 
@@ -134,6 +140,7 @@ function Proyecto({ proyecto, unico, seleccion, transportadas, cadenas, onElegir
       tarea={una}
       seleccion={seleccion}
       transportadas={transportadas}
+      enConflicto={enConflicto}
       cadenas={cadenas}
       onElegir={onElegir}
     />
@@ -158,6 +165,7 @@ export default function ExplorerMaster({
   entradas,
   cadenas,
   transportadas,
+  enConflicto,
   seleccion,
   claveElegida,
   onElegirIntegracion,
@@ -198,6 +206,7 @@ export default function ExplorerMaster({
           unico={proyectos.length === 1}
           seleccion={seleccion}
           transportadas={transportadas}
+          enConflicto={enConflicto}
           cadenas={cadenas}
           onElegir={onElegirIntegracion}
         />

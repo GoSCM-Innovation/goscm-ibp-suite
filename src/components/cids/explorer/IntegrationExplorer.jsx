@@ -9,6 +9,8 @@
 
 import { Suspense, lazy, useMemo, useState } from 'react'
 
+import { conConflicto, enrichWithAtl } from '../../../lib/atl-enrich.js'
+import { parseATL } from '../../../lib/cids-atl.js'
 import { analyzeProject } from '../../../lib/integration-index.js'
 import {
   DIMENSIONES,
@@ -57,6 +59,7 @@ function Filtro({ titulo, opciones, elegidas, onAlternar }) {
 
 export default function IntegrationExplorer({ transportadas }) {
   const [archivos, setArchivos] = useState([])
+  const [atls, setAtls] = useState([])
   const [analisis, setAnalisis] = useState(null)
   const [analizando, setAnalizando] = useState(false)
 
@@ -73,20 +76,26 @@ export default function IntegrationExplorer({ transportadas }) {
   const [srcDS, setSrcDS] = useState(new Set())
   const [dstDS, setDstDS] = useState(new Set())
   const [soloTransportadas, setSoloTransportadas] = useState(false)
+  const [soloConflictos, setSoloConflictos] = useState(false)
 
   // La lista vacía va en un `useMemo` para que sea la misma referencia entre repintados: si no,
   // todos los cálculos de abajo se rehacen en cada tecla mientras no hay proyecto cargado.
   const integraciones = useMemo(() => analisis?.integraciones ?? [], [analisis])
+
+  const atl = analisis?.atl ?? null
+
+  // Qué integraciones están metidas en un choque, para poder filtrar por ellas.
+  const enConflicto = useMemo(() => (atl ? conConflicto(atl.conflictos) : null), [atl])
 
   const filtros = useMemo(
     () => ({ planAreas, srcDS, dstDS, soloTransportadas, transportadas }),
     [planAreas, srcDS, dstDS, soloTransportadas, transportadas],
   )
 
-  const visibles = useMemo(
-    () => filtrarIntegraciones(integraciones, analisis?.indices, texto, filtros),
-    [integraciones, analisis, texto, filtros],
-  )
+  const visibles = useMemo(() => {
+    const pasan = filtrarIntegraciones(integraciones, analisis?.indices, texto, filtros)
+    return soloConflictos && enConflicto ? pasan.filter((una) => enConflicto.has(una._idx)) : pasan
+  }, [integraciones, analisis, texto, filtros, soloConflictos, enConflicto])
 
   const entradas = useMemo(
     () => (dimension === 'integracion'
@@ -110,9 +119,27 @@ export default function IntegrationExplorer({ transportadas }) {
     setSrcDS(new Set())
     setDstDS(new Set())
     setSoloTransportadas(false)
+    setSoloConflictos(false)
 
     try {
-      setAnalisis(await analyzeProject(archivos))
+      const resultado = await analyzeProject(archivos)
+
+      // El ATL es opcional: sin él el explorador funciona igual, solo que sin poder contrastar el
+      // orden real de ejecución. Uno que no se pueda leer se salta con su aviso.
+      const leidos = []
+      const fallados = []
+      for (const archivo of atls) {
+        try { leidos.push({ nombre: archivo.name, atl: parseATL(archivo.text) }) }
+        catch (error) { fallados.push({ archivo: archivo.name, mensaje: error?.message || String(error) }) }
+      }
+
+      setAnalisis({
+        ...resultado,
+        errores: [...resultado.errores, ...fallados],
+        atl: leidos.length > 0
+          ? enrichWithAtl(resultado.integraciones, resultado.cadenas, leidos)
+          : null,
+      })
     } finally {
       setAnalizando(false)
     }
@@ -147,6 +174,8 @@ export default function IntegrationExplorer({ transportadas }) {
         <ProjectDropzone
           archivos={archivos}
           onCambiar={setArchivos}
+          atls={atls}
+          onAtls={setAtls}
           onExplorar={explorar}
           analizando={analizando}
         />
@@ -247,6 +276,26 @@ export default function IntegrationExplorer({ transportadas }) {
             Solo las tareas que ya están en el repositorio productivo
           </label>
         )}
+
+        {atl && (
+          <div className="exp-atl-bar">
+            <span className="page-hint">
+              {atl.procesos.length} {atl.procesos.length === 1 ? 'proceso' : 'procesos'} de CI-DS
+              {' · '}{atl.huerfanas.length} sin ubicar
+              {atl.conflictos.length > 0 && ` · ${atl.conflictos.length} en choque con el orden real`}
+            </span>
+            {atl.conflictos.length > 0 && (
+              <label className="exp-check">
+                <input
+                  type="checkbox"
+                  checked={soloConflictos}
+                  onChange={(evento) => setSoloConflictos(evento.target.checked)}
+                />
+                Solo las que chocan con el orden de ejecución
+              </label>
+            )}
+          </div>
+        )}
       </div>
 
       {vista === 'grafo' && dimension === 'integracion' ? (
@@ -262,6 +311,7 @@ export default function IntegrationExplorer({ transportadas }) {
               entradas={entradas}
               cadenas={analisis.cadenas}
               transportadas={transportadas}
+              enConflicto={enConflicto}
               seleccion={elegida?._idx ?? null}
               claveElegida={clave}
               onElegirIntegracion={irA}
@@ -279,6 +329,7 @@ export default function IntegrationExplorer({ transportadas }) {
                     integraciones={integraciones}
                     cadenas={analisis.cadenas}
                     transportadas={transportadas}
+                    atl={atl}
                     puedeVolver={pila.length > 1}
                     onVolver={() => setPila((previa) => previa.slice(0, -1))}
                     onInicio={() => setPila((previa) => previa.slice(0, 1))}
