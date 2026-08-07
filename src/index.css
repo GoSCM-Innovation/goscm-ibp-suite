@@ -1565,3 +1565,6 @@ a { color: var(--cyan); }
 .doc-list { border: 1px solid var(--border); border-radius: 10px; max-height: 62vh; overflow-y: auto; }
 .doc-check { text-align: center; width: 34px; }
 .table-dense .tag { margin-left: 6px; }
+.doc-avisos { margin: 0; padding-left: 18px; }
+.doc-avisos li { margin: 2px 0; }
+.doc-nondi { opacity: .62; }

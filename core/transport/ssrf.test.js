@@ -170,6 +170,17 @@ describe('checkOdataService', () => {
     expect(checkOdataService('/otra/cosa')).toMatch(/no es un servicio/)
   })
 
+  // Así publica SAP los Application Jobs, y así hay que llamarlos. Sin esto, la ruta real del
+  // tenant se rechazaba aunque el servicio estuviera permitido.
+  it('acepta la versión pegada al nombre del servicio', () => {
+    expect(checkOdataService('/sap/opu/odata/sap/BC_EXT_APPJOB_MANAGEMENT;v=0002/$metadata')).toBeNull()
+  })
+
+  // La versión no puede colar un servicio que no está permitido.
+  it('lo que se autoriza es el servicio, no la versión', () => {
+    expect(checkOdataService('/sap/opu/odata/sap/OTRO_SRV;v=0002/X')).toMatch(/no permitido/)
+  })
+
   it('se puede ampliar la lista por variable de entorno', () => {
     expect(checkOdataService('/sap/opu/odata/IBP/OTRO_SRV/X')).toMatch(/no permitido/)
     process.env.ALLOWED_SAP_SERVICES = 'MASTER_DATA_API_SRV, OTRO_SRV'

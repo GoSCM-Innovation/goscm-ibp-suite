@@ -1,0 +1,50 @@
+// GET  /api/ibp/jobs?connectionId=…            — las plantillas de trabajo del tenant.
+// POST /api/ibp/jobs  { connectionId, plantillas } — los pasos de las plantillas elegidas.
+//
+// Son dos operaciones en un archivo porque son dos mitades de la misma pregunta y comparten todo el
+// preámbulo. Vercel cuenta funciones, no rutas.
+//
+// El acuerdo es `SAP_COM_0068`: los Application Jobs no van por el mismo que los datos.
+
+import { requireModule } from '../../core/auth/guards.js'
+import { getConnectionTarget, getCredentials } from '../../core/connections/index.js'
+import { readJobTemplates, readJobsWithSteps } from '../../core/ibp/index.js'
+
+const ACUERDO = 'SAP_COM_0068'
+
+export default async function handler(req, res) {
+  if (req.method !== 'GET' && req.method !== 'POST') {
+    return res.status(405).json({ error: 'Método no permitido.' })
+  }
+
+  const session = await requireModule(req, res, 'cids')
+  if (!session) return
+
+  const connectionId = req.method === 'GET' ? req.query?.connectionId : req.body?.connectionId
+  if (!connectionId) return res.status(400).json({ error: 'Falta la conexión.' })
+
+  try {
+    const conexion = await getConnectionTarget(session.clientId, connectionId)
+    if (conexion.kind !== 'ibp') return res.status(400).json({ error: 'Esa conexión no es de IBP.' })
+
+    const credentials = await getCredentials(session.clientId, connectionId, ACUERDO)
+
+    if (req.method === 'GET') {
+      const { entidad, jobs } = await readJobTemplates({ baseUrl: conexion.baseUrl, credentials })
+      return res.status(200).json({ entidad, jobs })
+    }
+
+    const plantillas = Array.isArray(req.body?.plantillas) ? req.body.plantillas : []
+    if (plantillas.length === 0) return res.status(400).json({ error: 'No se eligió ninguna plantilla.' })
+
+    const { pasos, avisoDeTaskId } = await readJobsWithSteps({
+      baseUrl: conexion.baseUrl,
+      credentials,
+      plantillas,
+    })
+    return res.status(200).json({ pasos, avisoDeTaskId })
+  } catch (error) {
+    console.error(`[ibp/jobs] ${error.stack || error.message}`)
+    return res.status(400).json({ error: error.message })
+  }
+}

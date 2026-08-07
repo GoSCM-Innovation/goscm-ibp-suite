@@ -94,9 +94,14 @@ export function isPrivateAddress(ip) {
 /**
  * Comprueba el servicio de OData que se está llamando, para URLs de IBP.
  * Devuelve un motivo si no se permite, o `null` si está bien.
+ *
+ * El nombre del servicio puede llevar versión pegada con punto y coma
+ * (`BC_EXT_APPJOB_MANAGEMENT;v=0002`): así los publica SAP y así hay que llamarlos. La versión no
+ * entra en la comparación con la lista permitida — lo que se autoriza es el servicio, no una
+ * versión suya.
  */
 export function checkOdataService(pathname) {
-  const match = pathname.match(/^\/sap\/opu\/odata\/(?:IBP|sap)\/([A-Za-z0-9_]+)\//)
+  const match = pathname.match(/^\/sap\/opu\/odata\/(?:IBP|sap)\/([A-Za-z0-9_]+)(?:;[A-Za-z0-9_=,.-]+)?\//)
   if (!match) return 'La ruta no es un servicio de OData de IBP'
   if (!allowedServices().includes(match[1])) return `Servicio no permitido: ${match[1]}`
   return null
