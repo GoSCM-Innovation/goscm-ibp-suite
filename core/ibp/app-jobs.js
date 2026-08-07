@@ -121,6 +121,10 @@ export async function readJobSteps({ baseUrl, credentials, templateName, templat
  *
  * Es lo que permite emparejar un paso con su tarea aunque en IBP le hayan cambiado el nombre: el
  * texto del paso lo edita cualquiera, este identificador no. Una sola consulta trae todos.
+ *
+ * En un trabajo de UN SOLO paso, el parámetro se llama `P_TSKID` a secas y la secuencia no tiene
+ * nombre. Se indexa igual, con la cadena vacía como nombre de paso: v9 exigía nombre y perdía justo
+ * esos trabajos, que son los de tarea directa.
  */
 export async function readTaskIds({ baseUrl, credentials }) {
   const filas = await readAllPages({
@@ -132,12 +136,55 @@ export async function readTaskIds({ baseUrl, credentials }) {
 
   const porPaso = {}
   for (const fila of filas) {
-    const secuencia = (fila.JobTemplateParameterName || '').replace(/^P_TSKID\s*/, '').trim()
     const taskId = (fila.Low || '').trim()
-    if (secuencia && taskId) porPaso[stepKey(fila.JobTemplateName, fila.JobTemplateVersion, secuencia)] = taskId
+    if (!taskId) continue
+    const secuencia = (fila.JobTemplateParameterName || '').replace(/^P_TSKID\s*/, '').trim()
+    porPaso[stepKey(fila.JobTemplateName, fila.JobTemplateVersion, secuencia)] = taskId
   }
 
   return porPaso
+}
+
+/**
+ * Qué trabajo y qué paso de IBP ejecutan cada tarea de CI-DS.
+ *
+ * Tres consultas para todo el tenant: los parámetros `P_TSKID`, todas las secuencias y todas las
+ * plantillas. Pedir los pasos plantilla por plantilla serían cientos de consultas y no entraría en
+ * el tiempo de una función.
+ *
+ * Una tarea puede aparecer más de una vez, y eso se conserva: a veces es legítimo —dos trabajos que
+ * cargan lo mismo en momentos distintos— y a veces es un paso copiado al que no le cambiaron la
+ * tarea. Las dos cosas hay que poder verlas.
+ */
+export async function readTaskIndex({ baseUrl, credentials }) {
+  const [tareas, secuencias, plantillas] = await Promise.all([
+    readTaskIds({ baseUrl, credentials }),
+    readAllPages({ baseUrl, credentials, entity: 'JobTemplateSequenceSet', maxPages: 40 }),
+    readAllPages({ baseUrl, credentials, entity: 'JobTemplateSet', maxPages: 40 }),
+  ])
+
+  const textoDePlantilla = new Map(plantillas.map((una) => [
+    una.JobTemplateName,
+    una.JobTemplateText || una.Text || una.JobTemplateName,
+  ]))
+
+  const indice = {}
+  for (const secuencia of secuencias) {
+    const tarea = tareas[stepKey(secuencia.JobTemplateName, secuencia.JobTemplateVersion, secuencia.JobSequenceName || '')]
+    if (!tarea) continue
+
+    const clave = tarea.toUpperCase()
+    indice[clave] = [...(indice[clave] ?? []), {
+      jobName: textoDePlantilla.get(secuencia.JobTemplateName) || secuencia.JobTemplateName,
+      template: secuencia.JobTemplateName,
+      stepName: secuencia.JobSequenceText || secuencia.JceText || '',
+      stepPos: secuencia.JobSequencePosition || 0,
+      stepType: secuencia.JceText || '',
+    }]
+  }
+
+  for (const usos of Object.values(indice)) usos.sort((a, b) => a.stepPos - b.stepPos)
+  return indice
 }
 
 /**

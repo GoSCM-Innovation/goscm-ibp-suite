@@ -14,6 +14,7 @@ import {
   vecinos,
 } from '../../../lib/integration-view.js'
 import AtlSection from './AtlSection.jsx'
+import IbpJobsSection from './IbpJobsSection.jsx'
 
 const DataflowDiagram = lazy(() => import('./DataflowDiagram.jsx'))
 
@@ -117,6 +118,7 @@ export default function IntegrationDetail({
   cadenas,
   transportadas,
   atl,
+  indiceDeJobs,
   puedeVolver,
   onVolver,
   onInicio,
@@ -194,6 +196,8 @@ export default function IntegrationDetail({
       )}
 
       {atl && <AtlSection idx={integracion._idx} atl={atl} integraciones={integraciones} />}
+
+      {indiceDeJobs && <IbpJobsSection jobName={integracion.jobName} indice={indiceDeJobs} />}
 
       {hayDiagrama && (
         <Seccion titulo="🗺️ Diagrama del dataflow" cantidad={integracion.diagram.nodes.length}>

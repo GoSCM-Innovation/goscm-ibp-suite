@@ -28,5 +28,6 @@ export {
   readJobTemplates,
   readJobsWithSteps,
   readTaskIds,
+  readTaskIndex,
   stepKey,
 } from './app-jobs.js'

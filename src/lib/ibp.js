@@ -4,6 +4,13 @@
 
 import { api } from './api.js'
 
+/**
+ * Cómo se compara un nombre de tarea entre el export de CI-DS y el índice de IBP.
+ *
+ * Tiene que coincidir con lo que hace `readTaskIndex` al armar las claves.
+ */
+export const claveDeTarea = (nombre) => String(nombre ?? '').trim().toUpperCase()
+
 /** Las conexiones de IBP a las que puede apuntar este usuario. */
 export async function listIbpConnections() {
   const { connections } = await api.get('/api/connections', { kind: 'ibp' })
@@ -36,6 +43,16 @@ export function fetchSampleRow(connectionId, { service, entitySet, planArea, sel
 export async function fetchJobTemplates(connectionId) {
   const { jobs } = await api.get('/api/ibp/jobs', { connectionId })
   return jobs
+}
+
+/**
+ * Qué trabajo y qué paso de IBP ejecutan cada tarea de CI-DS, para todo el tenant.
+ *
+ * Las claves vienen en mayúsculas, que es como se comparan con los nombres de tarea del export.
+ */
+export async function fetchTaskIndex(connectionId) {
+  const { indice } = await api.get('/api/ibp/jobs', { connectionId, indice: 'true' })
+  return indice
 }
 
 /** Los pasos de las plantillas elegidas, ya con su identificador técnico de tarea. */

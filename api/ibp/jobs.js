@@ -1,14 +1,15 @@
-// GET  /api/ibp/jobs?connectionId=…            — las plantillas de trabajo del tenant.
-// POST /api/ibp/jobs  { connectionId, plantillas } — los pasos de las plantillas elegidas.
+// GET  /api/ibp/jobs?connectionId=…                 — las plantillas de trabajo del tenant.
+// GET  /api/ibp/jobs?connectionId=…&indice=true      — qué trabajo y paso ejecutan cada tarea.
+// POST /api/ibp/jobs  { connectionId, plantillas }   — los pasos de las plantillas elegidas.
 //
-// Son dos operaciones en un archivo porque son dos mitades de la misma pregunta y comparten todo el
-// preámbulo. Vercel cuenta funciones, no rutas.
+// Las tres van en un archivo porque son partes de la misma pregunta y comparten todo el preámbulo.
+// Vercel cuenta funciones, no rutas.
 //
 // El acuerdo es `SAP_COM_0068`: los Application Jobs no van por el mismo que los datos.
 
 import { requireModule } from '../../core/auth/guards.js'
 import { getConnectionTarget, getCredentials } from '../../core/connections/index.js'
-import { readJobTemplates, readJobsWithSteps } from '../../core/ibp/index.js'
+import { readJobTemplates, readJobsWithSteps, readTaskIndex } from '../../core/ibp/index.js'
 
 const ACUERDO = 'SAP_COM_0068'
 
@@ -30,6 +31,9 @@ export default async function handler(req, res) {
     const credentials = await getCredentials(session.clientId, connectionId, ACUERDO)
 
     if (req.method === 'GET') {
+      if (req.query?.indice === 'true') {
+        return res.status(200).json({ indice: await readTaskIndex({ baseUrl: conexion.baseUrl, credentials }) })
+      }
       const { entidad, jobs } = await readJobTemplates({ baseUrl: conexion.baseUrl, credentials })
       return res.status(200).json({ entidad, jobs })
     }

@@ -7,11 +7,12 @@
 // Todo pasa en el navegador. El único dato que viene del servidor es qué tareas ya están en el
 // repositorio productivo, y es una marca de más: si falla, el explorador funciona igual.
 
-import { Suspense, lazy, useMemo, useState } from 'react'
+import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
 
 import { conConflicto, enrichWithAtl } from '../../../lib/atl-enrich.js'
 import { parseATL } from '../../../lib/cids-atl.js'
 import { analyzeProject } from '../../../lib/integration-index.js'
+import { claveDeTarea, fetchTaskIndex, listIbpConnections } from '../../../lib/ibp.js'
 import {
   DIMENSIONES,
   datastoreOptions,
@@ -77,6 +78,20 @@ export default function IntegrationExplorer({ transportadas }) {
   const [dstDS, setDstDS] = useState(new Set())
   const [soloTransportadas, setSoloTransportadas] = useState(false)
   const [soloConflictos, setSoloConflictos] = useState(false)
+  const [soloEnIbp, setSoloEnIbp] = useState(false)
+
+  // Qué tarea ejecuta qué trabajo de IBP. Es una marca de más: si el tenant no contesta, el
+  // explorador funciona igual. Se pide una sola vez porque son tres consultas al tenant.
+  const [indiceDeJobs, setIndiceDeJobs] = useState(null)
+
+  useEffect(() => {
+    let abandonado = false
+    listIbpConnections()
+      .then(([primera]) => (primera ? fetchTaskIndex(primera.id) : null))
+      .then((indice) => { if (!abandonado && indice) setIndiceDeJobs(indice) })
+      .catch(() => {})
+    return () => { abandonado = true }
+  }, [])
 
   // La lista vacía va en un `useMemo` para que sea la misma referencia entre repintados: si no,
   // todos los cálculos de abajo se rehacen en cada tecla mientras no hay proyecto cargado.
@@ -93,9 +108,11 @@ export default function IntegrationExplorer({ transportadas }) {
   )
 
   const visibles = useMemo(() => {
-    const pasan = filtrarIntegraciones(integraciones, analisis?.indices, texto, filtros)
-    return soloConflictos && enConflicto ? pasan.filter((una) => enConflicto.has(una._idx)) : pasan
-  }, [integraciones, analisis, texto, filtros, soloConflictos, enConflicto])
+    let pasan = filtrarIntegraciones(integraciones, analisis?.indices, texto, filtros)
+    if (soloConflictos && enConflicto) pasan = pasan.filter((una) => enConflicto.has(una._idx))
+    if (soloEnIbp && indiceDeJobs) pasan = pasan.filter((una) => claveDeTarea(una.jobName) in indiceDeJobs)
+    return pasan
+  }, [integraciones, analisis, texto, filtros, soloConflictos, enConflicto, soloEnIbp, indiceDeJobs])
 
   const entradas = useMemo(
     () => (dimension === 'integracion'
@@ -120,6 +137,7 @@ export default function IntegrationExplorer({ transportadas }) {
     setDstDS(new Set())
     setSoloTransportadas(false)
     setSoloConflictos(false)
+    setSoloEnIbp(false)
 
     try {
       const resultado = await analyzeProject(archivos)
@@ -277,6 +295,17 @@ export default function IntegrationExplorer({ transportadas }) {
           </label>
         )}
 
+        {indiceDeJobs && (
+          <label className="exp-check">
+            <input
+              type="checkbox"
+              checked={soloEnIbp}
+              onChange={(evento) => setSoloEnIbp(evento.target.checked)}
+            />
+            Solo las tareas que algún Application Job de IBP ejecuta
+          </label>
+        )}
+
         {atl && (
           <div className="exp-atl-bar">
             <span className="page-hint">
@@ -330,6 +359,7 @@ export default function IntegrationExplorer({ transportadas }) {
                     cadenas={analisis.cadenas}
                     transportadas={transportadas}
                     atl={atl}
+                    indiceDeJobs={indiceDeJobs}
                     puedeVolver={pila.length > 1}
                     onVolver={() => setPila((previa) => previa.slice(0, -1))}
                     onInicio={() => setPila((previa) => previa.slice(0, 1))}

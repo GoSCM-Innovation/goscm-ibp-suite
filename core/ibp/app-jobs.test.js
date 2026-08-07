@@ -10,6 +10,7 @@ const {
   readAllPages,
   readJobSteps,
   readTaskIds,
+  readTaskIndex,
   stepKey,
 } = await import('./app-jobs.js')
 
@@ -135,9 +136,97 @@ describe('readTaskIds', () => {
       .toEqual({ [stepKey('T', '1', 'S1')]: 'TAREA_A' })
   })
 
+  // Un trabajo de un solo paso llama al parámetro `P_TSKID` a secas. v9 los descartaba, y son
+  // justamente los de tarea directa.
+  it('un trabajo de un solo paso también se indexa', async () => {
+    sapFetch.mockResolvedValueOnce({
+      json: { value: [{ JobTemplateName: 'T', JobTemplateVersion: '0', JobTemplateParameterName: 'P_TSKID', Low: 'TAREA_SOLA' }] },
+    })
+
+    expect(await readTaskIds({ baseUrl: BASE, credentials: {} }))
+      .toEqual({ [stepKey('T', '0', '')]: 'TAREA_SOLA' })
+  })
+
   it('pide solo los parámetros que empiezan con P_TSKID', async () => {
     sapFetch.mockResolvedValueOnce({ json: { value: [] } })
     await readTaskIds({ baseUrl: BASE, credentials: {} })
     expect(decodeURIComponent(sapFetch.mock.calls[0][0].url)).toContain("startswith(JobTemplateParameterName,'P_TSKID')")
+  })
+})
+
+describe('readTaskIndex', () => {
+  /** Las tres consultas que hace, en el orden en que las pide. */
+  const responder = ({ parametros, secuencias, plantillas }) => {
+    sapFetch.mockImplementation(({ url }) => {
+      if (url.includes('JobTemplateParameterValueDataSet')) return Promise.resolve({ json: { value: parametros } })
+      if (url.includes('JobTemplateSequenceSet')) return Promise.resolve({ json: { value: secuencias } })
+      return Promise.resolve({ json: { value: plantillas } })
+    })
+  }
+
+  it('dice qué trabajo y qué paso ejecutan cada tarea, con el nombre legible', async () => {
+    responder({
+      parametros: [{ JobTemplateName: 'YY1_ABC', JobTemplateVersion: '0', JobTemplateParameterName: 'P_TSKID S1', Low: 'MD_PRODUCTO' }],
+      secuencias: [{
+        JobTemplateName: 'YY1_ABC', JobTemplateVersion: '0', JobSequenceName: 'S1',
+        JobSequencePosition: 2, JobSequenceText: 'Cargar producto', JceText: 'DATA INTEGRATION',
+      }],
+      plantillas: [{ JobTemplateName: 'YY1_ABC', JobTemplateText: 'Carga nocturna' }],
+    })
+
+    expect(await readTaskIndex({ baseUrl: BASE, credentials: {} })).toEqual({
+      MD_PRODUCTO: [{
+        jobName: 'Carga nocturna',
+        template: 'YY1_ABC',
+        stepName: 'Cargar producto',
+        stepPos: 2,
+        stepType: 'DATA INTEGRATION',
+      }],
+    })
+  })
+
+  it('la clave va en mayúsculas, que es como se compara con el export', async () => {
+    responder({
+      parametros: [{ JobTemplateName: 'T', JobTemplateVersion: '0', JobTemplateParameterName: 'P_TSKID S1', Low: 'md_producto' }],
+      secuencias: [{ JobTemplateName: 'T', JobTemplateVersion: '0', JobSequenceName: 'S1', JobSequencePosition: 1 }],
+      plantillas: [],
+    })
+    expect(Object.keys(await readTaskIndex({ baseUrl: BASE, credentials: {} }))).toEqual(['MD_PRODUCTO'])
+  })
+
+  // A veces es legítimo y a veces es un paso copiado al que no le cambiaron la tarea: las dos cosas
+  // hay que poder verlas, así que no se descarta ninguna.
+  it('una tarea usada por varios pasos los lista todos, en orden', async () => {
+    responder({
+      parametros: [
+        { JobTemplateName: 'T', JobTemplateVersion: '0', JobTemplateParameterName: 'P_TSKID S1', Low: 'TAREA' },
+        { JobTemplateName: 'T', JobTemplateVersion: '0', JobTemplateParameterName: 'P_TSKID S2', Low: 'TAREA' },
+      ],
+      secuencias: [
+        { JobTemplateName: 'T', JobTemplateVersion: '0', JobSequenceName: 'S2', JobSequencePosition: 5 },
+        { JobTemplateName: 'T', JobTemplateVersion: '0', JobSequenceName: 'S1', JobSequencePosition: 1 },
+      ],
+      plantillas: [{ JobTemplateName: 'T', JobTemplateText: 'Trabajo' }],
+    })
+
+    expect((await readTaskIndex({ baseUrl: BASE, credentials: {} })).TAREA.map((uno) => uno.stepPos)).toEqual([1, 5])
+  })
+
+  it('un paso sin tarea de CI-DS no entra', async () => {
+    responder({
+      parametros: [],
+      secuencias: [{ JobTemplateName: 'T', JobTemplateVersion: '0', JobSequenceName: 'S1', JobSequencePosition: 1 }],
+      plantillas: [],
+    })
+    expect(await readTaskIndex({ baseUrl: BASE, credentials: {} })).toEqual({})
+  })
+
+  it('sin texto legible se muestra el nombre técnico de la plantilla', async () => {
+    responder({
+      parametros: [{ JobTemplateName: 'YY1_XYZ', JobTemplateVersion: '0', JobTemplateParameterName: 'P_TSKID', Low: 'T' }],
+      secuencias: [{ JobTemplateName: 'YY1_XYZ', JobTemplateVersion: '0', JobSequenceName: '', JobSequencePosition: 1 }],
+      plantillas: [],
+    })
+    expect((await readTaskIndex({ baseUrl: BASE, credentials: {} })).T[0].jobName).toBe('YY1_XYZ')
   })
 })
