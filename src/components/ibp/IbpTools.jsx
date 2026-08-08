@@ -12,10 +12,14 @@ import { lazy, Suspense, useEffect, useState } from 'react'
 
 import { listIbpConnections } from '../../lib/ibp.js'
 
+const GlobalSummary = lazy(() => import('./GlobalSummary.jsx'))
 const Resumen = lazy(() => import('./Resumen.jsx'))
 const JobMonitor = lazy(() => import('./JobMonitor.jsx'))
 
 const HERRAMIENTAS = [
+  // El tablero global mira TODOS los tenants, así que el selector no le aplica. Con uno solo
+  // repetiría el tablero de al lado, y por eso solo aparece cuando hay varios.
+  { id: 'global', label: 'Global', soloConVarios: true },
   { id: 'resumen', label: 'Resumen' },
   { id: 'monitor', label: 'Monitor de trabajos' },
 ]
@@ -61,9 +65,14 @@ export default function IbpTools() {
       <div className="module-head">
         <div>
           <div className="page-title">IBP Tools</div>
-          <div className="page-hint">Los Application Jobs del tenant elegido.</div>
+          <div className="page-hint">
+            {herramienta === 'global'
+              ? 'Todos los tenants de IBP a la vez.'
+              : 'Los Application Jobs del tenant elegido.'}
+          </div>
         </div>
 
+        {herramienta !== 'global' && (
         <div className="monitor-bar">
           <select
             className="select input-sm"
@@ -77,10 +86,11 @@ export default function IbpTools() {
           </select>
           {conexion?.isProduction && <span className="tag tag-accent">Productivo</span>}
         </div>
+        )}
       </div>
 
       <div className="tabs">
-        {HERRAMIENTAS.map((una) => (
+        {HERRAMIENTAS.filter((una) => !una.soloConVarios || conexiones.length > 1).map((una) => (
           <button
             key={una.id}
             type="button"
@@ -95,6 +105,11 @@ export default function IbpTools() {
 
       {/* La clave fuerza a empezar de cero al cambiar de tenant: el rango, los filtros y la fila
           elegida son del tenant que se estaba mirando. */}
+      {herramienta === 'global' && (
+        <Suspense fallback={<div className="page-hint">Cargando el tablero…</div>}>
+          <GlobalSummary />
+        </Suspense>
+      )}
       {herramienta === 'resumen' && conexion && (
         <Suspense fallback={<div className="page-hint">Cargando el tablero…</div>}>
           <Resumen key={conexion.id} conexionId={conexion.id} />
