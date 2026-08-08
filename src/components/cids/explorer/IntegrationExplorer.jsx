@@ -4,8 +4,17 @@
 // desaparece respecto de aquel: el diálogo para conectarse a CI-DS —la conexión ya está elegida
 // arriba, en el módulo— y la carga de vis-network y JSZip desde un CDN.
 //
-// Todo pasa en el navegador. El único dato que viene del servidor es qué tareas ya están en el
-// repositorio productivo, y es una marca de más: si falla, el explorador funciona igual.
+// El ZIP se lee en el navegador y no sale del equipo. Lo único que viene del servidor son dos
+// enriquecimientos OPCIONALES, cada uno con su selector propio:
+//
+//   - de CI-DS: qué tareas ya están en el repositorio productivo (la marca ✓).
+//   - de IBP: qué Application Job ejecuta cada tarea.
+//
+// Los dos se eligen aquí y no se heredan del selector del módulo, que está escondido en esta
+// pestaña. Antes se tomaba "el primero de la lista" sin decirlo: con un solo tenant acertaba por
+// casualidad y con dos era una lotería silenciosa.
+//
+// Cuando hay UNA sola opción se elige sola —no hay nada que decidir—; con varias no se adivina.
 
 import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
 
@@ -14,6 +23,7 @@ import { parseATL } from '../../../lib/cids-atl.js'
 import { copyText } from '../../../lib/clipboard.js'
 import { dimensionATsv, tareasATsv } from '../../../lib/explorer-copy.js'
 import { analyzeProject } from '../../../lib/integration-index.js'
+import { cidsTargets, fetchPromotedTaskNames, listCidsConnections } from '../../../lib/cids.js'
 import { claveDeTarea, fetchTaskIndex, listIbpConnections } from '../../../lib/ibp.js'
 import {
   DIMENSIONES,
@@ -62,7 +72,66 @@ function Filtro({ titulo, opciones, elegidas, onAlternar }) {
   )
 }
 
-export default function IntegrationExplorer({ transportadas }) {
+/**
+ * De dónde salen las marcas opcionales.
+ *
+ * Se muestra siempre que haya algo que elegir, incluso con una sola opción: así se VE con qué se
+ * está enriqueciendo, que es justamente lo que antes no se podía saber.
+ */
+function Enriquecimiento({ destinos, tenants, destinoCids, tenantIbp, onDestinoCids, onTenantIbp, error }) {
+  if (destinos.length === 0 && tenants.length === 0) return null
+
+  return (
+    <div className="card exp-upload">
+      <div className="card-title">
+        🔗 Marcas de otros sistemas <span className="tag tag-muted">opcional</span>
+      </div>
+      <div className="card-hint">
+        No hacen falta para explorar. Añaden qué tareas ya están en el repositorio productivo y qué
+        Application Job de IBP ejecuta cada una.
+      </div>
+
+      <div className="exp-toolbar-row">
+        {destinos.length > 0 && (
+          <label className="exp-enriq">
+            <span className="exp-k">Repositorio de CI-DS</span>
+            <select
+              className="select input-sm"
+              value={destinoCids}
+              onChange={(evento) => onDestinoCids(evento.target.value)}
+            >
+              <option value="">Sin la marca de transportadas</option>
+              {destinos.map((uno) => <option key={uno.id} value={uno.id}>{uno.label}</option>)}
+            </select>
+          </label>
+        )}
+
+        {tenants.length > 0 && (
+          <label className="exp-enriq">
+            <span className="exp-k">Tenant de IBP</span>
+            <select
+              className="select input-sm"
+              value={tenantIbp}
+              onChange={(evento) => onTenantIbp(evento.target.value)}
+            >
+              <option value="">Sin los trabajos de IBP</option>
+              {tenants.map((uno) => <option key={uno.id} value={uno.id}>{uno.name}</option>)}
+            </select>
+          </label>
+        )}
+      </div>
+
+      {error && (
+        <div className="notice notice-info">
+          No se pudo leer el índice de trabajos de IBP ({error}). El explorador funciona igual, sin
+          esa marca.
+        </div>
+      )}
+    </div>
+  )
+}
+
+export default function IntegrationExplorer() {
   const [archivos, setArchivos] = useState([])
   const [atls, setAtls] = useState([])
   const [analisis, setAnalisis] = useState(null)
@@ -87,18 +156,68 @@ export default function IntegrationExplorer({ transportadas }) {
   const [soloConflictos, setSoloConflictos] = useState(false)
   const [soloEnIbp, setSoloEnIbp] = useState(false)
 
-  // Qué tarea ejecuta qué trabajo de IBP. Es una marca de más: si el tenant no contesta, el
-  // explorador funciona igual. Se pide una sola vez porque son tres consultas al tenant.
-  const [indiceDeJobs, setIndiceDeJobs] = useState(null)
+  // De dónde sale cada marca. Vacío = sin enriquecer.
+  const [destinos, setDestinos] = useState([])
+  const [tenants, setTenants] = useState([])
+  const [destinoCids, setDestinoCids] = useState('')
+  const [tenantIbp, setTenantIbp] = useState('')
 
+  const [transportadas, setTransportadas] = useState(null)
+  const [indiceDeJobs, setIndiceDeJobs] = useState(null)
+  const [falloDeMarcas, setFalloDeMarcas] = useState('')
+
+  // Qué hay disponible. Con una sola opción se elige sola.
   useEffect(() => {
     let abandonado = false
-    listIbpConnections()
-      .then(([primera]) => (primera ? fetchTaskIndex(primera.id) : null))
-      .then((indice) => { if (!abandonado && indice) setIndiceDeJobs(indice) })
+
+    listCidsConnections()
+      .then((lista) => {
+        if (abandonado) return
+        const suyos = cidsTargets(lista)
+        setDestinos(suyos)
+        if (suyos.length === 1) setDestinoCids(suyos[0].id)
+      })
       .catch(() => {})
+
+    listIbpConnections()
+      .then((lista) => {
+        if (abandonado) return
+        setTenants(lista)
+        if (lista.length === 1) setTenantIbp(lista[0].id)
+      })
+      .catch(() => {})
+
     return () => { abandonado = true }
   }, [])
+
+  // La marca de transportada. Que falle no rompe nada: es una marca de más.
+  useEffect(() => {
+    if (!destinoCids) return undefined
+    const destino = destinos.find((uno) => uno.id === destinoCids)
+    if (!destino) return undefined
+
+    let abandonado = false
+    fetchPromotedTaskNames(destino)
+      .then((nombres) => { if (!abandonado) setTransportadas(nombres) })
+      .catch(() => { if (!abandonado) setTransportadas(null) })
+    return () => { abandonado = true }
+  }, [destinoCids, destinos])
+
+  // El índice de trabajos de IBP. Son tres consultas al tenant, así que se pide una sola vez.
+  useEffect(() => {
+    if (!tenantIbp) return undefined
+
+    let abandonado = false
+    fetchTaskIndex(tenantIbp)
+      .then((indice) => { if (!abandonado) setIndiceDeJobs(indice) })
+      .catch((fallo) => { if (!abandonado) setFalloDeMarcas(fallo.message) })
+    return () => { abandonado = true }
+  }, [tenantIbp])
+
+  // Cambiar de origen invalida la marca anterior: mostrar la del tenant que ya no está elegido
+  // sería peor que no mostrar ninguna.
+  const marcaTransportadas = destinoCids ? transportadas : null
+  const marcaDeJobs = tenantIbp ? indiceDeJobs : null
 
   // La lista vacía va en un `useMemo` para que sea la misma referencia entre repintados: si no,
   // todos los cálculos de abajo se rehacen en cada tecla mientras no hay proyecto cargado.
@@ -110,16 +229,16 @@ export default function IntegrationExplorer({ transportadas }) {
   const enConflicto = useMemo(() => (atl ? conConflicto(atl.conflictos) : null), [atl])
 
   const filtros = useMemo(
-    () => ({ planAreas, srcDS, dstDS, soloTransportadas, transportadas }),
-    [planAreas, srcDS, dstDS, soloTransportadas, transportadas],
+    () => ({ planAreas, srcDS, dstDS, soloTransportadas, transportadas: marcaTransportadas }),
+    [planAreas, srcDS, dstDS, soloTransportadas, marcaTransportadas],
   )
 
   const visibles = useMemo(() => {
     let pasan = filtrarIntegraciones(integraciones, analisis?.indices, texto, filtros)
     if (soloConflictos && enConflicto) pasan = pasan.filter((una) => enConflicto.has(una._idx))
-    if (soloEnIbp && indiceDeJobs) pasan = pasan.filter((una) => claveDeTarea(una.jobName) in indiceDeJobs)
+    if (soloEnIbp && marcaDeJobs) pasan = pasan.filter((una) => claveDeTarea(una.jobName) in marcaDeJobs)
     return pasan
-  }, [integraciones, analisis, texto, filtros, soloConflictos, enConflicto, soloEnIbp, indiceDeJobs])
+  }, [integraciones, analisis, texto, filtros, soloConflictos, enConflicto, soloEnIbp, marcaDeJobs])
 
   const esDeDimension = dimension !== 'integracion' && dimension !== 'atl-proceso'
 
@@ -224,6 +343,16 @@ export default function IntegrationExplorer({ transportadas }) {
           onExplorar={explorar}
           analizando={analizando}
         />
+
+        <Enriquecimiento
+          destinos={destinos}
+          tenants={tenants}
+          destinoCids={destinoCids}
+          tenantIbp={tenantIbp}
+          onDestinoCids={setDestinoCids}
+          onTenantIbp={setTenantIbp}
+          error={falloDeMarcas}
+        />
       </div>
     )
   }
@@ -316,7 +445,7 @@ export default function IntegrationExplorer({ transportadas }) {
           onAlternar={(valor) => setDstDS((previo) => alternar(previo, valor))}
         />
 
-        {transportadas && (
+        {marcaTransportadas && (
           <label className="exp-check">
             <input
               type="checkbox"
@@ -327,7 +456,7 @@ export default function IntegrationExplorer({ transportadas }) {
           </label>
         )}
 
-        {indiceDeJobs && (
+        {marcaDeJobs && (
           <label className="exp-check">
             <input
               type="checkbox"
@@ -387,7 +516,7 @@ export default function IntegrationExplorer({ transportadas }) {
               integraciones={visibles}
               entradas={entradas}
               cadenas={analisis.cadenas}
-              transportadas={transportadas}
+              transportadas={marcaTransportadas}
               enConflicto={enConflicto}
               seleccion={elegida?._idx ?? null}
               claveElegida={clave}
@@ -409,9 +538,9 @@ export default function IntegrationExplorer({ transportadas }) {
                     integracion={elegida}
                     integraciones={integraciones}
                     cadenas={analisis.cadenas}
-                    transportadas={transportadas}
+                    transportadas={marcaTransportadas}
                     atl={atl}
-                    indiceDeJobs={indiceDeJobs}
+                    indiceDeJobs={marcaDeJobs}
                     puedeVolver={pila.length > 1}
                     onVolver={() => setPila((previa) => previa.slice(0, -1))}
                     onInicio={() => setPila((previa) => previa.slice(0, 1))}

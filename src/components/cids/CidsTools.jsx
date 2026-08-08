@@ -189,7 +189,7 @@ export default function CidsTools() {
       )}
       {herramienta === 'explorador' && (
         <Suspense fallback={<div className="page-hint">Cargando el explorador…</div>}>
-          <IntegrationExplorer transportadas={transportadasDelDestino} />
+          <IntegrationExplorer />
         </Suspense>
       )}
       {herramienta === 'documentador' && (

@@ -1657,3 +1657,4 @@ a { color: var(--cyan); }
 .job-log-tipo { width: 108px; }
 .job-log-problema { color: var(--red); }
 .lista-titulo { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.exp-enriq { align-items: center; display: flex; gap: 8px; }
