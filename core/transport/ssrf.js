@@ -26,8 +26,14 @@ import net from 'node:net'
 // "malicioso.com/x-api.scmibp.ondemand.com" pasaría.
 export const DEFAULT_IBP_HOST_PATTERN = /^[a-z0-9-]+-api\.scmibp\d*\.ondemand\.com$/i
 
-// CI-DS vive en Kyma, en Neo o en HCS según la antigüedad del tenant.
-export const DEFAULT_CIDS_HOST_PATTERN = /^([a-z0-9-]+\.)+(kyma\.ondemand\.com|hana\.ondemand\.com|hcs\.cloud\.sap)$/i
+// CI-DS vive en cuatro sitios según la antigüedad del tenant: Kyma, Neo, HCS, y el dominio propio
+// del servicio (`<región>.cids.cloud.sap`), que es donde SAP da de alta los tenants nuevos.
+//
+// Los cuatro son dominios de SAP y el patrón sigue anclado por los dos extremos, así que ampliarlo
+// no abre la puerta a nada que no sea de SAP. Si mañana aparece un quinto, se puede añadir sin
+// tocar el código con la variable de entorno `ALLOWED_CIDS_HOST_REGEX`.
+export const DEFAULT_CIDS_HOST_PATTERN =
+  /^([a-z0-9-]+\.)+(kyma\.ondemand\.com|hana\.ondemand\.com|hcs\.cloud\.sap|cids\.cloud\.sap)$/i
 
 // Servicios de OData que la aplicación tiene permitido llamar. Es el equivalente del patrón
 // de host, un nivel más abajo: aunque el tenant sea legítimo, no se llama a un servicio que

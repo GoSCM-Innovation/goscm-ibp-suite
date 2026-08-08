@@ -97,8 +97,20 @@ describe('validateSapUrl', () => {
     'https://x.kyma.ondemand.com/service',
     'https://mi-tenant.hana.ondemand.com/service',
     'https://algo.hcs.cloud.sap/service',
+    // El dominio propio del servicio, donde SAP da de alta los tenants nuevos.
+    'https://us.cids.cloud.sap/webservices',
+    'https://eu.cids.cloud.sap/webservices',
   ])('acepta el destino de CI-DS %s', async (url) => {
     await expect(validateSapUrl(url, { kind: 'cids' })).resolves.toBeNull()
+  })
+
+  // El patrón sigue anclado: ampliarlo no puede dejar pasar un dominio que solo TERMINE parecido.
+  it.each([
+    'https://cids.cloud.sap.malicioso.com/webservices',
+    'https://us.cids.cloud.sap.otro.com/webservices',
+    'https://cids-cloud.sap/webservices',
+  ])('sigue rechazando %s', async (url) => {
+    await expect(validateSapUrl(url, { kind: 'cids' })).resolves.toBe('Host no permitido')
   })
 
   it('no aplica la lista de servicios de OData a CI-DS', async () => {
