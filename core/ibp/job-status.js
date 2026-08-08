@@ -93,6 +93,25 @@ export function jobSuccessRate(codes) {
 }
 
 /**
+ * La severidad de una línea de registro (`MsgType` de `JobLogMessageSet`).
+ *
+ * Son los códigos de mensaje de ABAP, los mismos en todo SAP. `A` (abortar) es más grave que `E`
+ * (error): detiene el proceso en vez de anotar un fallo y seguir.
+ */
+export const MESSAGE_TYPE = Object.freeze({
+  A: { label: 'Interrupción', color: '#ef4444' },
+  E: { label: 'Error', color: '#ef4444' },
+  W: { label: 'Aviso', color: '#eab308' },
+  S: { label: 'Correcto', color: '#22c55e' },
+  I: { label: 'Información', color: '#7d9abf' },
+})
+
+export const messageTypeMeta = (type) => MESSAGE_TYPE[type] ?? { label: type || '—', color: '#9ca3af' }
+
+/** ¿Esta línea cuenta como problema? */
+export const isProblemMessage = (type) => type === 'A' || type === 'E'
+
+/**
  * Los modos con los que SAP admite reiniciar un job.
  *
  * Portados de v8 con su explicación: la diferencia importa y elegir mal repite trabajo ya hecho o

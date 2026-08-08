@@ -19,6 +19,7 @@ export {
   FINISHED_JOB_STATUSES,
   JOB_RESTART_MODES,
   JOB_STATUS,
+  MESSAGE_TYPE,
   RESTARTABLE_JOB_STATUSES,
   isJobCancelable,
   isJobFailed,
@@ -26,8 +27,10 @@ export {
   isJobQueued,
   isJobRestartable,
   isJobRunning,
+  isProblemMessage,
   jobStatusMeta,
   jobSuccessRate,
+  messageTypeMeta,
 } from './job-status.js'
 
 export {

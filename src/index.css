@@ -1620,3 +1620,39 @@ a { color: var(--cyan); }
 }
 .exp-falta { color: var(--text3); cursor: default; }
 .exp-falta:hover { background: none; }
+
+/* ── Monitor de Application Jobs ── */
+.job-steps { display: flex; flex-direction: column; gap: 8px; }
+.job-step-title { align-items: center; display: flex; flex-wrap: wrap; gap: 7px; }
+.job-step-num {
+  background: var(--surface-glass-strong);
+  border-radius: 4px;
+  color: var(--text2);
+  font-size: 10.5px;
+  font-weight: 700;
+  min-width: 20px;
+  padding: 1px 5px;
+  text-align: center;
+}
+.job-log { max-height: 320px; overflow-y: auto; }
+
+.job-modos { display: flex; flex-direction: column; gap: 8px; }
+.job-modo {
+  background: var(--surface-glass-soft);
+  border: 1px solid var(--border2);
+  border-radius: 8px;
+  color: var(--text);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  font-family: inherit;
+  gap: 3px;
+  padding: 10px 12px;
+  text-align: left;
+}
+.job-modo:hover:not(:disabled) { background: var(--surface-glass); border-color: var(--accent); }
+.job-modo:disabled { cursor: not-allowed; opacity: .55; }
+.job-modo-label { font-size: 13px; font-weight: 600; }
+.job-modo-desc { color: var(--text2); font-size: 11.5px; line-height: 1.5; }
+.job-log-tipo { width: 108px; }
+.job-log-problema { color: var(--red); }

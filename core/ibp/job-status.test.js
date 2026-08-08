@@ -8,8 +8,10 @@ import {
   isJobFailed,
   isJobFinished,
   isJobRestartable,
+  isProblemMessage,
   jobStatusMeta,
   jobSuccessRate,
+  messageTypeMeta,
 } from './job-status.js'
 
 describe('jobStatusMeta', () => {
@@ -91,6 +93,30 @@ describe('jobSuccessRate', () => {
   it('sin nada acabado no hay tasa que dar', () => {
     expect(jobSuccessRate([])).toBeNull()
     expect(jobSuccessRate(['R', 'S', 'P'])).toBeNull()
+  })
+})
+
+describe('los tipos de mensaje del registro', () => {
+  it('describe los códigos de mensaje de ABAP', () => {
+    expect(messageTypeMeta('E').label).toBe('Error')
+    expect(messageTypeMeta('S').label).toBe('Correcto')
+    expect(messageTypeMeta('W').label).toBe('Aviso')
+  })
+
+  // `A` detiene el proceso; `E` anota el fallo y sigue. Las dos son problema.
+  it('error e interrupción cuentan como problema; el resto no', () => {
+    expect(isProblemMessage('E')).toBe(true)
+    expect(isProblemMessage('A')).toBe(true)
+    for (const tipo of ['S', 'W', 'I', '', undefined]) expect(isProblemMessage(tipo), tipo).toBe(false)
+  })
+
+  it('un tipo desconocido se muestra tal cual, sin darlo por problema', () => {
+    expect(messageTypeMeta('Z').label).toBe('Z')
+    expect(isProblemMessage('Z')).toBe(false)
+  })
+
+  it('sin tipo no revienta', () => {
+    expect(messageTypeMeta(undefined).label).toBe('—')
   })
 })
 
