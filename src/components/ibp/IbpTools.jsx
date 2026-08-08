@@ -10,11 +10,13 @@
 
 import { lazy, Suspense, useEffect, useState } from 'react'
 
+import { readStoredTzMode } from '../../lib/dates.js'
 import { listIbpConnections } from '../../lib/ibp.js'
 
 const GlobalSummary = lazy(() => import('./GlobalSummary.jsx'))
 const Resumen = lazy(() => import('./Resumen.jsx'))
 const JobMonitor = lazy(() => import('./JobMonitor.jsx'))
+const JobTemplates = lazy(() => import('./JobTemplates.jsx'))
 
 const HERRAMIENTAS = [
   // El tablero global mira TODOS los tenants, así que el selector no le aplica. Con uno solo
@@ -22,6 +24,7 @@ const HERRAMIENTAS = [
   { id: 'global', label: 'Global', soloConVarios: true },
   { id: 'resumen', label: 'Resumen' },
   { id: 'monitor', label: 'Monitor de trabajos' },
+  { id: 'plantillas', label: 'Trabajos' },
 ]
 
 export default function IbpTools() {
@@ -118,6 +121,11 @@ export default function IbpTools() {
       {herramienta === 'monitor' && conexion && (
         <Suspense fallback={<div className="page-hint">Cargando el monitor…</div>}>
           <JobMonitor key={conexion.id} conexionId={conexion.id} />
+        </Suspense>
+      )}
+      {herramienta === 'plantillas' && conexion && (
+        <Suspense fallback={<div className="page-hint">Cargando las plantillas…</div>}>
+          <JobTemplates key={conexion.id} conexionId={conexion.id} zona={readStoredTzMode()} />
         </Suspense>
       )}
     </div>

@@ -147,3 +147,15 @@ export function daysBetween(fromValue, toValue, mode) {
   if (!desde || !hasta) return null
   return Math.round((hasta.getTime() - desde.getTime()) / 86400000)
 }
+
+/**
+ * Fecha de OData V2 (`/Date(1657818112000)/`) lista para mostrar.
+ *
+ * SAP mezcla los dos formatos en el mismo servicio: las ejecuciones traen la cadena de catorce
+ * digitos y las plantillas, esto. Pasarle una a la funcion de la otra da el 20/12/1899, que parece
+ * un dato y no lo es.
+ */
+export function formatODataDate(value, mode) {
+  const ms = String(value ?? '').match(/^\/Date\((-?\d+)/)
+  return ms ? formatEpochMs(ms[1], mode) : '—'
+}
