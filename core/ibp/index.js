@@ -59,6 +59,30 @@ export {
 export { readTemplateDetail, scheduleJob } from './job-schedule.js'
 
 export {
+  CONJUNTOS_DE_CONSUMO,
+  METERING_MAX,
+  METERING_PAGE,
+  meteringRoot,
+  readMetering,
+  readMeteringSet,
+  toMeteringTimestamp,
+} from './metering.js'
+
+export {
+  PREFIJO_COMPLEMENTO_EXCEL,
+  RANGOS_DE_CONSUMO,
+  aSegundos,
+  actividadPorDia,
+  contarPor,
+  diaDe,
+  distintos,
+  escribirDuracion,
+  nombresDeComponente,
+  nombresDeUsuario,
+  resumirConsumo,
+} from './metering-summary.js'
+
+export {
   RANGOS_DE_RECURSOS,
   agrupar,
   intervaloDeAgrupacion,

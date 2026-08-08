@@ -1658,3 +1658,12 @@ a { color: var(--cyan); }
 .job-log-problema { color: var(--red); }
 .lista-titulo { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .exp-enriq { align-items: center; display: flex; gap: 8px; }
+
+/* Metering: noventa columnas de una sola serie. Un grafico con eje y leyenda ocuparia mas que los datos. */
+.barras-dia { display: flex; align-items: flex-end; gap: 2px; height: 120px; padding: 6px 0; }
+.barra-dia { flex: 1 1 0; min-width: 2px; height: 100%; display: flex; align-items: flex-end; }
+.barra-dia-relleno { width: 100%; min-height: 1px; background: var(--cyan); border-radius: 2px 2px 0 0; }
+.barras-dia-pie { display: flex; justify-content: space-between; }
+
+.barra-fondo { height: 4px; margin-top: 5px; background: var(--border); border-radius: 2px; overflow: hidden; }
+.barra-relleno { height: 100%; background: var(--cyan); border-radius: 2px; }
