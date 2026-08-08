@@ -170,9 +170,34 @@ describe('parseResponse', () => {
     expect(logs.traceLog.maxPage).toBe('2')
   })
 
+  // El caso real que hacía que el visor mostrara el base64 crudo: este tenant NO separa las
+  // líneas, las pega. Cada una conserva su relleno, así que el "=" queda en medio del bloque y
+  // el bloque entero deja de parecer base64.
+  it('descodifica también las líneas pegadas sin separador', () => {
+    // Con relleno, como las manda SAP: rellena cada línea a un ancho fijo.
+    const pegadas = b64('Path Name ') + b64('+MA61V1 ') + b64('-Target_Query')
+    const xml = `<r><monitorLog><messageLines>${pegadas}</messageLines></monitorLog></r>`
+
+    expect(parseResponse('getTaskLogs', xml).monitorLog.messageLines)
+      .toEqual(['Path Name \n+MA61V1 \n-Target_Query'])
+  })
+
+  // Sin separador ni relleno no hay forma de saber dónde acaba una línea y empieza la otra. Se
+  // juntan, que es un defecto cosmético; lo que importa es que salga texto y no base64.
+  it('una línea sin relleno se junta con la siguiente, pero sale legible', () => {
+    const xml = `<r><monitorLog><messageLines>${b64('Path Name') + b64('+MA61V1 ')}</messageLines></monitorLog></r>`
+    expect(parseResponse('getTaskLogs', xml).monitorLog.messageLines).toEqual(['Path Name+MA61V1 '])
+  })
+
   it('deja pasar tal cual una línea que ya viene en texto plano', () => {
     const xml = '<r><errorLog><messageLines>Error sin codificar</messageLines></errorLog></r>'
     expect(parseResponse('getTaskLogs', xml).errorLog.messageLines).toEqual(['Error sin codificar'])
+  })
+
+  // Sin esta guarda, cualquier palabra del alfabeto base64 se descodificaría a caracteres raros.
+  it('un texto plano que parece base64 no se descodifica a medias', () => {
+    const xml = '<r><errorLog><messageLines>ERROR=fallo=grave</messageLines></errorLog></r>'
+    expect(parseResponse('getTaskLogs', xml).errorLog.messageLines).toEqual(['ERROR=fallo=grave'])
   })
 
   it('devuelve null para los registros que no se pidieron', () => {

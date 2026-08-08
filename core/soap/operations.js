@@ -139,28 +139,47 @@ export function buildBody(operation, params = {}) {
 /** SAP prefija los códigos de estado con "TASK:". Se quita para no arrastrarlo por toda la app. */
 const stripTaskPrefix = (value) => String(value || '').replace(/^TASK:/, '')
 
+/** Descodifica base64. Devuelve `null` si el trozo no lo era de verdad. */
+function decodeBase64(clean) {
+  if (!clean || clean.length % 4 !== 0) return null
+  try {
+    const decoded = Buffer.from(clean, 'base64').toString('utf-8')
+    // El carácter de reemplazo delata que se descodificó algo que no era texto.
+    return decoded && !/�/.test(decoded) ? decoded : null
+  } catch {
+    return null
+  }
+}
+
 /**
- * Descodifica una línea de registro.
+ * Descodifica un trozo de registro.
  *
- * SAP codifica cada línea por separado en base64, pero mete VARIAS líneas ya codificadas
- * dentro del mismo elemento, separadas por saltos. Hay que descodificar trozo a trozo: si se
- * juntaran primero, el relleno final de una línea quedaría en medio del texto y la detección
- * de base64 fallaría, devolviendo el bloque entero como texto ilegible.
+ * SAP codifica cada línea del registro por separado y luego mete VARIAS ya codificadas dentro del
+ * mismo elemento. Cómo las separa depende del tenant: unas veces con saltos de línea y otras
+ * PEGADAS, sin separador ninguno. En el segundo caso cada línea conserva su propio relleno, así que
+ * el "=" aparece en medio del bloque y no solo al final — que es exactamente lo que hace que un
+ * bloque así no parezca base64 y salga crudo.
  *
- * La descodificación es tolerante a propósito: una línea que ya viene en texto plano no pasa
- * la comprobación y sale tal cual.
+ * Por eso se prueban las dos formas: primero el bloque entero, y si no cuela, cortando después de
+ * cada relleno. Solo se acepta el corte si TODOS los trozos descodifican; si alguno no, el original
+ * se devuelve tal cual, que es lo correcto para una línea que ya venía en texto plano.
  */
 function decodeLogToken(part) {
   const clean = part.replace(/\s+/g, '')
-  if (clean && /^[A-Za-z0-9+/]+=*$/.test(clean) && clean.length % 4 === 0) {
-    try {
-      const decoded = Buffer.from(clean, 'base64').toString('utf-8')
-      if (decoded && !/�/.test(decoded)) return decoded
-    } catch {
-      // No era base64 de verdad: se devuelve el original.
-    }
+  if (!clean || !/^[A-Za-z0-9+/=]+$/.test(clean)) return part
+
+  // Una sola línea codificada: el relleno, si lo hay, va al final.
+  if (/^[A-Za-z0-9+/]+=*$/.test(clean)) {
+    const decoded = decodeBase64(clean)
+    if (decoded !== null) return decoded
   }
-  return part
+
+  // Varias pegadas: se corta después de cada relleno.
+  const trozos = clean.match(/[A-Za-z0-9+/]+={1,2}|[A-Za-z0-9+/]+/g) ?? []
+  if (trozos.length < 2) return part
+
+  const lineas = trozos.map(decodeBase64)
+  return lineas.every((una) => una !== null) ? lineas.join('\n') : part
 }
 
 function decodeLogLine(raw) {
