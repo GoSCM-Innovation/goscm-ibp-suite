@@ -1,7 +1,7 @@
 // Las plantillas de Application Job del tenant: qué se puede lanzar.
 //
-// Portado de `Jobs.jsx` de v8. Es la mitad de LECTURA de esa pantalla; el diálogo para programar una
-// —que es lo único que ESCRIBE en el tenant— va aparte y todavía no está.
+// Portado de `Jobs.jsx` de v8. Lanzar una plantilla es lo único de IBP Tools que CREA algo en el
+// tenant, así que va detrás de una confirmación que dice qué va a pasar.
 //
 // Reutiliza el endpoint que ya existía para el documentador de mapeos, así que esta pantalla no
 // añadió nada al servidor.
@@ -14,6 +14,7 @@ import { useEffect, useMemo, useState } from 'react'
 
 import { formatODataDate } from '../../lib/dates.js'
 import { fetchJobTemplates, nombreDeJob } from '../../lib/ibp.js'
+import ScheduleModal from './ScheduleModal.jsx'
 
 /**
  * Las plantillas estándar de SAP empiezan por `/IBP/`; las del cliente, no.
@@ -28,6 +29,7 @@ export default function JobTemplates({ conexionId, zona }) {
   const [error, setError] = useState('')
   const [texto, setTexto] = useState('')
   const [incluirDeSap, setIncluirDeSap] = useState(false)
+  const [lanzando, setLanzando] = useState(null)
 
   useEffect(() => {
     let abandonado = false
@@ -73,12 +75,6 @@ export default function JobTemplates({ conexionId, zona }) {
 
       {error && <div className="notice notice-error">✕ {error}</div>}
 
-      <div className="notice notice-info">
-        Por ahora esta pantalla solo consulta. Programar un trabajo desde aquí llega en la próxima
-        entrega: es lo único de IBP Tools que crea algo en tu tenant y conviene estrenarlo contigo
-        delante.
-      </div>
-
       <div className="table-scroll">
         <table className="table-dense">
           <thead>
@@ -88,6 +84,7 @@ export default function JobTemplates({ conexionId, zona }) {
               <th>Versión</th>
               <th>Creada</th>
               <th>Última modificación</th>
+              <th />
             </tr>
           </thead>
           <tbody>
@@ -104,14 +101,27 @@ export default function JobTemplates({ conexionId, zona }) {
                   {formatODataDate(una.LastChangeDateTime, zona)}
                   {una.LastChangeFormattedName && <div>{una.LastChangeFormattedName}</div>}
                 </td>
+                <td>
+                  <button type="button" className="btn btn-sm" onClick={() => setLanzando(una)}>
+                    ▶ Lanzar
+                  </button>
+                </td>
               </tr>
             ))}
             {visibles.length === 0 && (
-              <tr><td colSpan={5} className="table-empty">No hay ninguna plantilla que coincida.</td></tr>
+              <tr><td colSpan={6} className="table-empty">No hay ninguna plantilla que coincida.</td></tr>
             )}
           </tbody>
         </table>
       </div>
+
+      {lanzando && (
+        <ScheduleModal
+          conexionId={conexionId}
+          plantilla={lanzando}
+          onClose={() => setLanzando(null)}
+        />
+      )}
     </div>
   )
 }

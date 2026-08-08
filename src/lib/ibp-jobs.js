@@ -73,3 +73,17 @@ export function restartRun(connectionId, { jobName, runCount, modo }) {
  * se muestra si no hay nada mejor.
  */
 export const nombreDeEjecucion = (run) => run?.JobText || run?.JobTemplateText || run?.JobTemplateName || run?.JobName || '—'
+
+/** Qué hace una plantilla y con qué valores está configurada. */
+export function fetchTemplateDetail(connectionId, templateName) {
+  return api.get('/api/ibp/job-schedule', { connectionId, templateName })
+}
+
+/**
+ * Lanza una plantilla. CREA una ejecución en el tenant.
+ *
+ * El usuario con el que corre lo pone el servidor, no esta llamada.
+ */
+export function scheduleJob(connectionId, { templateName, jobText }) {
+  return api.post('/api/ibp/job-schedule', { connectionId, templateName, jobText })
+}
