@@ -12,9 +12,11 @@ import { lazy, Suspense, useEffect, useState } from 'react'
 
 import { listIbpConnections } from '../../lib/ibp.js'
 
+const Resumen = lazy(() => import('./Resumen.jsx'))
 const JobMonitor = lazy(() => import('./JobMonitor.jsx'))
 
 const HERRAMIENTAS = [
+  { id: 'resumen', label: 'Resumen' },
   { id: 'monitor', label: 'Monitor de trabajos' },
 ]
 
@@ -22,7 +24,7 @@ export default function IbpTools() {
   const [conexiones, setConexiones] = useState(null)
   const [elegida, setElegida] = useState('')
   const [error, setError] = useState('')
-  const [herramienta, setHerramienta] = useState('monitor')
+  const [herramienta, setHerramienta] = useState('resumen')
 
   useEffect(() => {
     let abandonado = false
@@ -93,6 +95,11 @@ export default function IbpTools() {
 
       {/* La clave fuerza a empezar de cero al cambiar de tenant: el rango, los filtros y la fila
           elegida son del tenant que se estaba mirando. */}
+      {herramienta === 'resumen' && conexion && (
+        <Suspense fallback={<div className="page-hint">Cargando el tablero…</div>}>
+          <Resumen key={conexion.id} conexionId={conexion.id} />
+        </Suspense>
+      )}
       {herramienta === 'monitor' && conexion && (
         <Suspense fallback={<div className="page-hint">Cargando el monitor…</div>}>
           <JobMonitor key={conexion.id} conexionId={conexion.id} />

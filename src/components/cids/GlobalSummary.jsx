@@ -27,7 +27,7 @@ import { useDateRange } from '../../lib/useDateRange.js'
 import ConnectionAvatar from '../ui/ConnectionAvatar.jsx'
 import DateRangeBar from '../ui/DateRangeBar.jsx'
 import EnvBadge from './EnvBadge.jsx'
-import { PerDayBars, SinDatos, StatusDonut } from './StatusCharts.jsx'
+import { PerDayBars, SinDatos, StatusDonut } from '../ui/StatusCharts.jsx'
 
 /** Cada cuánto se recarga solo. De v9. */
 const REFRESH_MS = 5 * 60 * 1000

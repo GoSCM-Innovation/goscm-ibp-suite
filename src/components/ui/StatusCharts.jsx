@@ -1,8 +1,11 @@
-// Los dos gráficos de un tablero de CI-DS: la torta por estado y las barras por día.
+// Los dos gráficos de un tablero: la torta por estado y las barras por día.
 //
-// Los usan el tablero del tenant y el global. En v9 estaban escritos dos veces, con los colores a
-// mano en cada copia; aquí los colores vienen con los datos, que a su vez salen de la tabla de
-// estados de la capa transversal.
+// Los comparten CI-DS e IBP. No fusionan nada: cada tablero sigue siendo suyo y calcula sus propios
+// datos —son cosas distintas, ejecuciones de tareas y ejecuciones de trabajos—; lo único común es
+// cómo se dibuja una torta. Los colores VIENEN con los datos, así que este archivo no sabe de
+// ningún estado de SAP.
+//
+// En v9 estaban escritos dos veces y en v8 otras dos, con los colores a mano en cada copia.
 
 import {
   Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis,

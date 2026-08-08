@@ -21,7 +21,7 @@ import {
 } from '../../lib/cids-stats.js'
 import { useDateRange } from '../../lib/useDateRange.js'
 import DateRangeBar from '../ui/DateRangeBar.jsx'
-import { PerDayBars, SinDatos, StatusDonut } from './StatusCharts.jsx'
+import { PerDayBars, SinDatos, StatusDonut } from '../ui/StatusCharts.jsx'
 
 /** Cada cuánto se recarga solo. De v9: cinco minutos, no treinta segundos como el monitor. */
 const REFRESH_MS = 5 * 60 * 1000
