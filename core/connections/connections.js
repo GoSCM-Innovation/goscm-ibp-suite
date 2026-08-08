@@ -213,6 +213,25 @@ export async function getCredentials(clientId, connectionId, agreement) {
   }
 }
 
+/**
+ * Las credenciales del primer acuerdo de la lista que la conexión tenga configurado.
+ *
+ * Los servicios de datos maestros y de planificación se habilitan con `SAP_COM_0720`, pero muchos
+ * tenants emiten un solo usuario y lo dejan también en `SAP_COM_0326`. Pedir el que corresponde y
+ * caer al otro evita obligar a duplicar el alta sin renunciar a usar el usuario correcto cuando
+ * está separado, que es lo que hace un tenant productivo.
+ */
+export async function getAnyCredentials(clientId, connectionId, agreements) {
+  for (const agreement of agreements) {
+    try {
+      return await getCredentials(clientId, connectionId, agreement)
+    } catch (error) {
+      if (!/no tiene configurado el acuerdo/.test(error.message)) throw error
+    }
+  }
+  throw new Error(`La conexión no tiene configurado ninguno de estos acuerdos: ${agreements.join(', ')}.`)
+}
+
 /** La dirección base y el tipo de una conexión, para armar las llamadas. */
 export async function getConnectionTarget(clientId, connectionId) {
   const row = await queryOneScoped(

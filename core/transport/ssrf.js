@@ -42,6 +42,9 @@ export const DEFAULT_ALLOWED_SERVICES = Object.freeze([
   'MASTER_DATA_API_SRV',
   'PLANNING_DATA_API_SRV',
   'BC_EXT_APPJOB_MANAGEMENT',
+  'RES_CONS_STATS_API_SRV',
+  // Los servicios de OData v4 se nombran en minúscula; la comparación no distingue mayúsculas.
+  'api_meteringactivity',
 ])
 
 function patternFrom(envVar, fallback) {
@@ -107,10 +110,33 @@ export function isPrivateAddress(ip) {
  * versión suya.
  */
 export function checkOdataService(pathname) {
-  const match = pathname.match(/^\/sap\/opu\/odata\/(?:IBP|sap)\/([A-Za-z0-9_]+)(?:;[A-Za-z0-9_=,.-]+)?\//)
-  if (!match) return 'La ruta no es un servicio de OData de IBP'
-  if (!allowedServices().includes(match[1])) return `Servicio no permitido: ${match[1]}`
+  const servicio = nombreDelServicio(pathname)
+  if (!servicio) return 'La ruta no es un servicio de OData de IBP'
+
+  const permitidos = allowedServices().map((uno) => uno.toUpperCase())
+  if (!permitidos.includes(servicio.toUpperCase())) return `Servicio no permitido: ${servicio}`
   return null
+}
+
+/**
+ * El nombre del servicio dentro de la ruta, o `null` si la ruta no tiene forma de servicio de IBP.
+ *
+ * SAP publica sus servicios de dos formas y la aplicación usa las dos:
+ *
+ *   v2  `/sap/opu/odata/IBP/MASTER_DATA_API_SRV/…`
+ *       `/sap/opu/odata/sap/BC_EXT_APPJOB_MANAGEMENT;v=0002/…`  (la versión va pegada al nombre)
+ *   v4  `/sap/opu/odata4/ibp/api_meteringactivity/srvd_a2x/ibp/api_meteringactivity/0001/…`
+ *
+ * De la de v4 se toma el nombre del servicio, que es el segundo tramo; el resto de la ruta lo repite
+ * y añade la versión. Las dos siguen ancladas al principio: sin el ancla, un host cualquiera con esa
+ * ruta al final pasaría.
+ */
+function nombreDelServicio(pathname) {
+  const v2 = pathname.match(/^\/sap\/opu\/odata\/(?:IBP|sap)\/([A-Za-z0-9_]+)(?:;[A-Za-z0-9_=,.-]+)?\//)
+  if (v2) return v2[1]
+
+  const v4 = pathname.match(/^\/sap\/opu\/odata4\/[A-Za-z0-9_]+\/([A-Za-z0-9_]+)\//)
+  return v4 ? v4[1] : null
 }
 
 /**

@@ -5,8 +5,8 @@
 //
 // En v8 las pestañas aparecían según qué acuerdo de comunicación tuviera configurada la conexión.
 // Esa idea se conserva —una pestaña que no puede funcionar es peor que una pestaña ausente— pero se
-// resolverá cuando estén portadas las que dependen de los otros acuerdos. Por ahora todas las de
-// aquí usan `SAP_COM_0068`.
+// resolverá cuando estén portadas las que faltan. Las de trabajos usan `SAP_COM_0326` y Recursos
+// `SAP_COM_0068`, que son acuerdos distintos con su propio usuario de SAP.
 
 import { lazy, Suspense, useEffect, useState } from 'react'
 
@@ -17,6 +17,7 @@ const GlobalSummary = lazy(() => import('./GlobalSummary.jsx'))
 const Resumen = lazy(() => import('./Resumen.jsx'))
 const JobMonitor = lazy(() => import('./JobMonitor.jsx'))
 const JobTemplates = lazy(() => import('./JobTemplates.jsx'))
+const ResourceStats = lazy(() => import('./ResourceStats.jsx'))
 
 const HERRAMIENTAS = [
   // El tablero global mira TODOS los tenants, así que el selector no le aplica. Con uno solo
@@ -25,6 +26,7 @@ const HERRAMIENTAS = [
   { id: 'resumen', label: 'Resumen' },
   { id: 'monitor', label: 'Monitor de trabajos' },
   { id: 'plantillas', label: 'Trabajos' },
+  { id: 'recursos', label: 'Recursos' },
 ]
 
 export default function IbpTools() {
@@ -69,9 +71,9 @@ export default function IbpTools() {
         <div>
           <div className="page-title">IBP Tools</div>
           <div className="page-hint">
-            {herramienta === 'global'
-              ? 'Todos los tenants de IBP a la vez.'
-              : 'Los Application Jobs del tenant elegido.'}
+            {herramienta === 'global' ? 'Todos los tenants de IBP a la vez.'
+              : herramienta === 'recursos' ? 'Cuánta CPU y memoria consume el tenant elegido.'
+                : 'Los Application Jobs del tenant elegido.'}
           </div>
         </div>
 
@@ -121,6 +123,11 @@ export default function IbpTools() {
       {herramienta === 'monitor' && conexion && (
         <Suspense fallback={<div className="page-hint">Cargando el monitor…</div>}>
           <JobMonitor key={conexion.id} conexionId={conexion.id} />
+        </Suspense>
+      )}
+      {herramienta === 'recursos' && conexion && (
+        <Suspense fallback={<div className="page-hint">Cargando el consumo…</div>}>
+          <ResourceStats key={conexion.id} conexionId={conexion.id} />
         </Suspense>
       )}
       {herramienta === 'plantillas' && conexion && (

@@ -7,10 +7,17 @@
 // El motivo viaja en `detail` para que la pantalla lo pueda mostrar como aviso.
 
 import { requireModule } from '../../core/auth/guards.js'
-import { getConnectionTarget, getCredentials } from '../../core/connections/index.js'
+import { getAnyCredentials, getConnectionTarget } from '../../core/connections/index.js'
 import { readSampleRow } from '../../core/ibp/index.js'
 
-const ACUERDO = 'SAP_COM_0326'
+/**
+ * Los acuerdos que habilitan los servicios de datos, en orden de preferencia.
+ *
+ * El que corresponde es `SAP_COM_0720` —es el que habilita `MASTER_DATA_API_SRV` y
+ * `PLANNING_DATA_API_SRV`, cada servicio por separado—. Se cae a `SAP_COM_0326` porque hay tenants
+ * que emiten un único usuario para todo y solo lo tienen dado de alta ahí.
+ */
+const ACUERDOS = ['SAP_COM_0720', 'SAP_COM_0326']
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Método no permitido.' })
@@ -28,7 +35,7 @@ export default async function handler(req, res) {
     const conexion = await getConnectionTarget(session.clientId, connectionId)
     if (conexion.kind !== 'ibp') return res.status(400).json({ error: 'Esa conexión no es de IBP.' })
 
-    const credentials = await getCredentials(session.clientId, connectionId, ACUERDO)
+    const credentials = await getAnyCredentials(session.clientId, connectionId, ACUERDOS)
     const { row, detail } = await readSampleRow({
       baseUrl: conexion.baseUrl,
       credentials,

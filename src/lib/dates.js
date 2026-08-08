@@ -108,6 +108,15 @@ export function formatEpochMs(epochMs, mode) {
   return Number.isNaN(fecha.getTime()) ? '—' : escribir(partes(fecha, mode))
 }
 
+/** "HH:MM" a partir de los milisegundos desde 1970, para el eje de un gráfico por hora. */
+export function clockLabelEpochMs(epochMs, mode) {
+  if (!epochMs) return '?'
+  const fecha = new Date(Number.parseInt(epochMs, 10))
+  if (Number.isNaN(fecha.getTime())) return '?'
+  const { hh, mm } = partes(fecha, mode)
+  return `${dosDigitos(hh)}:${dosDigitos(mm)}`
+}
+
 /**
  * "DD/MM" a partir de los milisegundos desde 1970, para el eje de un gráfico por día.
  *

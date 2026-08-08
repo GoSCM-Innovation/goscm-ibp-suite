@@ -22,7 +22,7 @@ import {
   restartJobRun,
 } from '../../core/ibp/index.js'
 
-const ACUERDO = 'SAP_COM_0068'
+const ACUERDO = 'SAP_COM_0326'
 
 /** Prepara lo común: sesión, conexión de IBP y credenciales. Devuelve `null` si ya contestó. */
 async function preparar(req, res) {

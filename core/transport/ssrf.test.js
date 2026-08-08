@@ -172,10 +172,30 @@ describe('validateSapHost', () => {
 })
 
 describe('checkOdataService', () => {
-  it('acepta los tres servicios de la lista por defecto', () => {
+  it('acepta los servicios de la lista por defecto', () => {
     expect(checkOdataService('/sap/opu/odata/IBP/MASTER_DATA_API_SRV/X')).toBeNull()
     expect(checkOdataService('/sap/opu/odata/IBP/PLANNING_DATA_API_SRV/X')).toBeNull()
     expect(checkOdataService('/sap/opu/odata/sap/BC_EXT_APPJOB_MANAGEMENT/X')).toBeNull()
+    expect(checkOdataService('/sap/opu/odata/IBP/RES_CONS_STATS_API_SRV/RES_CONS_STATS')).toBeNull()
+  })
+
+  // El de consumo es el único que SAP publica en v4, y la ruta repite el nombre del servicio con la
+  // versión al final. Sin contemplarla, la ruta real del tenant se rechazaba.
+  it('acepta la forma de OData v4', () => {
+    expect(checkOdataService(
+      '/sap/opu/odata4/ibp/api_meteringactivity/srvd_a2x/ibp/api_meteringactivity/0001/MtrgComponent',
+    )).toBeNull()
+  })
+
+  it('en la de v4 lo que se autoriza sigue siendo el servicio', () => {
+    expect(checkOdataService('/sap/opu/odata4/ibp/api_otracosa/srvd_a2x/ibp/api_otracosa/0001/X'))
+      .toMatch(/no permitido/)
+  })
+
+  // Sin el ancla, cualquier host podría servir esta ruta colgando de un prefijo suyo.
+  it('la ruta de v4 tiene que empezar donde SAP la pone', () => {
+    expect(checkOdataService('/proxy/sap/opu/odata4/ibp/api_meteringactivity/srvd_a2x/ibp/api_meteringactivity/0001/X'))
+      .toMatch(/no es un servicio/)
   })
 
   it('rechaza una ruta que no es de OData de IBP', () => {

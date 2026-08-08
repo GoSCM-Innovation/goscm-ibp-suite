@@ -58,6 +58,17 @@ export {
 
 export { readTemplateDetail, scheduleJob } from './job-schedule.js'
 
+export {
+  RANGOS_DE_RECURSOS,
+  agrupar,
+  intervaloDeAgrupacion,
+  parseOdataDate,
+  resumenDeRecursos,
+  serieDesdeFilas,
+} from './resource-series.js'
+
+export { RES_CONS_TOP, readResourceStats, resourceRoot } from './resource-stats.js'
+
 export { formatIbpExample, readSampleRow } from './sample-row.js'
 
 export { resolveTargetEntity, selectFieldsFor } from './target-entity.js'

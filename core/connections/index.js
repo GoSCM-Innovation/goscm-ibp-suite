@@ -13,6 +13,7 @@ export {
   deleteConnection,
   getConnection,
   getConnectionTarget,
+  getAnyCredentials,
   getCredentials,
   listConnections,
   upsertAgreement,

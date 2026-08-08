@@ -8,7 +8,8 @@
 // En v9 estaban escritos dos veces y en v8 otras dos, con los colores a mano en cada copia.
 
 import {
-  Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
+  Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart, Pie, PieChart, ResponsiveContainer,
+  Tooltip, XAxis, YAxis,
 } from 'recharts'
 
 const TOOLTIP = {
@@ -63,6 +64,34 @@ export function PerDayBars({ porDia }) {
         <Bar dataKey="Falladas" stackId="a" fill="var(--red)" />
         <Bar dataKey="Otras" stackId="a" fill="var(--text3)" radius={[3, 3, 0, 0]} />
       </BarChart>
+    </ResponsiveContainer>
+  )
+}
+
+/**
+ * Dos porcentajes en el tiempo, de 0 a 100.
+ *
+ * La escala se fija a 0-100 y no se deja que recharts la ajuste: con un tenant tranquilo al 2 % de
+ * CPU, una escala automática dibujaría la misma montaña que uno al 90 % y daría un susto que no es.
+ */
+export function UsageLines({ serie, etiquetaEje, etiquetaPunto }) {
+  if (serie.length === 0) return <SinDatos />
+
+  return (
+    <ResponsiveContainer width="100%" height={300}>
+      <LineChart data={serie} margin={{ top: 4, right: 16, left: -20, bottom: 0 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+        <XAxis dataKey="ts" tick={EJE} tickFormatter={etiquetaEje} minTickGap={50} />
+        <YAxis domain={[0, 100]} tick={EJE} tickFormatter={(valor) => `${valor}%`} />
+        <Tooltip
+          contentStyle={TOOLTIP}
+          labelFormatter={etiquetaPunto}
+          formatter={(valor, clave) => [`${valor}%`, clave === 'cpu' ? 'CPU' : 'Memoria']}
+        />
+        <Legend wrapperStyle={{ fontSize: 11 }} formatter={(clave) => (clave === 'cpu' ? 'CPU' : 'Memoria')} />
+        <Line type="monotone" dataKey="cpu" stroke="var(--cyan)" dot={false} strokeWidth={1.5} isAnimationActive={false} />
+        <Line type="monotone" dataKey="mem" stroke="var(--purple)" dot={false} strokeWidth={1.5} isAnimationActive={false} />
+      </LineChart>
     </ResponsiveContainer>
   )
 }

@@ -11,7 +11,7 @@ import { requireModule } from '../../core/auth/guards.js'
 import { getConnectionTarget, getCredentials } from '../../core/connections/index.js'
 import { readTemplateDetail, scheduleJob } from '../../core/ibp/index.js'
 
-const ACUERDO = 'SAP_COM_0068'
+const ACUERDO = 'SAP_COM_0326'
 
 export default async function handler(req, res) {
   if (req.method !== 'GET' && req.method !== 'POST') {

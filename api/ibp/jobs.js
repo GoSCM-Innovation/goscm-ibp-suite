@@ -5,13 +5,14 @@
 // Las tres van en un archivo porque son partes de la misma pregunta y comparten todo el preámbulo.
 // Vercel cuenta funciones, no rutas.
 //
-// El acuerdo es `SAP_COM_0068`: los Application Jobs no van por el mismo que los datos.
+// El acuerdo es `SAP_COM_0326`, que es el de los Application Jobs. Los datos maestros y de
+// planificación van por otro (`SAP_COM_0720`) y con su propio usuario.
 
 import { requireModule } from '../../core/auth/guards.js'
 import { getConnectionTarget, getCredentials } from '../../core/connections/index.js'
 import { readJobTemplates, readJobsWithSteps, readTaskIndex } from '../../core/ibp/index.js'
 
-const ACUERDO = 'SAP_COM_0068'
+const ACUERDO = 'SAP_COM_0326'
 
 export default async function handler(req, res) {
   if (req.method !== 'GET' && req.method !== 'POST') {
