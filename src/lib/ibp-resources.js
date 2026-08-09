@@ -12,6 +12,11 @@ export function fetchResourceStats(connectionId, horas) {
  *
  * Tarda: son ocho conjuntos y el más grande se lee de a 5.000 filas. Por eso la pantalla lo avisa.
  */
-export function fetchMetering(connectionId, dias) {
-  return api.get('/api/ibp/metering', { connectionId, dias })
+export function fetchMetering(connectionId, { dias, usuario = '', area = '' } = {}) {
+  return api.get('/api/ibp/metering', {
+    connectionId,
+    dias,
+    ...(usuario ? { usuario } : {}),
+    ...(area ? { area } : {}),
+  })
 }

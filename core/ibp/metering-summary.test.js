@@ -2,13 +2,20 @@ import { describe, it, expect } from 'vitest'
 
 import {
   actividadPorDia,
+  adopcionPorHerramienta,
   aSegundos,
+  avisosDeAtencion,
   contarPor,
+  detalleDeUsuarios,
   diaDe,
   distintos,
   escribirDuracion,
+  exitoDeVistas,
   nombresDeUsuario,
+  porTipoDeActividad,
+  rendimientoPorArea,
   resumirConsumo,
+  usuariosSinActividad,
 } from './metering-summary.js'
 
 describe('diaDe', () => {
@@ -171,10 +178,149 @@ describe('resumirConsumo', () => {
     expect(salida.vistasMasLentas[0]).toMatchObject({ plantilla: 'Plantilla', segundos: 30, usuario: 'Ana' })
   })
 
+  it('la adopción compara activos contra dados de alta', () => {
+    expect(salida.adopcion).toEqual({ activos: 3, licenciados: 3, tasa: 100 })
+  })
+
+  // Mirando a una sola persona, "1 de 35 activos" es un 3 % que no habla ni del tenant ni de ella,
+  // y la lista de inactivos pasa a ser "todos menos esta".
+  it('con un filtro puesto no se devuelve adopción ni inactivos', () => {
+    const acotado = resumirConsumo(datos, { conContexto: true })
+    expect(acotado.adopcion).toBeNull()
+    expect(acotado.inactivos).toEqual([])
+    expect(acotado.atencion).toEqual([])
+    // Lo que sí sigue valiendo se calcula igual.
+    expect(acotado.kpis.vistasDePlanificacion).toBe(2)
+  })
+
   it('un tenant sin actividad no revienta', () => {
     const vacio = resumirConsumo({}, {})
     expect(vacio.kpis.usuariosActivos).toBe(0)
     expect(vacio.kpis.duracionMediaDeVista).toBeNull()
     expect(vacio.porAplicacion).toEqual([])
+    expect(vacio.adopcion.tasa).toBeNull()
+    expect(vacio.atencion).toEqual([])
+  })
+})
+
+describe('exitoDeVistas', () => {
+  const vistas = [
+    { SuccessfullyCompleted: true, TotalDuration: 10_000, DurationUnit: 'MSE', PlanningViewCells: 500 },
+    { SuccessfullyCompleted: false, TotalDuration: 30_000, DurationUnit: 'MSE', PlanningViewCells: 100 },
+  ]
+
+  it('cuenta correctas, fallidas y la tasa', () => {
+    expect(exitoDeVistas(vistas)).toMatchObject({ total: 2, correctas: 1, fallidas: 1, tasa: 50, celdas: 600 })
+  })
+
+  it('promedia la duración en segundos', () => {
+    expect(exitoDeVistas(vistas).segundosMedios).toBe(20)
+  })
+
+  it('sin vistas no hay tasa que inventar', () => {
+    expect(exitoDeVistas([])).toMatchObject({ total: 0, tasa: null, segundosMedios: null })
+  })
+})
+
+describe('porTipoDeActividad', () => {
+  // El nombre técnico no se lee; el prefijo lo pone SAP en todos por igual y no distingue nada.
+  it('quita el prefijo y los guiones bajos', () => {
+    expect(porTipoDeActividad([{ ActivityType: 'XLS_CHANGE_PLANNING_VIEW' }]))
+      .toEqual([{ nombre: 'CHANGE PLANNING VIEW', total: 1 }])
+  })
+})
+
+describe('rendimientoPorArea', () => {
+  const vistas = [
+    { PlanningAreaID: 'A', SuccessfullyCompleted: true, TotalDuration: 10, DurationUnit: 'S' },
+    { PlanningAreaID: 'A', SuccessfullyCompleted: false, TotalDuration: 30, DurationUnit: 'S' },
+    { PlanningAreaID: 'B', SuccessfullyCompleted: true, TotalDuration: 5, DurationUnit: 'S' },
+  ]
+
+  // Una tasa global del 5 % puede esconder un área concreta al 40 %.
+  it('da la tasa de error y la duración media de cada área', () => {
+    expect(rendimientoPorArea(vistas)[0]).toEqual({
+      nombre: 'A', vistas: 2, fallidas: 1, tasaDeError: 50, segundosMedios: 20,
+    })
+  })
+
+  it('ordena por volumen', () => {
+    expect(rendimientoPorArea(vistas).map((una) => una.nombre)).toEqual(['A', 'B'])
+  })
+})
+
+describe('adopcionPorHerramienta', () => {
+  const conjuntos = {
+    vistas: [{ UserID: 'U1' }, { UserID: 'U2' }],
+    aplicaciones: [
+      { UserID: 'U1', FioriProjectID: 'tl.ibp.excel.addin.logon', FioriProjectTitle: 'Excel', ActivityCount: 900 },
+      { UserID: 'U3', FioriProjectID: 'tl.ibp.alerts', FioriProjectTitle: 'Alertas', ActivityCount: 7 },
+    ],
+    alertas: [],
+  }
+
+  // Una herramienta que un solo usuario aporrea mil veces no está adoptada.
+  it('mide en usuarios distintos, no en eventos', () => {
+    const filas = adopcionPorHerramienta(conjuntos, new Set(['U1', 'U2', 'U3', 'U4']))
+    expect(filas[0]).toEqual({ nombre: 'Complemento de Excel', usuarios: 2, eventos: 2, tasa: 50 })
+    expect(filas[1]).toEqual({ nombre: 'Alertas', usuarios: 1, eventos: 7, tasa: 25 })
+  })
+
+  it('las herramientas sin uso no ocupan una fila', () => {
+    expect(adopcionPorHerramienta(conjuntos, new Set(['U1'])).map((una) => una.nombre))
+      .not.toContain('Monitor de alertas')
+  })
+})
+
+describe('detalleDeUsuarios', () => {
+  const conjuntos = {
+    sesiones: [{ UserID: 'U1', TimestampStart: '2026-08-01T10:00:00Z', PlanningAreaID: 'A' }],
+    vistas: [
+      { UserID: 'U1', Timestamp: '2026-08-05T10:00:00Z', PlanningAreaID: 'B' },
+      { UserID: 'U2', Timestamp: '2026-08-02T10:00:00Z' },
+    ],
+    aplicaciones: [],
+  }
+
+  it('junta los conjuntos y se queda con la última fecha', () => {
+    expect(detalleDeUsuarios(conjuntos, { U1: 'Ana' })[0])
+      .toEqual({ id: 'U1', nombre: 'Ana', eventos: 2, ultima: '2026-08-05', areas: ['A', 'B'] })
+  })
+
+  it('sin área conocida la lista queda vacía, no con un hueco', () => {
+    expect(detalleDeUsuarios(conjuntos, {}).find((uno) => uno.id === 'U2').areas).toEqual([])
+  })
+})
+
+describe('usuariosSinActividad', () => {
+  const usuarios = [{ UserID: 'U1', FullName: 'Ana' }, { UserID: 'U2', FirstName: 'Beto', LastName: 'Pérez' }]
+
+  it('deja fuera a los que sí aparecieron', () => {
+    expect(usuariosSinActividad(usuarios, new Set(['U1']))).toEqual([{ id: 'U2', nombre: 'Beto Pérez' }])
+  })
+
+  it('con todos activos no queda nadie', () => {
+    expect(usuariosSinActividad(usuarios, new Set(['U1', 'U2']))).toEqual([])
+  })
+})
+
+describe('avisosDeAtencion', () => {
+  it('avisa de las licencias sin usar, en singular y en plural', () => {
+    expect(avisosDeAtencion({ inactivos: [{ id: 'U1' }], porArea: [] })[0].mensaje).toMatch(/^1 usuario /)
+    expect(avisosDeAtencion({ inactivos: [{ id: 'U1' }, { id: 'U2' }], porArea: [] })[0].mensaje).toMatch(/^2 usuarios /)
+  })
+
+  it('avisa de un área que falla de más', () => {
+    const avisos = avisosDeAtencion({ inactivos: [], porArea: [{ nombre: 'A', vistas: 10, tasaDeError: 40 }] })
+    expect(avisos).toEqual([{ tipo: 'error', mensaje: 'En A falló el 40% de las 10 vistas de planificación.' }])
+  })
+
+  // Un área con dos vistas y una fallida da el 50 % y no dice nada.
+  it('con pocas vistas la tasa no significa nada y no se avisa', () => {
+    expect(avisosDeAtencion({ inactivos: [], porArea: [{ nombre: 'A', vistas: 2, tasaDeError: 50 }] })).toEqual([])
+  })
+
+  it('un tenant sin nada que mirar no da avisos', () => {
+    expect(avisosDeAtencion({ inactivos: [], porArea: [{ nombre: 'A', vistas: 100, tasaDeError: 2 }] })).toEqual([])
   })
 })

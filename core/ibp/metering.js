@@ -63,9 +63,16 @@ export const CONJUNTOS_DE_CONSUMO = Object.freeze([
   { clave: 'aplicaciones', entidad: 'MtrgGenericUIActionUsage', campo: 'Timestamp' },
   { clave: 'alertas', entidad: 'MtrgActyAlertMonitor', campo: 'Timestamp' },
   { clave: 'cifras', entidad: 'MtrgActyExcelAddInChgKeyFig', campo: 'Timestamp' },
-  { clave: 'usuarios', entidad: 'MtrgActyBusinessUser' },
-  { clave: 'componentes', entidad: 'MtrgComponent' },
+  { clave: 'tableros', entidad: 'MtrgDashboard', campo: 'Timestamp' },
+  { clave: 'historias', entidad: 'MtrgMngAnalyticStory', campo: 'Timestamp' },
+  // Los catálogos siempre completos: quiénes son los usuarios del tenant no depende del período
+  // elegido, y es justamente lo que hace falta para saber a quién NO se vio en él.
+  { clave: 'usuarios', entidad: 'MtrgActyBusinessUser', sinContexto: true },
+  { clave: 'componentes', entidad: 'MtrgComponent', sinContexto: true },
 ])
+
+/** Escapa un literal de texto de OData: la comilla simple se duplica. */
+const literal = (valor) => String(valor ?? '').replace(/'/g, "''")
 
 /**
  * Todas las filas de un conjunto en el rango, paginando hasta el tope.
@@ -74,11 +81,22 @@ export const CONJUNTOS_DE_CONSUMO = Object.freeze([
  * que sigue creciendo se solapan y dejan huecos. Se ordena por la clave del conjunto —`ActivityID` o
  * `UserID`— y no por la fecha, porque la fecha se repite y no desempata.
  */
-export async function readMeteringSet({ baseUrl, credentials, entidad, campo, desde, hasta, maxFilas = METERING_MAX }) {
-  const partes = []
+export async function readMeteringSet({
+  baseUrl, credentials, entidad, campo, desde, hasta, usuario, area,
+  sinContexto = false, maxFilas = METERING_MAX,
+}) {
+  const condiciones = []
   if (campo && desde && hasta) {
-    partes.push(`$filter=${encodeURIComponent(`${campo} ge ${toMeteringTimestamp(desde)} and ${campo} le ${toMeteringTimestamp(hasta)}`)}`)
+    condiciones.push(`${campo} ge ${toMeteringTimestamp(desde)} and ${campo} le ${toMeteringTimestamp(hasta)}`)
   }
+  // El servicio filtra por usuario y por área, así que se le pide a él: mirar a una persona baja de
+  // 15.623 filas a 4.397 en el tenant de pruebas. v8 se traía todo y filtraba en el navegador.
+  if (!sinContexto && usuario) condiciones.push(`UserID eq '${literal(usuario)}'`)
+  if (!sinContexto && area) condiciones.push(`PlanningAreaID eq '${literal(area)}'`)
+
+  const partes = condiciones.length > 0
+    ? [`$filter=${encodeURIComponent(condiciones.join(' and '))}`]
+    : []
 
   const filas = []
   let total = null
@@ -103,17 +121,17 @@ export async function readMeteringSet({ baseUrl, credentials, entidad, campo, de
 }
 
 /**
- * Los ocho conjuntos del rango, a la vez.
+ * Todos los conjuntos del rango, a la vez, opcionalmente acotados a un usuario o a un área.
  *
  * En paralelo porque son independientes y el costo de cada petición a IBP es casi todo latencia: en
  * serie, la pantalla tardaría la suma y no el máximo. Un conjunto que falle no tumba la lectura —se
  * devuelve vacío y se anota el aviso—: que el tenant no tenga historias analíticas no es motivo para
  * dejar la pestaña en blanco.
  */
-export async function readMetering({ baseUrl, credentials, desde, hasta, maxFilas = METERING_MAX }) {
+export async function readMetering({ baseUrl, credentials, desde, hasta, usuario, area, maxFilas = METERING_MAX }) {
   const leidos = await Promise.all(CONJUNTOS_DE_CONSUMO.map(async (uno) => {
     try {
-      const salida = await readMeteringSet({ baseUrl, credentials, ...uno, desde, hasta, maxFilas })
+      const salida = await readMeteringSet({ baseUrl, credentials, ...uno, desde, hasta, usuario, area, maxFilas })
       return { ...uno, ...salida }
     } catch (error) {
       return { ...uno, filas: [], total: 0, truncado: false, fallo: error.detail || error.message }

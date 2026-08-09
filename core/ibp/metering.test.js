@@ -72,6 +72,30 @@ describe('readMeteringSet', () => {
     expect(salida.filas).toHaveLength(100)
   })
 
+  // Mirar a una persona baja de 15.623 filas a 4.397 en el tenant de pruebas: el filtro vale la pena.
+  it('acota a un usuario y a un área del lado de SAP', async () => {
+    sapFetch.mockResolvedValueOnce({ json: { value: [], '@odata.count': 0 } })
+    await pedir('MtrgActyExcelAddInPlanningView', { usuario: 'CB89', area: 'ASIBPTS' })
+
+    const url = decodeURIComponent(sapFetch.mock.calls[0][0].url)
+    expect(url).toContain("UserID eq 'CB89'")
+    expect(url).toContain("PlanningAreaID eq 'ASIBPTS'")
+  })
+
+  // Saber a quién NO se vio en el período exige la lista entera, no la de quienes sí aparecieron.
+  it('los catálogos no se acotan al contexto', async () => {
+    sapFetch.mockResolvedValueOnce({ json: { value: [], '@odata.count': 0 } })
+    await pedir('MtrgActyBusinessUser', { campo: undefined, usuario: 'CB89', sinContexto: true })
+    expect(sapFetch.mock.calls[0][0].url).not.toContain('$filter')
+  })
+
+  // Una comilla sin escapar cambiaría el filtro entero.
+  it('escapa las comillas del contexto', async () => {
+    sapFetch.mockResolvedValueOnce({ json: { value: [], '@odata.count': 0 } })
+    await pedir('MtrgActyExcelAddInPlanningView', { usuario: "O'Brien" })
+    expect(decodeURIComponent(sapFetch.mock.calls[0][0].url)).toContain("UserID eq 'O''Brien'")
+  })
+
   it('una página vacía corta el bucle', async () => {
     sapFetch.mockResolvedValueOnce({ json: { value: [], '@odata.count': 500 } })
     expect((await pedir()).filas).toEqual([])
@@ -85,7 +109,8 @@ describe('readMetering', () => {
 
     const { datos, avisos } = await readMetering({ baseUrl: BASE, credentials: cred, desde: '2026-07-09T00:00:00Z', hasta: '2026-08-08T00:00:00Z' })
     expect(Object.keys(datos)).toEqual([
-      'sesiones', 'vistas', 'entradas', 'aplicaciones', 'alertas', 'cifras', 'usuarios', 'componentes',
+      'sesiones', 'vistas', 'entradas', 'aplicaciones', 'alertas', 'cifras',
+      'tableros', 'historias', 'usuarios', 'componentes',
     ])
     expect(avisos).toEqual([])
   })

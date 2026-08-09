@@ -1667,3 +1667,16 @@ a { color: var(--cyan); }
 
 .barra-fondo { height: 4px; margin-top: 5px; background: var(--border); border-radius: 2px; overflow: hidden; }
 .barra-relleno { height: 100%; background: var(--cyan); border-radius: 2px; }
+
+/* Metering: la fila de un ranking y el nombre de un usuario llevan a mirar solo eso. */
+.tabs-sub { border-bottom: none; margin-bottom: -4px; }
+.tabs-sub .tab { font-size: 12px; padding: 6px 12px; }
+
+.lista-pulsable { background: none; border: none; cursor: pointer; text-align: left; width: 100%; }
+.lista-pulsable:hover .lista-titulo { color: var(--cyan); }
+
+.enlace {
+  background: none; border: none; color: var(--cyan); cursor: pointer;
+  font: inherit; padding: 0; text-align: left;
+}
+.enlace:hover { text-decoration: underline; }

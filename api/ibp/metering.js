@@ -1,7 +1,10 @@
-// GET /api/ibp/metering?connectionId=…&dias=30 — el consumo del tenant, ya resumido.
+// GET /api/ibp/metering?connectionId=…&dias=30[&usuario=…][&area=…] — el consumo, ya resumido.
 //
 // Lo que se resume aquí y no en el navegador: treinta días de actividad de aplicaciones son unas
 // 15.600 filas en un tenant mediano —un par de megas— y de ahí salen unos pocos kB de rankings.
+//
+// `usuario` y `area` acotan la lectura EN SAP, no después: mirar a una persona baja de 15.623 filas
+// a 4.397 en el tenant de pruebas. v8 se traía todo el tenant y filtraba en memoria.
 
 import { requireModule } from '../../core/auth/guards.js'
 import { getConnectionTarget, getCredentials } from '../../core/connections/index.js'
@@ -33,20 +36,31 @@ export default async function handler(req, res) {
     const desde = new Date(hasta.getTime() - dias * 86_400_000)
 
     const credentials = await getCredentials(session.clientId, connectionId, ACUERDO)
+    const usuario = req.query?.usuario || ''
+    const area = req.query?.area || ''
+
     const { datos, avisos, totales } = await readMetering({
       baseUrl: conexion.baseUrl,
       credentials,
       desde,
       hasta,
+      usuario,
+      area,
     })
 
     return res.status(200).json({
       dias,
       desde: desde.toISOString(),
       hasta: hasta.toISOString(),
+      usuario,
+      area,
       avisos,
       totales,
-      ...resumirConsumo(datos, { desde: desde.toISOString(), hasta: hasta.toISOString() }),
+      ...resumirConsumo(datos, {
+        desde: desde.toISOString(),
+        hasta: hasta.toISOString(),
+        conContexto: Boolean(usuario || area),
+      }),
     })
   } catch (error) {
     console.error(`[ibp/metering] ${error.stack || error.message}`)

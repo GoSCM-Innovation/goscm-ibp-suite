@@ -126,16 +126,198 @@ export function nombresDeComponente(componentes) {
 export const conNombres = (cuentas, nombres) =>
   cuentas.map((una) => ({ ...una, nombre: nombres[una.nombre] || una.nombre }))
 
+/** Los identificadores de usuario que aparecen en cualquiera de los conjuntos. */
+export function usuariosConActividad(conjuntos) {
+  const activos = new Set()
+  for (const filas of conjuntos) {
+    for (const fila of filas ?? []) if (fila?.UserID) activos.add(fila.UserID)
+  }
+  return activos
+}
+
+/**
+ * Cómo le fue al complemento de Excel: cuántas vistas se abrieron y cuántas se cayeron.
+ *
+ * `SuccessfullyCompleted` es un booleano de verdad —46 de 863 en el tenant de pruebas—, así que la
+ * tasa se puede calcular sin adivinar. Las duraciones vienen en milisegundos, de ahí `aSegundos`.
+ */
+export function exitoDeVistas(vistas, entradas = []) {
+  const total = vistas.length
+  const correctas = vistas.filter((una) => una.SuccessfullyCompleted).length
+  const segundos = vistas.reduce((suma, una) => suma + aSegundos(una.TotalDuration, una.DurationUnit), 0)
+  const deEntrada = entradas.reduce((suma, una) => suma + aSegundos(una.TotalDuration, una.DurationUnit), 0)
+
+  return {
+    total,
+    correctas,
+    fallidas: total - correctas,
+    tasa: total > 0 ? Math.round((correctas / total) * 100) : null,
+    celdas: vistas.reduce((suma, una) => suma + (Number(una.PlanningViewCells) || 0), 0),
+    segundosMedios: total > 0 ? Math.round(segundos / total) : null,
+    segundosMediosDeEntrada: entradas.length > 0 ? Math.round(deEntrada / entradas.length) : null,
+  }
+}
+
+/** Qué hace la gente dentro de Excel, sin el prefijo técnico que SAP le cuelga a cada tipo. */
+export function porTipoDeActividad(vistas) {
+  return contarPor(vistas, (una) => String(una.ActivityType ?? '').replace(/^XLS_/, '').replace(/_/g, ' '))
+}
+
+/**
+ * Cómo se comporta cada área: cuántas vistas, qué parte falla y cuánto tardan.
+ *
+ * La tasa de error por área es lo que en v8 disparaba un aviso, y sigue siendo la lectura útil: una
+ * tasa global del 5 % puede esconder un área concreta al 40 %.
+ */
+export function rendimientoPorArea(vistas) {
+  const areas = new Map()
+  for (const una of vistas ?? []) {
+    const area = String(una.PlanningAreaID ?? '').trim()
+    if (!area) continue
+
+    const acumulado = areas.get(area) ?? { nombre: area, vistas: 0, fallidas: 0, segundos: 0 }
+    acumulado.vistas += 1
+    if (!una.SuccessfullyCompleted) acumulado.fallidas += 1
+    acumulado.segundos += aSegundos(una.TotalDuration, una.DurationUnit)
+    areas.set(area, acumulado)
+  }
+
+  return [...areas.values()]
+    .map((una) => ({
+      nombre: una.nombre,
+      vistas: una.vistas,
+      fallidas: una.fallidas,
+      tasaDeError: Math.round((una.fallidas / una.vistas) * 100),
+      segundosMedios: Math.round(una.segundos / una.vistas),
+    }))
+    .sort((a, b) => b.vistas - a.vistas)
+}
+
+/**
+ * Qué parte de los usuarios activos toca cada herramienta.
+ *
+ * Se mide en usuarios distintos y no en eventos a propósito: una herramienta que un solo usuario
+ * aporrea mil veces no está adoptada, y contando eventos encabezaría la lista.
+ */
+export function adopcionPorHerramienta({ vistas = [], aplicaciones = [], alertas = [], tableros = [], historias = [] }, activos) {
+  const deFiori = aplicaciones.filter((una) => !String(una.FioriProjectID ?? '').startsWith(PREFIJO_COMPLEMENTO_EXCEL))
+
+  const porAplicacion = new Map()
+  for (const una of deFiori) {
+    const nombre = una.FioriProjectTitle || una.FioriProjectID
+    if (!nombre) continue
+    const acumulado = porAplicacion.get(nombre) ?? { nombre, usuarios: new Set(), eventos: 0 }
+    if (una.UserID) acumulado.usuarios.add(una.UserID)
+    acumulado.eventos += Number(una.ActivityCount) || 0
+    porAplicacion.set(nombre, acumulado)
+  }
+
+  const bloques = [
+    ['Complemento de Excel', vistas],
+    ['Monitor de alertas', alertas],
+    ['Tableros', tableros],
+    ['Historias analíticas', historias],
+  ]
+
+  const filas = [
+    ...bloques
+      .filter(([, filas_]) => filas_.length > 0)
+      .map(([nombre, filas_]) => ({ nombre, usuarios: distintos(filas_, 'UserID'), eventos: filas_.length })),
+    ...[...porAplicacion.values()].map((una) => ({ nombre: una.nombre, usuarios: una.usuarios.size, eventos: una.eventos })),
+  ]
+
+  const total = activos instanceof Set ? activos.size : Number(activos) || 0
+  return filas
+    .map((una) => ({ ...una, tasa: total > 0 ? Math.round((una.usuarios / total) * 100) : null }))
+    .sort((a, b) => b.usuarios - a.usuarios || b.eventos - a.eventos)
+}
+
+/** Cada usuario activo con cuánto hizo, cuándo fue la última vez y en qué áreas. */
+export function detalleDeUsuarios({ sesiones = [], vistas = [], aplicaciones = [] }, nombres) {
+  const gente = new Map()
+
+  const anotar = (fila, campoDeFecha) => {
+    if (!fila.UserID) return
+    const uno = gente.get(fila.UserID) ?? { id: fila.UserID, eventos: 0, ultima: '', areas: new Set() }
+    uno.eventos += 1
+
+    const dia = diaDe(fila[campoDeFecha])
+    if (dia > uno.ultima) uno.ultima = dia
+    if (fila.PlanningAreaID) uno.areas.add(fila.PlanningAreaID)
+    gente.set(fila.UserID, uno)
+  }
+
+  for (const fila of sesiones) anotar(fila, 'TimestampStart')
+  for (const fila of [...vistas, ...aplicaciones]) anotar(fila, 'Timestamp')
+
+  return [...gente.values()]
+    .map((uno) => ({
+      id: uno.id,
+      nombre: nombres?.[uno.id] || uno.id,
+      eventos: uno.eventos,
+      ultima: uno.ultima || '—',
+      areas: [...uno.areas].sort(),
+    }))
+    .sort((a, b) => b.eventos - a.eventos || a.nombre.localeCompare(b.nombre))
+}
+
+/** Los usuarios dados de alta que no aparecen en ningún conjunto del período. */
+export function usuariosSinActividad(usuarios, activos) {
+  return (usuarios ?? [])
+    .filter((uno) => uno.UserID && !activos.has(uno.UserID))
+    .map((uno) => ({
+      id: uno.UserID,
+      nombre: uno.FullName || [uno.FirstName, uno.LastName].filter(Boolean).join(' ') || uno.UserName || uno.UserID,
+    }))
+    .sort((a, b) => a.nombre.localeCompare(b.nombre))
+}
+
+/** Cuántas vistas tiene que tener un área antes de que su tasa de error signifique algo. */
+const MINIMO_PARA_AVISAR = 5
+
+/** Cuánta parte de las vistas de un área puede fallar antes de que valga la pena decirlo. */
+const ERROR_QUE_PREOCUPA = 30
+
+/**
+ * Lo que merece una mirada: licencias sin usar y áreas que fallan de más.
+ *
+ * Con un mínimo de vistas antes de avisar, porque un área con dos vistas y una fallida da el 50 % y
+ * no dice nada; sin el mínimo, la pantalla avisaría de todo y nadie leería ninguno.
+ */
+export function avisosDeAtencion({ inactivos, porArea }) {
+  const avisos = []
+
+  if (inactivos.length > 0) {
+    avisos.push({
+      tipo: 'aviso',
+      mensaje: inactivos.length === 1
+        ? '1 usuario dado de alta no tuvo actividad en el período.'
+        : `${inactivos.length} usuarios dados de alta no tuvieron actividad en el período.`,
+    })
+  }
+
+  for (const area of porArea) {
+    if (area.vistas >= MINIMO_PARA_AVISAR && area.tasaDeError > ERROR_QUE_PREOCUPA) {
+      avisos.push({
+        tipo: 'error',
+        mensaje: `En ${area.nombre} falló el ${area.tasaDeError}% de las ${area.vistas} vistas de planificación.`,
+      })
+    }
+  }
+
+  return avisos
+}
+
 /**
  * Todo lo que la pestaña de consumo dibuja, a partir de lo que se leyó del tenant.
  *
  * Recibe los conjuntos crudos y devuelve unos pocos kB. Los rankings van cortados a `top` porque una
  * lista de 300 aplicaciones no se lee: lo que interesa es qué está arriba.
  */
-export function resumirConsumo(datos, { desde, hasta, top = 10 } = {}) {
+export function resumirConsumo(datos, { desde, hasta, top = 10, conContexto = false } = {}) {
   const {
     sesiones = [], vistas = [], entradas = [], aplicaciones = [], alertas = [],
-    cifras = [], usuarios = [], componentes = [],
+    cifras = [], usuarios = [], componentes = [], tableros = [], historias = [],
   } = datos ?? {}
 
   const nombreDeUsuario = nombresDeUsuario(usuarios)
@@ -148,12 +330,33 @@ export function resumirConsumo(datos, { desde, hasta, top = 10 } = {}) {
 
   // Los usuarios activos se cuentan sobre TODOS los conjuntos: alguien que solo abrió una aplicación
   // web no aparece en las sesiones de Excel, y contarlo solo allí lo dejaría fuera.
-  const activos = new Set()
-  for (const filas of [sesiones, vistas, entradas, aplicaciones, alertas, cifras]) {
-    for (const fila of filas) if (fila.UserID) activos.add(fila.UserID)
-  }
+  const activos = usuariosConActividad([sesiones, vistas, entradas, aplicaciones, alertas, cifras])
+
+  const porAreaDetallado = rendimientoPorArea(vistas)
+
+  // Con un filtro puesto, la adopción y los inactivos dejan de significar nada: mirando a una sola
+  // persona, "1 de 35 usuarios activos" es un 3 % que no habla del tenant ni de ella, y la lista de
+  // inactivos pasa a ser "todos menos esta". Se omiten en vez de mostrarlos mal.
+  const inactivos = conContexto ? [] : usuariosSinActividad(usuarios, activos)
 
   return {
+    adopcion: conContexto ? null : {
+      activos: activos.size,
+      licenciados: usuarios.length,
+      tasa: usuarios.length > 0 ? Math.round((activos.size / usuarios.length) * 100) : null,
+    },
+
+    atencion: avisosDeAtencion({ inactivos, porArea: porAreaDetallado }),
+    herramientas: adopcionPorHerramienta({ vistas, aplicaciones, alertas, tableros, historias }, activos),
+    usuarios: detalleDeUsuarios({ sesiones, vistas, aplicaciones }, nombreDeUsuario).slice(0, 50),
+    inactivos,
+
+    excel: {
+      ...exitoDeVistas(vistas, entradas),
+      porTipo: porTipoDeActividad(vistas),
+      porArea: porAreaDetallado.slice(0, top),
+    },
+
     kpis: {
       usuariosActivos: activos.size,
       usuariosDelTenant: usuarios.length,
