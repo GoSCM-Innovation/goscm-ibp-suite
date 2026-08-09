@@ -24,7 +24,10 @@ export default defineConfig([
       },
     },
     rules: {
-      'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]' }],
+      // El linter no rastrea el uso dentro de JSX, así que lo que empieza en mayúscula —un
+      // componente— no se marca como sin usar. Vale también para los PARÁMETROS, porque un
+      // componente puede llegar por prop: `<Orchestrations Paleta={JobPalette} />`.
+      'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]', argsIgnorePattern: '^[A-Z_]' }],
     },
   },
   // Capa transversal (core/), funciones serverless (api/) y scripts: Node, sin React.

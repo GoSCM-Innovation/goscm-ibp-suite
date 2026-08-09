@@ -20,11 +20,18 @@ const QUE_SI_FALLA = [
 
 export default function NodeConfigPanel({ destino, nodo, onCambiar, onBorrar }) {
   const datos = nodo.data ?? {}
+
+  // El tipo se deduce de lo que el paso guarda y no de una marca aparte: un paso que lanza una
+  // plantilla de trabajo es de IBP, y uno que nombra una tarea es de CI-DS. Sin marca no hay forma
+  // de que se contradiga con lo que el paso realmente hace.
+  const esDeIbp = Boolean(datos.templateName)
   const [agentes, setAgentes] = useState([])
   const [configuraciones, setConfiguraciones] = useState([])
 
-  // Los agentes y las configuraciones del tenant se piden una vez por destino, no por paso.
+  // Los agentes y las configuraciones del tenant se piden una vez por destino, no por paso. Un paso
+  // de IBP no los usa, y pedírselos a CI-DS contra un tenant de IBP es un viaje que va a fallar.
   useEffect(() => {
+    if (esDeIbp) return undefined
     let abandonado = false
     Promise.all([
       cidsCall(destino, 'getAgents', { activeOnly: true }),
@@ -38,7 +45,7 @@ export default function NodeConfigPanel({ destino, nodo, onCambiar, onBorrar }) 
       // Que no lleguen no impide configurar el paso: los dos campos son opcionales.
       .catch(() => {})
     return () => { abandonado = true }
-  }, [destino])
+  }, [destino, esDeIbp])
 
   const cambiar = (campo, valor) => onCambiar({ ...datos, [campo]: valor })
 
@@ -69,15 +76,20 @@ export default function NodeConfigPanel({ destino, nodo, onCambiar, onBorrar }) 
           />
         </div>
 
+        {/* Un paso de IBP lanza una plantilla de trabajo; uno de CI-DS, una tarea. Lo demás del
+            panel —qué hacer si falla, cuántos reintentos— vale igual para los dos. */}
         <div className="field">
-          <label>Tarea de CI-DS</label>
-          <div className="config-tarea mono">{datos.taskName ?? '— sin elegir —'}</div>
+          <label>{esDeIbp ? 'Plantilla de trabajo' : 'Tarea de CI-DS'}</label>
+          <div className="config-tarea mono">
+            {(esDeIbp ? datos.templateName : datos.taskName) ?? '— sin elegir —'}
+          </div>
           <span className="card-hint">
-            Se elige desde la lista de tareas al agregar el paso. Para cambiarla, quitá este paso y
-            agregá el correcto.
+            Se elige desde la lista al agregar el paso. Para cambiarla, quitá este paso y agregá el
+            correcto.
           </span>
         </div>
 
+        {!esDeIbp && (
         <div className="field">
           <label htmlFor="cfg-agente">Agente (opcional)</label>
           <select
@@ -92,6 +104,9 @@ export default function NodeConfigPanel({ destino, nodo, onCambiar, onBorrar }) 
             ))}
           </select>
         </div>
+        )}
+
+        {!esDeIbp && (
 
         <div className="field">
           <label htmlFor="cfg-config">Configuración del sistema (opcional)</label>
@@ -107,6 +122,7 @@ export default function NodeConfigPanel({ destino, nodo, onCambiar, onBorrar }) 
             ))}
           </select>
         </div>
+        )}
 
         <div className="field">
           <label htmlFor="cfg-falla">Si este paso falla</label>
@@ -154,6 +170,9 @@ export default function NodeConfigPanel({ destino, nodo, onCambiar, onBorrar }) 
           </div>
         )}
 
+        {/* Las variables globales son de CI-DS. Un Application Job corre con los parámetros que
+            tiene configurados en IBP, y dejarlos cambiar aquí duplicaría esa configuración. */}
+        {!esDeIbp && (
         <div className="field">
           <label>Variables globales</label>
           <span className="card-hint">
@@ -200,6 +219,7 @@ export default function NodeConfigPanel({ destino, nodo, onCambiar, onBorrar }) 
             </button>
           </div>
         </div>
+        )}
       </div>
     </div>
   )

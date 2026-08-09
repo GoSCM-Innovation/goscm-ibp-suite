@@ -25,6 +25,7 @@ import NodeConfigPanel from './NodeConfigPanel.jsx'
 import RunBar from './RunBar.jsx'
 import TaskNode from './TaskNode.jsx'
 import TaskPalette from './TaskPalette.jsx'
+
 import { useOrchestrationRun } from './useOrchestrationRun.js'
 
 /** Dónde cae un paso nuevo. En cascada, para que no se apilen uno encima de otro. */
@@ -36,7 +37,7 @@ const nodeTypes = { task: TaskNode, group: GroupNode }
 /** Tamaño con el que nace un grupo. Se agranda arrastrando su borde. */
 const TAMANIO_DEL_GRUPO = { width: 320, height: 220 }
 
-export default function OrchestrationCanvas({ destino, orquestacion, onGuardar, guardando, error }) {
+export default function OrchestrationCanvas({ Paleta = TaskPalette, destino, orquestacion, onGuardar, guardando, error }) {
   const [nodos, setNodos] = useState(orquestacion.nodes ?? [])
   const [aristas, setAristas] = useState(orquestacion.edges ?? [])
   const [elegido, setElegido] = useState(null)
@@ -66,7 +67,9 @@ export default function OrchestrationCanvas({ destino, orquestacion, onGuardar, 
     marcarSucio()
   }, [marcarSucio])
 
-  function agregarTarea(tarea) {
+  // `datos` viene de la paleta y es lo único que cambia entre CI-DS e IBP: el resto del paso —qué
+  // hacer si falla, cuántas veces reintentar— lo pone el lienzo igual para los dos.
+  function agregarTarea(datos) {
     const id = `n-${Date.now()}-${nodos.length}`
     setNodos((previos) => [...previos, {
       id,
@@ -76,13 +79,7 @@ export default function OrchestrationCanvas({ destino, orquestacion, onGuardar, 
         y: POSICION_INICIAL.y + previos.length * DESPLAZAMIENTO,
       },
       data: {
-        taskName: tarea.taskName,
-        taskGuid: tarea.taskGuid ?? null,
-        taskType: tarea.type ?? null,
-        label: tarea.taskName,
-        agentName: null,
-        profileName: null,
-        globalVariables: [],
+        ...datos,
         errorStrategy: 'stop',
         maxRetries: 0,
         retryDelaySeconds: 30,
@@ -214,7 +211,7 @@ export default function OrchestrationCanvas({ destino, orquestacion, onGuardar, 
       {error && <div className="notice notice-error lienzo-error">✕ {error}</div>}
 
       <div className="lienzo-cuerpo">
-        {editable && <TaskPalette destino={destino} onAgregar={agregarTarea} onAgregarGrupo={agregarGrupo} />}
+        {editable && <Paleta destino={destino} onAgregar={agregarTarea} onAgregarGrupo={agregarGrupo} />}
 
         <div className="lienzo-dibujo">
           <ReactFlow

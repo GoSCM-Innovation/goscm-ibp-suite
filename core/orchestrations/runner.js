@@ -12,7 +12,8 @@
 
 import { randomUUID } from 'node:crypto'
 import { getRedis, globalKey, tenantKey } from '../persistence/redis.js'
-import { runCidsOperation } from '../cids/operations.js'
+import { getConnectionTarget } from '../connections/index.js'
+import { adaptadorPara } from './adapters.js'
 import { getOrchestration } from './orchestrations.js'
 import { decideForPending, directPredecessors, initRunState, resetForResume, runOutcome } from './run-state.js'
 import { isRetryDue, isStepDone, nextStepState } from './step-outcome.js'
@@ -119,31 +120,8 @@ async function conCerrojo(clientId, orchestrationId, hacer) {
   }
 }
 
-/** Lanza una tarea en CI-DS y devuelve el identificador de la ejecución. */
-async function lanzarTarea(destino, nodo, porOmision) {
-  const datos = nodo.data ?? {}
-  const respuesta = await runCidsOperation({
-    ...destino,
-    operation: 'runTask',
-    params: {
-      taskName: datos.taskName,
-      ...(datos.agentName ?? porOmision.agentName ? { agentName: datos.agentName ?? porOmision.agentName } : {}),
-      ...(datos.profileName ?? porOmision.profileName
-        ? { profileName: datos.profileName ?? porOmision.profileName }
-        : {}),
-      // Las del paso pisan a las generales: lo específico manda sobre lo que se puso para todos.
-      globalVariables: [...(porOmision.globalVariables ?? []), ...(datos.globalVariables ?? [])],
-    },
-  })
-  const runId = respuesta?.runId
-  if (!runId) throw new Error(`CI-DS no devolvió el identificador de ejecución de "${datos.taskName}".`)
-  return runId
-}
-
-/** Pregunta cómo va una ejecución. Un fallo al preguntar NO decide nada: se reintenta en la vuelta siguiente. */
-async function consultarTarea(destino, sapRunId) {
-  return runCidsOperation({ ...destino, operation: 'getTaskStatusByRunId2', params: { runId: sapRunId } })
-}
+// Qué se lanza y cómo se pregunta cómo va depende del tipo de conexión, y solo eso: las reglas de
+// dependencias, grupos y reintentos son las mismas para CI-DS y para IBP. Ver `adapters.js`.
 
 /**
  * Avanza un nivel de pasos: el primer nivel de la orquestación, o los hijos de un grupo.
@@ -151,7 +129,7 @@ async function consultarTarea(destino, sapRunId) {
  * Es la misma lógica en los dos casos, y por eso está una sola vez. Modifica `estados` en el sitio;
  * quien llama lo guarda.
  */
-async function avanzarNivel({ nodos, aristas, estados, destino, porOmision, ahora }) {
+async function avanzarNivel({ nodos, aristas, estados, destino, adaptador, porOmision, ahora }) {
   const predecesores = directPredecessors(nodos, aristas)
   const configPorId = Object.fromEntries(nodos.map((nodo) => [nodo.id, nodo.data ?? {}]))
   const porId = Object.fromEntries(nodos.map((nodo) => [nodo.id, nodo]))
@@ -166,7 +144,7 @@ async function avanzarNivel({ nodos, aristas, estados, destino, porOmision, ahor
     if (porId[id].type === 'group') return
 
     try {
-      paso.sapRunId = await lanzarTarea(destino, porId[id], porOmision)
+      paso.sapRunId = await adaptador.lanzar(destino, porId[id], porOmision)
     } catch (fallo) {
       // No poder lanzarla es un fallo del paso, no de la vuelta: los demás siguen.
       paso.status = 'error'
@@ -183,7 +161,7 @@ async function avanzarNivel({ nodos, aristas, estados, destino, porOmision, ahor
     if (paso.status === 'running' && paso.sapRunId) {
       let sapStatus
       try {
-        sapStatus = await consultarTarea(destino, paso.sapRunId)
+        sapStatus = await adaptador.consultar(destino, paso.sapRunId)
       } catch {
         return // No se pudo preguntar: se vuelve a intentar en la vuelta siguiente.
       }
@@ -241,6 +219,21 @@ export async function tickRun(clientId, orchestrationId, ahora = Date.now()) {
       connectionId: orquestacion.connectionId,
       production: orquestacion.production,
     }
+
+    // El tipo sale de la CONEXIÓN y no de la orquestación: es donde ya vive, y así una orquestación
+    // no puede decir que es de un tipo y apuntar a un tenant del otro.
+    let adaptador
+    try {
+      const conexion = await getConnectionTarget(clientId, orquestacion.connectionId)
+      adaptador = adaptadorPara(conexion.kind)
+    } catch (fallo) {
+      return guardarRun(clientId, orchestrationId, {
+        ...run,
+        status: 'error',
+        finishedAt: new Date(ahora).toISOString(),
+        error: fallo.message,
+      })
+    }
     const porOmision = run.defaults ?? {}
     const primerNivel = nodes.filter((nodo) => !nodo.parentId)
 
@@ -256,6 +249,7 @@ export async function tickRun(clientId, orchestrationId, ahora = Date.now()) {
           aristas: edges,
           estados: estadoGrupo.children,
           destino,
+          adaptador,
           porOmision,
           ahora,
         })
@@ -271,6 +265,7 @@ export async function tickRun(clientId, orchestrationId, ahora = Date.now()) {
       aristas: edges,
       estados: run.nodes,
       destino,
+      adaptador,
       porOmision,
       ahora,
     })
@@ -360,6 +355,16 @@ export async function cancelRun(clientId, orchestrationId, ahora = Date.now()) {
     if (esTerminal(run.status)) return run
 
     const destino = { clientId, connectionId: orquestacion.connectionId, production: orquestacion.production }
+
+    // No poder resolver el adaptador NO impide cancelar: el estado local se corta igual, que es lo
+    // que quien pulsó cancelar espera. Solo se pierde el aviso a SAP.
+    let adaptador = null
+    try {
+      adaptador = adaptadorPara((await getConnectionTarget(clientId, orquestacion.connectionId)).kind)
+    } catch {
+      adaptador = null
+    }
+
     const enMarcha = []
     for (const paso of Object.values(run.nodes)) {
       if (paso.status === 'running' && paso.sapRunId) enMarcha.push(paso)
@@ -370,9 +375,9 @@ export async function cancelRun(clientId, orchestrationId, ahora = Date.now()) {
 
     await Promise.allSettled(enMarcha.map(async (paso) => {
       try {
-        await runCidsOperation({ ...destino, operation: 'cancelTask', params: { runId: paso.sapRunId } })
+        await adaptador?.cancelar(destino, paso.sapRunId)
       } catch {
-        // CI-DS decide si alcanza a cancelarla; el estado local se marca igual.
+        // SAP decide si alcanza a detenerla; el estado local se marca igual.
       }
     }))
 

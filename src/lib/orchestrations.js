@@ -7,7 +7,7 @@ import { api } from './api.js'
 
 /** Las orquestaciones de un destino: una conexión y uno de sus dos repositorios. */
 export async function listOrchestrations(destino) {
-  const { orchestrations } = await api.get('/api/cids/orchestrations', {
+  const { orchestrations } = await api.get('/api/orchestrations', {
     connectionId: destino.connectionId,
     production: String(destino.production),
   })
@@ -16,12 +16,12 @@ export async function listOrchestrations(destino) {
 
 /** Una orquestación con su grafo completo. */
 export async function getOrchestration(id) {
-  const { orchestration } = await api.get('/api/cids/orchestrations', { id })
+  const { orchestration } = await api.get('/api/orchestrations', { id })
   return orchestration
 }
 
 export async function createOrchestration(destino, name) {
-  const { orchestration } = await api.post('/api/cids/orchestrations', {
+  const { orchestration } = await api.post('/api/orchestrations', {
     connectionId: destino.connectionId,
     production: destino.production,
     name,
@@ -38,29 +38,29 @@ export async function createOrchestration(destino, name) {
  * apuntar a un nodo que ya no está— y validar media cosa no demuestra nada.
  */
 export async function saveOrchestration(id, cambios) {
-  const { orchestration } = await api.patch('/api/cids/orchestrations', { id, ...cambios })
+  const { orchestration } = await api.patch('/api/orchestrations', { id, ...cambios })
   return orchestration
 }
 
 export async function duplicateOrchestration(id) {
-  const { orchestration } = await api.post('/api/cids/orchestrations', { action: 'duplicate', id })
+  const { orchestration } = await api.post('/api/orchestrations', { action: 'duplicate', id })
   return orchestration
 }
 
 export async function deleteOrchestration(id) {
-  await api.del('/api/cids/orchestrations', { id })
+  await api.del('/api/orchestrations', { id })
 }
 
 // ─── Ejecución ──────────────────────────────────────────────────────────────────────────────────
 
 /** El estado de la última ejecución, o `null` si nunca se ejecutó. */
 export async function getRun(id) {
-  const { run } = await api.get('/api/cids/orchestration-run', { id })
+  const { run } = await api.get('/api/orchestration-run', { id })
   return run
 }
 
 const accion = async (id, action, extra = {}) => {
-  const { run } = await api.post('/api/cids/orchestration-run', { id, action, ...extra })
+  const { run } = await api.post('/api/orchestration-run', { id, action, ...extra })
   return run
 }
 

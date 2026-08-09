@@ -33,16 +33,19 @@ function nombreValido(name) {
   return limpio
 }
 
+/** Los tipos de conexión que el motor sabe orquestar: tareas de CI-DS y Application Jobs de IBP. */
+const TIPOS_ORQUESTABLES = Object.freeze(['cids', 'ibp'])
+
 /**
- * Comprueba que el destino exista, sea de este cliente y sea de CI-DS.
+ * Comprueba que el destino exista, sea de este cliente y sea de un tipo que se pueda orquestar.
  *
- * Lo tercero importa: una orquestación encadena tareas de CI-DS, así que apuntarla a una conexión de
- * IBP daría una orquestación imposible de ejecutar y el error aparecería al lanzarla, no al crearla.
+ * Lo tercero importa: apuntar una orquestación a una conexión que el motor no sabe ejecutar daría
+ * una imposible de lanzar, y el error aparecería al lanzarla y no al crearla.
  */
 async function assertDestino(clientId, connectionId) {
   const conexion = await getConnectionTarget(clientId, connectionId)
-  if (conexion.kind !== 'cids') {
-    throw new Error(`La conexión "${conexion.name}" no es de CI-DS: no se pueden orquestar sus tareas.`)
+  if (!TIPOS_ORQUESTABLES.includes(conexion.kind)) {
+    throw new Error(`La conexión "${conexion.name}" no se puede orquestar: es de tipo "${conexion.kind}".`)
   }
 }
 

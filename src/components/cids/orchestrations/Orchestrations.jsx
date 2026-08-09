@@ -25,7 +25,9 @@ const OrchestrationCanvas = lazy(() => import('./OrchestrationCanvas.jsx'))
 const MobileEditor = lazy(() => import('./MobileEditor.jsx'))
 const TaskPalette = lazy(() => import('./TaskPalette.jsx'))
 
-export default function Orchestrations({ destino }) {
+// `Paleta` es lo único que cambia entre CI-DS e IBP: de dónde salen los pasos que se pueden
+// agregar. El resto de la pantalla —lista, lienzo, ejecución— es la misma para los dos.
+export default function Orchestrations({ destino, Paleta = TaskPalette }) {
   const [orquestaciones, setOrquestaciones] = useState([])
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState('')
@@ -200,6 +202,7 @@ export default function Orchestrations({ destino }) {
                   onGuardar={guardar}
                   guardando={guardando}
                   error={errorAlGuardar}
+                  Paleta={Paleta}
                 />
               )}
             </Suspense>
@@ -216,7 +219,7 @@ export default function Orchestrations({ destino }) {
         <Modal title="Agregar un paso" onClose={() => setEligiendoTarea(false)}>
           <Suspense fallback={<div className="page-hint">Cargando tareas…</div>}>
             <div className="movil-paleta">
-              <TaskPalette destino={destino} onAgregar={agregarPasoAlFinal} />
+              <Paleta destino={destino} onAgregar={agregarPasoAlFinal} />
             </div>
           </Suspense>
         </Modal>

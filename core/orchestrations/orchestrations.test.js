@@ -105,11 +105,18 @@ describe('createOrchestration', () => {
     expect(queryOneScoped.mock.calls[0][2][3]).toBe('Carga')
   })
 
-  // Una orquestación encadena tareas de CI-DS: apuntarla a un tenant de IBP daría algo imposible de
-  // ejecutar, y el error aparecería al lanzarla en vez de al crearla.
-  it('rechaza una conexión que no es de CI-DS', async () => {
+  // El motor sabe encadenar tareas de CI-DS y Application Jobs de IBP: los dos valen como destino.
+  it('acepta un tenant de IBP como destino', async () => {
     getConnectionTarget.mockResolvedValue({ id: CONEXION, kind: 'ibp', name: 'IBP QA' })
-    await expect(createOrchestration(CLIENTE, nueva)).rejects.toThrow(/no es de CI-DS/)
+    queryOneScoped.mockResolvedValue(FILA)
+    await expect(createOrchestration(CLIENTE, nueva)).resolves.toBeTruthy()
+  })
+
+  // Apuntarla a algo que el motor no sabe ejecutar daría una imposible de lanzar, y el error
+  // aparecería al lanzarla en vez de al crearla.
+  it('rechaza una conexión de un tipo que no se puede orquestar', async () => {
+    getConnectionTarget.mockResolvedValue({ id: CONEXION, kind: 'otra', name: 'Rara' })
+    await expect(createOrchestration(CLIENTE, nueva)).rejects.toThrow(/no se puede orquestar/)
     expect(queryOneScoped).not.toHaveBeenCalled()
   })
 

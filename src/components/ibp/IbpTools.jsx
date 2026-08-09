@@ -23,6 +23,12 @@ const MasterDataViewer = lazy(() => import('./MasterDataViewer.jsx'))
 const PlanningDataViewer = lazy(() => import('./PlanningDataViewer.jsx'))
 const MigrationPlan = lazy(() => import('./MigrationPlan.jsx'))
 
+// La pantalla de orquestaciones es la MISMA que la de CI-DS: encadenar tareas y encadenar trabajos
+// son la misma cosa por dentro, y lo único que cambia es de dónde salen los pasos. Por eso se le
+// pasa la paleta y no se escribe otra pantalla.
+const Orchestrations = lazy(() => import('../cids/orchestrations/Orchestrations.jsx'))
+const JobPalette = lazy(() => import('./JobPalette.jsx'))
+
 const HERRAMIENTAS = [
   // El tablero global mira TODOS los tenants, así que el selector no le aplica. Con uno solo
   // repetiría el tablero de al lado, y por eso solo aparece cuando hay varios.
@@ -36,6 +42,7 @@ const HERRAMIENTAS = [
   { id: 'cifras', label: 'Cifras clave' },
   // La migración mira DOS tenants a la vez, asi que el selector de arriba no le aplica.
   { id: 'migracion', label: 'Migración', sinTenant: true },
+  { id: 'orquestaciones', label: 'Orquestaciones' },
 ]
 
 export default function IbpTools() {
@@ -86,6 +93,7 @@ export default function IbpTools() {
                   : herramienta === 'datos' ? 'El dato maestro del tenant elegido, de solo lectura.'
                     : herramienta === 'cifras' ? 'Las cifras clave del tenant elegido, de solo lectura.'
                       : herramienta === 'migracion' ? 'Que se copiaria de un tenant a otro, antes de copiar nada.'
+                        : herramienta === 'orquestaciones' ? 'Encadenar trabajos del tenant elegido con sus dependencias.'
                 : 'Los Application Jobs del tenant elegido.'}
           </div>
         </div>
@@ -161,6 +169,17 @@ export default function IbpTools() {
       {herramienta === 'migracion' && (
         <Suspense fallback={<div className="page-hint">Cargando la migracion…</div>}>
           <MigrationPlan />
+        </Suspense>
+      )}
+      {herramienta === 'orquestaciones' && conexion && (
+        <Suspense fallback={<div className="page-hint">Cargando las orquestaciones…</div>}>
+          {/* Un tenant de IBP no tiene dos repositorios como CI-DS, asi que `production` va fijo en
+              falso: es una sola cosa y no hay nada que elegir. */}
+          <Orchestrations
+            key={conexion.id}
+            destino={{ connectionId: conexion.id, production: false }}
+            Paleta={JobPalette}
+          />
         </Suspense>
       )}
       {herramienta === 'plantillas' && conexion && (

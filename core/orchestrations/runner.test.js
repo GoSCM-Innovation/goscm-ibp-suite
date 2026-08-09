@@ -20,6 +20,13 @@ vi.mock('../persistence/redis.js', async (importOriginal) => {
 vi.mock('./orchestrations.js', () => ({ getOrchestration: vi.fn() }))
 vi.mock('../cids/operations.js', () => ({ runCidsOperation: vi.fn() }))
 
+// El motor elige el adaptador según el tipo de la conexión. Estas pruebas son las del motor con una
+// de CI-DS; las del adaptador de IBP están en `adapters.test.js`.
+vi.mock('../connections/index.js', () => ({
+  getConnectionTarget: vi.fn(async () => ({ kind: 'cids', baseUrl: 'https://cids' })),
+  getCredentials: vi.fn(async () => ({ user: 'u', password: 'p' })),
+}))
+
 const CLIENTE = 'c-1'
 const ORQ = 'orq-1'
 

@@ -12,6 +12,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { cidsCall } from '../../../lib/cids.js'
 
+// `onAgregar` recibe los DATOS del paso, no la tarea: así el lienzo no sabe si lo que se le agrega
+// es una tarea de CI-DS o un trabajo de IBP, y la misma pantalla sirve para los dos.
 export default function TaskPalette({ destino, onAgregar, onAgregarGrupo }) {
   const [proyectos, setProyectos] = useState([])
   const [tareas, setTareas] = useState({})
@@ -127,7 +129,15 @@ export default function TaskPalette({ destino, onAgregar, onAgregarGrupo }) {
                       key={tarea.taskGuid || tarea.taskName}
                       type="button"
                       className="paleta-tarea"
-                      onClick={() => onAgregar(tarea)}
+                      onClick={() => onAgregar({
+                      taskName: tarea.taskName,
+                      taskGuid: tarea.taskGuid ?? null,
+                      taskType: tarea.type ?? null,
+                      label: tarea.taskName,
+                      agentName: null,
+                      profileName: null,
+                      globalVariables: [],
+                    })}
                       title={`Agregar "${tarea.taskName}" al lienzo`}
                     >
                       <span className={`type-badge${tarea.type === 'PROCESS' ? ' process' : ''}`}>
