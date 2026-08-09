@@ -22,7 +22,7 @@ const A_LA_VEZ = 4
 async function esquemaDe({ baseUrl, credentials, entidad, planningArea }) {
   try {
     const leido = await readSchema({ baseUrl, credentials, entidad, planningArea })
-    return leido.vacia ? null : leido.columnas
+    return leido.vacia ? null : leido
   } catch {
     return null
   }
@@ -48,7 +48,7 @@ export async function planificarMigracion({
 
       // La cuenta lleva el filtro de la migración; los esquemas no, porque son de la tabla y no de
       // lo que se vaya a copiar.
-      const [camposOrigen, camposDestino, filas] = await Promise.all([
+      const [deOrigen, deDestino, filas] = await Promise.all([
         esquemaDe({ ...origen, entidad, planningArea: origen.planningArea }),
         pareja ? esquemaDe({ ...destino, entidad: pareja, planningArea: destino.planningArea }) : Promise.resolve(null),
         countEntity({
@@ -65,7 +65,10 @@ export async function planificarMigracion({
         destino: pareja,
         emparejadaAMano: Boolean(destinoDe[entidad]),
         filas,
-        ...compararCampos(camposOrigen, camposDestino, { ignorar: CAMPOS_DE_SOLO_LECTURA }),
+        // Las claves de negocio del ORIGEN: son con las que hay que ordenar al leer para copiar, y
+        // sin un orden estable dos ventanas se solapan y dejan huecos.
+        claves: deOrigen?.claves ?? [],
+        ...compararCampos(deOrigen?.columnas, deDestino?.columnas, { ignorar: CAMPOS_DE_SOLO_LECTURA }),
       }
     }))
 

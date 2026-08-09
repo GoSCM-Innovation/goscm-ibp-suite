@@ -9,10 +9,11 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
-import { revisarEntrada } from '../../../core/ibp/migration-plan.js'
+import { revisarEntrada, sePuedeCopiar } from '../../../core/ibp/migration-plan.js'
 import { listIbpConnections } from '../../lib/ibp.js'
 import { fetchMasterCatalog } from '../../lib/ibp-master-data.js'
-import { fetchMigrationPlan } from '../../lib/ibp-migration.js'
+import { fetchMigrationPlan, runMigrationSegment } from '../../lib/ibp-migration.js'
+import Modal from '../ui/Modal.jsx'
 
 const numero = (valor) => (valor === null || valor === undefined ? '—' : Number(valor).toLocaleString('es'))
 
@@ -119,6 +120,10 @@ export default function MigrationPlan() {
   const [calculando, setCalculando] = useState(false)
   const [error, setError] = useState('')
 
+  const [confirmando, setConfirmando] = useState(false)
+  const [escrito, setEscrito] = useState('')
+  const [carga, setCarga] = useState(null)
+
   useEffect(() => {
     listIbpConnections().then(setConexiones).catch((fallo) => setError(fallo.message))
   }, [])
@@ -140,6 +145,63 @@ export default function MigrationPlan() {
   }, [delOrigen, busqueda])
 
   const listo = origen.versionId && destino.versionId && elegidas.length > 0
+
+  const tenantDestino = conexiones.find((una) => una.id === destino.connectionId)
+  const copiables = useMemo(() => (plan?.entradas ?? []).filter(sePuedeCopiar), [plan])
+
+  /**
+   * Copia tabla por tabla, encadenando segmentos.
+   *
+   * Los segmentos van de a uno porque una tabla grande no cabe en el tiempo de una función, y
+   * porque cada uno es ya una transacción de SAP. Una tabla que falla NO detiene a las demás: se
+   * anota y se sigue, que es lo que uno querría después de esperar veinte minutos.
+   */
+  const copiar = useCallback(async () => {
+    setConfirmando(false)
+    setCarga({ enCurso: true, hechas: [], mirando: '' })
+
+    const hechas = []
+
+    for (const entrada of copiables) {
+      let desde = 0
+      let copiadas = 0
+      let fallo = null
+      const mensajes = []
+
+      for (;;) {
+        setCarga({ enCurso: true, hechas: [...hechas], mirando: `${entrada.origen} · ${copiadas} filas` })
+
+        let segmento
+        try {
+          segmento = await runMigrationSegment({
+            origen,
+            destino,
+            entidad: entrada.origen,
+            entidadDestino: entrada.destino,
+            columnas: entrada.comunes ?? [],
+            claves: entrada.claves ?? [],
+            desde,
+            cuantas: 5000,
+            nombre: `GoSCM · ${entrada.origen}`,
+          })
+        } catch (fallaDeRed) {
+          fallo = fallaDeRed.message
+          break
+        }
+
+        if (!segmento.ok) { fallo = segmento.error; break }
+
+        copiadas += segmento.filas
+        mensajes.push(...(segmento.mensajes ?? []))
+        if (segmento.agotado) break
+        desde += segmento.filas
+      }
+
+      hechas.push({ tabla: entrada.origen, destino: entrada.destino, copiadas, fallo, mensajes })
+    }
+
+    setCarga({ enCurso: false, hechas, mirando: '' })
+  }, [copiables, origen, destino])
 
   const calcular = useCallback(async () => {
     setCalculando(true)
@@ -163,8 +225,9 @@ export default function MigrationPlan() {
   return (
     <div className="module-body">
       <div className="notice notice-info">
-        Esta pantalla solo <b>mira</b>: dice qué se copiaría y qué se perdería por el camino. La
-        carga todavía no está — escribir en un tenant no es algo que se estrene sin nadie delante.
+        Primero se <b>analiza</b>: qué se copiaría y qué se perdería por el camino. Copiar de verdad
+        es un segundo paso, con su confirmación, y solo alcanza a las tablas que el análisis dio por
+        buenas.
       </div>
 
       {(error || deOrigen.error || deDestino.error) && (
@@ -261,6 +324,50 @@ export default function MigrationPlan() {
             </div>
           )}
 
+          <div className="monitor-bar">
+            <button
+              type="button"
+              className="btn btn-sm btn-primary"
+              onClick={() => { setEscrito(''); setConfirmando(true) }}
+              disabled={copiables.length === 0 || carga?.enCurso}
+            >
+              ▶ Copiar {copiables.length} {copiables.length === 1 ? 'tabla' : 'tablas'}
+            </button>
+            {carga?.enCurso && <span className="page-hint">Copiando {carga.mirando}…</span>}
+            {tenantDestino?.isProduction && <span className="tag tag-accent">El destino es productivo</span>}
+          </div>
+
+          {carga && !carga.enCurso && carga.hechas.length > 0 && (
+            <div className="card">
+              <div className="card-label">Resultado de la copia</div>
+              <div className="table-scroll">
+                <table className="table-dense">
+                  <thead>
+                    <tr><th>Tabla</th><th>Copiadas</th><th>Resultado</th></tr>
+                  </thead>
+                  <tbody>
+                    {carga.hechas.map((una) => (
+                      <tr key={una.tabla}>
+                        <td>{una.tabla} <span className="exp-sub">→ {una.destino}</span></td>
+                        <td>{numero(una.copiadas)}</td>
+                        <td>
+                          {una.fallo
+                            ? <span style={{ color: 'var(--red)' }}>✕ {una.fallo}</span>
+                            : <span style={{ color: 'var(--green)' }}>✓ Copiada</span>}
+                          {una.mensajes.length > 0 && (
+                            <div className="exp-sub" style={{ color: 'var(--accent)' }}>
+                              SAP rechazó {una.mensajes.length} {una.mensajes.length === 1 ? 'fila' : 'filas'}
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
           <div className="table-scroll table-alta">
             <table className="table-dense">
               <thead>
@@ -316,6 +423,57 @@ export default function MigrationPlan() {
             </table>
           </div>
         </>
+      )}
+
+      {confirmando && (
+        <Modal
+          title="Copiar de verdad"
+          subtitle={`${copiables.length} ${copiables.length === 1 ? 'tabla' : 'tablas'} · ${numero(plan.resumen.filas)} filas`}
+          onClose={() => setConfirmando(false)}
+          footer={(
+            <>
+              <button type="button" className="btn btn-sm" onClick={() => setConfirmando(false)}>Cancelar</button>
+              <button
+                type="button"
+                className="btn btn-sm btn-primary"
+                onClick={copiar}
+                disabled={escrito.trim().toLowerCase() !== 'copiar'}
+              >
+                Sí, copiar
+              </button>
+            </>
+          )}
+        >
+          <p>
+            Se van a <b>escribir {numero(plan.resumen.filas)} filas</b> en{' '}
+            <b>{tenantDestino?.name}</b>, área <b>{destino.planningArea}</b>, versión{' '}
+            <b>{destino.versionId}</b>.
+          </p>
+
+          {tenantDestino?.isProduction && (
+            <div className="notice notice-error">
+              ⚠ Ese tenant está marcado como <b>productivo</b>.
+            </div>
+          )}
+
+          <p className="exp-sub">
+            Las filas que ya existan con la misma clave se <b>sobrescriben</b>. Las que no, se crean.
+            Nada se borra. Las columnas que el destino no tiene no se copian, y las que tiene de más
+            se quedan como estén.
+          </p>
+
+          {/* Escribir la palabra, y no solo pulsar: es la unica operacion de la aplicacion que
+              modifica dato maestro, y conviene que cueste un segundo más que un clic distraído. */}
+          <label className="exp-enriq">
+            <span className="exp-k">Escribí «copiar» para confirmar</span>
+            <input
+              className="input input-sm"
+              value={escrito}
+              onChange={(evento) => setEscrito(evento.target.value)}
+              placeholder="copiar"
+            />
+          </label>
+        </Modal>
       )}
     </div>
   )

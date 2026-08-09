@@ -72,6 +72,23 @@ export {
 export { planificarMigracion } from './migration.js'
 
 export {
+  ESPERA_MAXIMA_MS,
+  MAX_BYTES_POR_ENVIO,
+  MAX_FILAS_POR_ENVIO,
+  abrirSesionDeEscritura,
+  commitTransaction,
+  getExportResult,
+  getTransactionId,
+  initiateParallelProcess,
+  partirEnEnvios,
+  postTransChunk,
+  readMessages,
+  waitForProcessed,
+} from './master-data-write.js'
+
+export { FILAS_POR_SEGMENTO, INTENTOS_POR_SEGMENTO, migrarSegmento, migrarTabla } from './migration-run.js'
+
+export {
   ATRIBUTOS_DE_CONVERSION,
   FILAS_PARA_CONTAR,
   VALOR_DE_SONDEO,

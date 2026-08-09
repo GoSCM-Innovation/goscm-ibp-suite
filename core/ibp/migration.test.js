@@ -17,8 +17,8 @@ beforeEach(() => {
 const esquemas = (porEntidad) => readSchema.mockImplementation(({ entidad }) => {
   const columnas = porEntidad[entidad]
   if (columnas === undefined) return Promise.reject(new Error('no se pudo leer'))
-  if (columnas === null) return Promise.resolve({ vacia: true, columnas: [] })
-  return Promise.resolve({ vacia: false, columnas })
+  if (columnas === null) return Promise.resolve({ vacia: true, columnas: [], claves: [] })
+  return Promise.resolve({ vacia: false, columnas, claves: [columnas[0]] })
 })
 
 describe('planificarMigracion', () => {
@@ -42,6 +42,18 @@ describe('planificarMigracion', () => {
       filas: 8005,
     })
     expect(resumen).toMatchObject({ tablas: 1, copiables: 1, filas: 8005 })
+  })
+
+  // Sin un orden estable, dos ventanas de lectura se solapan y dejan huecos: un hueco es una fila
+  // que no se copia.
+  it('devuelve las claves del origen, que son con las que se ordena al copiar', async () => {
+    esquemas({ T: ['PRDID', 'BRAND'], T2: ['PRDID'] })
+    countEntity.mockResolvedValue(1)
+
+    const { entradas } = await planificarMigracion({
+      origen, destino, tablas: ['T'], tablasDelDestino: ['T2'], destinoDe: { T: 'T2' },
+    })
+    expect(entradas[0].claves).toEqual(['PRDID'])
   })
 
   // El área y la versión viajan en el contexto de la transacción, no como columnas.
