@@ -59,6 +59,34 @@ export {
 export { readTemplateDetail, scheduleJob } from './job-schedule.js'
 
 export {
+  ATRIBUTOS_DE_CONVERSION,
+  FILAS_PARA_CONTAR,
+  VALOR_DE_SONDEO,
+  areasDesdeConjuntos,
+  cifraLegible,
+  conversionQueFalta,
+  esCero,
+  filtroDeCifra,
+  filtroDePlanificacion,
+  nivelDeAgregacion,
+  parseKfMetadata,
+  periodoLegible,
+  selectDePlanificacion,
+  sinCeros,
+} from './planning-data-model.js'
+
+export {
+  FILAS_POR_PAGINA,
+  countKf,
+  detectConversions,
+  planningRoot,
+  readKfMetadata,
+  readKfPage,
+  readPlanningAreas,
+  readVersions,
+} from './planning-data.js'
+
+export {
   CAMPOS_DE_SOLO_LECTURA,
   OPERADORES,
   catalogoDesdeVsmt,
