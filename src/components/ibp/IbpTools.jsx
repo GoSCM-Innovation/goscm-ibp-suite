@@ -21,6 +21,7 @@ const ResourceStats = lazy(() => import('./ResourceStats.jsx'))
 const Metering = lazy(() => import('./Metering.jsx'))
 const MasterDataViewer = lazy(() => import('./MasterDataViewer.jsx'))
 const PlanningDataViewer = lazy(() => import('./PlanningDataViewer.jsx'))
+const MigrationPlan = lazy(() => import('./MigrationPlan.jsx'))
 
 const HERRAMIENTAS = [
   // El tablero global mira TODOS los tenants, así que el selector no le aplica. Con uno solo
@@ -33,6 +34,8 @@ const HERRAMIENTAS = [
   { id: 'consumo', label: 'Consumo' },
   { id: 'datos', label: 'Dato maestro' },
   { id: 'cifras', label: 'Cifras clave' },
+  // La migración mira DOS tenants a la vez, asi que el selector de arriba no le aplica.
+  { id: 'migracion', label: 'Migración', sinTenant: true },
 ]
 
 export default function IbpTools() {
@@ -82,11 +85,12 @@ export default function IbpTools() {
                 : herramienta === 'consumo' ? 'Quién usa el tenant elegido, con qué y cuánto.'
                   : herramienta === 'datos' ? 'El dato maestro del tenant elegido, de solo lectura.'
                     : herramienta === 'cifras' ? 'Las cifras clave del tenant elegido, de solo lectura.'
+                      : herramienta === 'migracion' ? 'Que se copiaria de un tenant a otro, antes de copiar nada.'
                 : 'Los Application Jobs del tenant elegido.'}
           </div>
         </div>
 
-        {herramienta !== 'global' && (
+        {herramienta !== 'global' && !HERRAMIENTAS.find((una) => una.id === herramienta)?.sinTenant && (
         <div className="monitor-bar">
           <select
             className="select input-sm"
@@ -152,6 +156,11 @@ export default function IbpTools() {
       {herramienta === 'cifras' && conexion && (
         <Suspense fallback={<div className="page-hint">Cargando el visor…</div>}>
           <PlanningDataViewer key={conexion.id} conexionId={conexion.id} />
+        </Suspense>
+      )}
+      {herramienta === 'migracion' && (
+        <Suspense fallback={<div className="page-hint">Cargando la migracion…</div>}>
+          <MigrationPlan />
         </Suspense>
       )}
       {herramienta === 'plantillas' && conexion && (

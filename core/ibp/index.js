@@ -59,6 +59,19 @@ export {
 export { readTemplateDetail, scheduleJob } from './job-schedule.js'
 
 export {
+  ESTADOS_QUE_IMPIDEN,
+  compararCampos,
+  emparejarTabla,
+  emparejarTablas,
+  raicesDe,
+  resumirPlan,
+  revisarEntrada,
+  sePuedeCopiar,
+} from './migration-plan.js'
+
+export { planificarMigracion } from './migration.js'
+
+export {
   ATRIBUTOS_DE_CONVERSION,
   FILAS_PARA_CONTAR,
   VALOR_DE_SONDEO,

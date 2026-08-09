@@ -1,0 +1,322 @@
+// Qué se copiaría de un tenant a otro, antes de copiar nada.
+//
+// Portado de la fase de análisis de `Migration.jsx` de v8. La carga en sí todavía no está: escribir
+// en un tenant no es algo que se estrene sin nadie delante.
+//
+// Lo que esta pantalla responde, y que en v8 solo se veía dentro del diálogo de confirmación justo
+// antes de cargar, es: con qué tabla del destino se emparejó cada una, qué columnas se van a perder
+// por el camino y cuántas filas hay de verdad.
+
+import { useCallback, useEffect, useMemo, useState } from 'react'
+
+import { revisarEntrada } from '../../../core/ibp/migration-plan.js'
+import { listIbpConnections } from '../../lib/ibp.js'
+import { fetchMasterCatalog } from '../../lib/ibp-master-data.js'
+import { fetchMigrationPlan } from '../../lib/ibp-migration.js'
+
+const numero = (valor) => (valor === null || valor === undefined ? '—' : Number(valor).toLocaleString('es'))
+
+/** El color y la etiqueta de cada estado. Los dos primeros impiden copiar; el resto avisa. */
+const ESTADOS = {
+  'sin-pareja': { label: 'Sin pareja', color: 'var(--red)' },
+  'sin-campos': { label: 'Sin columnas en común', color: 'var(--red)' },
+  'a-ciegas': { label: 'No se pudo comparar', color: 'var(--accent)' },
+  'con-perdida': { label: 'Se pierden columnas', color: 'var(--accent)' },
+  vacia: { label: 'Vacía', color: 'var(--text3)' },
+  ok: { label: 'Lista', color: 'var(--green)' },
+}
+
+/** El selector de un lado: conexión, área y versión. */
+function Lado({ titulo, conexiones, valor, onCambiar, catalogo, cargando }) {
+  const versiones = catalogo?.[valor.planningArea]?.versions ?? []
+
+  return (
+    <div className="card">
+      <div className="card-label">{titulo}</div>
+
+      <select
+        className="select input-sm"
+        value={valor.connectionId}
+        onChange={(evento) => onCambiar({ connectionId: evento.target.value, planningArea: '', versionId: '' })}
+        aria-label={`Tenant de ${titulo}`}
+      >
+        <option value="">Elegí un tenant…</option>
+        {conexiones.map((una) => <option key={una.id} value={una.id}>{una.name}</option>)}
+      </select>
+
+      {cargando && <div className="exp-sub">Leyendo el catálogo…</div>}
+
+      {catalogo && (
+        <>
+          <select
+            className="select input-sm"
+            value={valor.planningArea}
+            onChange={(evento) => onCambiar({ ...valor, planningArea: evento.target.value, versionId: '' })}
+            aria-label={`Área de ${titulo}`}
+          >
+            <option value="">Elegí un área…</option>
+            {Object.entries(catalogo).map(([id, una]) => (
+              <option key={id} value={id}>{una.desc === id ? id : `${id} — ${una.desc}`}</option>
+            ))}
+          </select>
+
+          <select
+            className="select input-sm"
+            value={valor.versionId}
+            onChange={(evento) => onCambiar({ ...valor, versionId: evento.target.value })}
+            aria-label={`Versión de ${titulo}`}
+            disabled={versiones.length === 0}
+          >
+            <option value="">Elegí una versión…</option>
+            {versiones.map((una) => (
+              <option key={una.id} value={una.id}>{una.name === una.id ? una.id : `${una.id} — ${una.name}`}</option>
+            ))}
+          </select>
+        </>
+      )}
+    </div>
+  )
+}
+
+/** Lee el catálogo de un tenant cuando cambia la conexión elegida. */
+function useCatalogo(connectionId) {
+  const [catalogo, setCatalogo] = useState(null)
+  const [tablas, setTablas] = useState([])
+  const [cargando, setCargando] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    if (!connectionId) return undefined
+    let abandonado = false
+
+    const id = setTimeout(() => {
+      setCargando(true)
+      setCatalogo(null)
+      fetchMasterCatalog(connectionId)
+        .then((leido) => {
+          if (abandonado) return
+          setCatalogo(leido.catalogo)
+          setTablas(leido.importables)
+          setError('')
+        })
+        .catch((fallo) => { if (!abandonado) setError(fallo.message) })
+        .finally(() => { if (!abandonado) setCargando(false) })
+    }, 0)
+
+    return () => { abandonado = true; clearTimeout(id) }
+  }, [connectionId])
+
+  return { catalogo, tablas, cargando, error }
+}
+
+export default function MigrationPlan() {
+  const [conexiones, setConexiones] = useState([])
+  const [origen, setOrigen] = useState({ connectionId: '', planningArea: '', versionId: '' })
+  const [destino, setDestino] = useState({ connectionId: '', planningArea: '', versionId: '' })
+  const [elegidas, setElegidas] = useState([])
+  const [busqueda, setBusqueda] = useState('')
+  const [plan, setPlan] = useState(null)
+  const [calculando, setCalculando] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    listIbpConnections().then(setConexiones).catch((fallo) => setError(fallo.message))
+  }, [])
+
+  const deOrigen = useCatalogo(origen.connectionId)
+  const deDestino = useCatalogo(destino.connectionId)
+
+  // Las tablas que se pueden elegir son las del ÁREA Y VERSIÓN del origen, no todas las del tenant:
+  // un tipo de dato maestro existe por versión, y ofrecer los de otra llevaría a un plan vacío.
+  const delOrigen = useMemo(() => {
+    const version = deOrigen.catalogo?.[origen.planningArea]?.versions
+      ?.find((una) => una.id === origen.versionId)
+    return version?.mdts ?? []
+  }, [deOrigen.catalogo, origen.planningArea, origen.versionId])
+
+  const visibles = useMemo(() => {
+    const texto = busqueda.trim().toUpperCase()
+    return texto ? delOrigen.filter((una) => una.includes(texto)) : delOrigen
+  }, [delOrigen, busqueda])
+
+  const listo = origen.versionId && destino.versionId && elegidas.length > 0
+
+  const calcular = useCallback(async () => {
+    setCalculando(true)
+    setPlan(null)
+    try {
+      const leido = await fetchMigrationPlan({
+        origen,
+        destino,
+        tablas: elegidas,
+        tablasDelDestino: deDestino.tablas,
+      })
+      setPlan(leido)
+      setError('')
+    } catch (fallo) {
+      setError(fallo.message)
+    } finally {
+      setCalculando(false)
+    }
+  }, [origen, destino, elegidas, deDestino.tablas])
+
+  return (
+    <div className="module-body">
+      <div className="notice notice-info">
+        Esta pantalla solo <b>mira</b>: dice qué se copiaría y qué se perdería por el camino. La
+        carga todavía no está — escribir en un tenant no es algo que se estrene sin nadie delante.
+      </div>
+
+      {(error || deOrigen.error || deDestino.error) && (
+        <div className="notice notice-error">✕ {error || deOrigen.error || deDestino.error}</div>
+      )}
+
+      <div className="grid-charts">
+        <Lado
+          titulo="origen"
+          conexiones={conexiones}
+          valor={origen}
+          onCambiar={(nuevo) => { setOrigen(nuevo); setElegidas([]); setPlan(null) }}
+          catalogo={deOrigen.catalogo}
+          cargando={deOrigen.cargando}
+        />
+        <Lado
+          titulo="destino"
+          conexiones={conexiones}
+          valor={destino}
+          onCambiar={(nuevo) => { setDestino(nuevo); setPlan(null) }}
+          catalogo={deDestino.catalogo}
+          cargando={deDestino.cargando}
+        />
+      </div>
+
+      {delOrigen.length > 0 && (
+        <div className="card">
+          <div className="card-label">
+            Qué copiar ({elegidas.length} de {numero(delOrigen.length)})
+          </div>
+
+          <div className="monitor-bar">
+            <input
+              className="input input-sm"
+              value={busqueda}
+              onChange={(evento) => setBusqueda(evento.target.value)}
+              placeholder="Buscar una tabla"
+            />
+            <button type="button" className="btn btn-sm" onClick={() => setElegidas(visibles)}>
+              Elegir las {visibles.length} visibles
+            </button>
+            <button type="button" className="btn btn-sm" onClick={() => setElegidas([])}>Ninguna</button>
+          </div>
+
+          <div className="columnas" style={{ maxHeight: 160 }}>
+            {visibles.map((una) => (
+              <label key={una} className={`columna${elegidas.includes(una) ? ' columna-clave' : ''}`}>
+                <input
+                  type="checkbox"
+                  checked={elegidas.includes(una)}
+                  onChange={() => setElegidas((previas) => (previas.includes(una)
+                    ? previas.filter((otra) => otra !== una)
+                    : [...previas, una]))}
+                />
+                {una}
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="monitor-bar">
+        <button type="button" className="btn btn-sm btn-primary" onClick={calcular} disabled={!listo || calculando}>
+          {calculando ? 'Analizando…' : 'Analizar qué se copiaría'}
+        </button>
+        <span className="page-hint">
+          {calculando
+            ? 'Se leen las dos tablas de cada par y se cuentan las filas; tarda unos segundos por tabla.'
+            : listo ? `${elegidas.length} tablas por analizar` : 'Elegí origen, destino y al menos una tabla.'}
+        </span>
+      </div>
+
+      {plan && (
+        <>
+          <div className="grid-kpi">
+            <div className="kpi">
+              <div className="kpi-label">Tablas analizadas</div>
+              <div className="kpi-valor">{numero(plan.resumen.tablas)}</div>
+            </div>
+            <div className="kpi">
+              <div className="kpi-label">Se copiarían</div>
+              <div className="kpi-valor" style={{ color: 'var(--green)' }}>{numero(plan.resumen.copiables)}</div>
+            </div>
+            <div className="kpi">
+              <div className="kpi-label">Filas</div>
+              <div className="kpi-valor">{numero(plan.resumen.filas)}</div>
+              <div className="kpi-detalle">solo de las que se copiarían</div>
+            </div>
+          </div>
+
+          {plan.resumen.hayQueMirar && (
+            <div className="notice notice-info">
+              Hay tablas que no van a copiarse enteras. La columna «Estado» dice por qué.
+            </div>
+          )}
+
+          <div className="table-scroll table-alta">
+            <table className="table-dense">
+              <thead>
+                <tr>
+                  <th>Origen</th><th>Destino</th><th>Filas</th><th>Columnas</th><th>Estado</th>
+                </tr>
+              </thead>
+              <tbody>
+                {plan.entradas.map((entrada) => {
+                  const revision = revisarEntrada(entrada)
+                  const meta = ESTADOS[revision.estado] ?? ESTADOS.ok
+
+                  return (
+                    <tr key={entrada.origen}>
+                      <td>{entrada.origen}</td>
+                      <td>
+                        {entrada.destino ?? <span className="exp-sub">ninguna</span>}
+                        {entrada.destino && entrada.destino !== entrada.origen && (
+                          <div className="exp-sub">emparejada por la raíz del nombre</div>
+                        )}
+                      </td>
+                      <td>{numero(entrada.filas)}</td>
+                      <td>
+                        {entrada.verificable
+                          ? (
+                            <>
+                              {entrada.comunes.length} en común
+                              {entrada.soloEnOrigen.length > 0 && (
+                                <div className="exp-sub" style={{ color: 'var(--accent)' }} title={entrada.soloEnOrigen.join(', ')}>
+                                  no se copian: {entrada.soloEnOrigen.slice(0, 4).join(', ')}
+                                  {entrada.soloEnOrigen.length > 4 && ` y ${entrada.soloEnOrigen.length - 4} más`}
+                                </div>
+                              )}
+                              {entrada.soloEnDestino.length > 0 && (
+                                <div className="exp-sub" title={entrada.soloEnDestino.join(', ')}>
+                                  quedan como estén: {entrada.soloEnDestino.length}
+                                </div>
+                              )}
+                            </>
+                          )
+                          : <span className="exp-sub">sin comparar</span>}
+                      </td>
+                      <td>
+                        <span className="badge" style={{ background: `${meta.color}26`, borderColor: `${meta.color}4d`, color: meta.color }}>
+                          {meta.label}
+                        </span>
+                        {revision.mensaje && <div className="exp-sub">{revision.mensaje}</div>}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
