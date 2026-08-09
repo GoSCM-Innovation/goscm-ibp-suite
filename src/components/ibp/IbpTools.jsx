@@ -19,6 +19,7 @@ const JobMonitor = lazy(() => import('./JobMonitor.jsx'))
 const JobTemplates = lazy(() => import('./JobTemplates.jsx'))
 const ResourceStats = lazy(() => import('./ResourceStats.jsx'))
 const Metering = lazy(() => import('./Metering.jsx'))
+const MasterDataViewer = lazy(() => import('./MasterDataViewer.jsx'))
 
 const HERRAMIENTAS = [
   // El tablero global mira TODOS los tenants, así que el selector no le aplica. Con uno solo
@@ -29,6 +30,7 @@ const HERRAMIENTAS = [
   { id: 'plantillas', label: 'Trabajos' },
   { id: 'recursos', label: 'Recursos' },
   { id: 'consumo', label: 'Consumo' },
+  { id: 'datos', label: 'Dato maestro' },
 ]
 
 export default function IbpTools() {
@@ -76,6 +78,7 @@ export default function IbpTools() {
             {herramienta === 'global' ? 'Todos los tenants de IBP a la vez.'
               : herramienta === 'recursos' ? 'Cuánta CPU y memoria consume el tenant elegido.'
                 : herramienta === 'consumo' ? 'Quién usa el tenant elegido, con qué y cuánto.'
+                  : herramienta === 'datos' ? 'El dato maestro del tenant elegido, de solo lectura.'
                 : 'Los Application Jobs del tenant elegido.'}
           </div>
         </div>
@@ -136,6 +139,11 @@ export default function IbpTools() {
       {herramienta === 'consumo' && conexion && (
         <Suspense fallback={<div className="page-hint">Cargando el consumo…</div>}>
           <Metering key={conexion.id} conexionId={conexion.id} />
+        </Suspense>
+      )}
+      {herramienta === 'datos' && conexion && (
+        <Suspense fallback={<div className="page-hint">Cargando el visor…</div>}>
+          <MasterDataViewer key={conexion.id} conexionId={conexion.id} />
         </Suspense>
       )}
       {herramienta === 'plantillas' && conexion && (

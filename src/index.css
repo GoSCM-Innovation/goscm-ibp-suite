@@ -1680,3 +1680,14 @@ a { color: var(--cyan); }
   font: inherit; padding: 0; text-align: left;
 }
 .enlace:hover { text-decoration: underline; }
+
+/* Visor de dato maestro: sesenta casillas de columna y las condiciones del filtro. */
+.columnas { display: flex; flex-wrap: wrap; gap: 4px 12px; max-height: 150px; overflow-y: auto; padding: 6px 0; }
+.columna { align-items: center; display: flex; font-size: 11px; gap: 4px; }
+.columna-clave { color: var(--cyan); font-weight: 600; }
+
+.condicion { align-items: center; display: flex; flex-wrap: wrap; gap: 6px; padding: 4px 0; }
+.condicion .select, .condicion .input { flex: 1 1 130px; min-width: 110px; }
+.condicion-ayuda { flex: 1 1 130px; }
+
+.table-alta { max-height: 55vh; }

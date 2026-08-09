@@ -59,6 +59,34 @@ export {
 export { readTemplateDetail, scheduleJob } from './job-schedule.js'
 
 export {
+  CAMPOS_DE_SOLO_LECTURA,
+  OPERADORES,
+  catalogoDesdeVsmt,
+  clavesDesdeUri,
+  columnasPorOmision,
+  etiquetaDeCondicion,
+  filasPorPagina,
+  filasPorPaginaSegunCampos,
+  filtroDeCondiciones,
+  filtroDeDatos,
+  literalOdata,
+  partirValores,
+  sinCamposDeSoloLectura,
+  sinMetadatos,
+  valorLegible,
+} from './master-data-model.js'
+
+export {
+  countEntity,
+  masterDataRoot,
+  readDistinctValues,
+  readEntityPage,
+  readImportableMdts,
+  readSchema,
+  readVsmt,
+} from './master-data.js'
+
+export {
   CONJUNTOS_DE_CONSUMO,
   METERING_MAX,
   METERING_PAGE,
