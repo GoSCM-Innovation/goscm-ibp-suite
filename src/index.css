@@ -1714,3 +1714,20 @@ a { color: var(--cyan); }
 .tech-logs-fila:last-child { border-bottom: none; }
 /* El detalle del error se queda con el resto de la fila y se corta si no cabe. */
 .tech-logs-detalle { flex: 1 1 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Detalle por paso de una ejecución: el registro que dejó cada uno en SAP. */
+.run-detalle { flex-shrink: 0; padding: 8px 12px; }
+.run-registro { margin-top: 6px; }
+.run-registro-texto {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-family: var(--mono);
+  font-size: 10px;
+  line-height: 1.45;
+  margin: 2px 0 6px;
+  max-height: 200px;
+  overflow: auto;
+  padding: 6px 8px;
+  white-space: pre;
+}

@@ -13,6 +13,7 @@ import { cidsTargets, fetchPromotedTaskNames, listCidsConnections, promotedForTa
 import TaskMonitor from './TaskMonitor.jsx'
 import TaskLauncher from './TaskLauncher.jsx'
 import Orchestrations from './orchestrations/Orchestrations.jsx'
+import { lectorDeCids } from '../../lib/run-logs.js'
 
 // Los tableros se cargan aparte, solo al abrir su pestaña. Son los únicos que usan la librería de
 // gráficos, y esa librería pesa más que todo el resto de la aplicación junta: dejarla en el paquete
@@ -185,7 +186,11 @@ export default function CidsTools() {
         />
       )}
       {herramienta === 'orquestaciones' && destino && (
-        <Orchestrations key={`orq-${destino.id}`} destino={destino} />
+        <Orchestrations
+          key={`orq-${destino.id}`}
+          destino={destino}
+          leerRegistro={lectorDeCids(destino)}
+        />
       )}
       {herramienta === 'explorador' && (
         <Suspense fallback={<div className="page-hint">Cargando el explorador…</div>}>

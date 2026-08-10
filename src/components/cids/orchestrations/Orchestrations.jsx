@@ -27,7 +27,7 @@ const TaskPalette = lazy(() => import('./TaskPalette.jsx'))
 
 // `Paleta` es lo único que cambia entre CI-DS e IBP: de dónde salen los pasos que se pueden
 // agregar. El resto de la pantalla —lista, lienzo, ejecución— es la misma para los dos.
-export default function Orchestrations({ destino, Paleta = TaskPalette }) {
+export default function Orchestrations({ destino, Paleta = TaskPalette, leerRegistro }) {
   const [orquestaciones, setOrquestaciones] = useState([])
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState('')
@@ -203,6 +203,7 @@ export default function Orchestrations({ destino, Paleta = TaskPalette }) {
                   guardando={guardando}
                   error={errorAlGuardar}
                   Paleta={Paleta}
+                  leerRegistro={leerRegistro}
                 />
               )}
             </Suspense>

@@ -23,6 +23,7 @@ import '@xyflow/react/dist/style.css'
 import GroupNode from './GroupNode.jsx'
 import NodeConfigPanel from './NodeConfigPanel.jsx'
 import RunBar from './RunBar.jsx'
+import RunDetail from './RunDetail.jsx'
 import TaskNode from './TaskNode.jsx'
 import TaskPalette from './TaskPalette.jsx'
 
@@ -37,7 +38,7 @@ const nodeTypes = { task: TaskNode, group: GroupNode }
 /** Tamaño con el que nace un grupo. Se agranda arrastrando su borde. */
 const TAMANIO_DEL_GRUPO = { width: 320, height: 220 }
 
-export default function OrchestrationCanvas({ Paleta = TaskPalette, destino, orquestacion, onGuardar, guardando, error }) {
+export default function OrchestrationCanvas({ leerRegistro, Paleta = TaskPalette, destino, orquestacion, onGuardar, guardando, error }) {
   const [nodos, setNodos] = useState(orquestacion.nodes ?? [])
   const [aristas, setAristas] = useState(orquestacion.edges ?? [])
   const [elegido, setElegido] = useState(null)
@@ -207,6 +208,10 @@ export default function OrchestrationCanvas({ Paleta = TaskPalette, destino, orq
         onCortar={ejecucion.cortar}
         onRetomar={ejecucion.retomar}
       />
+
+      {/* Debajo de la barra y plegado: la barra dice cuántos pasos van, esto dice qué pasó en cada
+          uno. Quien solo quiere ver el avance no lo abre. */}
+      <RunDetail orquestacion={{ nodes: nodos }} run={ejecucion.run} leerRegistro={leerRegistro} />
 
       {error && <div className="notice notice-error lienzo-error">✕ {error}</div>}
 

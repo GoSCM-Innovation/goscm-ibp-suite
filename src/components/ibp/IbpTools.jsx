@@ -12,6 +12,7 @@ import { lazy, Suspense, useEffect, useState } from 'react'
 
 import { readStoredTzMode } from '../../lib/dates.js'
 import { listIbpConnections } from '../../lib/ibp.js'
+import { lectorDeIbp } from '../../lib/run-logs.js'
 
 const GlobalSummary = lazy(() => import('./GlobalSummary.jsx'))
 const Resumen = lazy(() => import('./Resumen.jsx'))
@@ -179,6 +180,7 @@ export default function IbpTools() {
             key={conexion.id}
             destino={{ connectionId: conexion.id, production: false }}
             Paleta={JobPalette}
+            leerRegistro={lectorDeIbp(conexion.id)}
           />
         </Suspense>
       )}
