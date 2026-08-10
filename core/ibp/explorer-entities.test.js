@@ -6,8 +6,10 @@ import {
   detectarRoles,
   entidadesDelTenant,
   esTablaDeTraduccion,
+  gruposEfectivos,
   mejorEntidadPara,
   prefijoDelTenant,
+  rolesEfectivos,
   rolesPorRevisar,
 } from './explorer-entities.js'
 
@@ -204,6 +206,72 @@ describe('detectarRoles', () => {
   it('cada papel trae su etiqueta legible', () => {
     const detectado = detectarRoles(conPrefijo('GID'), ROLES_DEL_ARBOL, 'GID')
     expect(detectado.product.etiqueta).toBeTruthy()
+  })
+})
+
+describe('rolesEfectivos', () => {
+  const detectado = {
+    product: { etiqueta: 'Productos', entidad: 'GIDCUSTOMERPRODUCT', seguro: false, alternativas: ['GIDPRODUCT'] },
+    header: { etiqueta: 'Cabecera', entidad: 'GIDSOURCEPRODUCTION', seguro: true, alternativas: [] },
+  }
+
+  it('sin correcciones devuelve lo detectado', () => {
+    const efectivos = rolesEfectivos(detectado, {})
+    expect(efectivos.product.entidad).toBe('GIDCUSTOMERPRODUCT')
+    expect(efectivos.product.corregido).toBe(false)
+  })
+
+  it('una corrección pisa a la detección', () => {
+    const efectivos = rolesEfectivos(detectado, { product: 'GIDPRODUCT' })
+    expect(efectivos.product).toMatchObject({ entidad: 'GIDPRODUCT', corregido: true })
+  })
+
+  // Alguien miró el tenant y decidió: no hay señal más fuerte, y la puntuación de la máquina no
+  // tiene por qué ganarle.
+  it('lo corregido a mano cuenta como seguro', () => {
+    expect(rolesEfectivos(detectado, { product: 'GIDPRODUCT' }).product.seguro).toBe(true)
+  })
+
+  // Si la corrección resulta estar mal, se puede volver sin volver a detectar.
+  it('lo que había elegido la máquina pasa a ser alternativa', () => {
+    const efectivos = rolesEfectivos(detectado, { product: 'GIDPRODUCT' })
+    expect(efectivos.product.alternativas).toContain('GIDCUSTOMERPRODUCT')
+    expect(efectivos.product.alternativas).not.toContain('GIDPRODUCT')
+  })
+
+  it('corregir a lo mismo que se detectó no cuenta como corrección', () => {
+    expect(rolesEfectivos(detectado, { header: 'GIDSOURCEPRODUCTION' }).header.corregido).toBe(false)
+  })
+
+  it('una corrección de un papel que no existe no inventa uno', () => {
+    expect(Object.keys(rolesEfectivos(detectado, { inventado: 'X' }))).toEqual(['product', 'header'])
+  })
+
+  it('resuelve un papel que la detección dejó sin nada', () => {
+    const sinResolver = { itemSub: { etiqueta: 'Sustitutos', entidad: null, seguro: false, alternativas: [] } }
+    expect(rolesEfectivos(sinResolver, { itemSub: 'GIDPSISUB' }).itemSub)
+      .toMatchObject({ entidad: 'GIDPSISUB', seguro: true, corregido: true })
+  })
+
+  it('sin nada detectado no hay nada efectivo', () => {
+    expect(rolesEfectivos(undefined, { product: 'X' })).toEqual({})
+  })
+})
+
+describe('gruposEfectivos', () => {
+  const porGrupo = {
+    arbol: { product: { etiqueta: 'P', entidad: 'A', seguro: false, alternativas: [] } },
+    red: { product: { etiqueta: 'P', entidad: 'B', seguro: false, alternativas: [] } },
+  }
+
+  it('corrige cada grupo por separado', () => {
+    const efectivos = gruposEfectivos(porGrupo, { arbol: { product: 'CORREGIDO' } })
+    expect(efectivos.arbol.product.entidad).toBe('CORREGIDO')
+    expect(efectivos.red.product.entidad).toBe('B')
+  })
+
+  it('sin correcciones devuelve los grupos tal cual', () => {
+    expect(gruposEfectivos(porGrupo).arbol.product.entidad).toBe('A')
   })
 })
 

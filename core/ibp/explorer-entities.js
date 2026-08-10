@@ -301,6 +301,40 @@ export function detectarRoles(entidades, roles, prefijo = '') {
   }))
 }
 
+/**
+ * La respuesta DEFINITIVA de qué entidad cumple cada papel: lo detectado, con lo corregido encima.
+ *
+ * Existe para que haya UNA sola respuesta. Sin esto, la extracción combinaría detección y
+ * correcciones por su cuenta, los analizadores lo harían por la suya, y bastaría que uno de ellos se
+ * olvidara de mirar las correcciones para que dos pantallas del mismo tenant leyeran tablas
+ * distintas y nadie entendiera por qué no cuadran.
+ *
+ * **Una corrección a mano vale como certeza.** Alguien miró el tenant y decidió; no hay señal más
+ * fuerte que eso, y la puntuación de la máquina no tiene por qué ganarle.
+ */
+export function rolesEfectivos(detectados, corregidos = {}) {
+  return Object.fromEntries(Object.entries(detectados ?? {}).map(([papel, uno]) => {
+    const corregido = corregidos?.[papel]
+    if (!corregido || corregido === uno.entidad) return [papel, { ...uno, corregido: false }]
+
+    return [papel, {
+      ...uno,
+      entidad: corregido,
+      seguro: true,
+      corregido: true,
+      // La que la máquina había elegido pasa a ser una alternativa: si la corrección resulta estar
+      // mal, se puede volver sin volver a detectar.
+      alternativas: [...new Set([uno.entidad, ...uno.alternativas].filter(Boolean))]
+        .filter((nombre) => nombre !== corregido),
+    }]
+  }))
+}
+
+/** Lo mismo para varios grupos de papeles a la vez —el árbol y la red—. */
+export const gruposEfectivos = (detectadosPorGrupo, corregidosPorGrupo = {}) =>
+  Object.fromEntries(Object.entries(detectadosPorGrupo ?? {})
+    .map(([grupo, roles]) => [grupo, rolesEfectivos(roles, corregidosPorGrupo?.[grupo])]))
+
 /** Los papeles que quedaron sin resolver o resueltos solo por el nombre. */
 export const rolesPorRevisar = (detectados) =>
   Object.entries(detectados ?? {})

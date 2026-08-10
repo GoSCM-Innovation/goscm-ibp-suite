@@ -139,9 +139,11 @@ export {
   ROLES_DE_RED,
   detectarRoles,
   entidadesDelTenant,
+  gruposEfectivos,
   esTablaDeTraduccion,
   mejorEntidadPara,
   prefijoDelTenant,
+  rolesEfectivos,
   rolesPorRevisar,
 } from './explorer-entities.js'
 

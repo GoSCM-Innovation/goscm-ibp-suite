@@ -5,8 +5,13 @@
 // PUT    { connectionId, planningArea, versionId, roles, fields }  — guardar las correcciones.
 // DELETE { connectionId, planningArea, versionId }     — volver a la detección automática.
 //
-// El GET devuelve las dos cosas juntas a propósito: la pantalla necesita saber qué detectó la máquina
-// Y qué corrigió una persona, porque lo que muestra es la diferencia entre ambas.
+// El GET devuelve TRES cosas: qué detectó la máquina, qué corrigió una persona, y la respuesta ya
+// combinada (`efectivo`). Las dos primeras son para que la pantalla pueda mostrar la diferencia; la
+// tercera es la que consume todo lo demás.
+//
+// Se combina aquí y no en cada consumidor a propósito: si la extracción lo hiciera por su cuenta y
+// los analizadores por la suya, bastaría que uno se olvidara de mirar las correcciones para que dos
+// pantallas del mismo tenant leyeran tablas distintas y nadie entendiera por qué no cuadran.
 
 import { requireModule } from '../../core/auth/guards.js'
 import { getAnyCredentials, getConnectionTarget } from '../../core/connections/index.js'
@@ -15,6 +20,7 @@ import {
   ROLES_DE_RED,
   catalogoDesdeVsmt,
   detectarRoles,
+  gruposEfectivos,
   prefijoDelTenant,
   readCatalog,
   readVsmt,
@@ -92,7 +98,11 @@ export default async function handler(req, res) {
         detectar({ baseUrl: conexion.baseUrl, credentials }, destino),
       ])
 
-      return res.status(200).json({ guardado, ...deteccion })
+      return res.status(200).json({
+        guardado,
+        ...deteccion,
+        efectivo: gruposEfectivos(deteccion.detectado, guardado.roles),
+      })
     }
 
     if (req.method === 'PUT') {
