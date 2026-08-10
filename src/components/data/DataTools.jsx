@@ -16,9 +16,11 @@ import { listIbpConnections } from '../../lib/ibp.js'
 import { fetchMasterCatalog } from '../../lib/ibp-master-data.js'
 
 const ExplorerSetup = lazy(() => import('./ExplorerSetup.jsx'))
+const ExplorerExtract = lazy(() => import('./ExplorerExtract.jsx'))
 
 const HERRAMIENTAS = [
   { id: 'origen', label: 'Origen de los datos' },
+  { id: 'descarga', label: 'Descargar' },
 ]
 
 /** Elige sola solo si hay UNA opción. Con varias, la cadena vacía obliga a elegir. */
@@ -177,6 +179,14 @@ export default function DataTools() {
       {listo && herramienta === 'origen' && (
         <Suspense fallback={<div className="page-hint">Cargando…</div>}>
           <ExplorerSetup
+            key={`${conexionId}|${area}|${version}`}
+            destino={{ connectionId: conexionId, planningArea: area, versionId: version }}
+          />
+        </Suspense>
+      )}
+      {listo && herramienta === 'descarga' && (
+        <Suspense fallback={<div className="page-hint">Cargando…</div>}>
+          <ExplorerExtract
             key={`${conexionId}|${area}|${version}`}
             destino={{ connectionId: conexionId, planningArea: area, versionId: version }}
           />

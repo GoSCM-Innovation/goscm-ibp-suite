@@ -118,6 +118,14 @@ export {
 } from './planning-data.js'
 
 export {
+  EXTRACCIONES,
+  GRUPOS_DE_EXTRACCION,
+  MARCA_DE_INVALIDA,
+  descartarInvalidas,
+  planificarExtraccion,
+} from './explorer-extract-plan.js'
+
+export {
   DESCRIPCION_DE_CAMPO,
   NO_EXISTE,
   armarSelect,
