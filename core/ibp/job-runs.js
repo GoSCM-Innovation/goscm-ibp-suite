@@ -115,6 +115,34 @@ export async function readJobRuns({ baseUrl, credentials, desde, hasta, connecti
   }
 }
 
+/**
+ * UNA ejecución concreta, por su nombre y su repetición. `null` si SAP no la conoce.
+ *
+ * Existe aparte de `readJobRuns` porque el motor de orquestaciones pregunta por una sola, en cada
+ * vuelta y por cada paso en marcha: traer las 2.000 filas del tope para buscar una dentro sería
+ * pagar una lectura enorme muchas veces. Es lo que hacía el orquestador de v8, que filtraba por
+ * `JobName` en la consulta.
+ */
+export async function readJobRun({ baseUrl, credentials, jobName, jobRunCount }) {
+  if (!jobName) return null
+
+  const filtro = jobRunCount
+    ? `JobName eq '${literal(jobName)}' and JobRunCount eq '${literal(jobRunCount)}'`
+    : `JobName eq '${literal(jobName)}'`
+
+  const consulta = `$select=${encodeURIComponent(JOB_HEADER_SELECT.join(','))}`
+    + `&$filter=${encodeURIComponent(filtro)}&$top=1`
+
+  const { json } = await sapFetch({
+    url: `${appJobRoot(baseUrl)}/JobHeaderSet?${consulta}&$format=json`,
+    credentials,
+    kind: 'ibp',
+  })
+
+  const filas = json?.d?.results ?? json?.value ?? []
+  return filas[0] ?? null
+}
+
 /** El catálogo de estados que describe el tenant. Las etiquetas vienen de SAP. */
 export async function readJobStatuses({ baseUrl, credentials }) {
   return readAllPages({ baseUrl, credentials, entity: 'JobStatusInfoSet' })

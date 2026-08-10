@@ -6,12 +6,12 @@ vi.mock('../connections/index.js', () => ({
 }))
 vi.mock('../cids/operations.js', () => ({ runCidsOperation: vi.fn() }))
 vi.mock('../ibp/job-schedule.js', () => ({ scheduleJob: vi.fn() }))
-vi.mock('../ibp/job-runs.js', () => ({ readJobRuns: vi.fn(), cancelJobRun: vi.fn() }))
+vi.mock('../ibp/job-runs.js', () => ({ readJobRun: vi.fn(), cancelJobRun: vi.fn() }))
 
 const { getCredentials } = await import('../connections/index.js')
 const { runCidsOperation } = await import('../cids/operations.js')
 const { scheduleJob } = await import('../ibp/job-schedule.js')
-const { cancelJobRun, readJobRuns } = await import('../ibp/job-runs.js')
+const { cancelJobRun, readJobRun } = await import('../ibp/job-runs.js')
 const { adaptadorPara } = await import('./adapters.js')
 
 const destino = { clientId: 'c-1', connectionId: 'x-1', production: false }
@@ -80,19 +80,28 @@ describe('adaptador de IBP', () => {
   })
 
   it('traduce el estado del trabajo al idioma del motor', async () => {
-    readJobRuns.mockResolvedValue({ runs: [{ JobName: 'FA163E', JobRunCount: '7', JobStatus: 'F' }] })
+    readJobRun.mockResolvedValue({ JobName: 'FA163E', JobRunCount: '7', JobStatus: 'F' })
     await expect(ibp.consultar(destino, 'FA163E|7')).resolves.toMatchObject({ statusCode: 'SUCCESS' })
   })
 
-  // Darla por perdida en la primera vuelta cortaría la cadena por nada.
-  it('una ejecución que SAP todavía no registró no se da por fallada', async () => {
-    readJobRuns.mockResolvedValue({ runs: [] })
-    await expect(ibp.consultar(destino, 'FA163E|7')).resolves.toMatchObject({ statusCode: 'UNKNOWN' })
+  // El motor pregunta una vez por vuelta y por paso: traer el lote entero para buscar dentro sería
+  // pagar una lectura de dos mil filas muchas veces.
+  it('pide SOLO esa ejecución, por nombre y repetición', async () => {
+    readJobRun.mockResolvedValue(null)
+    await ibp.consultar(destino, 'FA163E|7')
+    expect(readJobRun.mock.calls[0][0]).toMatchObject({ jobName: 'FA163E', jobRunCount: '7' })
+  })
+
+  // Darla por perdida en la primera vuelta cortaría la cadena por nada: el motor toma «desconocido»
+  // como fallo, así que sin registrar tiene que traducirse como «en cola».
+  it('una ejecución que SAP todavía no registró queda en cola, no fallada', async () => {
+    readJobRun.mockResolvedValue(null)
+    await expect(ibp.consultar(destino, 'FA163E|7')).resolves.toMatchObject({ statusCode: 'QUEUEING' })
   })
 
   it('un identificador roto se dice, no se consulta', async () => {
     await expect(ibp.consultar(destino, 'roto')).rejects.toThrow(/ilegible/)
-    expect(readJobRuns).not.toHaveBeenCalled()
+    expect(readJobRun).not.toHaveBeenCalled()
   })
 
   it('cancela por nombre y repetición', async () => {

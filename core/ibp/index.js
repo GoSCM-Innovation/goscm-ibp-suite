@@ -38,6 +38,7 @@ export {
   JOB_HEADER_TOP,
   buildJobHeaderQuery,
   cancelJobRun,
+  readJobRun,
   readJobRuns,
   readJobStatuses,
   readLogMessages,

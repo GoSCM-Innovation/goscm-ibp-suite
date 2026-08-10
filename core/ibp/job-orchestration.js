@@ -35,7 +35,7 @@ export function partirIdentificador(identificador) {
 /**
  * El estado de un trabajo en el idioma que entiende el motor.
  *
- * Las dos decisiones que importan:
+ * Las tres decisiones que importan:
  *
  *   - «Terminado con avisos» (`W`) cuenta como CORRECTO, igual que en CI-DS: el trabajo hizo lo suyo
  *     y dejó el dato, así que lo que viene detrás puede seguir. Tratarlo como fallo pararía cadenas
@@ -43,11 +43,21 @@ export function partirIdentificador(identificador) {
  *   - Un trabajo CANCELADO es un FALLO para el motor, aunque el monitor lo pinte como un final más.
  *     No hizo su trabajo, así que dar por bueno lo que venía detrás sería mentir. Es exactamente el
  *     mismo criterio que el motor ya aplica a `TERMINATED` de CI-DS.
+ *   - Una ejecución que SAP TODAVÍA NO REGISTRÓ cuenta como EN COLA, no como desconocida. Esto no es
+ *     un matiz: el motor trata «desconocido» como FALLO —a propósito, para no colgarse esperando algo
+ *     de lo que SAP no sabe nada—, así que devolverlo aquí marcaría fallado un trabajo sano en la
+ *     primera vuelta, antes de que SAP alcance a anotarlo. El orquestador de v8 seguía preguntando
+ *     en ese caso, y esto es lo mismo.
+ *
+ * Contrapartida asumida, igual que en v8: si la ejecución no aparece NUNCA —porque alguien la borró—
+ * el paso se queda esperando. Es preferible a romper cadenas sanas, que pasaría siempre.
  */
 export function estadoParaElMotor(run) {
-  const codigo = run?.JobStatus
+  if (!run) return { statusCode: 'QUEUEING', statusMsg: 'SAP todavía no la registró', endTime: null }
+
+  const codigo = run.JobStatus
   const meta = jobStatusMeta(codigo)
-  const fin = run?.JobEndDateTime || null
+  const fin = run.JobEndDateTime || null
 
   if (isJobFinished(codigo)) {
     // `F` es limpio; `W` terminó con avisos, y el motor tiene un estado propio para eso.

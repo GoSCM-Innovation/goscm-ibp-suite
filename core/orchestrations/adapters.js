@@ -11,7 +11,7 @@
 import { getConnectionTarget, getCredentials } from '../connections/index.js'
 import { runCidsOperation } from '../cids/operations.js'
 import { estadoParaElMotor, identificadorDeEjecucion, partirIdentificador } from '../ibp/job-orchestration.js'
-import { cancelJobRun, readJobRuns } from '../ibp/job-runs.js'
+import { cancelJobRun, readJobRun } from '../ibp/job-runs.js'
 import { scheduleJob } from '../ibp/job-schedule.js'
 
 /** El acuerdo de los Application Jobs. */
@@ -83,22 +83,18 @@ const adaptadorIbp = {
   /**
    * Pregunta cómo va una ejecución y lo traduce al idioma del motor.
    *
-   * Se busca por nombre y repetición dentro de las ejecuciones recientes: `JobHeaderSet` no admite
-   * leer una sola por su clave con este servicio, así que se filtra del lote. Si no aparece, se
-   * devuelve un estado desconocido en vez de un fallo: puede que SAP todavía no la haya registrado,
-   * y darla por perdida en la primera vuelta cortaría la cadena por nada.
+   * Se pide SOLO esa, filtrando por nombre y repetición en la consulta. El motor pregunta una vez
+   * por vuelta y por cada paso en marcha, así que traer el lote entero para buscar dentro sería
+   * pagar una lectura de dos mil filas muchas veces.
+   *
+   * Si SAP todavía no la registró, `estadoParaElMotor` lo traduce como «en cola» y no como fallo.
    */
   async consultar(destino, sapRunId) {
     const partes = partirIdentificador(sapRunId)
     if (!partes) throw new Error(`Identificador de ejecución ilegible: "${sapRunId}".`)
 
     const tenant = await tenantDeIbp(destino)
-    const { runs } = await readJobRuns({ ...tenant, connectionId: destino.connectionId })
-
-    const suya = runs.find((una) => una.JobName === partes.jobName
-      && String(una.JobRunCount) === String(partes.jobRunCount))
-
-    return estadoParaElMotor(suya ?? { JobStatus: null })
+    return estadoParaElMotor(await readJobRun({ ...tenant, ...partes }))
   },
 
   /** Le pide a SAP que detenga la ejecución. Solo se puede con las que están en marcha. */
