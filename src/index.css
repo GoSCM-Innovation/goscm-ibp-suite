@@ -1691,3 +1691,26 @@ a { color: var(--cyan); }
 .condicion-ayuda { flex: 1 1 130px; }
 
 .table-alta { max-height: 55vh; }
+
+/* Panel de diagnóstico: las últimas llamadas. Lo comparten los dos módulos. */
+.tech-logs { flex-shrink: 0; margin-top: 14px; }
+.tech-logs-cuerpo {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin-top: 8px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+.tech-logs-fila {
+  align-items: baseline;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 11px;
+  gap: 8px;
+  padding: 5px 10px;
+}
+.tech-logs-fila:last-child { border-bottom: none; }
+/* El detalle del error se queda con el resto de la fila y se corta si no cabe. */
+.tech-logs-detalle { flex: 1 1 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

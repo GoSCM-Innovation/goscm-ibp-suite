@@ -4,6 +4,8 @@
 // token ni nada que guardar. Es la diferencia con v9, que llevaba una clave incrustada en el
 // código del navegador y por tanto visible para cualquiera.
 
+import { anotarLlamada } from './tech-logs.js'
+
 export class ApiError extends Error {
   constructor(message, status) {
     super(message)
@@ -12,25 +14,46 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Toda petición queda anotada para el panel de diagnóstico, salga bien o mal.
+ *
+ * Se hace aquí y no en cada pantalla —como en v8 y v9— porque así el panel ve TODO el tráfico sin que
+ * nadie tenga que acordarse de registrarlo, y una pantalla nueva no empieza muda.
+ */
 async function request(path, { method = 'GET', body, params } = {}) {
   const query = params ? `?${new URLSearchParams(params)}` : ''
+  const arranque = Date.now()
 
-  const response = await fetch(`${path}${query}`, {
-    method,
-    credentials: 'same-origin',
-    ...(body === undefined ? {} : {
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    }),
-  })
+  let response
+  try {
+    response = await fetch(`${path}${query}`, {
+      method,
+      credentials: 'same-origin',
+      ...(body === undefined ? {} : {
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      }),
+    })
+  } catch (fallo) {
+    // Sin respuesta: se cortó la red o el servidor no está. Es justo lo que hay que poder ver.
+    anotarLlamada({ metodo: method, ruta: path, estado: 0, ms: Date.now() - arranque, detalle: fallo.message })
+    throw fallo
+  }
 
   const text = await response.text()
+  const anotar = (detalle) => anotarLlamada({
+    metodo: method, ruta: path, estado: response.status, ms: Date.now() - arranque, detalle,
+  })
+
   let data = {}
   try {
     data = text ? JSON.parse(text) : {}
   } catch {
+    anotar('respuesta ilegible')
     throw new ApiError('El servidor devolvió una respuesta ilegible.', response.status)
   }
+
+  anotar(response.ok ? '' : (data.error ?? ''))
 
   if (!response.ok) throw new ApiError(data.error || `Error ${response.status}`, response.status)
   return data

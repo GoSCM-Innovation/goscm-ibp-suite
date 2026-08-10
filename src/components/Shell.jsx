@@ -5,6 +5,7 @@
 // módulo. Un módulo escondido no se vende.
 
 import { MODULES } from '../lib/modules.js'
+import TechLogs from './ui/TechLogs.jsx'
 
 export default function Shell({ user, modules, theme, onToggleTheme, onSignOut, route, onNavigate, children }) {
   const contratados = new Set(modules)
@@ -69,7 +70,12 @@ export default function Shell({ user, modules, theme, onToggleTheme, onSignOut, 
           )}
         </nav>
 
-        <main className="content">{children}</main>
+        {/* El panel de diagnóstico va UNA vez aquí y no en cada módulo: lee todo el tráfico de la
+            aplicación, así que ponerlo por módulo sería tres copias mostrando lo mismo. */}
+        <main className="content">
+          {children}
+          <TechLogs />
+        </main>
       </div>
     </>
   )
