@@ -14,6 +14,7 @@ import ModuleLocked from './components/ModuleLocked.jsx'
 import ModulePlaceholder from './components/ModulePlaceholder.jsx'
 import CidsTools from './components/cids/CidsTools.jsx'
 import IbpTools from './components/ibp/IbpTools.jsx'
+import DataTools from './components/data/DataTools.jsx'
 import AdminPanel from './components/admin/AdminPanel.jsx'
 
 const RUTAS_VALIDAS = new Set([...MODULES.map((m) => m.id), 'admin'])
@@ -102,6 +103,7 @@ export default function App() {
     // Los módulos que ya están escritos se montan; el resto sigue con su presentación.
     if (module.id === 'cids') return <CidsTools />
     if (module.id === 'jobs') return <IbpTools />
+    if (module.id === 'explorer') return <DataTools />
     return <ModulePlaceholder module={module} />
   }
 
