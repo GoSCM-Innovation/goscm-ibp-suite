@@ -118,6 +118,23 @@ export {
 } from './planning-data.js'
 
 export {
+  DESCRIPCION_DE_CAMPO,
+  NO_EXISTE,
+  armarSelect,
+  campoReal,
+  decidir,
+  describirCampo,
+  hayDecision,
+  normalizarFilas,
+  olvidar,
+  revisarCampos,
+  revisarTodo,
+  sugerirCampo,
+} from './explorer-fields.js'
+
+export { deleteExplorerMap, getExplorerMap, saveExplorerMap } from './explorer-map.js'
+
+export {
   ROLES_DEL_ARBOL,
   ROLES_DE_RED,
   detectarRoles,
