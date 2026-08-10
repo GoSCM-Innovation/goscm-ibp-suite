@@ -55,11 +55,16 @@ const attr = (tag, nombre) => tag.match(new RegExp(`\\b${nombre}="([^"]*)"`))?.[
 /**
  * Lee un `$metadata` a `{ descs, types, entitySets, entityProps }`.
  *
- * `entityProps` solo se llena para datos de planificación: ahí el `$select` es obligatorio y tiene
+ * `entityProps` se llena SIEMPRE para datos de planificación: ahí el `$select` es obligatorio y tiene
  * que nombrar propiedades que existan de verdad. Los campos de la tabla de staging de CI-DS
  * —`KEYFIGUREDATE` y compañía— no existen en la entidad, y pedirlos devuelve un error.
+ *
+ * Para dato maestro se llena solo si se pide con `conCampos`. No es gratis —son unas seiscientas
+ * entidades con decenas de campos cada una— y quien documenta mapeos no los necesita. El explorador
+ * sí: sin ellos no puede saber qué tabla de ESTE tenant es el maestro de productos y qué tabla es
+ * producto-por-cliente, porque las dos se llaman parecido y solo los campos las distinguen.
  */
-export function parseCatalog(xml, service) {
+export function parseCatalog(xml, service, { conCampos = false } = {}) {
   const texto = String(xml ?? '')
 
   const descs = {}
@@ -87,7 +92,7 @@ export function parseCatalog(xml, service) {
   }
 
   const entityProps = {}
-  if (service === 'PLANNING_DATA_API_SRV') {
+  if (service === 'PLANNING_DATA_API_SRV' || conCampos) {
     const porTipo = {}
     for (const match of texto.matchAll(/<EntityType\b[^>]*>[\s\S]*?<\/EntityType>/g)) {
       const bloque = match[0]
@@ -158,7 +163,7 @@ export function planningAreasFrom(entitySets) {
  * el otro, y con el que conteste ya se puede documentar. Solo se falla si no contesta ninguno —ahí
  * el problema es la conexión, y decir "sin etiquetas" escondería el motivo real.
  */
-export async function readCatalog({ baseUrl, credentials, services = SERVICIOS }) {
+export async function readCatalog({ baseUrl, credentials, services = SERVICIOS, conCampos = false }) {
   const respuestas = await Promise.allSettled(services.map(async (service) => {
     const { text } = await sapFetch({
       url: `${serviceRoot(baseUrl, service)}/$metadata`,
@@ -166,7 +171,7 @@ export async function readCatalog({ baseUrl, credentials, services = SERVICIOS }
       kind: 'ibp',
       expect: 'xml',
     })
-    return parseCatalog(text, service)
+    return parseCatalog(text, service, { conCampos })
   }))
 
   const buenas = respuestas.filter((una) => una.status === 'fulfilled').map((una) => una.value)

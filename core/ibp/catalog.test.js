@@ -68,12 +68,20 @@ describe('parseCatalog', () => {
     ])
   })
 
-  // En dato maestro el $select no es obligatorio, así que saber las propiedades no aporta nada.
-  it('solo los datos de planificación traen las propiedades de cada entidad', () => {
+  // Quien documenta mapeos no necesita las propiedades de las seiscientas entidades de dato maestro,
+  // y sacarlas cuesta. En planificación sí hacen falta siempre: el $select es obligatorio.
+  it('por omisión solo los datos de planificación traen las propiedades de cada entidad', () => {
     expect(master.entityProps).toEqual({})
 
     const planning = parseCatalog(METADATA_PLANNING, 'PLANNING_DATA_API_SRV')
     expect([...planning.entityProps.SAPIBP1]).toEqual(['PRDID', 'CONSENSUSDEMANDQTY'])
+  })
+
+  // El explorador SÍ las necesita: sin ellas no puede distinguir el maestro de productos de la
+  // tabla producto-por-cliente, porque las dos se llaman parecido y solo los campos las separan.
+  it('el dato maestro las trae si se piden', () => {
+    const conCampos = parseCatalog(METADATA_MASTER, 'MASTER_DATA_API_SRV', { conCampos: true })
+    expect(Object.keys(conCampos.entityProps).length).toBeGreaterThan(0)
   })
 
   it('un metadata vacío no revienta', () => {

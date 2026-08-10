@@ -118,6 +118,17 @@ export {
 } from './planning-data.js'
 
 export {
+  ROLES_DEL_ARBOL,
+  ROLES_DE_RED,
+  detectarRoles,
+  entidadesDelTenant,
+  esTablaDeTraduccion,
+  mejorEntidadPara,
+  prefijoDelTenant,
+  rolesPorRevisar,
+} from './explorer-entities.js'
+
+export {
   CAMPOS_DE_SOLO_LECTURA,
   OPERADORES,
   catalogoDesdeVsmt,
