@@ -56,6 +56,48 @@ export const UMBRAL_PARA_PARTIR_POR_TIEMPO = 100_000
 export const FILAS_POR_SEGMENTO = 20_000
 
 /**
+ * Las cifras de una lista pegada, clasificadas.
+ *
+ * Portado de la ventana de pegar de `KeyFigureMigration.jsx` de v8. Una migración de verdad son
+ * treinta o cincuenta cifras que vienen de una hoja de cálculo o de un correo; marcarlas de a una en
+ * un catálogo de mil ciento treinta y siete es donde se cometen los errores.
+ *
+ * Se parte por cualquier separador razonable —salto de línea, coma, punto y coma, tabulación— porque
+ * de dónde viene el texto pegado no se controla: de Excel viene con tabulaciones, de un correo con
+ * comas, de una consulta con saltos de línea.
+ *
+ * Y devuelve las tres listas por separado en vez de agregar lo que encaja y callar el resto: si de
+ * cincuenta nombres cuatro no existen en el origen, eso hay que verlo. Callarlo dejaría una migración
+ * que parece completa y le faltan cuatro.
+ */
+export function cifrasPegadas(texto, delCatalogo = [], yaElegidas = []) {
+  const catalogo = new Set(delCatalogo)
+  const elegidas = new Set(yaElegidas)
+
+  const nombres = String(texto ?? '')
+    .split(/[\r\n,;\t]+/)
+    .map((uno) => uno.trim().toUpperCase())
+    .filter(Boolean)
+
+  const nuevas = []
+  const faltantes = []
+  const repetidas = []
+  const vistas = new Set()
+
+  for (const nombre of nombres) {
+    // Repetido DENTRO del texto pegado: se cuenta una vez y no se avisa dos.
+    if (vistas.has(nombre)) continue
+    vistas.add(nombre)
+
+    if (!catalogo.has(nombre)) faltantes.push(nombre)
+    else if (elegidas.has(nombre)) repetidas.push(nombre)
+    else nuevas.push(nombre)
+  }
+
+  return { nuevas, faltantes, repetidas }
+}
+
+/**
  * Cómo se llama en el destino algo que en el origen se llama de otra forma.
  *
  * Dos tenants que se montaron por separado no usan los mismos nombres: la misma cifra puede ser

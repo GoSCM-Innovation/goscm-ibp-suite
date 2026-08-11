@@ -12,10 +12,14 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-import { NIVELES_DE_TIEMPO, esCampoDeTiempo, nivelDeTiempoDe } from '../../../core/ibp/kf-migration-plan.js'
+import {
+  NIVELES_DE_TIEMPO, cifrasPegadas, esCampoDeTiempo, nivelDeTiempoDe,
+} from '../../../core/ibp/kf-migration-plan.js'
 import { listIbpConnections } from '../../lib/ibp.js'
 import { fetchConversions, fetchPlanningCatalog } from '../../lib/ibp-planning-data.js'
-import { contarCifras, copiarSegmentoDeCifras, revisarMigracionDeCifras } from '../../lib/ibp-kf-migration.js'
+import {
+  contarCifras, copiarSegmentoDeCifras, revisarMigracionDeCifras, valoresDeConversion,
+} from '../../lib/ibp-kf-migration.js'
 import Modal from '../ui/Modal.jsx'
 
 const numero = (valor) => Number(valor ?? 0).toLocaleString('es')
@@ -108,6 +112,11 @@ export default function KfMigration() {
   const [destinoDe, setDestinoDe] = useState({})
   const [desdeFecha, setDesdeFecha] = useState('')
   const [hastaFecha, setHastaFecha] = useState('')
+  // Los valores que acepta cada atributo de conversión en el tenant de origen.
+  const [valoresDe, setValoresDe] = useState({})
+  const [pegando, setPegando] = useState(false)
+  const [pegado, setPegado] = useState('')
+  const [loPegado, setLoPegado] = useState(null)
   const [revision, setRevision] = useState(null)
   const [plan, setPlan] = useState(null)
   const [error, setError] = useState('')
@@ -164,7 +173,40 @@ export default function KfMigration() {
     return () => { abandonado = true; clearTimeout(id) }
   }, [cifras, origen.connectionId, origen.area])
 
+  // Los valores que acepta cada conversión se piden al saber cuáles hacen falta. Cuesta dos lecturas
+  // por atributo, así que se piden una vez y no se vuelven a pedir.
+  useEffect(() => {
+    if (pedidas.length === 0 || !origen.connectionId || !origen.area) return undefined
+    let abandonado = false
+
+    const id = setTimeout(async () => {
+      for (const campo of pedidas) {
+        if (abandonado || valoresDe[campo]) continue
+        try {
+          const valores = await valoresDeConversion({ origen }, campo)
+          if (!abandonado) setValoresDe((previos) => ({ ...previos, [campo]: valores }))
+        } catch {
+          // Ofrecerlos es una comodidad: si no se pueden traer, el campo se escribe a mano.
+          if (!abandonado) setValoresDe((previos) => ({ ...previos, [campo]: [] }))
+        }
+      }
+    }, 0)
+
+    return () => { abandonado = true; clearTimeout(id) }
+    // `valoresDe` a propósito fuera: se consulta dentro para no volver a pedir lo que ya está, pero
+    // meterlo en las dependencias relanzaría el efecto con cada respuesta.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pedidas, origen.connectionId, origen.area])
+
   const faltaConversion = pedidas.find((campo) => !conversiones[campo])
+
+  /** Mete de golpe una lista de cifras pegada. */
+  function aplicarPegado() {
+    const salida = cifrasPegadas(pegado, deOrigen.catalogo?.cifras ?? [], cifras)
+    setCifras((previas) => [...previas, ...salida.nuevas])
+    setLoPegado(salida)
+    setPegado('')
+  }
 
   const peticion = useMemo(
     () => ({
@@ -276,7 +318,20 @@ export default function KfMigration() {
           titulo="origen"
           conexiones={conexiones}
           valor={origen}
-          onCambiar={(nuevo) => { setOrigen(nuevo); setCifras([]); setNivel([]); setRevision(null); setPlan(null); setPedidas([]); setConversiones({}) }}
+          onCambiar={(nuevo) => {
+            setOrigen(nuevo)
+            setCifras([])
+            setNivel([])
+            setRevision(null)
+            setPlan(null)
+            setPedidas([])
+            setConversiones({})
+            // Las unidades y las monedas son de ESTE origen: las de otra área no valen aquí, y
+            // ofrecerlas sería sugerir valores que la consulta va a devolver vacíos.
+            setValoresDe({})
+            setDestinoDe({})
+            setLoPegado(null)
+          }}
           catalogo={deOrigen.catalogo}
           cargando={deOrigen.cargando}
         />
@@ -296,12 +351,36 @@ export default function KfMigration() {
             <div className="card-label">
               Cifras clave a copiar ({cifras.length} de {numero(deOrigen.catalogo.cifras.length)})
             </div>
-            <input
-              className="input input-sm"
-              value={busquedaCifra}
-              onChange={(evento) => setBusquedaCifra(evento.target.value)}
-              placeholder="Buscar una cifra"
-            />
+            <div className="monitor-bar">
+              <input
+                className="input input-sm"
+                value={busquedaCifra}
+                onChange={(evento) => setBusquedaCifra(evento.target.value)}
+                placeholder="Buscar una cifra"
+              />
+              {/* Una migración de verdad son treinta o cincuenta cifras que vienen de una hoja de
+                  cálculo. Marcarlas de a una en un catálogo de mil es donde se cometen los errores. */}
+              <button type="button" className="btn btn-sm" onClick={() => { setPegando(true); setLoPegado(null) }}>
+                Pegar una lista
+              </button>
+              {cifras.length > 0 && (
+                <button type="button" className="btn btn-sm" onClick={() => setCifras([])}>
+                  Quitar las {cifras.length}
+                </button>
+              )}
+            </div>
+
+            {loPegado && (
+              <div className={`notice notice-${loPegado.faltantes.length > 0 ? 'info' : 'ok'}`}>
+                Se agregaron <b>{loPegado.nuevas.length}</b>.
+                {loPegado.repetidas.length > 0 && ` ${loPegado.repetidas.length} ya estaban.`}
+                {loPegado.faltantes.length > 0 && (
+                  <> El origen no tiene <b>{loPegado.faltantes.length}</b>: {loPegado.faltantes.slice(0, 12).join(', ')}
+                    {loPegado.faltantes.length > 12 && ` y ${loPegado.faltantes.length - 12} más`}.
+                  </>
+                )}
+              </div>
+            )}
             <div className="columnas">
               {cifrasVisibles.map((una) => (
                 <label key={una} className={`columna${cifras.includes(una) ? ' columna-clave' : ''}`}>
@@ -383,7 +462,18 @@ export default function KfMigration() {
                     ...previas, [campo]: evento.target.value.toUpperCase(),
                   }))}
                   placeholder={campo === 'UOMTOID' ? 'KG' : 'USD'}
+                  list={`valores-${campo}`}
                 />
+                {/* Los del tenant, no una lista fija: que exista «EA» en SAP no quiere decir que
+                    haya datos en esta área. */}
+                <datalist id={`valores-${campo}`}>
+                  {(valoresDe[campo] ?? []).map((uno) => (
+                    <option key={uno.id} value={uno.id}>{uno.descripcion}</option>
+                  ))}
+                </datalist>
+                {valoresDe[campo]?.length > 0 && (
+                  <span className="exp-sub">{valoresDe[campo].length} en el origen</span>
+                )}
               </label>
             ))}
           </div>
@@ -536,6 +626,40 @@ export default function KfMigration() {
           {salida.cancelado && ' · cancelado'}
           {salida.mensajes?.length > 0 && ` · SAP rechazó ${numero(salida.mensajes.length)} filas`}.
         </div>
+      )}
+
+      {pegando && (
+        <Modal
+          title="Pegar una lista de cifras"
+          subtitle={origen.area}
+          onClose={() => setPegando(false)}
+          footer={(
+            <>
+              <button type="button" className="btn btn-sm" onClick={() => setPegando(false)}>Cancelar</button>
+              <button
+                type="button"
+                className="btn btn-sm btn-primary"
+                onClick={() => { aplicarPegado(); setPegando(false) }}
+                disabled={pegado.trim() === ''}
+              >
+                Agregar
+              </button>
+            </>
+          )}
+        >
+          <p className="exp-sub">
+            Una por línea, o separadas por comas, punto y coma o tabuladores —como salgan de donde
+            las copies—. Al agregarlas se dice cuántas entraron y cuáles no existen en el origen.
+          </p>
+          <textarea
+            className="input"
+            rows={10}
+            value={pegado}
+            onChange={(evento) => setPegado(evento.target.value)}
+            placeholder={'ACTUALSQTY\nCONSENSUSDEMANDQTY\nADJUSTEDPRODUCTION'}
+            aria-label="Las cifras a agregar"
+          />
+        </Modal>
       )}
 
       {confirmando && (

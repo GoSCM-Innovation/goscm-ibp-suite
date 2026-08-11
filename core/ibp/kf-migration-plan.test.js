@@ -7,6 +7,7 @@ import {
   UMBRAL_PARA_PARTIR_POR_TIEMPO,
   dimensionesEscribibles,
   esCampoDeTiempo,
+  cifrasPegadas,
   filaParaEscribir,
   nivelDeTiempoDe,
   nombreEnDestino,
@@ -135,6 +136,55 @@ describe('revisarMigracionDeCifras', () => {
 
   it('sin argumentos no revienta', () => {
     expect(revisarMigracionDeCifras().sePuede).toBe(false)
+  })
+})
+
+describe('cifrasPegadas', () => {
+  const catalogo = ['ACTUALSQTY', 'CONSENSUSDEMANDQTY', 'ADJUSTEDPRODUCTION']
+
+  it('parte por salto de linea', () => {
+    expect(cifrasPegadas('ACTUALSQTY\nADJUSTEDPRODUCTION', catalogo).nuevas)
+      .toEqual(['ACTUALSQTY', 'ADJUSTEDPRODUCTION'])
+  })
+
+  // De Excel viene con tabulaciones, de un correo con comas: de donde viene no se controla.
+  it('parte por coma, punto y coma y tabulacion', () => {
+    expect(cifrasPegadas('ACTUALSQTY, ADJUSTEDPRODUCTION', catalogo).nuevas).toHaveLength(2)
+    expect(cifrasPegadas('ACTUALSQTY;ADJUSTEDPRODUCTION', catalogo).nuevas).toHaveLength(2)
+    expect(cifrasPegadas('ACTUALSQTY\tADJUSTEDPRODUCTION', catalogo).nuevas).toHaveLength(2)
+  })
+
+  it('no le molestan los espacios ni las minusculas', () => {
+    expect(cifrasPegadas('  actualsqty  ', catalogo).nuevas).toEqual(['ACTUALSQTY'])
+  })
+
+  // Si de cincuenta nombres cuatro no existen, eso hay que verlo: callarlo dejaria una migracion
+  // que parece completa y le faltan cuatro.
+  it('separa lo que el origen no tiene', () => {
+    const salida = cifrasPegadas('ACTUALSQTY\nZNOEXISTE', catalogo)
+    expect(salida.nuevas).toEqual(['ACTUALSQTY'])
+    expect(salida.faltantes).toEqual(['ZNOEXISTE'])
+  })
+
+  it('separa lo que ya estaba elegido', () => {
+    const salida = cifrasPegadas('ACTUALSQTY\nADJUSTEDPRODUCTION', catalogo, ['ACTUALSQTY'])
+    expect(salida.nuevas).toEqual(['ADJUSTEDPRODUCTION'])
+    expect(salida.repetidas).toEqual(['ACTUALSQTY'])
+  })
+
+  it('un nombre repetido dentro del texto se cuenta una vez', () => {
+    const salida = cifrasPegadas('ACTUALSQTY\nACTUALSQTY', catalogo)
+    expect(salida.nuevas).toEqual(['ACTUALSQTY'])
+    expect(salida.repetidas).toEqual([])
+  })
+
+  it('sin texto no hay nada', () => {
+    expect(cifrasPegadas('', catalogo)).toEqual({ nuevas: [], faltantes: [], repetidas: [] })
+    expect(cifrasPegadas(undefined)).toEqual({ nuevas: [], faltantes: [], repetidas: [] })
+  })
+
+  it('sin catalogo no da nada por bueno', () => {
+    expect(cifrasPegadas('ACTUALSQTY').faltantes).toEqual(['ACTUALSQTY'])
   })
 })
 

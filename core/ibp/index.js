@@ -114,6 +114,7 @@ export {
   NIVELES_DE_TIEMPO,
   UMBRAL_PARA_PARTIR_POR_TIEMPO,
   dimensionesEscribibles,
+  cifrasPegadas,
   esCampoDeTiempo,
   filaParaEscribir,
   nivelDeTiempoDe,
@@ -232,6 +233,14 @@ export {
   readSchema,
   readVsmt,
 } from './master-data.js'
+
+export {
+  CONVERSIONES,
+  MAX_VALORES as MAX_VALORES_DE_CONVERSION,
+  mdtsDelArea,
+  readConversionValues,
+  tablaDeConversion,
+} from './conversion-values.js'
 
 export {
   CONJUNTOS_DE_CONSUMO,

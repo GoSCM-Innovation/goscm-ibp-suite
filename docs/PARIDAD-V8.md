@@ -39,16 +39,17 @@ atrasada—. Existe porque «¿ya está v8?» se contestó dos veces de memoria 
 
 ## Huecos abiertos
 
-Ninguno impide usar el módulo; todos son de la migración de cifras clave.
+Queda uno, y no impide usar el módulo.
 
-1. **Pegar una lista de cifras.** v8 dejaba pegar 50 nombres de golpe y decía cuáles no existen y
-   cuáles están repetidos. Aquí hay que marcarlas de a una. Con listas largas se nota.
-2. **Unidades y monedas como lista.** v8 traía las del tenant y las ofrecía en un desplegable; aquí
-   el atributo de conversión se escribe a mano (con la pista de que «KG» tiene datos y «EA» no).
-3. **Informe en PDF de una corrida.** v8 generaba un PDF con la configuración, las cifras, los
-   resultados y los tiempos por fase. No se porta tal cual porque el modelo de corrida es distinto:
-   v8 copiaba una cifra por transacción y medía fases por cifra; aquí varias cifras viajan en la
-   misma fila y el progreso es por segmento. Un informe equivalente hay que diseñarlo, no traducirlo.
+1. **Informe en PDF de una corrida de cifras clave.** v8 generaba un PDF con la configuración, las
+   cifras, los resultados y los tiempos por fase. No se porta tal cual porque el modelo de corrida es
+   distinto: v8 copiaba una cifra por transacción y medía fases por cifra; aquí varias cifras viajan
+   en la misma fila y el progreso es por segmento. Un informe equivalente hay que **diseñarlo**, no
+   traducirlo, y además traería dos dependencias nuevas (`jspdf`, `jspdf-autotable`).
+
+Cerrados el 2026-08-11: pegar una lista de cifras, y las unidades y monedas del tenant como lista
+(se leen de la tabla que acaba en `UOMTO` / `CURRENCYTO`, buscada por sufijo porque el prefijo es del
+tenant).
 
 ## Sin estrenar
 

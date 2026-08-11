@@ -17,6 +17,19 @@ export async function contarCifras(peticion) {
 }
 
 /**
+ * Qué unidades o qué monedas acepta el tenant de origen.
+ *
+ * Devuelve lista vacía si el tenant no tiene esa tabla: ofrecerlos es una comodidad, y el campo
+ * sigue aceptando lo que se escriba a mano.
+ */
+export async function valoresDeConversion(peticion, atributo) {
+  const { valores } = await api.post('/api/ibp/kf-migration', {
+    ...peticion, accion: 'valores', atributo,
+  })
+  return valores
+}
+
+/**
  * Copia UN segmento. **Esto escribe en el tenant de destino.**
  *
  * Un segmento por llamada porque una cifra puede ser un millón de filas y no cabe en el tiempo de una

@@ -1,6 +1,7 @@
 // La migración de cifras clave entre dos tenants.
 //
 // POST { accion: 'revisar', … }   — qué se copiaría y qué lo impide. Solo lee.
+// POST { accion: 'valores', … }   — las unidades o las monedas del origen. Solo lee.
 // POST { accion: 'contar', … }    — cuántas filas hay al nivel elegido. Solo lee.
 // POST { accion: 'copiar', … }    — copia UN segmento. **ESTO ESCRIBE EN SAP.**
 //
@@ -14,6 +15,7 @@ import { requireModule } from '../../core/auth/guards.js'
 import { getAnyCredentials, getConnectionTarget } from '../../core/connections/index.js'
 import {
   contarLoQueSeCopia,
+  readConversionValues,
   filtroDePlanificacion,
   migrarSegmentoDeCifras,
   readKfMetadata,
@@ -51,15 +53,23 @@ export default async function handler(req, res) {
 
   const {
     accion, origen = {}, destino = {}, cifras = [], dimensiones = [], condiciones = [],
-    destinoDe = {}, desdeFecha = '', hastaFecha = '',
+    destinoDe = {}, desdeFecha = '', hastaFecha = '', atributo = '',
     desde = 0, cuantas = 5000, confirmacion, nombre,
   } = req.body ?? {}
 
   try {
-    const [deOrigen, deDestino] = await Promise.all([
-      tenantDe(session.clientId, origen.connectionId, 'origen'),
-      tenantDe(session.clientId, destino.connectionId, 'destino'),
-    ])
+    const deOrigen = await tenantDe(session.clientId, origen.connectionId, 'origen')
+
+    // Los valores que acepta un atributo de conversión salen del ORIGEN, que es de donde se lee. Se
+    // contesta antes de resolver el destino a propósito: exigir un destino para poder listar las
+    // unidades del origen obligaría a elegir a dónde se copia antes de saber si hay algo que copiar.
+    if (accion === 'valores') {
+      return res.status(200).json({
+        valores: await readConversionValues({ ...deOrigen, area: origen.area, atributo }),
+      })
+    }
+
+    const deDestino = await tenantDe(session.clientId, destino.connectionId, 'destino')
 
     if (accion === 'revisar') {
       // Los catálogos de los dos lados: es lo que permite decir "el destino no tiene esa cifra" antes
