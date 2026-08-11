@@ -126,6 +126,17 @@ export {
 } from './kf-migration-plan.js'
 
 export {
+  duracionLegible,
+  estadoDeCorrida,
+  filasDeConfiguracion,
+  filasDeSegmentos,
+  mensajesAgrupados,
+  momentoLegible,
+  nombreDelInforme,
+  resumirCorrida,
+} from './kf-run-report.js'
+
+export {
   INTENTOS_POR_SEGMENTO as INTENTOS_POR_SEGMENTO_KF,
   contarLoQueSeCopia,
   migrarCifras,

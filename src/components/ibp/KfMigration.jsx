@@ -15,6 +15,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   NIVELES_DE_TIEMPO, cifrasPegadas, esCampoDeTiempo, nivelDeTiempoDe,
 } from '../../../core/ibp/kf-migration-plan.js'
+import { duracionLegible, resumirCorrida } from '../../../core/ibp/kf-run-report.js'
 import { listIbpConnections } from '../../lib/ibp.js'
 import { fetchConversions, fetchPlanningCatalog } from '../../lib/ibp-planning-data.js'
 import {
@@ -126,6 +127,9 @@ export default function KfMigration() {
   const [escrito, setEscrito] = useState('')
   const [avance, setAvance] = useState(null)
   const [salida, setSalida] = useState(null)
+  // La corrida entera, segmento a segmento: es lo que se enseña al acabar y lo que va al informe.
+  const [corrida, setCorrida] = useState(null)
+  const [informe, setInforme] = useState('')
   const cancelar = useRef(false)
 
   useEffect(() => {
@@ -257,29 +261,71 @@ export default function KfMigration() {
     setConfirmando(false)
     cancelar.current = false
     setSalida(null)
+    setCorrida(null)
+    setInforme('')
+
+    // La configuracion se congela AL ARRANCAR y no se lee del estado al acabar: una corrida de veinte
+    // minutos da tiempo de sobra a cambiar un filtro en la pantalla, y el informe tiene que decir con
+    // que se corrio, no con que quedo la pantalla.
+    const arranque = {
+      inicio: Date.now(),
+      origen: { tenant: tenantOrigen?.name ?? '', area: origen.area, versionId: origen.versionId },
+      destino: { tenant: tenantDestino?.name ?? '', area: destino.area, versionId: destino.versionId },
+      cifras: [...cifras],
+      nivel: revision?.revision?.nivel ?? nivel,
+      periodo: periodoDelNivel?.etiqueta ?? '',
+      desdeFecha,
+      hastaFecha,
+      destinoDe: { ...destinoDe },
+      conversiones: { ...conversiones },
+      previstas: plan?.total ?? 0,
+      nombre: 'goscm-suite',
+    }
 
     let desde = 0
     let copiadas = 0
     const mensajes = []
+    const segmentos = []
+
+    /** Cierra la corrida con lo que haya pasado. Siempre por aqui: el informe no puede quedar a medias. */
+    const cerrar = (extra) => {
+      const hecha = { ...arranque, fin: Date.now(), segmentos, mensajes, ...extra }
+      setCorrida(hecha)
+      setSalida({ copiadas, mensajes, ...extra })
+      setAvance(null)
+    }
 
     for (;;) {
       if (cancelar.current) break
       setAvance({ desde, copiadas })
 
+      const empezo = Date.now()
       let segmento
       try {
         segmento = await copiarSegmentoDeCifras({ ...peticion, desde, cuantas: 5000 })
       } catch (fallo) {
-        setSalida({ copiadas, error: fallo.message })
-        setAvance(null)
+        cerrar({ error: fallo.message })
         return
       }
 
       if (!segmento.ok) {
-        setSalida({ copiadas, error: segmento.error, cifraCalculada: segmento.cifraCalculada })
-        setAvance(null)
+        // El segmento fallido tambien se anota: saber en que fila se corto es lo que permite
+        // reanudar sin volver a escribir lo que ya entro.
+        segmentos.push({
+          desde, filas: 0, estado: segmento.fase === 'lectura' ? 'FALLO_AL_LEER' : 'FALLO_AL_ESCRIBIR',
+          ms: Date.now() - empezo,
+        })
+        cerrar({ error: segmento.error, cifraCalculada: segmento.cifraCalculada })
         return
       }
+
+      segmentos.push({
+        desde,
+        filas: segmento.filas,
+        transactionId: segmento.transactionId,
+        estado: segmento.estado,
+        ms: Date.now() - empezo,
+      })
 
       copiadas += segmento.filas
       mensajes.push(...(segmento.mensajes ?? []))
@@ -287,10 +333,22 @@ export default function KfMigration() {
       desde += segmento.filas
     }
 
-    setSalida({ copiadas, mensajes, cancelado: cancelar.current })
-    setAvance(null)
+    cerrar({ cancelado: cancelar.current })
   }
 
+  /** Baja el informe de la corrida. El generador de PDF se carga solo al pulsar. */
+  async function bajarInforme() {
+    setInforme('generando')
+    try {
+      const { descargarInforme } = await import('../../lib/kf-report-pdf.js')
+      setInforme(await descargarInforme(corrida))
+    } catch (fallo) {
+      setInforme('')
+      setError(`No se pudo armar el informe: ${fallo.message}`)
+    }
+  }
+
+  const tenantOrigen = conexiones.find((una) => una.id === origen.connectionId)
   const tenantDestino = conexiones.find((una) => una.id === destino.connectionId)
   const sinPeriodo = nivel.length > 0 && !nivel.some(esCampoDeTiempo)
   const periodoDelNivel = nivelDeTiempoDe(nivel)
@@ -300,6 +358,7 @@ export default function KfMigration() {
   const aRenombrar = [...cifras, ...nivel.filter((uno) => !esCampoDeTiempo(uno))]
   const cuantosRenombrados = aRenombrar.filter((uno) => destinoDe[uno] && destinoDe[uno] !== uno).length
   const cifrasDelDestino = revision?.destino?.cifras ?? []
+  const resumenDeLaCorrida = resumirCorrida(corrida)
 
   return (
     <div className="module-body">
@@ -625,6 +684,67 @@ export default function KfMigration() {
           {salida.error && !salida.cifraCalculada && ` · ${salida.error}`}
           {salida.cancelado && ' · cancelado'}
           {salida.mensajes?.length > 0 && ` · SAP rechazó ${numero(salida.mensajes.length)} filas`}.
+        </div>
+      )}
+
+      {/* Lo que pasó, segmento a segmento. Cada uno es una transacción que SAP confirma sola, así que
+          si la corrida se cortó, lo que quedó escrito son los de aquí arriba —y en qué fila se paró
+          es lo que permite reanudar sin volver a escribir lo que ya entró—. */}
+      {corrida && (
+        <div className="card">
+          <div className="card-label">
+            {resumenDeLaCorrida.estado.etiqueta} · {numero(resumenDeLaCorrida.copiadas)} filas en{' '}
+            {duracionLegible(resumenDeLaCorrida.duracion)}
+            <span className="exp-sub">
+              {numero(resumenDeLaCorrida.segmentos)}{' '}
+              {resumenDeLaCorrida.segmentos === 1 ? 'segmento' : 'segmentos'}, media de{' '}
+              {duracionLegible(resumenDeLaCorrida.mediaPorSegmento)}
+            </span>
+          </div>
+
+          <div className="monitor-bar">
+            <button
+              type="button"
+              className="btn btn-sm"
+              onClick={bajarInforme}
+              disabled={informe === 'generando'}
+            >
+              {informe === 'generando' ? 'Armando el informe…' : 'Descargar el informe (PDF)'}
+            </button>
+            {informe && informe !== 'generando' && (
+              <span className="page-hint">✓ {informe}</span>
+            )}
+            <span className="exp-sub">
+              Lleva la configuración con la que se corrió: el nivel, el tramo y los renombrados. Dentro
+              de un mes, «182.787 filas» no dice nada sin eso.
+            </span>
+          </div>
+
+          <div className="table-scroll">
+            <table className="table-dense">
+              <thead>
+                <tr>
+                  <th>#</th><th>Desde la fila</th><th>Filas</th><th>Transacción</th>
+                  <th>Estado</th><th>Duración</th>
+                </tr>
+              </thead>
+              <tbody>
+                {corrida.segmentos.map((uno, indice) => (
+                  <tr key={`${uno.desde}-${uno.transactionId ?? indice}`}>
+                    <td>{indice + 1}</td>
+                    <td>{numero(uno.desde)}</td>
+                    <td>{numero(uno.filas)}</td>
+                    <td className="mono">{uno.transactionId ?? '—'}</td>
+                    <td>{uno.estado ?? '—'}</td>
+                    <td>{duracionLegible(uno.ms)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {corrida.segmentos.length === 0 && (
+              <div className="sin-datos">No se llegó a escribir ningún segmento</div>
+            )}
+          </div>
         </div>
       )}
 

@@ -21,7 +21,8 @@ atrasada—. Existe porque «¿ya está v8?» se contestó dos veces de memoria 
 | `DataViewer/TransactionalDataViewer.jsx` | `ibp/PlanningDataViewer.jsx` | |
 | `utils/csv.js`, `config/migrationLimits.js` | `core/ibp/export-csv.js` | |
 | `Migration/Migration.jsx`, `FilterControls.jsx` | `ibp/MigrationPlan.jsx` | Carga sin estrenar |
-| `Migration/KeyFigureMigration.jsx` | `ibp/KfMigration.jsx` | Ver los huecos de abajo |
+| `Migration/KeyFigureMigration.jsx` | `ibp/KfMigration.jsx` | Copia sin estrenar |
+| `utils/kfReportPdf.js` | `core/ibp/kf-run-report.js` + `src/lib/kf-report-pdf.js` | Rediseñado, no traducido — ver abajo |
 | `Orchestrations/*` | `cids/orchestrations/*` | Motor unificado con CI-DS |
 | `TechLogs.jsx` | `src/lib/tech-logs.js` + panel | Aquí se registra solo, en `api.js` |
 | `services/*`, `utils/sapUrl.js`, `dateUtils.js` | `core/ibp/*`, `core/transport/*` | |
@@ -39,17 +40,27 @@ atrasada—. Existe porque «¿ya está v8?» se contestó dos veces de memoria 
 
 ## Huecos abiertos
 
-Queda uno, y no impide usar el módulo.
+Ninguno. El último que quedaba —el informe de una corrida de cifras clave— se cerró el 2026-08-11,
+**rediseñado en vez de traducido**, porque traducir el de v8 habría dado un informe que miente:
 
-1. **Informe en PDF de una corrida de cifras clave.** v8 generaba un PDF con la configuración, las
-   cifras, los resultados y los tiempos por fase. No se porta tal cual porque el modelo de corrida es
-   distinto: v8 copiaba una cifra por transacción y medía fases por cifra; aquí varias cifras viajan
-   en la misma fila y el progreso es por segmento. Un informe equivalente hay que **diseñarlo**, no
-   traducirlo, y además traería dos dependencias nuevas (`jspdf`, `jspdf-autotable`).
+- v8 copiaba **una cifra por transacción**, así que su informe tenía una fila por cifra con su estado,
+  su duración y sus tiempos por fase.
+- Aquí varias cifras viajan en la **misma fila** de planificación —es como funciona el dato de
+  planificación: una combinación de atributos y periodo lleva todas sus cifras— y la unidad de avance
+  es el **segmento**. Una fila por cifra sería inventarse un dato que no existe: no hay «cuánto tardó
+  ADJUSTEDPRODUCTION» cuando las cinco cifras se escribieron juntas.
 
-Cerrados el 2026-08-11: pegar una lista de cifras, y las unidades y monedas del tenant como lista
-(se leen de la tabla que acaba en `UOMTO` / `CURRENCYTO`, buscada por sufijo porque el prefijo es del
-tenant).
+Así que la tabla de resultados es por segmento —que es además la unidad real de la transacción, y por
+tanto lo que quedó escrito si la corrida se cortó— y las cifras se listan en la configuración.
+
+Dependencias nuevas: `jspdf` y `jspdf-autotable`, con **import dinámico**, así que salen en su propio
+trozo del paquete (399 kB + 30 kB) y no pesan para quien nunca migra cifras. Aviso heredado de v8: la
+Helvetica que trae jsPDF solo cubre WinAnsi (cp1252). Los acentos y la ñ entran; las flechas y los
+símbolos (→ ✓ ⚠ ×) **no**, y salen como un carácter roto — por eso el núcleo emite `->` en ASCII.
+
+Cerrados antes, el mismo día: pegar una lista de cifras, y las unidades y monedas del tenant como
+lista (se leen de la tabla que acaba en `UOMTO` / `CURRENCYTO`, buscada por sufijo porque el prefijo
+es del tenant).
 
 ## Sin estrenar
 
