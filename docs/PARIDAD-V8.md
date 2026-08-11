@@ -4,7 +4,8 @@ Inventario recorrido contra `origin/master` de v8 —no contra la carpeta local,
 atrasada—. Existe porque «¿ya está v8?» se contestó dos veces de memoria y las dos veces mal: la
 única respuesta honesta sale de recorrer el árbol de `src/` de v8 y marcar cada pieza.
 
-Última revisión: 2026-08-11, contra `ed718ed` de v8.
+Última revisión: 2026-08-11, contra `ed718ed` de v8. Son **61 archivos** en su `src/` (sin contar
+`assets/`, `.json` y `.css`), y este documento da cuenta de todos.
 
 ## Portado y verificado contra tenants reales
 
@@ -32,8 +33,10 @@ atrasada—. Existe porque «¿ya está v8?» se contestó dos veces de memoria 
 - **`Connections/*`** — v8 guardaba las conexiones en `localStorage` en texto plano. Aquí viven
   cifradas en Postgres y se administran en Administración. `ImportConnectionsModal` importaba un
   archivo de conexiones con credenciales dentro: eso no se porta.
-- **`System/SystemView.jsx`, `Sidebar/`, `Header.jsx`, `hooks/useTheme.js`** — el armazón de v8.
-  Aquí es el de la suite.
+- **`App.jsx`, `main.jsx`, `System/SystemView.jsx`, `Sidebar/`, `Header.jsx`, `hooks/useTheme.js`** —
+  el armazón de v8. Aquí es el de la suite.
+- **`ui/ProgressBar.jsx`, `ui/TruncText.jsx`** — piezas sueltas de interfaz; aquí las cubren las
+  clases compartidas de `src/index.css`.
 - **`context/I18nContext.jsx`, `i18n/*`** — el idioma es una fase propia al final.
 - **`DataViewer/DataGrid.jsx`, `ColumnPicker.jsx`, `CollapsibleSection.jsx`, `ViewerTabs.jsx`** —
   presentación. Lo que hacían está repartido en los visores.
