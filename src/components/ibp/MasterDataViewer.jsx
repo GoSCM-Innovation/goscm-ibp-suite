@@ -1,21 +1,30 @@
-// Mirar el dato maestro de un tenant: elegir área, versión y tabla, y recorrer las filas.
+// Mirar y editar el dato maestro de un tenant: elegir área, versión y tabla, recorrer las filas y —si
+// hace falta— cambiar valores o borrar registros.
 //
-// Portado de `DataViewer/MasterDataViewer.jsx` de v8, de solo lectura. Editar y borrar cambian el
-// tenant y van en su propia pantalla, con su confirmación.
+// Portado de `DataViewer/MasterDataViewer.jsx` de v8. Se lee de entrada y para escribir hay que
+// entrar en modo edición: son las dos únicas operaciones de la aplicación que tocan filas que YA
+// existen, y ninguna se dispara sin pasar por la revisión.
 //
-// Dos decisiones que vienen de v8 y se conservan porque están ganadas contra tenants reales:
+// Tres decisiones que vienen de v8 y se conservan porque están ganadas contra tenants reales:
 //
 //   - Las columnas y el filtro se editan sin consultar; hay que pulsar «Mostrar datos». Una tabla de
 //     ocho mil filas y sesenta columnas no se puede releer con cada tecla.
 //   - Al paginar se ordena por las claves de negocio. Sin un orden estable, dos ventanas sobre una
 //     tabla que alguien está tocando se solapan y dejan huecos.
+//   - Sin claves de negocio no se edita nada. No es una limitación de la pantalla: sin ellas no hay
+//     con qué decirle a SAP cuál es la fila, y el cambio se leería como un registro nuevo.
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-import { columnasPorOmision, etiquetaDeCondicion, OPERADORES, valorLegible } from '../../../core/ibp/master-data-model.js'
+import {
+  CAMPOS_DE_SOLO_LECTURA, columnasPorOmision, etiquetaDeCondicion, OPERADORES, valorLegible,
+} from '../../../core/ibp/master-data-model.js'
+import { anotarCambio, claveDeFila, resumirCambios } from '../../../core/ibp/master-data-edit.js'
 import {
   fetchMasterCatalog, fetchMasterCount, fetchMasterRows, fetchMasterSchema, fetchMasterValues,
 } from '../../lib/ibp-master-data.js'
+import { borrarDatoMaestro, guardarDatoMaestro } from '../../lib/ibp-master-data-edit.js'
+import EdicionDeDatoMaestro from './EdicionDeDatoMaestro.jsx'
 
 const numero = (valor) => Number(valor ?? 0).toLocaleString('es')
 
@@ -77,7 +86,7 @@ function Condicion({ condicion, columnas, valores, onCambiar, onQuitar, onPedirV
   )
 }
 
-export default function MasterDataViewer({ conexionId }) {
+export default function MasterDataViewer({ conexionId, tenant = '', productivo = false }) {
   const [catalogo, setCatalogo] = useState(null)
   const [importables, setImportables] = useState([])
   const [error, setError] = useState('')
@@ -98,6 +107,16 @@ export default function MasterDataViewer({ conexionId }) {
   const [filas, setFilas] = useState([])
   const [pagina, setPagina] = useState(0)
   const [cargandoFilas, setCargandoFilas] = useState(false)
+
+  const [modo, setModo] = useState('leer')
+  // Los cambios y las filas marcadas se guardan por CLAVE DE NEGOCIO, con su fila original dentro.
+  // Así sobreviven a pasar de página: el ciclo real es corregir tres valores acá, dos allá, y
+  // guardar una vez. Perderlos al avanzar obligaría a guardar página por página.
+  const [edits, setEdits] = useState({})
+  const [marcadas, setMarcadas] = useState({})
+  const [revision, setRevision] = useState(null)
+  // Si la escritura llegó a SAP hay que releer, y eso no es estado que se dibuje.
+  const seEscribio = useRef(false)
 
   useEffect(() => {
     let abandonado = false
@@ -142,6 +161,11 @@ export default function MasterDataViewer({ conexionId }) {
     setConsulta(null)
     setFilas([])
     setPagina(0)
+    // Los cambios pendientes son de la tabla que se estaba mirando: sus claves no significan nada en
+    // otra, y arrastrarlos escribiría en la tabla equivocada.
+    setModo('leer')
+    setEdits({})
+    setMarcadas({})
   }, [])
 
   useEffect(() => {
@@ -227,6 +251,50 @@ export default function MasterDataViewer({ conexionId }) {
     }
   }
 
+  /** La identidad de una fila con las claves de ESTA tabla. */
+  const identidadDe = (fila) => claveDeFila(fila, esquema?.claves ?? [])
+
+  const cambiarCelda = (fila, campo, valor) => setEdits((previos) =>
+    anotarCambio(previos, { fila, campo, valor, claves: esquema?.claves ?? [] }))
+
+  function marcar(fila, puesta) {
+    const clave = identidadDe(fila)
+    setMarcadas((previas) => {
+      if (!puesta) {
+        const { [clave]: _fuera, ...resto } = previas
+        return resto
+      }
+      return { ...previas, [clave]: fila }
+    })
+  }
+
+  const descartar = () => { setEdits({}); setMarcadas({}) }
+
+  async function escribir() {
+    const comun = {
+      entidad: consulta.entidad,
+      planningArea: consulta.planningArea,
+      versionId: consulta.versionId,
+      claves: esquema.claves,
+    }
+
+    const salida = revision.accion === 'borrar'
+      ? await borrarDatoMaestro(conexionId, { ...comun, filas: Object.values(marcadas) })
+      : await guardarDatoMaestro(conexionId, { ...comun, edits })
+
+    // Llegó a SAP, con o sin rechazos: lo que se está mirando ya no es lo que hay.
+    seEscribio.current = true
+    return salida
+  }
+
+  function cerrarRevision() {
+    setRevision(null)
+    if (!seEscribio.current) return
+    seEscribio.current = false
+    descartar()
+    cargarPagina(pagina)
+  }
+
   if (catalogo === null) return <div className="page-hint">Cargando el catálogo del tenant…</div>
 
   if (Object.keys(catalogo).length === 0) {
@@ -252,6 +320,25 @@ export default function MasterDataViewer({ conexionId }) {
       : (prueba?.para === JSON.stringify(consulta.condiciones) ? prueba.total : null))
     : null
   const paginas = totalDeLaConsulta && consulta ? Math.ceil(totalDeLaConsulta / consulta.top) : 0
+
+  const pendientes = resumirCambios(edits)
+  const cuantasMarcadas = Object.keys(marcadas).length
+  const hayPendientes = pendientes.campos > 0 || cuantasMarcadas > 0
+
+  // Para editar hacen falta las claves de negocio Y que estén entre las columnas traídas: son lo que
+  // identifica la fila ante SAP, y sin ellas en la respuesta no hay nada que mandar.
+  const clavesTraidas = Boolean(consulta) && esquema?.claves?.length > 0
+    && esquema.claves.every((clave) => consulta.select.includes(clave))
+
+  const editando = modo === 'editar' && clavesTraidas
+
+  /** Una celda se puede escribir si no es clave, no es de solo lectura y no es una fecha. */
+  const sePuedeEscribir = (fila, columna) => editando
+    && !esquema.claves.includes(columna)
+    && !CAMPOS_DE_SOLO_LECTURA.includes(columna)
+    // Una fecha se muestra convertida a la hora local; dejar escribir encima mandaría a SAP el texto
+    // que se lee, no el literal que entiende.
+    && valorLegible(fila[columna]) === String(fila[columna] ?? '')
 
   return (
     <div className="module-body">
@@ -404,18 +491,128 @@ export default function MasterDataViewer({ conexionId }) {
             )}
           </div>
 
+          {/* Escribir en el tenant se pide aparte de mirarlo. En modo lectura no hay ni un botón que
+              lo haga: hay que entrar en edición a propósito. */}
+          {consulta && (
+            <div className="monitor-bar">
+              {!clavesTraidas
+                ? (
+                  <span className="page-hint">
+                    {esquema.claves.length === 0
+                      ? `${tabla} no declara claves de negocio: sin ellas no hay con qué decirle a SAP `
+                        + 'cuál es la fila, así que esta tabla solo se puede mirar.'
+                      : `Para editar hay que traer las claves (${esquema.claves.join(', ')}) entre las `
+                        + 'columnas y volver a mostrar los datos.'}
+                  </span>
+                )
+                : modo === 'leer'
+                  ? (
+                    <button type="button" className="btn btn-sm" onClick={() => setModo('editar')}>
+                      Editar esta tabla
+                    </button>
+                  )
+                  : (
+                    <>
+                      <button
+                        type="button"
+                        className="btn btn-sm"
+                        onClick={() => { setModo('leer'); descartar() }}
+                      >
+                        {hayPendientes ? 'Descartar y salir' : 'Salir de edición'}
+                      </button>
+
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-primary"
+                        onClick={() => setRevision({ accion: 'modificar' })}
+                        disabled={pendientes.campos === 0}
+                      >
+                        Revisar y guardar
+                        {pendientes.campos > 0 && ` (${numero(pendientes.campos)} en `
+                          + `${numero(pendientes.filas)} ${pendientes.filas === 1 ? 'fila' : 'filas'})`}
+                      </button>
+
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-danger"
+                        onClick={() => setRevision({ accion: 'borrar' })}
+                        disabled={cuantasMarcadas === 0}
+                      >
+                        Borrar{cuantasMarcadas > 0 && ` ${numero(cuantasMarcadas)}`}…
+                      </button>
+
+                      <span className="page-hint">
+                        Nada se escribe hasta confirmarlo. Los cambios se conservan al pasar de página.
+                      </span>
+                    </>
+                  )}
+            </div>
+          )}
+
+          {/* Los cambios pendientes no se tiran al cambiar la consulta, pero si las claves se quedaron
+              fuera dejan de poder mandarse: hay que decirlo, no perderlos en silencio. */}
+          {hayPendientes && !clavesTraidas && (
+            <div className="notice notice-info">
+              Hay {numero(pendientes.campos)} cambios y {numero(cuantasMarcadas)} filas marcadas sin
+              escribir. Volvé a incluir las claves entre las columnas para poder guardarlos.
+            </div>
+          )}
+
           {consulta && (
             <div className="table-scroll table-alta">
               <table className="table-dense">
                 <thead>
-                  <tr>{consulta.select.map((columna) => <th key={columna}>{columna}</th>)}</tr>
+                  <tr>
+                    {editando && (
+                      <th className="col-marca">
+                        <input
+                          type="checkbox"
+                          aria-label="Marcar todas las filas de esta página"
+                          checked={filas.length > 0 && filas.every((fila) => marcadas[identidadDe(fila)])}
+                          onChange={(evento) => filas.forEach((fila) => marcar(fila, evento.target.checked))}
+                        />
+                      </th>
+                    )}
+                    {consulta.select.map((columna) => <th key={columna}>{columna}</th>)}
+                  </tr>
                 </thead>
                 <tbody>
-                  {filas.map((fila, indice) => (
-                    <tr key={esquema.claves.map((clave) => fila[clave]).join('|') || indice}>
-                      {consulta.select.map((columna) => <td key={columna}>{valorLegible(fila[columna])}</td>)}
-                    </tr>
-                  ))}
+                  {filas.map((fila, indice) => {
+                    const clave = identidadDe(fila) || String(indice)
+                    const cambios = edits[clave]?.cambios ?? {}
+                    const porBorrar = Boolean(marcadas[clave])
+
+                    return (
+                      <tr key={clave} className={porBorrar ? 'fila-por-borrar' : undefined}>
+                        {editando && (
+                          <td className="col-marca">
+                            <input
+                              type="checkbox"
+                              aria-label={`Marcar ${clave} para borrar`}
+                              checked={porBorrar}
+                              onChange={(evento) => marcar(fila, evento.target.checked)}
+                            />
+                          </td>
+                        )}
+                        {consulta.select.map((columna) => (sePuedeEscribir(fila, columna)
+                          ? (
+                            <td
+                              key={columna}
+                              className={`celda-editable${columna in cambios ? ' celda-tocada' : ''}`}
+                            >
+                              <input
+                                value={cambios[columna] ?? String(fila[columna] ?? '')}
+                                onChange={(evento) => cambiarCelda(fila, columna, evento.target.value)}
+                                aria-label={`${columna} de ${clave}`}
+                                title={columna in cambios ? `Antes: ${String(fila[columna] ?? '') || '(vacío)'}` : undefined}
+                                disabled={porBorrar}
+                              />
+                            </td>
+                          )
+                          : <td key={columna}>{valorLegible(fila[columna])}</td>))}
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
               {!cargandoFilas && filas.length === 0 && <div className="sin-datos">Ninguna fila cumple el filtro</div>}
@@ -423,6 +620,24 @@ export default function MasterDataViewer({ conexionId }) {
             </div>
           )}
         </>
+      )}
+
+      {revision && (
+        <EdicionDeDatoMaestro
+          accion={revision.accion}
+          entidad={consulta.entidad}
+          claves={esquema.claves}
+          edits={edits}
+          filas={Object.values(marcadas)}
+          destino={{
+            tenant: tenant || conexionId,
+            planningArea: consulta.planningArea,
+            versionId: consulta.versionId,
+            esProductivo: productivo,
+          }}
+          onEscribir={escribir}
+          onCerrar={cerrarRevision}
+        />
       )}
     </div>
   )

@@ -94,7 +94,7 @@ export default function IbpTools() {
             {herramienta === 'global' ? 'Todos los tenants de IBP a la vez.'
               : herramienta === 'recursos' ? 'Cuánta CPU y memoria consume el tenant elegido.'
                 : herramienta === 'consumo' ? 'Quién usa el tenant elegido, con qué y cuánto.'
-                  : herramienta === 'datos' ? 'El dato maestro del tenant elegido, de solo lectura.'
+                  : herramienta === 'datos' ? 'El dato maestro del tenant elegido: mirarlo y, si hace falta, corregirlo.'
                     : herramienta === 'cifras' ? 'Las cifras clave del tenant elegido, de solo lectura.'
                       : herramienta === 'migracion' ? 'Que se copiaria de un tenant a otro, antes de copiar nada.'
                         : herramienta === 'cifras-mig' ? 'Copiar cifras clave de un tenant a otro.'
@@ -163,7 +163,14 @@ export default function IbpTools() {
       )}
       {herramienta === 'datos' && conexion && (
         <Suspense fallback={<div className="page-hint">Cargando el visor…</div>}>
-          <MasterDataViewer key={conexion.id} conexionId={conexion.id} />
+          {/* El nombre y la marca de productivo bajan a la pantalla porque desde ahí se escribe: la
+              confirmación tiene que decir en qué tenant se va a escribir, no solo qué tabla. */}
+          <MasterDataViewer
+            key={conexion.id}
+            conexionId={conexion.id}
+            tenant={conexion.name}
+            productivo={Boolean(conexion.isProduction)}
+          />
         </Suspense>
       )}
       {herramienta === 'cifras' && conexion && (

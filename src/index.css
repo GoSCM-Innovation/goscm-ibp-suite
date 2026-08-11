@@ -1692,6 +1692,23 @@ a { color: var(--cyan); }
 
 .table-alta { max-height: 55vh; }
 
+/* Modo edición del visor: se ve de un golpe qué celdas se tocaron y qué filas se van a borrar. */
+.celda-editable { padding: 2px 4px; }
+.celda-editable input {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: inherit;
+  font: inherit;
+  padding: 2px 4px;
+  width: 100%;
+}
+.celda-editable input:hover { border-color: var(--border); }
+.celda-editable input:focus { background: var(--bg2); border-color: var(--cyan); outline: none; }
+.celda-tocada input { background: var(--surface-glass); border-color: var(--accent); font-weight: 600; }
+.fila-por-borrar td { opacity: 0.55; text-decoration: line-through; }
+.col-marca { width: 28px; }
+
 /* Panel de diagnóstico: las últimas llamadas. Lo comparten los dos módulos. */
 .tech-logs { flex-shrink: 0; margin-top: 14px; }
 .tech-logs-cuerpo {

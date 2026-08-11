@@ -211,6 +211,16 @@ export {
 } from './master-data-model.js'
 
 export {
+  MAX_CAMBIOS_LISTADOS,
+  cambiosParaRevisar,
+  filasParaBorrar,
+  filasParaModificar,
+  resumirCambios,
+} from './master-data-edit.js'
+
+export { escribirDatoMaestro } from './master-data-edit-run.js'
+
+export {
   countEntity,
   masterDataRoot,
   readDistinctValues,
