@@ -6,6 +6,7 @@ import {
   conversionQueFalta,
   esCero,
   filtroDeCifra,
+  filtroDeFechas,
   filtroDePlanificacion,
   nivelDeAgregacion,
   parseKfMetadata,
@@ -74,6 +75,50 @@ describe('filtroDeCifra', () => {
 
   it('sin cifra no hay filtro', () => {
     expect(filtroDeCifra('')).toBe('')
+  })
+})
+
+describe('filtroDeFechas', () => {
+  it('el literal es el de OData v2', () => {
+    expect(filtroDeFechas('PERIODID4_TSTAMP', '2026-01-01', '2026-03-31')).toBe(
+      "PERIODID4_TSTAMP ge datetime'2026-01-01T00:00:00' and PERIODID4_TSTAMP le datetime'2026-03-31T23:59:59'",
+    )
+  })
+
+  // Sin T23:59:59 el ultimo dia se queda fuera: un periodo con hora distinta de medianoche ya es
+  // mayor que 2026-03-31T00:00:00.
+  it('el extremo de arriba llega al final del dia', () => {
+    expect(filtroDeFechas('P', '', '2026-03-31')).toContain("T23:59:59")
+  })
+
+  it('cualquiera de los dos extremos puede ir solo', () => {
+    expect(filtroDeFechas('P', '2026-01-01', '')).toBe("P ge datetime'2026-01-01T00:00:00'")
+    expect(filtroDeFechas('P', '', '2026-01-01')).toBe("P le datetime'2026-01-01T23:59:59'")
+  })
+
+  it('sin campo de tiempo no hay filtro que poner', () => {
+    expect(filtroDeFechas('', '2026-01-01', '2026-03-31')).toBe('')
+  })
+
+  it('sin fechas no filtra', () => {
+    expect(filtroDeFechas('P')).toBe('')
+  })
+})
+
+describe('filtroDePlanificacion con tramo de tiempo', () => {
+  it('el tramo se une al resto con and', () => {
+    const filtro = filtroDePlanificacion({
+      conversiones: { UOMTOID: 'KG' },
+      campoDeTiempo: 'PERIODID4_TSTAMP',
+      desde: '2026-01-01',
+    })
+    expect(filtro).toContain("UOMTOID eq 'KG'")
+    expect(filtro).toContain("PERIODID4_TSTAMP ge datetime'2026-01-01T00:00:00'")
+    expect(filtro).toContain(' and ')
+  })
+
+  it('sin tramo, el filtro es el de siempre', () => {
+    expect(filtroDePlanificacion({ conversiones: { UOMTOID: 'KG' } })).toBe("UOMTOID eq 'KG'")
   })
 })
 

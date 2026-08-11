@@ -9,6 +9,8 @@ import {
   esCampoDeTiempo,
   filaParaEscribir,
   nivelDeTiempoDe,
+  nombreEnDestino,
+  renombrados,
   planificarSegmentos,
   revisarMigracionDeCifras,
   selectDeLaMigracion,
@@ -136,6 +138,86 @@ describe('revisarMigracionDeCifras', () => {
   })
 })
 
+describe('renombrar para el destino', () => {
+  it('sin mapa, el nombre es el mismo', () => {
+    expect(nombreEnDestino('ADJUSTEDPRODUCTION')).toBe('ADJUSTEDPRODUCTION')
+    expect(nombreEnDestino('ADJUSTEDPRODUCTION', {})).toBe('ADJUSTEDPRODUCTION')
+  })
+
+  it('con mapa, el del destino', () => {
+    expect(nombreEnDestino('ADJUSTEDPRODUCTION', { ADJUSTEDPRODUCTION: 'ZPROD' })).toBe('ZPROD')
+  })
+
+  // Una entrada vacía es «con el mismo nombre», no «con un nombre vacío».
+  it('un destino vacío no borra el nombre', () => {
+    expect(nombreEnDestino('KF', { KF: '' })).toBe('KF')
+  })
+
+  it('solo lista lo que de verdad cambia de nombre', () => {
+    expect(renombrados(['A', 'B', 'C'], { A: 'ZA', B: 'B' }))
+      .toEqual([{ origen: 'A', destino: 'ZA' }])
+  })
+
+  it('sin nombres no revienta', () => {
+    expect(renombrados(undefined, undefined)).toEqual([])
+  })
+})
+
+describe('revisarMigracionDeCifras con renombrado y tramo', () => {
+  const base = {
+    origen: ORIGEN,
+    destino: DESTINO,
+    cifras: ['ADJUSTEDPRODUCTION'],
+    dimensiones: ['PRDID', 'PERIODID4_TSTAMP'],
+    cifrasDelDestino: ['ZPROD', 'OTRA'],
+    dimensionesDelDestino: ['ZPRODUCTO', 'PERIODID4_TSTAMP'],
+  }
+
+  // Lo que tiene que existir en el destino es el nombre NUEVO, no el del origen.
+  it('con el renombrado puesto, la migración se puede hacer', () => {
+    const revision = revisarMigracionDeCifras({
+      ...base,
+      destinoDe: { ADJUSTEDPRODUCTION: 'ZPROD', PRDID: 'ZPRODUCTO' },
+    })
+    expect(revision.sePuede).toBe(true)
+  })
+
+  it('sin el renombrado, el destino no tiene esos nombres', () => {
+    const revision = revisarMigracionDeCifras(base)
+    expect(revision.sePuede).toBe(false)
+    expect(revision.impedimentos.join(' ')).toContain('ADJUSTEDPRODUCTION')
+  })
+
+  // Se configura una vez y se olvida, y escribe en una cifra que no era.
+  it('avisa por escrito de cada renombrado', () => {
+    const revision = revisarMigracionDeCifras({
+      ...base,
+      destinoDe: { ADJUSTEDPRODUCTION: 'ZPROD', PRDID: 'ZPRODUCTO' },
+    })
+    expect(revision.avisos.join(' ')).toContain('ADJUSTEDPRODUCTION → ZPROD')
+    expect(revision.avisos.join(' ')).toContain('PRDID → ZPRODUCTO')
+  })
+
+  // Un rango al revés no da error en SAP: da cero filas, que se lee como «no hay datos».
+  it('un tramo de fechas al revés no se puede', () => {
+    const revision = revisarMigracionDeCifras({
+      ...base,
+      destinoDe: { ADJUSTEDPRODUCTION: 'ZPROD', PRDID: 'ZPRODUCTO' },
+      desde: '2026-03-01',
+      hasta: '2026-01-01',
+    })
+    expect(revision.sePuede).toBe(false)
+    expect(revision.impedimentos.join(' ')).toContain('al revés')
+  })
+
+  it('un tramo en orden, o con un solo extremo, sí', () => {
+    const conDestino = { ...base, destinoDe: { ADJUSTEDPRODUCTION: 'ZPROD', PRDID: 'ZPRODUCTO' } }
+    expect(revisarMigracionDeCifras({ ...conDestino, desde: '2026-01-01', hasta: '2026-03-01' }).sePuede).toBe(true)
+    expect(revisarMigracionDeCifras({ ...conDestino, desde: '2026-01-01' }).sePuede).toBe(true)
+    expect(revisarMigracionDeCifras({ ...conDestino, hasta: '2026-03-01' }).sePuede).toBe(true)
+  })
+})
+
 describe('selectDeLaMigracion', () => {
   // Si el select y la lista del nivel no coinciden, SAP escribe a otro nivel del que se leyó.
   it('pone el nivel primero y las cifras después', () => {
@@ -182,6 +264,18 @@ describe('filaParaEscribir', () => {
 
   it('un campo que la fila no trae no se inventa', () => {
     expect(filaParaEscribir(fila, ['PRDID', 'NOESTA'], [])).toEqual({ PRDID: 'P1' })
+  })
+
+  // La fila se LEE con los nombres del origen y se ESCRIBE con los del destino.
+  it('escribe con el nombre del destino', () => {
+    const fila = { PRDID: 'P1', ADJUSTEDPRODUCTION: 5 }
+    expect(filaParaEscribir(fila, ['PRDID'], ['ADJUSTEDPRODUCTION'], {
+      PRDID: 'ZPRODUCTO', ADJUSTEDPRODUCTION: 'ZPROD',
+    })).toEqual({ ZPRODUCTO: 'P1', ZPROD: 5 })
+  })
+
+  it('sin mapa escribe con el mismo nombre', () => {
+    expect(filaParaEscribir({ PRDID: 'P1' }, ['PRDID'], [], {})).toEqual({ PRDID: 'P1' })
   })
 
   it('sin fila no revienta', () => {

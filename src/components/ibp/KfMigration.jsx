@@ -12,7 +12,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-import { NIVELES_DE_TIEMPO, esCampoDeTiempo } from '../../../core/ibp/kf-migration-plan.js'
+import { NIVELES_DE_TIEMPO, esCampoDeTiempo, nivelDeTiempoDe } from '../../../core/ibp/kf-migration-plan.js'
 import { listIbpConnections } from '../../lib/ibp.js'
 import { fetchConversions, fetchPlanningCatalog } from '../../lib/ibp-planning-data.js'
 import { contarCifras, copiarSegmentoDeCifras, revisarMigracionDeCifras } from '../../lib/ibp-kf-migration.js'
@@ -104,6 +104,10 @@ export default function KfMigration() {
 
   const [pedidas, setPedidas] = useState([])
   const [conversiones, setConversiones] = useState({})
+  // Con qué nombre se escribe cada cosa en el destino. Vacío = con el mismo.
+  const [destinoDe, setDestinoDe] = useState({})
+  const [desdeFecha, setDesdeFecha] = useState('')
+  const [hastaFecha, setHastaFecha] = useState('')
   const [revision, setRevision] = useState(null)
   const [plan, setPlan] = useState(null)
   const [error, setError] = useState('')
@@ -163,8 +167,16 @@ export default function KfMigration() {
   const faltaConversion = pedidas.find((campo) => !conversiones[campo])
 
   const peticion = useMemo(
-    () => ({ origen: { ...origen, conversiones }, destino, cifras, dimensiones: nivel }),
-    [origen, conversiones, destino, cifras, nivel],
+    () => ({
+      origen: { ...origen, conversiones },
+      destino,
+      cifras,
+      dimensiones: nivel,
+      destinoDe,
+      desdeFecha,
+      hastaFecha,
+    }),
+    [origen, conversiones, destino, cifras, nivel, destinoDe, desdeFecha, hastaFecha],
   )
 
   const revisar = useCallback(async () => {
@@ -239,6 +251,13 @@ export default function KfMigration() {
 
   const tenantDestino = conexiones.find((una) => una.id === destino.connectionId)
   const sinPeriodo = nivel.length > 0 && !nivel.some(esCampoDeTiempo)
+  const periodoDelNivel = nivelDeTiempoDe(nivel)
+
+  // Lo que se puede renombrar: las cifras y los atributos del nivel, menos el periodo —ese lo nombra
+  // SAP igual en los dos lados, es su propio catálogo de tiempo—.
+  const aRenombrar = [...cifras, ...nivel.filter((uno) => !esCampoDeTiempo(uno))]
+  const cuantosRenombrados = aRenombrar.filter((uno) => destinoDe[uno] && destinoDe[uno] !== uno).length
+  const cifrasDelDestino = revision?.destino?.cifras ?? []
 
   return (
     <div className="module-body">
@@ -372,6 +391,89 @@ export default function KfMigration() {
             <div className="exp-sub" style={{ color: 'var(--accent)' }}>
               Falta {faltaConversion} para poder seguir.
             </div>
+          )}
+        </div>
+      )}
+
+      {/* El tramo de tiempo va sobre el periodo del nivel: sin periodo no hay sobre qué acotar, y
+          copiar todo el horizonte cuando se quería un trimestre son horas de más y datos de más. */}
+      {periodoDelNivel && (
+        <div className="card">
+          <div className="card-label">Tramo de tiempo ({periodoDelNivel.etiqueta.toLowerCase()})</div>
+          <p className="exp-sub">
+            Sobre {periodoDelNivel.campo}. Si se deja vacío se copia todo el horizonte que tenga la
+            cifra en el origen. Cualquiera de los dos extremos puede ir solo.
+          </p>
+          <div className="condicion">
+            <label className="exp-enriq">
+              <span className="exp-k">Desde</span>
+              <input
+                type="date"
+                className="input input-sm"
+                value={desdeFecha}
+                onChange={(evento) => setDesdeFecha(evento.target.value)}
+              />
+            </label>
+            <label className="exp-enriq">
+              <span className="exp-k">Hasta</span>
+              <input
+                type="date"
+                className="input input-sm"
+                value={hastaFecha}
+                onChange={(evento) => setHastaFecha(evento.target.value)}
+              />
+            </label>
+            {(desdeFecha || hastaFecha) && (
+              <button type="button" className="btn btn-sm" onClick={() => { setDesdeFecha(''); setHastaFecha('') }}>
+                Quitar el tramo
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Dos tenants que se montaron por separado no llaman igual a las mismas cosas. Sin esto,
+          migrar entre ellos exigiría renombrar a mano en SAP. */}
+      {aRenombrar.length > 0 && (
+        <div className="card">
+          <div className="card-label">
+            Con qué nombre se escribe en el destino
+            {cuantosRenombrados > 0 && (
+              <span className="tag tag-accent">
+                {cuantosRenombrados} {cuantosRenombrados === 1 ? 'renombrado' : 'renombrados'}
+              </span>
+            )}
+          </div>
+          <p className="exp-sub">
+            Vacío quiere decir «con el mismo nombre». Se lee del origen y se escribe con el nombre de
+            acá, así que tiene que existir en el destino: la revisión lo comprueba.
+          </p>
+          <div className="columnas columnas-anchas">
+            {aRenombrar.map((uno) => (
+              <label key={uno} className="exp-enriq">
+                <span className="exp-k mono">{uno}</span>
+                <span className="exp-sub">→</span>
+                <input
+                  className="input input-sm"
+                  value={destinoDe[uno] ?? ''}
+                  onChange={(evento) => setDestinoDe((previos) => {
+                    const puesto = evento.target.value.trim().toUpperCase()
+                    if (!puesto || puesto === uno) {
+                      const { [uno]: _fuera, ...resto } = previos
+                      return resto
+                    }
+                    return { ...previos, [uno]: puesto }
+                  })}
+                  placeholder={uno}
+                  list={cifrasDelDestino.length > 0 ? 'nombres-del-destino' : undefined}
+                />
+              </label>
+            ))}
+          </div>
+          {cifrasDelDestino.length > 0 && (
+            <datalist id="nombres-del-destino">
+              {cifrasDelDestino.map((una) => <option key={una} value={una} />)}
+            </datalist>
           )}
         </div>
       )}

@@ -86,8 +86,31 @@ const escapar = (valor) => String(valor ?? '').replace(/'/g, "''")
  * `conversiones` es lo que la cifra EXIGE —la unidad o la moneda de destino—; sin eso no hay
  * lectura. `soloConValor` aprovecha una regla de SAP a propósito: ver `filtroDeCifra`.
  */
-export function filtroDePlanificacion({ conversiones = {}, condiciones = [], cifra, soloConValor } = {}) {
+/**
+ * El tramo de tiempo, sobre el campo de periodo que se esté usando.
+ *
+ * El literal es el de OData v2 —`datetime'2024-01-01T00:00:00'`— y las horas no son adorno: sin
+ * `T23:59:59` en el extremo de arriba, el último día se queda fuera, porque un periodo con hora
+ * distinta de medianoche ya es mayor que `2024-12-31T00:00:00`.
+ *
+ * Cualquiera de los dos extremos puede ir solo: «desde enero» y «hasta marzo» son peticiones
+ * normales, y exigir los dos obligaría a inventar una fecha.
+ */
+export function filtroDeFechas(campoDeTiempo, desde, hasta) {
+  if (!campoDeTiempo) return ''
   const partes = []
+  if (desde) partes.push(`${campoDeTiempo} ge datetime'${desde}T00:00:00'`)
+  if (hasta) partes.push(`${campoDeTiempo} le datetime'${hasta}T23:59:59'`)
+  return partes.join(' and ')
+}
+
+export function filtroDePlanificacion({
+  conversiones = {}, condiciones = [], cifra, soloConValor, campoDeTiempo, desde, hasta,
+} = {}) {
+  const partes = []
+
+  const deFechas = filtroDeFechas(campoDeTiempo, desde, hasta)
+  if (deFechas) partes.push(deFechas)
 
   for (const { campo } of ATRIBUTOS_DE_CONVERSION) {
     const valor = conversiones[campo]

@@ -98,6 +98,7 @@ export {
   conversionQueFalta,
   esCero,
   filtroDeCifra,
+  filtroDeFechas,
   filtroDePlanificacion,
   nivelDeAgregacion,
   parseKfMetadata,
@@ -116,7 +117,9 @@ export {
   esCampoDeTiempo,
   filaParaEscribir,
   nivelDeTiempoDe,
+  nombreEnDestino,
   planificarSegmentos,
+  renombrados,
   revisarMigracionDeCifras,
   selectDeLaMigracion,
 } from './kf-migration-plan.js'

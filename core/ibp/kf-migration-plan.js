@@ -55,6 +55,22 @@ export const UMBRAL_PARA_PARTIR_POR_TIEMPO = 100_000
 /** Filas leídas por segmento. Cada segmento es una transacción propia que se confirma sola. */
 export const FILAS_POR_SEGMENTO = 20_000
 
+/**
+ * Cómo se llama en el destino algo que en el origen se llama de otra forma.
+ *
+ * Dos tenants que se montaron por separado no usan los mismos nombres: la misma cifra puede ser
+ * `CONSENSUSDEMANDQTY` en uno y `ZCONSENSOQTY` en el otro. Sin esto, migrar entre ellos exige
+ * renombrar a mano en SAP, que es justo lo que no se puede hacer.
+ *
+ * Vale igual para las cifras y para los atributos del nivel: son nombres, y no se pisan entre sí.
+ */
+export const nombreEnDestino = (nombre, destinoDe) => (destinoDe ?? {})[nombre] || nombre
+
+/** Qué se renombra de verdad: lo que tiene un nombre distinto en el destino. */
+export const renombrados = (nombres, destinoDe) => (nombres ?? [])
+  .map((uno) => ({ origen: uno, destino: nombreEnDestino(uno, destinoDe) }))
+  .filter((par) => par.origen !== par.destino)
+
 /** El nivel de tiempo que lleva un nivel, o `null` si el nivel no tiene tiempo. */
 export const nivelDeTiempoDe = (dimensiones) =>
   NIVELES_DE_TIEMPO.find((uno) => (dimensiones ?? []).includes(uno.campo)) ?? null
@@ -73,6 +89,7 @@ export const dimensionesEscribibles = (dimensiones) =>
  */
 export function revisarMigracionDeCifras({
   origen = {}, destino = {}, cifras = [], dimensiones = [], cifrasDelDestino = [], dimensionesDelDestino = [],
+  destinoDe = {}, desde = '', hasta = '',
 } = {}) {
   const impedimentos = []
   const avisos = []
@@ -94,14 +111,32 @@ export function revisarMigracionDeCifras({
     )
   }
 
-  const faltanEnDestino = cifras.filter((una) => cifrasDelDestino.length > 0 && !cifrasDelDestino.includes(una))
+  // Se comprueba el nombre que va a tener EN EL DESTINO, no el del origen: si se renombró, el que
+  // tiene que existir allá es el nuevo.
+  const faltanEnDestino = cifras
+    .map((una) => nombreEnDestino(una, destinoDe))
+    .filter((una) => cifrasDelDestino.length > 0 && !cifrasDelDestino.includes(una))
   if (faltanEnDestino.length > 0) {
     impedimentos.push(`El destino no tiene ${faltanEnDestino.length === 1 ? 'la cifra' : 'las cifras'} ${faltanEnDestino.join(', ')}.`)
   }
 
-  const dimsFaltantes = nivel.filter((uno) => dimensionesDelDestino.length > 0 && !dimensionesDelDestino.includes(uno))
+  const dimsFaltantes = nivel
+    .map((uno) => nombreEnDestino(uno, destinoDe))
+    .filter((uno) => dimensionesDelDestino.length > 0 && !dimensionesDelDestino.includes(uno))
   if (dimsFaltantes.length > 0) {
     impedimentos.push(`El destino no tiene ${dimsFaltantes.length === 1 ? 'el atributo' : 'los atributos'} ${dimsFaltantes.join(', ')}.`)
+  }
+
+  // Un renombrado no es un problema, pero SÍ hay que verlo escrito antes de copiar: es la clase de
+  // cosa que se configura una vez y se olvida, y escribe en una cifra que no era.
+  const cambios = renombrados([...cifras, ...nivel], destinoDe)
+  if (cambios.length > 0) {
+    avisos.push(`Se escribe con otro nombre: ${cambios.map((par) => `${par.origen} → ${par.destino}`).join(', ')}.`)
+  }
+
+  // Un rango al revés no da error en SAP: da cero filas, que se lee como «no hay datos».
+  if (desde && hasta && desde > hasta) {
+    impedimentos.push(`El rango de fechas está al revés: ${desde} es posterior a ${hasta}.`)
   }
 
   const descartadas = (dimensiones ?? []).filter((uno) => ATRIBUTOS_DE_SOLO_LECTURA.includes(uno))
@@ -157,10 +192,11 @@ export function planificarSegmentos(totalFilas, { porSegmento = FILAS_POR_SEGMEN
  * completo —es lo que define la agregación— y en cambio la escritura no admite los atributos de solo
  * lectura que ese nivel puede incluir.
  */
-export function filaParaEscribir(fila, nivel, cifras) {
+export function filaParaEscribir(fila, nivel, cifras, destinoDe) {
   const salida = {}
   for (const campo of [...(nivel ?? []), ...(cifras ?? [])]) {
-    if (fila?.[campo] !== undefined) salida[campo] = fila[campo]
+    // La fila viene leída con los nombres del ORIGEN y se escribe con los del destino.
+    if (fila?.[campo] !== undefined) salida[nombreEnDestino(campo, destinoDe)] = fila[campo]
   }
   return salida
 }

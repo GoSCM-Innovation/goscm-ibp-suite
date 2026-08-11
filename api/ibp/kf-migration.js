@@ -51,6 +51,7 @@ export default async function handler(req, res) {
 
   const {
     accion, origen = {}, destino = {}, cifras = [], dimensiones = [], condiciones = [],
+    destinoDe = {}, desdeFecha = '', hastaFecha = '',
     desde = 0, cuantas = 5000, confirmacion, nombre,
   } = req.body ?? {}
 
@@ -70,24 +71,36 @@ export default async function handler(req, res) {
 
       return res.status(200).json({
         revision: revisarMigracionDeCifras({
-          origen, destino, cifras, dimensiones,
+          origen, destino, cifras, dimensiones, destinoDe,
+          desde: desdeFecha,
+          hasta: hastaFecha,
           cifrasDelDestino: delDestino.cifras,
           dimensionesDelDestino: delDestino.dims,
         }),
         origen: { cifras: delOrigen.cifras, dims: delOrigen.dims, etiquetas: delOrigen.etiquetas },
+        // El catálogo del DESTINO también, para poder ofrecer con qué nombre se escribe cada cosa
+        // cuando los dos tenants no las llaman igual.
+        destino: { cifras: delDestino.cifras, dims: delDestino.dims, etiquetas: delDestino.etiquetas },
         destinoEsProductivo: Boolean(deDestino.isProduction),
         nombreDelDestino: deDestino.name,
       })
     }
 
-    const revision = revisarMigracionDeCifras({ origen, destino, cifras, dimensiones })
+    const revision = revisarMigracionDeCifras({
+      origen, destino, cifras, dimensiones, destinoDe, desde: desdeFecha, hasta: hastaFecha,
+    })
     if (!revision.sePuede) {
       return res.status(400).json({ error: revision.impedimentos.join(' ') })
     }
 
+    // El rango de fechas va sobre el campo de periodo del nivel elegido: sin nivel de tiempo no hay
+    // sobre qué acotar, y pedirlo igual daría un filtro contra un campo que no se está leyendo.
     const filtro = filtroDePlanificacion({
       conversiones: origen.conversiones ?? {},
       condiciones,
+      campoDeTiempo: revision.nivelDeTiempo?.campo ?? '',
+      desde: desdeFecha,
+      hasta: hastaFecha,
     })
 
     if (accion === 'contar') {
@@ -115,6 +128,7 @@ export default async function handler(req, res) {
         nivel: revision.nivel,
         cifras,
         filtro,
+        destinoDe,
         desde: Number(desde) || 0,
         cuantas: Math.min(Number(cuantas) || 5000, MAX_POR_SEGMENTO),
         nombre: nombre || 'goscm-suite',

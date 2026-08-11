@@ -24,7 +24,7 @@ import {
 } from './planning-data-write.js'
 import { countKf, readKfPage } from './planning-data.js'
 import {
-  FILAS_POR_SEGMENTO, filaParaEscribir, planificarSegmentos, selectDeLaMigracion,
+  FILAS_POR_SEGMENTO, filaParaEscribir, nombreEnDestino, planificarSegmentos, selectDeLaMigracion,
 } from './kf-migration-plan.js'
 
 /** Cuántas veces se rehace un segmento antes de darlo por perdido. */
@@ -65,7 +65,9 @@ async function leerSegmento({ origen, area, select, filtro, orderby, desde, cuan
  * Si algo falla, la transacción se queda sin confirmar —SAP la descarta— y quien llama vuelve a
  * intentar el segmento entero en otra nueva.
  */
-async function escribirSegmento({ destino, area, nivel, cifras, filas, nombre, csrf, onProgreso }) {
+async function escribirSegmento({
+  destino, area, nivel, cifras, filas, nombre, csrf, onProgreso, destinoDe,
+}) {
   const transactionId = await getTransactionId({ ...destino, csrf })
   avisar(onProgreso, { fase: 'transaccion', transactionId })
 
@@ -73,7 +75,7 @@ async function escribirSegmento({ destino, area, nivel, cifras, filas, nombre, c
     ...destino, transactionId, area, versionId: destino.versionId, nombre, csrf,
   })
 
-  const paraEscribir = filas.map((una) => filaParaEscribir(una, nivel, cifras))
+  const paraEscribir = filas.map((una) => filaParaEscribir(una, nivel, cifras, destinoDe))
   const envios = partirEnEnvios(paraEscribir, cifras.length)
 
   for (const [indice, envio] of envios.entries()) {
@@ -82,8 +84,9 @@ async function escribirSegmento({ destino, area, nivel, cifras, filas, nombre, c
       area,
       transactionId,
       filas: envio,
-      // La MISMA lista que el `$select` de la lectura: si se separan, se escribe a otro nivel.
-      campos: nivel,
+      // La MISMA lista que el `$select` de la lectura, con los nombres del destino: si se separan,
+      // se escribe a otro nivel del que se leyó.
+      campos: nivel.map((uno) => nombreEnDestino(uno, destinoDe)),
       versionId: destino.versionId,
       csrf,
     })
@@ -122,7 +125,7 @@ export async function contarLoQueSeCopia({ origen, area, nivel, cifras, filtro }
  * debe pararse entera por una.
  */
 export async function migrarSegmentoDeCifras({
-  origen, destino, area, areaDestino, nivel, cifras, filtro,
+  origen, destino, area, areaDestino, nivel, cifras, filtro, destinoDe,
   desde = 0, cuantas = FILAS_POR_SEGMENTO, nombre, csrf, onProgreso,
 }) {
   const sesion = csrf ?? await abrirSesionDeEscritura(destino)
@@ -148,6 +151,7 @@ export async function migrarSegmentoDeCifras({
     try {
       hecho = await escribirSegmento({
         destino, area: areaDestino ?? area, nivel, cifras, filas, nombre, csrf: sesion, onProgreso,
+        destinoDe,
       })
     } catch (error) {
       ultimoFallo = error.detail || error.message
