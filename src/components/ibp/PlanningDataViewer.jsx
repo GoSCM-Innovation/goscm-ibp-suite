@@ -7,13 +7,15 @@
 // pruebas salen 1.594 filas por producto, 90.713 añadiendo el periodo y 106.996 añadiendo también la
 // ubicación. Son los mismos datos con tres lupas distintas, y quien no lo sepa lee mal el resultado.
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { cifraLegible, periodoLegible } from '../../../core/ibp/planning-data-model.js'
 import { OPERADORES } from '../../../core/ibp/master-data-model.js'
+import { TOPES, revisarVolumen } from '../../../core/ibp/export-csv.js'
 import {
   fetchConversions, fetchPlanningCatalog, fetchPlanningCount, fetchPlanningRows,
 } from '../../lib/ibp-planning-data.js'
+import { volcarACsv } from '../../lib/descargar-csv.js'
 import { SinDatos } from '../ui/StatusCharts.jsx'
 
 const numero = (valor) => Number(valor ?? 0).toLocaleString('es')
@@ -87,6 +89,9 @@ export default function PlanningDataViewer({ conexionId }) {
   const [descartadas, setDescartadas] = useState(0)
   const [pagina, setPagina] = useState(0)
   const [cargando, setCargando] = useState(false)
+
+  const [volcado, setVolcado] = useState(null)
+  const cortarVolcado = useRef(null)
 
   useEffect(() => {
     let abandonado = false
@@ -163,9 +168,49 @@ export default function PlanningDataViewer({ conexionId }) {
     }
   }
 
+  /**
+   * Vuelca a un archivo TODAS las filas de la consulta, no la página que se ve.
+   *
+   * Las celdas se escriben con las MISMAS funciones que la tabla —un periodo como `2026-08-01`, la
+   * cifra con tres decimales—, porque un archivo que no dice lo mismo que la pantalla no sirve para
+   * comprobar nada.
+   */
+  async function volcar(total, columnasDelArchivo, definicion) {
+    const revision = revisarVolumen(total, TOPES.cifras)
+    if (revision.estado === 'bloqueado') { setVolcado({ error: revision.mensaje }); return }
+    if (revision.estado === 'aviso' && !window.confirm(revision.mensaje)) return
+
+    const corte = new AbortController()
+    cortarVolcado.current = corte
+    setVolcado({ leidas: 0, total })
+
+    try {
+      const salida = await volcarACsv({
+        columnas: columnasDelArchivo,
+        comoSeLee: (valor, columna) =>
+          (columna === definicion.cifra ? cifraLegible(valor) : periodoLegible(valor)),
+        leerPagina: async ({ skip, top, signal }) => {
+          const respuesta = await fetchPlanningRows(conexionId, definicion, { skip, top, signal })
+          return respuesta.filas
+        },
+        nombre: [definicion.area, definicion.cifra || 'sin-cifra'],
+        total,
+        tope: TOPES.cifras.maximo,
+        signal: corte.signal,
+        onAvance: (avance) => setVolcado(avance),
+      })
+      setVolcado(salida ? { hecho: salida.filas, cortado: salida.cortado } : null)
+    } catch (fallo) {
+      setVolcado(fallo.name === 'AbortError' ? null : { error: fallo.message })
+    } finally {
+      if (cortarVolcado.current === corte) cortarVolcado.current = null
+    }
+  }
+
   function mostrarDatos() {
     // La definición va aparte del tamaño de página para poder comparar la huella con la de la
     // cuenta sin que el `top` estorbe.
+    setVolcado(null)
     setConsulta({ definicion: laConsulta, top: 500 })
   }
 
@@ -336,6 +381,53 @@ export default function PlanningDataViewer({ conexionId }) {
               {descartadas > 0 && ` · ${numero(descartadas)} en cero descartadas`}
             </span>
             <button type="button" className="btn btn-sm" onClick={() => cargarPagina(pagina + 1)} disabled={filas.length === 0 || cargando}>Siguiente ›</button>
+          </div>
+
+          {/* El volcado se lleva TODAS las filas de la consulta. Con cifras son muchas más que en
+              dato maestro, así que el tope es más alto y se puede cortar a mitad. */}
+          <div className="monitor-bar">
+            <button
+              type="button"
+              className="btn btn-sm"
+              onClick={() => volcar(contadas ?? 0, columnas, mostrada)}
+              disabled={volcado?.leidas !== undefined}
+            >
+              Descargar CSV
+            </button>
+
+            {volcado?.leidas !== undefined && (
+              <>
+                <span className="page-hint">
+                  {numero(volcado.leidas)}
+                  {volcado.total > 0 ? ` de ${numero(volcado.total)}` : ''} filas leídas…
+                </span>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-danger"
+                  onClick={() => cortarVolcado.current?.abort()}
+                >
+                  Cortar
+                </button>
+              </>
+            )}
+
+            {volcado?.hecho !== undefined && (
+              <span className="page-hint">
+                ✓ {numero(volcado.hecho)} filas en el archivo
+                {volcado.cortado && ` · se cortó en el tope de ${numero(TOPES.cifras.maximo)}`}
+              </span>
+            )}
+
+            {volcado?.error && (
+              <span className="page-hint" style={{ color: 'var(--red)' }}>{volcado.error}</span>
+            )}
+
+            {contadas === null && (
+              <span className="exp-sub">
+                Sin contar la consulta no se sabe cuántas filas son; el volcado corta en{' '}
+                {numero(TOPES.cifras.maximo)}.
+              </span>
+            )}
           </div>
 
           <div className="table-scroll table-alta">

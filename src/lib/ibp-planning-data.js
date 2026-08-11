@@ -34,8 +34,8 @@ export async function fetchPlanningCount(connectionId, consulta) {
 }
 
 /** Una página de filas. Devuelve también cuántas se descartaron por valer cero. */
-export function fetchPlanningRows(connectionId, consulta, { skip = 0, top = 500 } = {}) {
+export function fetchPlanningRows(connectionId, consulta, { skip = 0, top = 500, signal } = {}) {
   return api.get('/api/ibp/planning-data', {
     connectionId, accion: 'filas', skip, top, ...comoConsulta(consulta),
-  })
+  }, { signal })
 }

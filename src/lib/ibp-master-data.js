@@ -30,7 +30,7 @@ export async function fetchMasterCount(connectionId, { entidad, planningArea, ve
 
 /** Una página de filas. `orderby` son las claves, para que las ventanas no se solapen. */
 export async function fetchMasterRows(connectionId, {
-  entidad, planningArea, versionId, condiciones, select, orderby, skip = 0, top = 500,
+  entidad, planningArea, versionId, condiciones, select, orderby, skip = 0, top = 500, signal,
 }) {
   const { filas } = await api.get('/api/ibp/master-data', {
     connectionId,
@@ -43,7 +43,7 @@ export async function fetchMasterRows(connectionId, {
     ...(select?.length ? { select: select.join(',') } : {}),
     ...(orderby?.length ? { orderby: orderby.join(',') } : {}),
     ...conCondiciones(condiciones),
-  })
+  }, { signal })
   return filas
 }
 

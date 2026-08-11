@@ -20,10 +20,12 @@ import {
   CAMPOS_DE_SOLO_LECTURA, columnasPorOmision, etiquetaDeCondicion, OPERADORES, valorLegible,
 } from '../../../core/ibp/master-data-model.js'
 import { anotarCambio, claveDeFila, resumirCambios } from '../../../core/ibp/master-data-edit.js'
+import { TOPES, revisarVolumen } from '../../../core/ibp/export-csv.js'
 import {
   fetchMasterCatalog, fetchMasterCount, fetchMasterRows, fetchMasterSchema, fetchMasterValues,
 } from '../../lib/ibp-master-data.js'
 import { borrarDatoMaestro, guardarDatoMaestro } from '../../lib/ibp-master-data-edit.js'
+import { volcarACsv } from '../../lib/descargar-csv.js'
 import EdicionDeDatoMaestro from './EdicionDeDatoMaestro.jsx'
 
 const numero = (valor) => Number(valor ?? 0).toLocaleString('es')
@@ -118,6 +120,9 @@ export default function MasterDataViewer({ conexionId, tenant = '', productivo =
   // Si la escritura llegó a SAP hay que releer, y eso no es estado que se dibuje.
   const seEscribio = useRef(false)
 
+  const [volcado, setVolcado] = useState(null)
+  const cortarVolcado = useRef(null)
+
   useEffect(() => {
     let abandonado = false
     fetchMasterCatalog(conexionId)
@@ -166,6 +171,7 @@ export default function MasterDataViewer({ conexionId, tenant = '', productivo =
     setModo('leer')
     setEdits({})
     setMarcadas({})
+    setVolcado(null)
   }, [])
 
   useEffect(() => {
@@ -248,6 +254,49 @@ export default function MasterDataViewer({ conexionId, tenant = '', productivo =
     } catch {
       // Traer los valores es una comodidad: si el campo no se deja proyectar, se escribe a mano.
       setValoresDe((previos) => ({ ...previos, [campo]: [] }))
+    }
+  }
+
+  /**
+   * Vuelca a un archivo TODO lo que devuelve el filtro, no la página que se ve.
+   *
+   * Se leen páginas grandes —5.000 filas— porque en SAP el costo es por petición, no por fila: son
+   * los mismos ~6 segundos traer 500 que 5.000.
+   */
+  async function volcar(total) {
+    if (!consulta) return
+
+    const revision = revisarVolumen(total, TOPES.maestro)
+    if (revision.estado === 'bloqueado') { setVolcado({ error: revision.mensaje }); return }
+    if (revision.estado === 'aviso' && !window.confirm(revision.mensaje)) return
+
+    const corte = new AbortController()
+    cortarVolcado.current = corte
+    setVolcado({ leidas: 0, total })
+
+    try {
+      const salida = await volcarACsv({
+        columnas: consulta.select,
+        // Las claves van en el $select aunque no se estén mirando: sin un orden estable las páginas
+        // se solapan. Al archivo llegan solo las columnas de la pantalla.
+        leerPagina: ({ skip, top, signal }) => fetchMasterRows(conexionId, {
+          ...consulta,
+          select: [...new Set([...consulta.select, ...esquema.claves])],
+          skip,
+          top,
+          signal,
+        }),
+        nombre: [consulta.entidad, consulta.planningArea, consulta.versionId || 'base'],
+        total,
+        tope: TOPES.maestro.maximo,
+        signal: corte.signal,
+        onAvance: (avance) => setVolcado(avance),
+      })
+      setVolcado(salida ? { hecho: salida.filas, cortado: salida.cortado } : null)
+    } catch (fallo) {
+      setVolcado(fallo.name === 'AbortError' ? null : { error: fallo.message })
+    } finally {
+      if (cortarVolcado.current === corte) cortarVolcado.current = null
     }
   }
 
@@ -490,6 +539,53 @@ export default function MasterDataViewer({ conexionId, tenant = '', productivo =
               </span>
             )}
           </div>
+
+          {/* El volcado se lleva TODO lo que devuelve el filtro, no la página que se ve: es lo que se
+              pide de un archivo. Por eso puede tardar, y por eso se puede cortar. */}
+          {consulta && (
+            <div className="monitor-bar">
+              <button
+                type="button"
+                className="btn btn-sm"
+                onClick={() => volcar(totalDeLaConsulta ?? esquema.total ?? 0)}
+                disabled={Boolean(volcado?.leidas !== undefined)}
+              >
+                Descargar CSV
+              </button>
+
+              {volcado?.leidas !== undefined && (
+                <>
+                  <span className="page-hint">
+                    {numero(volcado.leidas)}
+                    {volcado.total > 0 ? ` de ${numero(volcado.total)}` : ''} filas leídas…
+                  </span>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-danger"
+                    onClick={() => cortarVolcado.current?.abort()}
+                  >
+                    Cortar
+                  </button>
+                </>
+              )}
+
+              {volcado?.hecho !== undefined && (
+                <span className="page-hint">
+                  ✓ {numero(volcado.hecho)} filas en el archivo
+                  {volcado.cortado && ` · se cortó en el tope de ${numero(TOPES.maestro.maximo)}`}
+                </span>
+              )}
+
+              {volcado?.error && (
+                <span className="page-hint" style={{ color: 'var(--red)' }}>{volcado.error}</span>
+              )}
+
+              <span className="exp-sub">
+                Se descargan las {columnas.length} columnas que se están mirando, con punto y coma,
+                como las abre Excel en español.
+              </span>
+            </div>
+          )}
 
           {/* Escribir en el tenant se pide aparte de mirarlo. En modo lectura no hay ni un botón que
               lo haga: hay que entrar en edición a propósito. */}

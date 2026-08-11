@@ -20,7 +20,7 @@ export class ApiError extends Error {
  * Se hace aquí y no en cada pantalla —como en v8 y v9— porque así el panel ve TODO el tráfico sin que
  * nadie tenga que acordarse de registrarlo, y una pantalla nueva no empieza muda.
  */
-async function request(path, { method = 'GET', body, params } = {}) {
+async function request(path, { method = 'GET', body, params, signal } = {}) {
   const query = params ? `?${new URLSearchParams(params)}` : ''
   const arranque = Date.now()
 
@@ -29,14 +29,23 @@ async function request(path, { method = 'GET', body, params } = {}) {
     response = await fetch(`${path}${query}`, {
       method,
       credentials: 'same-origin',
+      signal,
       ...(body === undefined ? {} : {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       }),
     })
   } catch (fallo) {
-    // Sin respuesta: se cortó la red o el servidor no está. Es justo lo que hay que poder ver.
-    anotarLlamada({ metodo: method, ruta: path, estado: 0, ms: Date.now() - arranque, detalle: fallo.message })
+    // Sin respuesta: se cortó la red, el servidor no está, o alguien canceló. Los tres se anotan,
+    // pero una cancelación no es un fallo y el panel no debería leerse como si lo fuera.
+    const cancelada = fallo.name === 'AbortError'
+    anotarLlamada({
+      metodo: method,
+      ruta: path,
+      estado: 0,
+      ms: Date.now() - arranque,
+      detalle: cancelada ? 'cancelada' : fallo.message,
+    })
     throw fallo
   }
 
@@ -60,7 +69,7 @@ async function request(path, { method = 'GET', body, params } = {}) {
 }
 
 export const api = {
-  get: (path, params) => request(path, { params }),
+  get: (path, params, opciones) => request(path, { params, ...opciones }),
   post: (path, body) => request(path, { method: 'POST', body }),
   patch: (path, body) => request(path, { method: 'PATCH', body }),
   put: (path, body) => request(path, { method: 'PUT', body }),
