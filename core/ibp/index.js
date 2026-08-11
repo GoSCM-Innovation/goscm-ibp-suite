@@ -107,6 +107,21 @@ export {
 } from './planning-data-model.js'
 
 export {
+  ESPERA_MAXIMA_MS as ESPERA_MAXIMA_KF_MS,
+  MAX_VALORES_POR_ENVIO,
+  abrirSesionDeEscritura as abrirSesionDeEscrituraKf,
+  commitTransaction as commitTransactionKf,
+  filasPorEnvio,
+  getExportResult as getExportResultKf,
+  getTransactionId as getTransactionIdKf,
+  initiateParallelProcess as initiateParallelProcessKf,
+  partirEnEnvios as partirEnEnviosKf,
+  postKfChunk,
+  readMessages as readMessagesKf,
+  waitForProcessed as waitForProcessedKf,
+} from './planning-data-write.js'
+
+export {
   FILAS_POR_PAGINA,
   countKf,
   detectConversions,
