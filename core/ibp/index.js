@@ -107,6 +107,28 @@ export {
 } from './planning-data-model.js'
 
 export {
+  ATRIBUTOS_DE_SOLO_LECTURA,
+  CAMPOS_DE_TIEMPO,
+  FILAS_POR_SEGMENTO as FILAS_POR_SEGMENTO_KF,
+  NIVELES_DE_TIEMPO,
+  UMBRAL_PARA_PARTIR_POR_TIEMPO,
+  dimensionesEscribibles,
+  esCampoDeTiempo,
+  filaParaEscribir,
+  nivelDeTiempoDe,
+  planificarSegmentos,
+  revisarMigracionDeCifras,
+  selectDeLaMigracion,
+} from './kf-migration-plan.js'
+
+export {
+  INTENTOS_POR_SEGMENTO as INTENTOS_POR_SEGMENTO_KF,
+  contarLoQueSeCopia,
+  migrarCifras,
+  migrarSegmentoDeCifras,
+} from './kf-migration.js'
+
+export {
   ESPERA_MAXIMA_MS as ESPERA_MAXIMA_KF_MS,
   MAX_VALORES_POR_ENVIO,
   abrirSesionDeEscritura as abrirSesionDeEscrituraKf,

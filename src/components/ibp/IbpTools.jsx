@@ -23,6 +23,7 @@ const Metering = lazy(() => import('./Metering.jsx'))
 const MasterDataViewer = lazy(() => import('./MasterDataViewer.jsx'))
 const PlanningDataViewer = lazy(() => import('./PlanningDataViewer.jsx'))
 const MigrationPlan = lazy(() => import('./MigrationPlan.jsx'))
+const KfMigration = lazy(() => import('./KfMigration.jsx'))
 
 // La pantalla de orquestaciones es la MISMA que la de CI-DS: encadenar tareas y encadenar trabajos
 // son la misma cosa por dentro, y lo único que cambia es de dónde salen los pasos. Por eso se le
@@ -43,6 +44,8 @@ const HERRAMIENTAS = [
   { id: 'cifras', label: 'Cifras clave' },
   // La migración mira DOS tenants a la vez, asi que el selector de arriba no le aplica.
   { id: 'migracion', label: 'Migración', sinTenant: true },
+  // Tambien mira DOS tenants a la vez.
+  { id: 'cifras-mig', label: 'Migrar cifras', sinTenant: true },
   { id: 'orquestaciones', label: 'Orquestaciones' },
 ]
 
@@ -94,6 +97,7 @@ export default function IbpTools() {
                   : herramienta === 'datos' ? 'El dato maestro del tenant elegido, de solo lectura.'
                     : herramienta === 'cifras' ? 'Las cifras clave del tenant elegido, de solo lectura.'
                       : herramienta === 'migracion' ? 'Que se copiaria de un tenant a otro, antes de copiar nada.'
+                        : herramienta === 'cifras-mig' ? 'Copiar cifras clave de un tenant a otro.'
                         : herramienta === 'orquestaciones' ? 'Encadenar trabajos del tenant elegido con sus dependencias.'
                 : 'Los Application Jobs del tenant elegido.'}
           </div>
@@ -182,6 +186,11 @@ export default function IbpTools() {
             Paleta={JobPalette}
             leerRegistro={lectorDeIbp(conexion.id)}
           />
+        </Suspense>
+      )}
+      {herramienta === 'cifras-mig' && (
+        <Suspense fallback={<div className="page-hint">Cargando…</div>}>
+          <KfMigration />
         </Suspense>
       )}
       {herramienta === 'plantillas' && conexion && (
