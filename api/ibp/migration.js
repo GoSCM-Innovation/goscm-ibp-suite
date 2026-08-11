@@ -35,7 +35,10 @@ export default async function handler(req, res) {
   if (!session) return
 
   const {
-    origen = {}, destino = {}, tablas = [], tablasDelDestino = [], destinoDe = {}, condiciones = [],
+    origen = {}, destino = {}, tablas = [], tablasDelDestino = [], destinoDe = {},
+    // Las condiciones son POR TABLA: `{ tabla: [condiciones] }`. Un filtro global no serviria —
+    // filtrar por marca solo tiene sentido en la tabla de productos.
+    condicionesPorTabla = {},
   } = req.body ?? {}
 
   if (!Array.isArray(tablas) || tablas.length === 0) {
@@ -64,7 +67,9 @@ export default async function handler(req, res) {
       tablas,
       tablasDelDestino,
       destinoDe,
-      condiciones: filtroDeCondiciones(condiciones),
+      filtroPorTabla: Object.fromEntries(
+        Object.entries(condicionesPorTabla).map(([tabla, suyas]) => [tabla, filtroDeCondiciones(suyas)]),
+      ),
     })
 
     return res.status(200).json(plan)

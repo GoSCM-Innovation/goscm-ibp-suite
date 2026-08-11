@@ -119,13 +119,31 @@ describe('planificarMigracion', () => {
     esquemas({ T: ['A'], T2: ['A'] })
     countEntity.mockResolvedValue(1)
 
-    await planificarMigracion({
+    const { entradas } = await planificarMigracion({
       origen, destino, tablas: ['T'], tablasDelDestino: ['T2'], destinoDe: { T: 'T2' },
-      condiciones: "BRAND eq 'X'",
+      filtroPorTabla: { T: "BRAND eq 'X'" },
     })
 
     expect(countEntity).toHaveBeenCalledWith(expect.objectContaining({ extraFilter: "BRAND eq 'X'" }))
     expect(readSchema).not.toHaveBeenCalledWith(expect.objectContaining({ extraFilter: expect.anything() }))
+    // La pantalla necesita saberlo: "8.005" y "1.246 de 8.005" no se leen igual.
+    expect(entradas[0].filtrada).toBe(true)
+  })
+
+  // Uno global no serviría: filtrar por marca aplicado a la tabla de ubicaciones se llevaría todo.
+  it('el filtro es de cada tabla, no de la migración', async () => {
+    esquemas({ A: ['X'], A2: ['X'], B: ['X'], B2: ['X'] })
+    countEntity.mockResolvedValue(1)
+
+    const { entradas } = await planificarMigracion({
+      origen, destino, tablas: ['A', 'B'], tablasDelDestino: ['A2', 'B2'],
+      destinoDe: { A: 'A2', B: 'B2' },
+      filtroPorTabla: { A: "BRAND eq 'X'" },
+    })
+
+    expect(entradas.find((una) => una.origen === 'A').filtrada).toBe(true)
+    expect(entradas.find((una) => una.origen === 'B').filtrada).toBe(false)
+    expect(countEntity.mock.calls.find((una) => una[0].entidad === 'B')[0].extraFilter).toBe('')
   })
 
   it('varias tablas salen todas en el plan', async () => {

@@ -35,7 +35,7 @@ async function esquemaDe({ baseUrl, credentials, entidad, planningArea }) {
  * automático no acierta —los nombres los pone cada cliente y no siempre siguen el mismo patrón—.
  */
 export async function planificarMigracion({
-  origen, destino, tablas, tablasDelDestino, destinoDe = {}, condiciones = [],
+  origen, destino, tablas, tablasDelDestino, destinoDe = {}, filtroPorTabla = {},
 }) {
   const pendientes = [...(tablas ?? [])]
   const entradas = []
@@ -56,7 +56,9 @@ export async function planificarMigracion({
           entidad,
           planningArea: origen.planningArea,
           versionId: origen.versionId,
-          extraFilter: condiciones,
+          // El filtro es DE ESA TABLA. Uno global no serviría: filtrar por marca solo tiene sentido
+          // en la tabla de productos, y aplicado a la de ubicaciones se llevaría todo.
+          extraFilter: filtroPorTabla[entidad] ?? '',
         }).catch(() => null),
       ])
 
@@ -65,6 +67,9 @@ export async function planificarMigracion({
         destino: pareja,
         emparejadaAMano: Boolean(destinoDe[entidad]),
         filas,
+        // Se devuelve para que la pantalla pueda decir que esa cuenta es la del filtro y no la de la
+        // tabla entera: "8.005" y "1.246 de 8.005" no se leen igual.
+        filtrada: Boolean(filtroPorTabla[entidad]),
         // Las claves de negocio del ORIGEN: son con las que hay que ordenar al leer para copiar, y
         // sin un orden estable dos ventanas se solapan y dejan huecos.
         claves: deOrigen?.claves ?? [],

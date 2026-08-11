@@ -7,12 +7,13 @@
 // antes de cargar, es: con qué tabla del destino se emparejó cada una, qué columnas se van a perder
 // por el camino y cuántas filas hay de verdad.
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 
 import { revisarEntrada, sePuedeCopiar } from '../../../core/ibp/migration-plan.js'
 import { listIbpConnections } from '../../lib/ibp.js'
 import { fetchMasterCatalog } from '../../lib/ibp-master-data.js'
 import { fetchMigrationPlan, runMigrationSegment } from '../../lib/ibp-migration.js'
+import FiltroDeTabla from './FiltroDeTabla.jsx'
 import Modal from '../ui/Modal.jsx'
 
 const numero = (valor) => (valor === null || valor === undefined ? '—' : Number(valor).toLocaleString('es'))
@@ -120,6 +121,11 @@ export default function MigrationPlan() {
   const [calculando, setCalculando] = useState(false)
   const [error, setError] = useState('')
 
+  // Las condiciones son POR TABLA. Se guardan aparte del plan porque sobreviven a recalcularlo: uno
+  // ajusta el filtro y vuelve a analizar varias veces antes de copiar.
+  const [condicionesPorTabla, setCondicionesPorTabla] = useState({})
+  const [filtrando, setFiltrando] = useState(null)
+
   const [confirmando, setConfirmando] = useState(false)
   const [escrito, setEscrito] = useState('')
   const [carga, setCarga] = useState(null)
@@ -180,6 +186,7 @@ export default function MigrationPlan() {
             entidadDestino: entrada.destino,
             columnas: entrada.comunes ?? [],
             claves: entrada.claves ?? [],
+            condiciones: (condicionesPorTabla[entrada.origen] ?? []).filter((una) => una.field),
             desde,
             cuantas: 5000,
             nombre: `GoSCM · ${entrada.origen}`,
@@ -201,7 +208,7 @@ export default function MigrationPlan() {
     }
 
     setCarga({ enCurso: false, hechas, mirando: '' })
-  }, [copiables, origen, destino])
+  }, [copiables, origen, destino, condicionesPorTabla])
 
   const calcular = useCallback(async () => {
     setCalculando(true)
@@ -212,6 +219,7 @@ export default function MigrationPlan() {
         destino,
         tablas: elegidas,
         tablasDelDestino: deDestino.tablas,
+        condicionesPorTabla,
       })
       setPlan(leido)
       setError('')
@@ -220,7 +228,7 @@ export default function MigrationPlan() {
     } finally {
       setCalculando(false)
     }
-  }, [origen, destino, elegidas, deDestino.tablas])
+  }, [origen, destino, elegidas, deDestino.tablas, condicionesPorTabla])
 
   return (
     <div className="module-body">
@@ -381,7 +389,8 @@ export default function MigrationPlan() {
                   const meta = ESTADOS[revision.estado] ?? ESTADOS.ok
 
                   return (
-                    <tr key={entrada.origen}>
+                    <Fragment key={entrada.origen}>
+                    <tr>
                       <td>{entrada.origen}</td>
                       <td>
                         {entrada.destino ?? <span className="exp-sub">ninguna</span>}
@@ -389,7 +398,10 @@ export default function MigrationPlan() {
                           <div className="exp-sub">emparejada por la raíz del nombre</div>
                         )}
                       </td>
-                      <td>{numero(entrada.filas)}</td>
+                      <td>
+                        {numero(entrada.filas)}
+                        {entrada.filtrada && <div className="exp-sub">con el filtro puesto</div>}
+                      </td>
                       <td>
                         {entrada.verificable
                           ? (
@@ -415,8 +427,48 @@ export default function MigrationPlan() {
                           {meta.label}
                         </span>
                         {revision.mensaje && <div className="exp-sub">{revision.mensaje}</div>}
+
+                        {/* Filtrar solo se ofrece donde se sabe qué columnas hay: sin el análisis no
+                            habría de dónde sacar la lista de campos. */}
+                        {entrada.verificable && entrada.comunes.length > 0 && (
+                          <button
+                            type="button"
+                            className="btn btn-sm"
+                            onClick={() => setFiltrando((actual) => (actual === entrada.origen ? null : entrada.origen))}
+                          >
+                            {(condicionesPorTabla[entrada.origen] ?? []).length > 0 ? 'Filtro puesto' : 'Filtrar'}
+                          </button>
+                        )}
                       </td>
                     </tr>
+
+                    {/* El editor va en su propia fila y a todo el ancho: con cinco columnas no cabe un
+                        filtro de tres controles sin que quede ilegible. */}
+                    {filtrando === entrada.origen && (
+                      <tr>
+                        <td colSpan={5}>
+                          <div className="exp-sub">
+                            Copiar solo las filas de <b>{entrada.origen}</b> que cumplan esto. Las
+                            demás tablas no se tocan.
+                          </div>
+                          <FiltroDeTabla
+                            tabla={entrada.origen}
+                            campos={entrada.comunes ?? []}
+                            condiciones={condicionesPorTabla[entrada.origen] ?? []}
+                            onCambiar={(suyas) => setCondicionesPorTabla((previas) => {
+                              const salida = { ...previas }
+                              if (suyas.length === 0) delete salida[entrada.origen]
+                              else salida[entrada.origen] = suyas
+                              return salida
+                            })}
+                          />
+                          <div className="exp-sub">
+                            Volvé a analizar para ver cuántas filas quedan con el filtro puesto.
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                    </Fragment>
                   )
                 })}
               </tbody>

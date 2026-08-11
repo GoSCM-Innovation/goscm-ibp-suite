@@ -7,9 +7,9 @@ import { api } from './api.js'
  *
  * Va por POST porque lleva la lista de tablas y las parejas puestas a mano, no porque cambie nada.
  */
-export function fetchMigrationPlan({ origen, destino, tablas, tablasDelDestino, destinoDe, condiciones }) {
+export function fetchMigrationPlan({ origen, destino, tablas, tablasDelDestino, destinoDe, condicionesPorTabla }) {
   return api.post('/api/ibp/migration', {
-    origen, destino, tablas, tablasDelDestino, destinoDe, condiciones,
+    origen, destino, tablas, tablasDelDestino, destinoDe, condicionesPorTabla,
   })
 }
 
