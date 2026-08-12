@@ -11,7 +11,9 @@ import {
   listOrchestrations,
   saveOrchestration,
 } from '../../../lib/orchestrations.js'
-import { downloadFile, fromFile, toFile } from '../../../lib/orchestration-file.js'
+import {
+  clasificarImportacion, downloadFile, fromFile, toFile,
+} from '../../../lib/orchestration-file.js'
 import { useIsNarrow } from '../../../lib/useIsNarrow.js'
 import Modal from '../../ui/Modal.jsx'
 import OrchestrationList from './OrchestrationList.jsx'
@@ -33,6 +35,9 @@ export default function Orchestrations({ destino, Paleta = TaskPalette, leerRegi
   const [error, setError] = useState('')
   const [elegida, setElegida] = useState(null)
   const [aBorrar, setABorrar] = useState(null)
+  // Lo que trae un archivo, ya repartido, esperando que se decida qué entra.
+  const [porImportar, setPorImportar] = useState(null)
+  const [traerRepetidas, setTraerRepetidas] = useState(false)
   const [recarga, setRecarga] = useState(0)
   const [guardando, setGuardando] = useState(false)
   const [errorAlGuardar, setErrorAlGuardar] = useState('')
@@ -94,10 +99,20 @@ export default function Orchestrations({ destino, Paleta = TaskPalette, leerRegi
    */
   const importar = (archivo) => hacer(async () => {
     const leidas = fromFile(JSON.parse(await archivo.text()))
+    // Se enseña antes de crear nada. Un archivo de veinte orquestaciones entrando de golpe no deja
+    // ver cuantas venian ni que doce ya estaban, hasta que la lista aparece con doce «(2)» detras.
+    setPorImportar({ archivo: archivo.name, ...clasificarImportacion(leidas, orquestaciones) })
+  })
+
+  /** Crea de verdad lo revisado. `cuales` es lo que se decidio traer. */
+  const confirmarImportacion = (cuales) => hacer(async () => {
+    setPorImportar(null)
     const usados = new Set(orquestaciones.map((una) => una.name))
     const fallidas = []
 
-    for (const una of leidas) {
+    for (const una of cuales) {
+      // Un nombre repetido se trae con un sufijo y NO se pisa lo que hay: una orquestacion se
+      // configura una vez y sobrescribirla por un nombre igual es una perdida que no se deshace.
       let nombre = una.name
       for (let numero = 2; usados.has(nombre); numero += 1) nombre = `${una.name} (${numero})`
       usados.add(nombre)
@@ -113,6 +128,10 @@ export default function Orchestrations({ destino, Paleta = TaskPalette, leerRegi
   })
 
   const abierta = orquestaciones.find((una) => una.id === elegida) ?? null
+
+  const cuantasEntran = porImportar
+    ? porImportar.nuevas.length + (traerRepetidas ? porImportar.repetidas.length : 0)
+    : 0
 
   /**
    * Guarda el grafo. El error NO se muestra arriba con los de la lista: es del lienzo y hay que
@@ -223,6 +242,91 @@ export default function Orchestrations({ destino, Paleta = TaskPalette, leerRegi
               <Paleta destino={destino} onAgregar={agregarPasoAlFinal} />
             </div>
           </Suspense>
+        </Modal>
+      )}
+
+      {porImportar && (
+        <Modal
+          wide
+          title="Traer orquestaciones de un archivo"
+          subtitle={porImportar.archivo}
+          onClose={() => setPorImportar(null)}
+          footer={(
+            <>
+              <div className="modal-foot-info" />
+              <button type="button" className="btn btn-sm" onClick={() => setPorImportar(null)}>Cancelar</button>
+              <button
+                type="button"
+                className="btn btn-sm btn-primary"
+                onClick={() => confirmarImportacion(
+                  traerRepetidas
+                    ? [...porImportar.nuevas, ...porImportar.repetidas]
+                    : porImportar.nuevas,
+                )}
+                disabled={cuantasEntran === 0}
+              >
+                {cuantasEntran === 0
+                  ? 'No hay nada que traer'
+                  : `Traer ${cuantasEntran}`}
+              </button>
+            </>
+          )}
+        >
+          <p>
+            El archivo trae <b>{porImportar.nuevas.length + porImportar.repetidas.length}</b>{' '}
+            {porImportar.nuevas.length + porImportar.repetidas.length === 1 ? 'orquestación' : 'orquestaciones'}.
+            {porImportar.repetidas.length > 0 && (
+              <>
+                {' '}<b>{porImportar.repetidas.length}</b> ya {porImportar.repetidas.length === 1 ? 'existe' : 'existen'} acá con
+                ese nombre.
+              </>
+            )}
+          </p>
+
+          {porImportar.repetidas.length > 0 && (
+            <label className="exp-enriq">
+              <input
+                type="checkbox"
+                checked={traerRepetidas}
+                onChange={(evento) => setTraerRepetidas(evento.target.checked)}
+              />
+              <span>
+                Traer también las repetidas, con un número detrás del nombre. Lo que ya está{' '}
+                <b>no se pisa</b> nunca: una orquestación se configura una vez.
+              </span>
+            </label>
+          )}
+
+          <div className="table-scroll table-alta">
+            <table className="table-dense">
+              <thead>
+                <tr><th>Orquestación</th><th>Pasos</th><th>Uniones</th><th>Entra</th></tr>
+              </thead>
+              <tbody>
+                {[...porImportar.nuevas.map((una) => ({ ...una, repetida: false })),
+                  ...porImportar.repetidas.map((una) => ({ ...una, repetida: true }))]
+                  .map((una, indice) => (
+                    <tr key={`${una.name}-${indice}`}>
+                      <td>{una.name}</td>
+                      <td>{una.pasos}</td>
+                      <td>{una.uniones}</td>
+                      <td className="exp-sub">
+                        {una.repetida
+                          ? (traerRepetidas ? 'sí, renombrada' : 'no: ya existe')
+                          : 'sí'}
+                      </td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* El archivo no lleva de qué repositorio salió, a propósito: así no puede apuntar en
+              silencio al equivocado. Por eso el aviso es de dónde van a caer, no de dónde vienen. */}
+          <p className="page-hint">
+            Van a nacer en el repositorio donde estás parado
+            {destino?.production ? ' — el PRODUCTIVO' : ''}, con identificadores nuevos.
+          </p>
         </Modal>
       )}
 

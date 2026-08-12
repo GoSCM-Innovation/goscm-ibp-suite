@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { FILE_FORMAT, fromFile, toFile } from './orchestration-file.js'
+import { FILE_FORMAT, clasificarImportacion, fromFile, toFile } from './orchestration-file.js'
 
 const orquestacion = {
   id: 'orq-1',
@@ -89,5 +89,40 @@ describe('fromFile', () => {
       expect(una.nodes).toHaveLength(1)
       expect(una.nodes[0].id).toBe('a')
     })
+  })
+})
+
+describe('clasificarImportacion', () => {
+  const puestas = [{ name: 'Carga diaria' }, { name: 'Cierre de mes' }]
+
+  it('reparte entre lo nuevo y lo que ya estaba', () => {
+    const salida = clasificarImportacion(
+      [{ name: 'Carga diaria' }, { name: 'Carga semanal' }],
+      puestas,
+    )
+    expect(salida.nuevas.map((una) => una.name)).toEqual(['Carga semanal'])
+    expect(salida.repetidas.map((una) => una.name)).toEqual(['Carga diaria'])
+  })
+
+  // «Carga diaria» y «carga diaria » son la misma para quien las mira.
+  it('no distingue mayusculas ni espacios sobrantes', () => {
+    expect(clasificarImportacion([{ name: ' carga DIARIA ' }], puestas).repetidas).toHaveLength(1)
+  })
+
+  it('cuenta los pasos y las uniones de cada una', () => {
+    const salida = clasificarImportacion(
+      [{ name: 'Nueva', nodes: [{ id: 'a' }, { id: 'b' }], edges: [{ id: 'e' }] }],
+      [],
+    )
+    expect(salida.nuevas[0]).toMatchObject({ pasos: 2, uniones: 1 })
+  })
+
+  it('una orquestacion sin grafo cuenta cero, no undefined', () => {
+    expect(clasificarImportacion([{ name: 'Vacia' }], []).nuevas[0]).toMatchObject({ pasos: 0, uniones: 0 })
+  })
+
+  it('sin nada que importar no revienta', () => {
+    expect(clasificarImportacion([], [])).toEqual({ nuevas: [], repetidas: [] })
+    expect(clasificarImportacion(undefined, undefined)).toEqual({ nuevas: [], repetidas: [] })
   })
 })

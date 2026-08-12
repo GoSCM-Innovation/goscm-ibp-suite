@@ -47,7 +47,7 @@ Las 17 reglas confirmadas (documentadas en `docs/FASE-0-LEVANTAMIENTO.md` §5) v
 - Español para texto de interfaz, documentación y comentarios. Código y nombres de símbolos en inglés.
 - **Sin iframes para los módulos.** Todo se reescribe a React; es una decisión de producto, no una preferencia.
 - **Todo módulo de `core/` lleva tests** (Vitest). Es la única forma de sostener la paridad con proyectos que no tienen ninguno.
-- **Paridad antes de dar un módulo por terminado**: checklist de funcionalidad y verificación lado a lado contra la app vieja correspondiente. El de v8 está en [`docs/PARIDAD-V8.md`](docs/PARIDAD-V8.md) — **antes de contestar «¿ya está v8?», recorrer el árbol de `src/` de v8 en `origin/master` y actualizarlo**, no contestar de memoria.
+- **Paridad antes de dar un módulo por terminado**: checklist de funcionalidad y verificación lado a lado contra la app vieja correspondiente. Los de v8 y v9 están en [`docs/PARIDAD-V8.md`](docs/PARIDAD-V8.md) y [`docs/PARIDAD-V9.md`](docs/PARIDAD-V9.md) — **antes de contestar «¿ya está v8/v9?», recorrer su árbol en `origin/master` y actualizar el checklist**, no contestar de memoria. En v9 hay que recorrer también `api/` y `public/legacy/`: dos módulos enteros vivían ahí.
 - Preservar la arquitectura de IndexedDB de v7 al reescribir Explorer: los datasets grandes **nunca** viven completos en memoria, se leen por cursor. Meterlos en estado de React degrada el rendimiento.
 - Commits sin `Co-Authored-By`.
 - Sesiones cortas y enfocadas por feature.

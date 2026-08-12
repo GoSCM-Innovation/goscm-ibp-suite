@@ -91,6 +91,34 @@ function dePasosPlanos(steps) {
   return { nodes, edges }
 }
 
+/**
+ * Reparte lo que trae el archivo entre lo nuevo y lo que ya existe con ese nombre.
+ *
+ * Se enseña ANTES de importar, que es lo que hacía v9. Sin esto, un archivo de veinte orquestaciones
+ * entra de golpe: no se sabe cuántas venían, ni que doce ya estaban, hasta que la lista aparece con
+ * doce «(2)» detrás.
+ *
+ * Se comparan los nombres sin espacios sobrantes y sin distinguir mayúsculas, porque «Carga diaria» y
+ * «carga diaria » son la misma para quien las mira.
+ */
+export function clasificarImportacion(leidas, existentes) {
+  const puestos = new Set((existentes ?? []).map((una) => String(una?.name ?? '').trim().toLowerCase()))
+
+  const nuevas = []
+  const repetidas = []
+
+  for (const una of leidas ?? []) {
+    const lista = puestos.has(String(una?.name ?? '').trim().toLowerCase()) ? repetidas : nuevas
+    lista.push({
+      ...una,
+      pasos: una?.nodes?.length ?? 0,
+      uniones: una?.edges?.length ?? 0,
+    })
+  }
+
+  return { nuevas, repetidas }
+}
+
 /** Descarga el archivo. Nombre con la fecha, que es lo que se busca cuando hay varios. */
 export function downloadFile(contenido, nombre) {
   const texto = JSON.stringify(contenido, null, 2)
