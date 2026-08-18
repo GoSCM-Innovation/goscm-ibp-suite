@@ -17,10 +17,12 @@ import { fetchMasterCatalog } from '../../lib/ibp-master-data.js'
 
 const ExplorerSetup = lazy(() => import('./ExplorerSetup.jsx'))
 const ExplorerExtract = lazy(() => import('./ExplorerExtract.jsx'))
+const BomTree = lazy(() => import('./BomTree.jsx'))
 
 const HERRAMIENTAS = [
   { id: 'origen', label: 'Origen de los datos' },
   { id: 'descarga', label: 'Descargar' },
+  { id: 'arbol', label: 'Árbol de materiales' },
 ]
 
 /** Elige sola solo si hay UNA opción. Con varias, la cadena vacía obliga a elegir. */
@@ -190,6 +192,13 @@ export default function DataTools() {
             key={`${conexionId}|${area}|${version}`}
             destino={{ connectionId: conexionId, planningArea: area, versionId: version }}
           />
+        </Suspense>
+      )}
+      {/* El árbol trabaja sobre lo DESCARGADO, no contra SAP: no necesita el destino, solo la clave
+          para empezar de cero si se cambió de tenant. */}
+      {listo && herramienta === 'arbol' && (
+        <Suspense fallback={<div className="page-hint">Cargando el árbol…</div>}>
+          <BomTree key={`${conexionId}|${area}|${version}`} />
         </Suspense>
       )}
     </div>

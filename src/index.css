@@ -1692,6 +1692,58 @@ a { color: var(--cyan); }
 
 .table-alta { max-height: 55vh; }
 
+/* Árbol de materiales: filas planas con sangría, no anidadas — mil nodos anidados van lentos. */
+.tag-error { background: var(--red-bg-soft, rgba(198, 44, 44, 0.12)); border-color: var(--red); color: var(--red); }
+
+.bom-lista { display: flex; flex-direction: column; gap: 2px; max-height: 300px; overflow-y: auto; padding: 4px 0; }
+.bom-opcion {
+  align-items: baseline;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: inherit;
+  cursor: pointer;
+  display: flex;
+  font: inherit;
+  gap: 8px;
+  padding: 4px 6px;
+  text-align: left;
+}
+.bom-opcion:hover { background: var(--surface-glass); border-color: var(--border); }
+.bom-opcion.active { background: var(--surface-glass); border-color: var(--cyan); }
+
+.bom-leyenda { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 11px; color: var(--muted); padding-top: 6px; }
+
+.bom-arbol { display: flex; flex-direction: column; font-size: 12px; }
+.bom-fila {
+  align-items: baseline;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 3px 6px;
+}
+.bom-fila:hover { background: var(--surface-glass); }
+.bom-ciclo { background: var(--red-bg-soft, rgba(198, 44, 44, 0.08)); }
+
+.bom-flecha {
+  background: transparent;
+  border: none;
+  color: var(--cyan);
+  cursor: pointer;
+  font: inherit;
+  line-height: 1;
+  padding: 0;
+  width: 14px;
+}
+.bom-flecha-hueca { cursor: default; visibility: hidden; }
+
+.bom-icono { line-height: 1; }
+.bom-prd { font-weight: 600; }
+.bom-descr { color: var(--muted); flex: 1 1 200px; min-width: 120px; }
+
+.bom-ciclos { display: flex; flex-direction: column; gap: 2px; font-size: 11px; padding-top: 6px; }
+
 /* Modo edición del visor: se ve de un golpe qué celdas se tocaron y qué filas se van a borrar. */
 .celda-editable { padding: 2px 4px; }
 .celda-editable input {
