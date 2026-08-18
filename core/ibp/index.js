@@ -246,6 +246,37 @@ export {
 } from './master-data.js'
 
 export {
+  ARCOS as ARCOS_DE_RED,
+  CLASES as CLASES_DE_RED,
+  COLUMNAS as COLUMNAS_DE_RED,
+  TIPO_PROVEEDOR,
+  armarRed,
+  claseDeUbicacion,
+  nodosSueltos,
+  plazoLegible,
+  repartirEnColumnas,
+  resumirRed,
+  vecinosDe,
+} from './supply-network.js'
+
+export {
+  TIPOS as TIPOS_DEL_ARBOL,
+  abrirTodo,
+  armarHijos,
+  armarNodo,
+  buscarNodo,
+  claveDePlanta,
+  indexarCabeceras,
+  indexarComponentes,
+  indexarMaestro,
+  indexarPorReceta,
+  indicesVacios,
+  profundidad,
+  raicesPorPlanta,
+  soltarHijos,
+} from './bom-tree.js'
+
+export {
   CONVERSIONES,
   MAX_VALORES as MAX_VALORES_DE_CONVERSION,
   mdtsDelArea,

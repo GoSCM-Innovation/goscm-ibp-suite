@@ -18,11 +18,13 @@ import { fetchMasterCatalog } from '../../lib/ibp-master-data.js'
 const ExplorerSetup = lazy(() => import('./ExplorerSetup.jsx'))
 const ExplorerExtract = lazy(() => import('./ExplorerExtract.jsx'))
 const BomTree = lazy(() => import('./BomTree.jsx'))
+const SupplyNetwork = lazy(() => import('./SupplyNetwork.jsx'))
 
 const HERRAMIENTAS = [
   { id: 'origen', label: 'Origen de los datos' },
   { id: 'descarga', label: 'Descargar' },
   { id: 'arbol', label: 'Árbol de materiales' },
+  { id: 'red', label: 'Red de suministro' },
 ]
 
 /** Elige sola solo si hay UNA opción. Con varias, la cadena vacía obliga a elegir. */
@@ -199,6 +201,11 @@ export default function DataTools() {
       {listo && herramienta === 'arbol' && (
         <Suspense fallback={<div className="page-hint">Cargando el árbol…</div>}>
           <BomTree key={`${conexionId}|${area}|${version}`} />
+        </Suspense>
+      )}
+      {listo && herramienta === 'red' && (
+        <Suspense fallback={<div className="page-hint">Cargando la red…</div>}>
+          <SupplyNetwork key={`${conexionId}|${area}|${version}`} />
         </Suspense>
       )}
     </div>

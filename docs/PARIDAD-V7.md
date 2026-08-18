@@ -15,7 +15,7 @@ prueba. Por eso se porta módulo a módulo, y cada uno con sus pruebas antes de 
 |---|---|---|---|
 | Production Visualizer | `bom.js` | 1.594 | **Portado** — `core/ibp/bom-tree.js` + `src/lib/bom-load.js` + `data/BomTree.jsx` |
 | Production Analyzer | `prodAnalyzer.js` | 2.789 | Pendiente |
-| Network Visualizer | `visualizer.js` | 1.448 | Pendiente |
+| Network Visualizer | `visualizer.js` | 1.448 | **Portado** — `core/ibp/supply-network.js` + `src/lib/network-load.js` + `data/SupplyNetwork.jsx` |
 | Network Analyzer | `analyzer.js` + `snWebView.js` | 3.531 | Pendiente |
 | Glosario Analyzers | `glosario.js` | 1.409 | Pendiente |
 | Planning Area Documenter | `paDoc.js` | 1.055 | Pendiente |
@@ -60,6 +60,39 @@ Las cinco reglas de SAP que gobiernan el árbol están codificadas como guardas 
   principal es `TERMINADO` y su coproducto `ASERRIN` salía encabezada por el aserrín. Aquí encabeza el
   producto principal si él mismo puede ser raíz; si es componente en esa planta, encabeza el primer
   coproducto que sí pueda —que es correcto: la receta produce algo que nadie consume—.
+
+## Cómo se porta la red de suministro
+
+Tres reglas, cada una con prueba:
+
+1. Una ubicación **no** se clasifica por su nombre ni por dónde aparece, sino por el maestro:
+   `LOCTYPE = V` es proveedor; si fabrica el producto, planta; el resto, ubicación.
+2. Un arco de proveedor solo se dibuja si va a una **planta** y si lo que trae es de verdad un
+   componente de la receta **de esa planta**. Sin eso, cualquier proveedor del tenant cuelga de
+   cualquier planta y la red deja de decir nada.
+3. Los arcos de un mismo proveedor a una misma planta se juntan en **uno** que lista los componentes.
+   Un proveedor que trae once materiales son once flechas encima de la misma.
+
+### Diferencias deliberadas
+
+- **Columnas en vez de lienzo.** v7 usaba `vis-network` desde un CDN y colocaba los nodos con
+  baricentros para reducir cruces. Aquí se dibujan cinco columnas —proveedores, plantas, ubicaciones,
+  producto, clientes— porque una red de suministro se lee de izquierda a derecha, y un lienzo con nodos
+  arrastrables invita a moverlos: dos personas mirando el mismo dato acaban viendo dibujos distintos.
+- **Los arcos también se listan.** En una red real son decenas. «¿De dónde le llega a esta planta?» se
+  contesta antes leyendo una lista que persiguiendo flechas.
+- **Los nodos sueltos se nombran.** En v7 aparecían en una esquina y nadie decía qué eran. Un nodo sin
+  arcos es un dato incompleto en SAP, y decirlo es más útil que dibujarlo.
+
+### Dos campos que hubo que añadir a la descarga
+
+Ninguno se inventó: los dos son los que leía v7, comprobados antes en el tenant.
+
+- `LOCTYPE` en el maestro de ubicaciones. Es lo único que distingue un proveedor de una planta. En el
+  tenant de pruebas, 137 de 481 ubicaciones son proveedores.
+- El **maestro de clientes** (`AS1CUSTOMER`, 631 filas) con su descripción. Sin él la red enseñaba
+  códigos de cliente, y un mapa de a quién le vendés en el que los clientes son números no sirve para
+  hablarlo con nadie.
 
 ## Sin estrenar
 

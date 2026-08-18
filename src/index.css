@@ -1692,6 +1692,48 @@ a { color: var(--cyan); }
 
 .table-alta { max-height: 55vh; }
 
+/* Red de suministro: columnas de origen a destino, no un lienzo con nodos que se arrastran. */
+.red-columnas { align-items: flex-start; display: flex; gap: 12px; overflow-x: auto; padding: 8px 0; }
+.red-columna { display: flex; flex: 0 0 auto; flex-direction: column; gap: 4px; min-width: 170px; }
+.red-columna-titulo {
+  align-items: baseline;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  font-size: 11px;
+  font-weight: 600;
+  gap: 6px;
+  justify-content: space-between;
+  padding-bottom: 4px;
+  text-transform: uppercase;
+}
+.red-nodo {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-left-width: 3px;
+  border-radius: 6px;
+  color: inherit;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  font: inherit;
+  font-size: 11px;
+  gap: 1px;
+  padding: 5px 7px;
+  text-align: left;
+}
+.red-nodo:hover { border-color: var(--cyan); }
+.red-nombre { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.red-marcado { border-color: var(--cyan); box-shadow: 0 0 0 1px var(--cyan); }
+.red-apagado { opacity: 0.35; }
+
+.red-proveedor { border-left-color: #a78bfa; }
+.red-planta { border-left-color: var(--accent); }
+.red-ubicacion { border-left-color: var(--cyan); }
+.red-producto { border-left-color: #6c63ff; }
+.red-cliente { border-left-color: #10b981; }
+
+.red-arco { align-items: baseline; display: flex; flex-wrap: wrap; font-size: 11px; gap: 6px; padding: 2px 0; }
+
 /* Árbol de materiales: filas planas con sangría, no anidadas — mil nodos anidados van lentos. */
 .tag-error { background: var(--red-bg-soft, rgba(198, 44, 44, 0.12)); border-color: var(--red); color: var(--red); }
 

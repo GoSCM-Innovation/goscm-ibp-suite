@@ -94,7 +94,10 @@ export const EXTRACCIONES = Object.freeze([
     grupo: 'arbol',
     papel: 'locMaster',
     etiqueta: 'Maestro de ubicaciones',
-    campos: ['LOCID', 'LOCDESCR', 'LOCVALID'],
+    // `LOCTYPE` es lo que distingue un PROVEEDOR de una planta o un almacén: en SAP vale `V` para los
+    // proveedores y viene vacío para el resto. Sin él, la red de suministro no puede dibujar de dónde
+    // entra la materia prima, que es media red.
+    campos: ['LOCID', 'LOCDESCR', 'LOCTYPE', 'LOCVALID'],
     descartarSi: 'LOCVALID',
     esencial: false,
   },
@@ -149,6 +152,17 @@ export const EXTRACCIONES = Object.freeze([
     papel: 'custProd',
     etiqueta: 'Producto por cliente',
     campos: ['CUSTID', 'PRDID'],
+    esencial: false,
+  },
+  {
+    tabla: 'sn_cust_master',
+    grupo: 'red',
+    papel: 'custMaster',
+    etiqueta: 'Maestro de clientes',
+    // Sin la descripción, la red enseña códigos de cliente. Un mapa de a quién le vendés en el que
+    // los clientes son números no sirve para hablarlo con nadie.
+    campos: ['CUSTID', 'CUSTDESCR', 'CUSTVALID'],
+    descartarSi: 'CUSTVALID',
     esencial: false,
   },
 ])

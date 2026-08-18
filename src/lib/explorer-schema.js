@@ -12,7 +12,7 @@
 // el que v7 podía con áreas de decenas de miles de productos.
 
 /** La versión del esquema. Sube cuando cambian las tablas o los índices. */
-export const VERSION_DEL_ESQUEMA = 1
+export const VERSION_DEL_ESQUEMA = 2
 
 /** Cómo se llama la base local. Una sola, con marca de a qué tenant pertenece lo que hay dentro. */
 export const NOMBRE_DE_LA_BASE = 'goscm_explorer'
@@ -56,6 +56,7 @@ export const TABLAS = Object.freeze([
   { nombre: 'sn_psi', indices: [idx('by_prdid', 'PRDID'), idx('by_sourceid', 'SOURCEID')] },
   { nombre: 'sn_loc_prod', indices: [idx('by_prdid', 'PRDID'), idx('by_locid', 'LOCID')] },
   { nombre: 'sn_cust_prod', indices: [idx('by_prdid', 'PRDID'), idx('by_custid', 'CUSTID')] },
+  { nombre: 'sn_cust_master', clave: 'CUSTID' },
 
   // ── Jerarquía de producción ────────────────────────────────────────────────
   { nombre: 'pa_psh', indices: [idx('by_prdid', 'PRDID'), idx('by_locid', 'LOCID'), idx('by_sourceid', 'SOURCEID')] },
