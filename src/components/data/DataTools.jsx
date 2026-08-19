@@ -21,6 +21,7 @@ const BomTree = lazy(() => import('./BomTree.jsx'))
 const SupplyNetwork = lazy(() => import('./SupplyNetwork.jsx'))
 const ProductionAnalyzer = lazy(() => import('./ProductionAnalyzer.jsx'))
 const PlanningAreaDoc = lazy(() => import('./PlanningAreaDoc.jsx'))
+const Glosario = lazy(() => import('./Glosario.jsx'))
 
 const HERRAMIENTAS = [
   { id: 'origen', label: 'Origen de los datos' },
@@ -29,6 +30,7 @@ const HERRAMIENTAS = [
   { id: 'red', label: 'Red de suministro' },
   { id: 'calidad', label: 'Calidad de datos' },
   { id: 'documentar', label: 'Documentar el área' },
+  { id: 'glosario', label: 'Cómo se lee' },
 ]
 
 /** Elige sola solo si hay UNA opción. Con varias, la cadena vacía obliga a elegir. */
@@ -215,6 +217,12 @@ export default function DataTools() {
       {/* La clasificación de tipos se guarda por área, así que el área baja como prop. */}
       {/* El documentador NO trabaja sobre lo descargado: recibe los CSV de la configuración del área,
           que SAP no expone por API. Lo único que lee en vivo son los trabajos del tenant. */}
+      {/* El glosario no depende del tenant ni de lo descargado: explica los informes. */}
+      {listo && herramienta === 'glosario' && (
+        <Suspense fallback={<div className="page-hint">Cargando…</div>}>
+          <Glosario />
+        </Suspense>
+      )}
       {listo && herramienta === 'documentar' && (
         <Suspense fallback={<div className="page-hint">Cargando el documentador…</div>}>
           <PlanningAreaDoc

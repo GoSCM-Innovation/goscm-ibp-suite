@@ -1692,6 +1692,24 @@ a { color: var(--cyan); }
 
 .table-alta { max-height: 55vh; }
 
+/* Glosario: sale del mismo código que juzga, así que no puede quedarse viejo. */
+.glos-titulo {
+  background: transparent;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 0;
+  text-align: left;
+  text-transform: uppercase;
+  width: 100%;
+}
+.glos-titulo:hover { color: var(--cyan); }
+.glos-cuerpo { padding-top: 8px; }
+.glos-cuerpo .table-dense td:first-child { font-weight: 600; white-space: nowrap; }
+
 /* Analizador de la jerarquía: clasificar tipos y leer el informe por severidad. */
 .pa-exige { color: var(--muted); font-size: 11px; margin: 6px 0 0; padding-left: 18px; }
 .pa-exige li { padding: 1px 0; }

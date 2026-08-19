@@ -9,6 +9,9 @@ local, que está anidado un nivel más abajo (`ibp-bom-v7/ibp-bom-v7`) y puede e
 v7 es la migración más grande de las tres: casi tanto código como v8 y v9 juntos, y sin una sola
 prueba. Por eso se porta módulo a módulo, y cada uno con sus pruebas antes de darlo por hecho.
 
+**Los ocho módulos están portados.** Lo que queda pendiente son partes de dos de ellos —las hojas por
+entidad de los analizadores—, anotadas más abajo.
+
 ## Los ocho módulos de v7
 
 | Módulo (nombre en su menú) | Archivo | Líneas | Estado |
@@ -17,7 +20,7 @@ prueba. Por eso se porta módulo a módulo, y cada uno con sus pruebas antes de 
 | Production Analyzer | `prodAnalyzer.js` | 2.789 | **Portado (la hoja de productos)** — `core/ibp/production-rules.js` + `production-analysis.js` + `data/ProductionAnalyzer.jsx` |
 | Network Visualizer | `visualizer.js` | 1.448 | **Portado** — `core/ibp/supply-network.js` + `src/lib/network-load.js` + `data/SupplyNetwork.jsx` |
 | Network Analyzer | `analyzer.js` + `snWebView.js` | 3.531 | **Portado (la hoja de productos)** — `core/ibp/network-analysis.js` + `src/lib/network-analyze.js` |
-| Glosario Analyzers | `glosario.js` | 1.409 | Pendiente |
+| Glosario Analyzers | `glosario.js` | 1.409 | **Portado** — `data/Glosario.jsx`, derivado del código |
 | Planning Area Documenter | `paDoc.js` | 1.055 | **Portado** — `core/ibp/pa-doc-model.js` + `src/lib/docx.js` + `pa-doc.js` + `data/PlanningAreaDoc.jsx` |
 | Mapping Dataflow Generator | `docs.js` | 2.527 | **Portado** (llegó por v9) — `cids/documenter/*` |
 | Integration Explorer | `explorer.js` | 1.724 | **Portado** (llegó por v9) — `cids/explorer/*` |
@@ -194,6 +197,19 @@ Tres detalles que se ganan leyendo el formato:
 El lector de CSV es el de SAP: separador punto y coma, y un salto de línea dentro de un campo
 entrecomillado es parte del campo —las definiciones de cálculo los llevan—, así que partir por líneas
 antes de mirar las comillas rompería esas filas.
+
+## El glosario, derivado del código
+
+v7 tenía el glosario escrito a mano en HTML, en paralelo a las reglas del analizador: dos textos que
+hablan de lo mismo y que nadie mantiene a la vez. Se cambia una regla, el glosario sigue explicando la
+vieja, y el consultor le explica al cliente algo que la herramienta ya no hace.
+
+Aquí el glosario **se deriva** de `core/ibp/production-rules.js` y `network-analysis.js`, que son los
+mismos módulos que juzgan. La tabla de «qué se le exige a cada categoría» es la matriz resuelta, no una
+copia: comprobado en el navegador, sus 13 filas son las 13 comprobaciones de `MATRIZ`, y la fila de «sin
+receta propia» dice Error / Error / — / — / Aviso, que es exactamente lo que devuelve `reglasDe()` para
+cada categoría. Si mañana una comprobación cambia de rojo a aviso, esa pantalla lo dice sin que nadie la
+toque.
 
 ## Sin estrenar
 
