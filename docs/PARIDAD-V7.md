@@ -9,17 +9,19 @@ local, que está anidado un nivel más abajo (`ibp-bom-v7/ibp-bom-v7`) y puede e
 v7 es la migración más grande de las tres: casi tanto código como v8 y v9 juntos, y sin una sola
 prueba. Por eso se porta módulo a módulo, y cada uno con sus pruebas antes de darlo por hecho.
 
-**Los ocho módulos están portados.** Lo que queda pendiente son partes de dos de ellos —las hojas por
-entidad de los analizadores—, anotadas más abajo.
+**Los ocho módulos están portados, y con ellos v7 queda cerrado.** De las ocho hojas del Excel que
+sacaban los analizadores se portaron las tres que contestan una pregunta propia —producto, ubicación y
+recurso—; las otras cuatro eran la misma información vista desde otra tabla y se descartan a propósito,
+con el motivo escrito en [Los informes por entidad](#los-informes-por-entidad).
 
 ## Los ocho módulos de v7
 
 | Módulo (nombre en su menú) | Archivo | Líneas | Estado |
 |---|---|---|---|
 | Production Visualizer | `bom.js` | 1.594 | **Portado** — `core/ibp/bom-tree.js` + `src/lib/bom-load.js` + `data/BomTree.jsx` |
-| Production Analyzer | `prodAnalyzer.js` | 2.789 | **Portado (la hoja de productos)** — `core/ibp/production-rules.js` + `production-analysis.js` + `data/ProductionAnalyzer.jsx` |
+| Production Analyzer | `prodAnalyzer.js` | 2.789 | **Portado** — `core/ibp/production-rules.js` + `production-analysis.js` + `location-analysis.js` + `resource-analysis.js` + `data/ProductionAnalyzer.jsx` |
 | Network Visualizer | `visualizer.js` | 1.448 | **Portado** — `core/ibp/supply-network.js` + `src/lib/network-load.js` + `data/SupplyNetwork.jsx` |
-| Network Analyzer | `analyzer.js` + `snWebView.js` | 3.531 | **Portado (la hoja de productos)** — `core/ibp/network-analysis.js` + `src/lib/network-analyze.js` |
+| Network Analyzer | `analyzer.js` + `snWebView.js` | 3.531 | **Portado** — `core/ibp/network-analysis.js` + `src/lib/network-analyze.js` |
 | Glosario Analyzers | `glosario.js` | 1.409 | **Portado** — `data/Glosario.jsx`, derivado del código |
 | Planning Area Documenter | `paDoc.js` | 1.055 | **Portado** — `core/ibp/pa-doc-model.js` + `src/lib/docx.js` + `pa-doc.js` + `data/PlanningAreaDoc.jsx` |
 | Mapping Dataflow Generator | `docs.js` | 2.527 | **Portado** (llegó por v9) — `cids/documenter/*` |
@@ -155,14 +157,86 @@ La **máquina de estados** de v7 se conserva con sus nombres —«Red completa»
 material: un terminado necesita ruta a cliente, un insumo un arco de abastecimiento, un semiterminado
 consumo local o transferencia. Preguntarles lo mismo a los tres no diría nada de ninguno.
 
-### Lo que falta de estos dos módulos
+### Los informes por entidad
 
 v7 sacaba un Excel de ocho hojas: una por entidad (producto, ubicación, recurso, recurso-ubicación,
-cabecera, componente, recurso de receta) más la de tipos excluidos. **Aquí está la de productos**, que
-es la que contesta la pregunta del consultor —«qué materiales están mal armados»—; las otras siete son
-vistas por tabla de los mismos problemas. Quedan pendientes, y el andamio para ellas ya existe: las
-tablas de vista `pa_location_web`, `pa_resource_web`, `pa_resloc_web`, `pa_psh_web`, `pa_psi_web` y
-`pa_psr_web` están declaradas en el esquema local.
+cabecera, componente, recurso de receta) más la de tipos excluidos. Aquí las tres que contestan una
+pregunta propia son pestañas de la misma pantalla; las otras cuatro eran vistas por tabla de los mismos
+datos y no se portan (ver más abajo).
+
+**Por ubicación** (`core/ibp/location-analysis.js`, pestaña 4) es el que más criterio propio tiene, y no
+por las comprobaciones sino por lo que hace antes: el **rol de una ubicación no se lee de ningún campo
+de SAP, se deduce de cómo se comporta**. SAP tiene `LOCTYPE`, pero solo distingue al proveedor; que algo
+sea planta, nodo de transferencia o punto final no está escrito en ninguna parte.
+
+| Rol | De qué se deduce |
+| --- | --- |
+| Planta de producción | Tiene recetas |
+| Proveedor | Manda un producto que el destino **consume** en una receta suya |
+| Nodo de transferencia | Manda un producto que el destino **no** consume |
+| Nodo receptor | Recibe, y no produce ni manda |
+| Nodo de recursos | Tiene recursos asignados o usados |
+| Sin actividad | Solo está en el maestro |
+
+La distinción entre **proveedor** y **nodo de transferencia** es la que da valor a la hoja: las dos
+mandan material, pero solo una lo manda a donde se usa. La otra casi siempre esconde un arco de más o un
+componente que falta en el BOM del destino. Una ubicación puede tener varios roles a la vez y entonces
+se le exige lo de cada uno; preguntarle a todas lo mismo daría cientos de errores falsos, igual que en
+el informe de productos.
+
+**Por recurso** (`core/ibp/resource-analysis.js`, pestaña 5) son tres comprobaciones y aun así es el que
+más rápido encuentra algo, porque un recurso vive en dos tablas que nadie mira juntas: la que dice qué
+máquinas **usan** las recetas (`PRODUCTIONSOURCERESOURCE`) y la que dice qué máquinas están
+**asignadas** a una planta (`RESOURCELOCATION`). Estar en una y no en la otra da un plan que no se puede
+ejecutar —capacidad que no restringe, o capacidad que nunca se va a cargar— y SAP no lo avisa. El
+universo que se recorre es la **unión** de las tres tablas y no el maestro: un recurso que una receta usa
+y que no está en el maestro es justo el caso que se perdería.
+
+Estas dos tablas se agregaron a la descarga del grupo «Árbol de materiales» (`bom_res`, `bom_resloc`).
+Son de cientos de filas, no de decenas de miles. Comprobado contra dos tenants: el maestro de recursos
+**no tiene el tipo de recurso**; está en `RESOURCETYPE` de Resource Location, porque en IBP el mismo
+recurso puede ser de un tipo distinto en cada planta.
+
+### Medido contra el tenant de pruebas
+
+`my400444`, área `ASIBPTS`, con los cuatro tipos clasificados (`FERT` terminado, `HALB` semiterminado,
+`ROH` insumo, `HAWA` mercadería). Los dos papeles nuevos resolvieron **por sus campos**, no por el
+nombre: `AS1RESOURCE` y `AS1RESOURCELOCATION`.
+
+| | Ubicaciones | Recursos |
+|---|---|---|
+| Analizados | 478 en 4,3 s | 545 en 0,3 s |
+| Error / Aviso / Nota / Bien | 135 / 70 / 232 / 41 | 4 / 335 / 0 / 206 |
+
+Lo que sale de ahí, y que es lo que hace creíble la deducción de roles:
+
+- **144 nodos de transferencia y 45 proveedores**, y **27 ubicaciones con los dos roles a la vez** —
+  mandan material que el destino consume *y* material que no—. Es el caso que el diseño predecía, y
+  aparece solo porque los roles se acumulan en vez de elegir uno.
+- Los 45 proveedores **no** son los 137 que tienen `LOCTYPE = V`: son los que además mandan algo que en
+  el destino de verdad se consume. La diferencia es el hallazgo, no un error de conteo.
+- **232 ubicaciones solo están en el maestro** y en ninguna otra tabla. Salen como nota, no como error:
+  media ficha sin usar es normal en un maestro vivo.
+- Con 7 plantas, las comprobaciones de planta dieron números pequeños y revisables: 7 recetas con plazo
+  de producción en cero, 3 componentes sin arco que los traiga, 5 recursos asignados que nadie usa, 2
+  recetas sin componentes y 2 sin recurso.
+- De los 545 recursos, **335 no aparecen en ninguna receta** (aviso: capacidad que nadie planifica), **3
+  están huérfanos** y **1 lo usan las recetas sin estar asignado a ninguna planta** (error: SAP no le
+  aplica su restricción de capacidad).
+
+Ninguna lista llegó al tope en este tenant, y las tres comprobaciones de coherencia cuadran: filas
+guardadas = filas analizadas, suma de severidades = total, y todas las filas con las 11 columnas
+declaradas.
+
+**Lo que no se porta y por qué.** Las cuatro hojas restantes de v7 —recurso-ubicación, cabecera,
+componente y recurso de receta— no contestan ninguna pregunta que las tres anteriores no contesten ya:
+son la misma fila de datos vista desde la tabla en la que está guardada. La de cabeceras enumera las
+recetas sin componentes que el informe por ubicación ya agrupa por planta; la de componentes enumera las
+filas de `PSI` que el informe de productos ya cruza. Existían porque v7 volcaba un Excel y una hoja por
+tabla era gratis; aquí cada pestaña cuesta una descarga y una explicación, y una que repite lo que la de
+al lado ya dijo hace el informe peor, no más completo. Las tablas de vista `pa_resloc_web`,
+`pa_psh_web`, `pa_psi_web` y `pa_psr_web` quedan declaradas en el esquema local por si un cliente las
+pide con un motivo concreto.
 
 ## Cómo se porta el documentador del área
 
@@ -204,12 +278,41 @@ v7 tenía el glosario escrito a mano en HTML, en paralelo a las reglas del anali
 hablan de lo mismo y que nadie mantiene a la vez. Se cambia una regla, el glosario sigue explicando la
 vieja, y el consultor le explica al cliente algo que la herramienta ya no hace.
 
-Aquí el glosario **se deriva** de `core/ibp/production-rules.js` y `network-analysis.js`, que son los
-mismos módulos que juzgan. La tabla de «qué se le exige a cada categoría» es la matriz resuelta, no una
-copia: comprobado en el navegador, sus 13 filas son las 13 comprobaciones de `MATRIZ`, y la fila de «sin
-receta propia» dice Error / Error / — / — / Aviso, que es exactamente lo que devuelve `reglasDe()` para
-cada categoría. Si mañana una comprobación cambia de rojo a aviso, esa pantalla lo dice sin que nadie la
-toque.
+Aquí el glosario **se deriva** de `core/ibp/production-rules.js`, `network-analysis.js`,
+`location-analysis.js` y `resource-analysis.js`, que son los mismos módulos que juzgan. La tabla de «qué
+se le exige a cada categoría» es la matriz resuelta, no una copia: comprobado en el navegador, sus 13
+filas son las 13 comprobaciones de `MATRIZ`, y la fila de «sin receta propia» dice
+Error / Error / — / — / Aviso, que es exactamente lo que devuelve `reglasDe()` para cada categoría. Si
+mañana una comprobación cambia de rojo a aviso, esa pantalla lo dice sin que nadie la toque.
+
+Por lo mismo, las comprobaciones por ubicación se declaran como tabla (`EXIGENCIAS`) y no como una
+cadena de `if`: el glosario las lee de ahí, y hay una prueba que recorre la tabla entrada por entrada y
+comprueba que cada una dispara de verdad su severidad. Sin esa prueba, renombrar un campo dejaría al
+glosario prometiendo una comprobación que ya no existe —que es exactamente lo que le pasaba a v7—.
+
+## Un número que no se puede escribir como si fuera un total
+
+Corriendo el informe por ubicación contra un tenant real, 155 de 167 ubicaciones decían exactamente
+«400 materiales que recibe sin cobertura». Ninguna tenía 400: **400 es el tope** de la lista que se
+guarda por ubicación, y el tope existe porque la tabla de arcos de ese tenant son **4,3 millones de
+filas** y guardar el conjunto completo por ubicación tira la pestaña.
+
+El tope se queda; lo que se arregla es lo que se escribe. Cuando una lista se topa, la fila dice «más de
+400» y no «400». Un tope disfrazado de dato es peor que no dar el dato, porque el consultor se lo lleva
+a la reunión como si lo hubiera contado.
+
+## Un hallazgo que no es de estos módulos: las familias de tablas mezcladas
+
+En el tenant `my301282`, área `ASIBPTS`, la detección de papeles eligió los arcos de la familia `GMX*`
+(`GMXSOURCELOCATION`) y la cobertura de la familia `GID*` (`GIDLOCATIONPRODUCT`). El área tiene los dos
+juegos de tipos de dato maestro, y **cruzar dos familias compara universos distintos**: de ahí venían los
+155 «sin cobertura».
+
+No se toca la detección en esta iteración: afecta igual al analizador de la red, que se verificó contra
+otro tenant, y elegir familia por su cuenta sería decidir por el consultor. Queda anotado como lo que
+hay que resolver —probablemente ofrecer la familia en la pantalla de correcciones, que ya existe— y es
+otro caso del mismo principio: **los nombres de tabla no son iguales entre tenants, y ninguna pantalla
+puede dar por supuesto cuál eligió**.
 
 ## Sin estrenar
 

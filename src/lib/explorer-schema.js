@@ -12,7 +12,7 @@
 // el que v7 podía con áreas de decenas de miles de productos.
 
 /** La versión del esquema. Sube cuando cambian las tablas o los índices. */
-export const VERSION_DEL_ESQUEMA = 2
+export const VERSION_DEL_ESQUEMA = 3
 
 /** Cómo se llama la base local. Una sola, con marca de a qué tenant pertenece lo que hay dentro. */
 export const NOMBRE_DE_LA_BASE = 'goscm_explorer'
@@ -48,6 +48,11 @@ export const TABLAS = Object.freeze([
   // está mirando. Las demás se recorren por índice.
   { nombre: 'bom_prd', clave: 'PRDID' },
   { nombre: 'bom_loc', clave: 'LOCID' },
+  // Los recursos: el maestro y su asignación a ubicaciones. Son las dos tablas que permiten decir que
+  // una máquina está asignada a una planta y ninguna receta la usa —capacidad que nadie planifica—,
+  // que mirando solo `bom_psr` es invisible: ahí solo salen los recursos que SÍ se usan.
+  { nombre: 'bom_res', clave: 'RESID' },
+  { nombre: 'bom_resloc', indices: [idx('by_locid', 'LOCID'), idx('by_resid', 'RESID')] },
 
   // ── Red de suministro ──────────────────────────────────────────────────────
   { nombre: 'sn_loc', indices: [idx('by_prdid', 'PRDID')] },

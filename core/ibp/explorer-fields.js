@@ -48,6 +48,9 @@ export const DESCRIPCION_DE_CAMPO = Object.freeze({
   PRDDESCR: 'Descripción del producto.',
   MATTYPEID: 'Tipo de material de SAP. De él dependen las categorías de planificación.',
   RESDESCR: 'Descripción del recurso productivo.',
+  // El tipo va en Resource Location y no en el maestro de recursos: en IBP el mismo recurso puede ser
+  // de un tipo distinto en cada planta.
+  RESOURCETYPE: 'Tipo de recurso en esa ubicación (código de SAP).',
   COMPVALIDFR: 'Desde cuándo vale el componente.',
   COMPVALIDTO: 'Hasta cuándo vale el componente.',
 })

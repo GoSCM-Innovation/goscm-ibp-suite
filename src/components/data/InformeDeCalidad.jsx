@@ -1,8 +1,8 @@
 // Un informe de calidad: los contadores por gravedad, qué falla más, la tabla y el archivo.
 //
-// Lo comparten el informe de la jerarquía y el de la red porque son la misma pantalla con otras
-// columnas: filtrar por gravedad, pasar páginas y bajarlo. Tenerlo dos veces habría sido copiar
-// cuatrocientas líneas para cambiar un nombre de tabla.
+// Lo comparten los cuatro informes —jerarquía, red, ubicación y recurso— porque son la misma pantalla
+// con otras columnas: filtrar por gravedad, pasar páginas y bajarlo. Tenerlo cuatro veces habría sido
+// copiar cuatrocientas líneas para cambiar un nombre de tabla.
 //
 // Las filas se leen de la base local por tramos, y el filtro por gravedad usa el índice: pedir «solo
 // los errores» de un informe de nueve mil filas no recorre nada.
@@ -29,7 +29,15 @@ const SEVERIDAD = {
   ok: { etiqueta: 'Bien', icono: '🟢' },
 }
 
-export default function InformeDeCalidad({ tabla, columnas, resumen, analizados, excluidos, nombre }) {
+/**
+ * `tituloDeEstados` es lo que rotula el desglose de `resumen.porEstado`, y tiene que venir de quien
+ * llama: en el informe de la red esos son estados de red, y en el de ubicaciones son roles. Rotularlos
+ * igual haría que la pantalla dijera algo que no es.
+ */
+export default function InformeDeCalidad({
+  tabla, columnas, resumen, analizados, excluidos, nombre,
+  tituloDeEstados = 'Estados de la red',
+}) {
   const [severidad, setSeveridad] = useState('todas')
   const [pagina, setPagina] = useState(0)
   const [filas, setFilas] = useState([])
@@ -124,7 +132,7 @@ export default function InformeDeCalidad({ tabla, columnas, resumen, analizados,
           )}
           {resumen.porEstado?.length > 0 && (
             <>
-              <div className="exp-sub" style={{ paddingTop: 8 }}>Estados de la red</div>
+              <div className="exp-sub" style={{ paddingTop: 8 }}>{tituloDeEstados}</div>
               <div className="pa-conteo">
                 {resumen.porEstado.slice(0, 8).map(([estado, cuantos]) => (
                   <span className="tag" key={estado}>{numero(cuantos)} {estado}</span>
@@ -143,7 +151,7 @@ export default function InformeDeCalidad({ tabla, columnas, resumen, analizados,
             ))}
           </ol>
           {resumen.masFrecuentes.length === 0 && (
-            <p className="exp-sub">Ningún producto tiene problemas.</p>
+            <p className="exp-sub">Ninguna fila tiene problemas.</p>
           )}
         </div>
       </div>

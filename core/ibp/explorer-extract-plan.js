@@ -101,6 +101,28 @@ export const EXTRACCIONES = Object.freeze([
     descartarSi: 'LOCVALID',
     esencial: false,
   },
+  {
+    tabla: 'bom_res',
+    grupo: 'arbol',
+    papel: 'resMaster',
+    etiqueta: 'Maestro de recursos',
+    // El maestro de recursos tiene el código y la descripción, y nada más que sirva acá. En particular
+    // NO tiene el tipo de recurso: comprobado contra dos tenants, el tipo vive en `RESOURCETYPE` de
+    // Resource Location, porque en IBP un mismo recurso puede ser de un tipo distinto en cada planta.
+    campos: ['RESID', 'RESDESCR'],
+    esencial: false,
+  },
+  {
+    tabla: 'bom_resloc',
+    grupo: 'arbol',
+    papel: 'resLoc',
+    etiqueta: 'Recurso por ubicación',
+    // Estas dos son tablas de cientos de filas, no de decenas de miles, y son lo único que permite
+    // ver un recurso ASIGNADO a una planta que ninguna receta usa. `bom_psr` solo trae los recursos
+    // que ya están en una receta, así que por definición no puede enseñar los que sobran.
+    campos: ['RESID', 'LOCID', 'RESOURCETYPE'],
+    esencial: false,
+  },
 
   // ── Red de suministro ──────────────────────────────────────────────────────
   {

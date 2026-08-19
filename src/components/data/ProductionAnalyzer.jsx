@@ -12,17 +12,25 @@
 //      guarda por área de planificación.
 //   2. EL INFORME DE LA JERARQUÍA: si cada material tiene lo que necesita para planificarse.
 //   3. EL INFORME DE LA RED: si lo que se fabrica llega a alguien.
+//   4. LOS MISMOS PROBLEMAS POR UBICACIÓN Y POR RECURSO: los dos de arriba contestan «¿a este material
+//      le falta algo?»; estos contestan «¿esta planta está bien montada?» y «¿esta máquina está de
+//      verdad en el plan?». Es la misma información agrupada por la entidad de la que alguien es
+//      dueño, que es la que se puede llevar a una reunión.
 //
-// La clasificación se hace UNA vez y sirve para los dos. v7 tenía dos pantallas y pedía clasificar dos
-// veces, con lo que las dos podían acabar diciendo cosas distintas del mismo material.
+// La clasificación se hace UNA vez y sirve para los cuatro. v7 tenía dos pantallas y pedía clasificar
+// dos veces, con lo que las dos podían acabar diciendo cosas distintas del mismo material.
 
 import { useEffect, useMemo, useState } from 'react'
 
 import { COLUMNAS as COLUMNAS_JERARQUIA } from '../../../core/ibp/production-analysis.js'
 import { COLUMNAS as COLUMNAS_RED } from '../../../core/ibp/network-analysis.js'
 import { CATEGORIAS, repartirTipos, sinClasificar } from '../../../core/ibp/production-rules.js'
+import { COLUMNAS as COLUMNAS_UBICACION } from '../../../core/ibp/location-analysis.js'
+import { COLUMNAS as COLUMNAS_RECURSO } from '../../../core/ibp/resource-analysis.js'
 import { analizar, tiposDeMaterial } from '../../lib/production-analyze.js'
 import { analizarRedes } from '../../lib/network-analyze.js'
+import { analizar as analizarUbicaciones } from '../../lib/location-analyze.js'
+import { analizar as analizarRecursos } from '../../lib/resource-analyze.js'
 import InformeDeCalidad from './InformeDeCalidad.jsx'
 
 const numero = (valor) => Number(valor ?? 0).toLocaleString('es')
@@ -56,6 +64,8 @@ export default function ProductionAnalyzer({ area = '' }) {
   const [avance, setAvance] = useState(null)
   const [jerarquia, setJerarquia] = useState(null)
   const [red, setRed] = useState(null)
+  const [ubicaciones, setUbicaciones] = useState(null)
+  const [recursos, setRecursos] = useState(null)
 
   useEffect(() => {
     let abandonado = false
@@ -105,11 +115,22 @@ export default function ProductionAnalyzer({ area = '' }) {
     })
   }
 
-  /** Corre los dos análisis. Al cambiar la clasificación los dos quedan viejos, así que van juntos. */
+  /**
+   * Corre los cuatro análisis.
+   *
+   * Van juntos porque los cuatro salen de la misma clasificación: dejar uno viejo mientras los otros
+   * están nuevos es la forma de que dos pantallas digan cosas distintas del mismo material, que es
+   * justo lo que le pasaba a v7 con sus dos analizadores separados.
+   *
+   * El de recursos no recibe la clasificación: sus tres comprobaciones no dependen del tipo de
+   * material, sino de en qué tablas aparece la máquina.
+   */
   async function correr() {
     setError('')
     setJerarquia(null)
     setRed(null)
+    setUbicaciones(null)
+    setRecursos(null)
     setAvance({ paso: 'productos', cual: 'jerarquía' })
 
     try {
@@ -123,6 +144,21 @@ export default function ProductionAnalyzer({ area = '' }) {
         onAvance: (cual) => setAvance({ ...cual, cual: 'red' }),
       })
       setRed(otro)
+
+      const porUbicacion = await analizarUbicaciones(configuracion, {
+        onAvance: (cual) => setAvance({ ...cual, cual: 'ubicaciones' }),
+      })
+      setUbicaciones(porUbicacion)
+
+      // Los recursos dependen de dos tablas que son opcionales en la descarga. Si no están, se dice y
+      // los otros tres informes siguen valiendo: parar los cuatro por esto sería desproporcionado.
+      try {
+        setRecursos(await analizarRecursos({
+          onAvance: (cual) => setAvance({ ...cual, cual: 'recursos' }),
+        }))
+      } catch {
+        setRecursos({ sinDatos: true })
+      }
     } catch (fallo) {
       setError(fallo.message)
     } finally {
@@ -174,6 +210,22 @@ export default function ProductionAnalyzer({ area = '' }) {
           disabled={!red}
         >
           3 · La red
+        </button>
+        <button
+          type="button"
+          className={`tab${paso === 'ubicaciones' ? ' active' : ''}`}
+          onClick={() => setPaso('ubicaciones')}
+          disabled={!ubicaciones}
+        >
+          4 · Por ubicación
+        </button>
+        <button
+          type="button"
+          className={`tab${paso === 'recursos' ? ' active' : ''}`}
+          onClick={() => setPaso('recursos')}
+          disabled={!recursos}
+        >
+          5 · Por recurso
         </button>
       </div>
 
@@ -297,6 +349,54 @@ export default function ProductionAnalyzer({ area = '' }) {
           excluidos={red.excluidos}
           nombre={['red', area]}
         />
+      )}
+
+      {paso === 'ubicaciones' && ubicaciones && (
+        <>
+          <div className="notice notice-info">
+            Los mismos problemas, agrupados por <b>ubicación</b>. El rol de cada una no se lee de ningún
+            campo de SAP: se deduce de cómo se comporta —tener recetas la hace planta; mandar algo que
+            el destino consume la hace proveedor; mandar algo que el destino NO consume la hace nodo de
+            transferencia— y a cada rol se le exige lo suyo. Una ubicación puede tener varios roles a la
+            vez, y entonces se le pide lo de cada uno.
+          </div>
+          <InformeDeCalidad
+            tabla="pa_location_web"
+            columnas={COLUMNAS_UBICACION}
+            resumen={ubicaciones.resumen}
+            analizados={ubicaciones.analizados}
+            nombre={['ubicaciones', area]}
+            tituloDeEstados="Roles deducidos"
+          />
+        </>
+      )}
+
+      {paso === 'recursos' && recursos && (
+        recursos.sinDatos
+          ? (
+            <div className="notice notice-info">
+              Para este informe hacen falta el <b>maestro de recursos</b> y <b>Recurso por ubicación</b>,
+              que se bajan con el grupo «Árbol de materiales». Volvé a <b>Descargar</b> y corré ese grupo
+              otra vez: son dos tablas chicas.
+            </div>
+          )
+          : (
+            <>
+              <div className="notice notice-info">
+                Un recurso vive en dos tablas que nadie mira juntas: la que dice qué máquinas{' '}
+                <b>usan</b> las recetas y la que dice qué máquinas están <b>asignadas</b> a una planta.
+                Estar en una y no en la otra da un plan que no se puede ejecutar —capacidad que no
+                restringe, o capacidad que nunca se va a cargar— y SAP no lo avisa.
+              </div>
+              <InformeDeCalidad
+                tabla="pa_resource_web"
+                columnas={COLUMNAS_RECURSO}
+                resumen={recursos.resumen}
+                analizados={recursos.analizados}
+                nombre={['recursos', area]}
+              />
+            </>
+          )
       )}
     </div>
   )

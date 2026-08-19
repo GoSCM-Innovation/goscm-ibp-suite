@@ -303,6 +303,24 @@ export {
 } from './production-analysis.js'
 
 export {
+  COLUMNAS as COLUMNAS_DE_UBICACION,
+  EXIGENCIAS as EXIGENCIAS_DE_UBICACION,
+  ROLES as ROLES_DE_UBICACION,
+  analizarUbicacion,
+  filaDeUbicacion,
+  resumirUbicaciones,
+  rolesDe,
+} from './location-analysis.js'
+
+export {
+  COLUMNAS as COLUMNAS_DE_RECURSO,
+  ESTADOS as ESTADOS_DE_RECURSO,
+  analizarRecurso,
+  filaDeRecurso,
+  resumirRecursos,
+} from './resource-analysis.js'
+
+export {
   ARCOS as ARCOS_DE_RED,
   CLASES as CLASES_DE_RED,
   COLUMNAS as COLUMNAS_DE_RED,

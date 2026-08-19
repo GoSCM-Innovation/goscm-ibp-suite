@@ -14,6 +14,12 @@ import { useMemo, useState } from 'react'
 import { CATEGORIAS, IDS_DE_CATEGORIA, MATRIZ, TEXTOS, reglasDe } from '../../../core/ibp/production-rules.js'
 import { COLUMNAS as COLUMNAS_JERARQUIA } from '../../../core/ibp/production-analysis.js'
 import { COLUMNAS as COLUMNAS_RED, estadoEsperado } from '../../../core/ibp/network-analysis.js'
+import {
+  COLUMNAS as COLUMNAS_UBICACION,
+  EXIGENCIAS,
+  ROLES,
+} from '../../../core/ibp/location-analysis.js'
+import { COLUMNAS as COLUMNAS_RECURSO, ESTADOS } from '../../../core/ibp/resource-analysis.js'
 
 /** Cómo se lee cada severidad, y qué hacer con ella. */
 const SEVERIDADES = [
@@ -69,6 +75,30 @@ const ESTADOS_DE_RED = [
   ['Sin producción', 'Se espera que se fabrique y no tiene receta.'],
   ['Sin consumo en ninguna receta', 'Un semiterminado que ninguna receta lleva.'],
   ['Sin arcos de red', 'No aparece en ninguna tabla de la red.'],
+]
+
+/**
+ * De qué se deduce cada rol de una ubicación.
+ *
+ * Los nombres salen de `ROLES`, así que no pueden desalinearse del informe; lo que se escribe acá es de
+ * dónde sale cada uno, que es lo que el consultor necesita para defender la lectura delante del cliente.
+ */
+const DE_DONDE_SALE_EL_ROL = {
+  [ROLES.planta]: 'Tiene al menos una receta de producción.',
+  [ROLES.proveedor]: 'Manda un producto a un sitio donde alguna receta SÍ lo consume.',
+  [ROLES.transferencia]: 'Manda un producto a un sitio donde NINGUNA receta lo consume.',
+  [ROLES.receptor]: 'Recibe producto y no produce ni manda nada.',
+  [ROLES.recursos]: 'Tiene recursos asignados o usados por sus recetas.',
+  [ROLES.sinActividad]: 'Está en el maestro de ubicaciones y en ninguna otra tabla.',
+}
+
+/** Qué hacer con cada estado de un recurso. Los textos del hallazgo salen de `ESTADOS`. */
+const QUE_HACER_CON_EL_RECURSO = [
+  [ESTADOS.huerfano, 'red', 'Nadie lo usa y no está en ninguna planta. O se borra, o falta configurarlo.'],
+  [ESTADOS.sinUso, 'yel', 'Está asignado a una planta y ninguna receta lo carga: la capacidad '
+    + 'disponible cuenta una máquina que nunca se va a usar.'],
+  [ESTADOS.sinPlanta, 'red', 'Las recetas lo usan y no está en ninguna planta: SAP no aplica su '
+    + 'restricción de capacidad, y el plan sale sin ese límite.'],
 ]
 
 /** Los hallazgos de grafo, que son los que no se ven mirando una tabla. */
@@ -232,6 +262,68 @@ export default function Glosario() {
         </>
       ))}
 
+      {seccion('roles', 'Los roles de una ubicación, y qué se le pide a cada uno', (
+        <>
+          <p className="exp-sub">
+            SAP no dice qué es una ubicación: <b>solo marca al proveedor</b> (<span className="mono">
+              LOCTYPE
+            </span>). Que algo sea planta, nodo de transferencia o punto final se deduce de cómo se
+            comporta en los datos. Una ubicación puede tener <b>varios roles a la vez</b> y entonces se
+            le exige lo de cada uno; a un proveedor no se le pide nada de planta, que es lo que evita
+            cientos de errores falsos.
+          </p>
+          <div className="table-scroll table-alta">
+            <table className="table-dense">
+              <thead>
+                <tr><th>Rol</th><th>De qué se deduce</th><th>Qué se le exige</th></tr>
+              </thead>
+              <tbody>
+                {Object.values(ROLES).map((rol) => (
+                  <tr key={rol}>
+                    <td>{rol}</td>
+                    <td>{DE_DONDE_SALE_EL_ROL[rol]}</td>
+                    <td>
+                      {(EXIGENCIAS[rol] ?? []).length === 0
+                        ? <span className="exp-sub">Nada propio.</span>
+                        : (
+                          <ul className="pa-exige">
+                            {EXIGENCIAS[rol].map((una) => (
+                              <li key={una.texto}>
+                                {QUE_SIGNIFICA[una.severidad]?.texto}: {una.texto}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      ))}
+
+      {seccion('recursos', 'Los tres estados de un recurso', (
+        <>
+          <p className="exp-sub">
+            Un recurso vive en dos tablas que nadie mira juntas: la que dice qué máquinas <b>usan</b> las
+            recetas y la que dice qué máquinas están <b>asignadas</b> a una planta. Cada combinación es un
+            problema distinto, y SAP no avisa de ninguna.
+          </p>
+          <table className="table-dense">
+            <thead><tr><th>Estado</th><th>Qué quiere decir</th></tr></thead>
+            <tbody>
+              {QUE_HACER_CON_EL_RECURSO.map(([texto, severidad, porque]) => (
+                <tr key={texto}>
+                  <td>{SEVERIDADES.find((una) => una.id === severidad)?.icono} {texto}</td>
+                  <td>{porque}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      ))}
+
       {seccion('columnas', 'Las columnas de los informes', (
         <div className="tablero">
           <div>
@@ -244,6 +336,18 @@ export default function Glosario() {
             <div className="card-label">Informe de la red</div>
             <ol className="pa-frecuentes">
               {COLUMNAS_RED.map((una) => <li key={una}>{una}</li>)}
+            </ol>
+          </div>
+          <div>
+            <div className="card-label">Informe por ubicación</div>
+            <ol className="pa-frecuentes">
+              {COLUMNAS_UBICACION.map((una) => <li key={una}>{una}</li>)}
+            </ol>
+          </div>
+          <div>
+            <div className="card-label">Informe por recurso</div>
+            <ol className="pa-frecuentes">
+              {COLUMNAS_RECURSO.map((una) => <li key={una}>{una}</li>)}
             </ol>
           </div>
         </div>
