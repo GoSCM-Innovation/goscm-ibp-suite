@@ -3,8 +3,9 @@
 Inventario recorrido contra `origin/master` de v7, en `GoSCM-Innovation/ibp-bom-v7` —**no** el clon
 local, que está anidado un nivel más abajo (`ibp-bom-v7/ibp-bom-v7`) y puede estar atrasado—.
 
-Última revisión: 2026-08-12, contra `6d027d2` de v7. Son **20 archivos** en `public/js/` que suman
-**20.643 líneas** de JavaScript sin build, más `server.js` y las plantillas de `public/`.
+Última revisión: 2026-08-18, contra `6d027d2` de v7 —el mismo commit que la vez anterior: v7 no ha
+cambiado—. Son **20 archivos** en `public/js/` que suman **20.643 líneas** de JavaScript sin build, más
+`server.js` y las plantillas de `public/`.
 
 v7 es la migración más grande de las tres: casi tanto código como v8 y v9 juntos, y sin una sola
 prueba. Por eso se porta módulo a módulo, y cada uno con sus pruebas antes de darlo por hecho.
@@ -314,6 +315,18 @@ hay que resolver —probablemente ofrecer la familia en la pantalla de correccio
 otro caso del mismo principio: **los nombres de tabla no son iguales entre tenants, y ninguna pantalla
 puede dar por supuesto cuál eligió**.
 
+## Huecos abiertos
+
+Ninguno. El último —los informes por entidad de los dos analizadores— se cerró el 2026-08-18 con las
+pestañas por ubicación y por recurso, y con el motivo escrito de por qué las otras cuatro hojas de v7 no
+se portan.
+
+Recorrido de `origin/master` (`6d027d2`) el 2026-08-18: los **20 archivos** de `public/js/` están todos
+asignados, y las otras piezas del repo también —`server.js` a `api/ibp/*`, `public/index.html` y
+`public/css/styles.css` a React, y los cuatro JSON de `public/i18n/` a la fase de idioma, que es
+deliberadamente la última—.
+
 ## Sin estrenar
 
-Nada del árbol escribe en SAP: trabaja sobre lo que quedó descargado en el navegador.
+Nada de estos módulos escribe en SAP: los cuatro informes, el árbol y la red trabajan sobre lo que quedó
+descargado en el navegador, y el documentador del área escribe un `.docx` en el disco del consultor.

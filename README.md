@@ -12,10 +12,26 @@ Cada cliente contrata los módulos que necesita; los no contratados aparecen blo
 
 ## Estado
 
-**Fase 1 completa — los cimientos funcionan de punta a punta.** Se puede entrar con un código
-enviado al correo, moverse por la aplicación y administrar clientes, personas, suscripciones y
-conexiones a SAP desde el navegador. Los tres módulos existen en el menú como sitios
-reservados: sus pantallas llegan en las fases siguientes.
+**Los tres proyectos previos están portados.** No queda ningún hueco de funcionalidad abierto en
+ninguno de los tres, y cada uno tiene su inventario recorrido contra el repositorio de origen:
+[`PARIDAD-V7.md`](docs/PARIDAD-V7.md), [`PARIDAD-V8.md`](docs/PARIDAD-V8.md) y
+[`PARIDAD-V9.md`](docs/PARIDAD-V9.md). Ahí está también lo que **no** se portó, con el motivo escrito
+en cada caso: no todo lo que hacían las apps viejas valía la pena traer.
+
+Los cimientos funcionan de punta a punta: se entra con un código enviado al correo, y clientes,
+personas, suscripciones y conexiones a SAP se administran desde el navegador.
+
+Lo que falta para poner esto delante de un cliente, y no es código de módulos:
+
+- **Un proveedor de correo de verdad** para los códigos de acceso. Es lo que bloquea el primer
+  despliegue.
+- **Vercel Pro y los `crons`** de `vercel.json`, para lo que corre solo.
+- **El idioma (es/en)** es una fase propia y deliberadamente la última: hasta que todo esté portado,
+  traducir es traducir dos veces.
+- **Todo lo que ESCRIBE en SAP está construido y probado en lectura, pero sin estrenar.** Lanzar un
+  trabajo, cargar una migración, modificar o borrar dato maestro, copiar cifras clave, lanzar una
+  orquestación o una tarea de CI-DS: se estrenan con el usuario delante, no en una corrida
+  desatendida. Cada documento de paridad lo lista en su sección «Sin estrenar».
 
 El plan completo y el inventario del que nace esta arquitectura están en
 [`docs/FASE-0-LEVANTAMIENTO.md`](docs/FASE-0-LEVANTAMIENTO.md); el estado de cada módulo de la
