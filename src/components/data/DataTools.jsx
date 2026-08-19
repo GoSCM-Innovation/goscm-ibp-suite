@@ -19,12 +19,14 @@ const ExplorerSetup = lazy(() => import('./ExplorerSetup.jsx'))
 const ExplorerExtract = lazy(() => import('./ExplorerExtract.jsx'))
 const BomTree = lazy(() => import('./BomTree.jsx'))
 const SupplyNetwork = lazy(() => import('./SupplyNetwork.jsx'))
+const ProductionAnalyzer = lazy(() => import('./ProductionAnalyzer.jsx'))
 
 const HERRAMIENTAS = [
   { id: 'origen', label: 'Origen de los datos' },
   { id: 'descarga', label: 'Descargar' },
   { id: 'arbol', label: 'Árbol de materiales' },
   { id: 'red', label: 'Red de suministro' },
+  { id: 'calidad', label: 'Calidad de la jerarquía' },
 ]
 
 /** Elige sola solo si hay UNA opción. Con varias, la cadena vacía obliga a elegir. */
@@ -206,6 +208,12 @@ export default function DataTools() {
       {listo && herramienta === 'red' && (
         <Suspense fallback={<div className="page-hint">Cargando la red…</div>}>
           <SupplyNetwork key={`${conexionId}|${area}|${version}`} />
+        </Suspense>
+      )}
+      {/* La clasificación de tipos se guarda por área, así que el área baja como prop. */}
+      {listo && herramienta === 'calidad' && (
+        <Suspense fallback={<div className="page-hint">Cargando el analizador…</div>}>
+          <ProductionAnalyzer key={`${conexionId}|${area}|${version}`} area={area} />
         </Suspense>
       )}
     </div>

@@ -246,6 +246,28 @@ export {
 } from './master-data.js'
 
 export {
+  CATEGORIAS,
+  IDS_DE_CATEGORIA,
+  MATRIZ,
+  SEVERIDADES,
+  TEXTOS as TEXTOS_DE_COMPROBACION,
+  configuracionInicial,
+  laMasPermisiva,
+  reglasDe,
+  repartirTipos,
+  sinClasificar,
+} from './production-rules.js'
+
+export {
+  COLUMNAS as COLUMNAS_DEL_ANALISIS,
+  analizarProducto,
+  esCeroOVacio,
+  filaDelInforme,
+  laPeor,
+  resumirAnalisis,
+} from './production-analysis.js'
+
+export {
   ARCOS as ARCOS_DE_RED,
   CLASES as CLASES_DE_RED,
   COLUMNAS as COLUMNAS_DE_RED,

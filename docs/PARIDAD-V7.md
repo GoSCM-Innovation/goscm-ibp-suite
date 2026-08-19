@@ -14,7 +14,7 @@ prueba. Por eso se porta módulo a módulo, y cada uno con sus pruebas antes de 
 | Módulo (nombre en su menú) | Archivo | Líneas | Estado |
 |---|---|---|---|
 | Production Visualizer | `bom.js` | 1.594 | **Portado** — `core/ibp/bom-tree.js` + `src/lib/bom-load.js` + `data/BomTree.jsx` |
-| Production Analyzer | `prodAnalyzer.js` | 2.789 | Pendiente |
+| Production Analyzer | `prodAnalyzer.js` | 2.789 | **Portado (la hoja de productos)** — `core/ibp/production-rules.js` + `production-analysis.js` + `data/ProductionAnalyzer.jsx` |
 | Network Visualizer | `visualizer.js` | 1.448 | **Portado** — `core/ibp/supply-network.js` + `src/lib/network-load.js` + `data/SupplyNetwork.jsx` |
 | Network Analyzer | `analyzer.js` + `snWebView.js` | 3.531 | Pendiente |
 | Glosario Analyzers | `glosario.js` | 1.409 | Pendiente |
@@ -93,6 +93,49 @@ Ninguno se inventó: los dos son los que leía v7, comprobados antes en el tenan
 - El **maestro de clientes** (`AS1CUSTOMER`, 631 filas) con su descripción. Sin él la red enseñaba
   códigos de cliente, y un mapa de a quién le vendés en el que los clientes son números no sirve para
   hablarlo con nadie.
+
+## Cómo se porta el analizador de la jerarquía
+
+Lo que hace es contestar, producto a producto: **¿está listo para que SAP planifique con él?** Y la
+respuesta depende de **qué es** el material, que es lo que decide la matriz de
+`core/ibp/production-rules.js`.
+
+Esa matriz es la pieza con más criterio de negocio del proyecto y la que menos código tiene: cuatro
+categorías —producto terminado, semiterminado, materia prima, mercadería— por trece comprobaciones,
+y cada casilla dice si eso es error, aviso o **no se mira**. El `no se mira` es tan importante como el
+rojo: es lo que evita que una materia prima salga con veinte errores por no tener receta.
+
+Decisiones que se conservan de v7:
+
+- **La clasificación la hace el consultor, no se adivina.** Los tipos de material son del cliente
+  (`FERT`, `HALB`, `ROH`, `ZEMP`…) y sin saber qué son el informe no vale. Se dice una vez por área de
+  planificación y se guarda.
+- **Un tipo en dos categorías gana la exigencia más suave.** Marcar en rojo algo que en una de sus
+  lecturas es correcto llena el informe de ruido, y un informe con ruido no se lee.
+- **Un tipo sin clasificar no se calla ni se marca en rojo**: lo que a otros sería error, a él le sale
+  como aviso. Nadie ha dicho todavía qué es.
+
+Diferencias deliberadas:
+
+- **No se bajan las tablas por tercera vez.** v7 bajaba PSH, PSI y PSR otra vez para este análisis,
+  además de las del árbol y las de la red. Aquí se cruzan las ya descargadas: bajar tres veces la
+  misma tabla es exactamente la duplicación que esta arquitectura vino a quitar.
+- **Una fila por producto, no una por problema.** Un producto con cinco cosas mal es un producto que
+  hay que arreglar, no cinco. Sale con la severidad peor y la lista de lo que le falta.
+- **El informe se guarda en la base local y se lee por tramos.** Es la arquitectura de IndexedDB que ya
+  usaba el resto: la tabla de vista guarda la fila calculada con su severidad indexada, así que filtrar
+  «solo los errores» no recorre nada.
+- **Se dice qué comprobación falla más.** Si nueve de cada diez rojos son la misma cosa, el trabajo no
+  es revisar mil productos: es cargar una tabla.
+
+### Lo que falta de este módulo
+
+v7 sacaba un Excel de ocho hojas: una por entidad (producto, ubicación, recurso, recurso-ubicación,
+cabecera, componente, recurso de receta) más la de tipos excluidos. **Aquí está la de productos**, que
+es la que contesta la pregunta del consultor —«qué materiales están mal armados»—; las otras siete son
+vistas por tabla de los mismos problemas. Quedan pendientes, y el andamio para ellas ya existe: las
+tablas de vista `pa_location_web`, `pa_resource_web`, `pa_resloc_web`, `pa_psh_web`, `pa_psi_web` y
+`pa_psr_web` están declaradas en el esquema local.
 
 ## Sin estrenar
 

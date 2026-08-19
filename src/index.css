@@ -1692,6 +1692,34 @@ a { color: var(--cyan); }
 
 .table-alta { max-height: 55vh; }
 
+/* Analizador de la jerarquía: clasificar tipos y leer el informe por severidad. */
+.pa-exige { color: var(--muted); font-size: 11px; margin: 6px 0 0; padding-left: 18px; }
+.pa-exige li { padding: 1px 0; }
+
+.pa-excluido { opacity: 0.45; }
+
+.pa-conteo { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 6px; }
+.pa-chip {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  padding: 3px 10px;
+}
+.pa-chip:hover { border-color: var(--cyan); }
+.pa-chip.active { border-color: var(--cyan); box-shadow: 0 0 0 1px var(--cyan); }
+
+.pa-frecuentes { color: var(--muted); font-size: 11px; margin: 6px 0 0; padding-left: 20px; }
+.pa-frecuentes li { padding: 1px 0; }
+.pa-frecuentes b { color: var(--text); }
+
+.pa-red td:first-child { color: var(--red); }
+.pa-yel td:first-child { color: var(--accent); }
+.pa-ok td:first-child { color: var(--green, #10b981); }
+
 /* Red de suministro: columnas de origen a destino, no un lienzo con nodos que se arrastran. */
 .red-columnas { align-items: flex-start; display: flex; gap: 12px; overflow-x: auto; padding: 8px 0; }
 .red-columna { display: flex; flex: 0 0 auto; flex-direction: column; gap: 4px; min-width: 170px; }
