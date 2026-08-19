@@ -16,7 +16,7 @@ prueba. Por eso se porta módulo a módulo, y cada uno con sus pruebas antes de 
 | Production Visualizer | `bom.js` | 1.594 | **Portado** — `core/ibp/bom-tree.js` + `src/lib/bom-load.js` + `data/BomTree.jsx` |
 | Production Analyzer | `prodAnalyzer.js` | 2.789 | **Portado (la hoja de productos)** — `core/ibp/production-rules.js` + `production-analysis.js` + `data/ProductionAnalyzer.jsx` |
 | Network Visualizer | `visualizer.js` | 1.448 | **Portado** — `core/ibp/supply-network.js` + `src/lib/network-load.js` + `data/SupplyNetwork.jsx` |
-| Network Analyzer | `analyzer.js` + `snWebView.js` | 3.531 | Pendiente |
+| Network Analyzer | `analyzer.js` + `snWebView.js` | 3.531 | **Portado (la hoja de productos)** — `core/ibp/network-analysis.js` + `src/lib/network-analyze.js` |
 | Glosario Analyzers | `glosario.js` | 1.409 | Pendiente |
 | Planning Area Documenter | `paDoc.js` | 1.055 | Pendiente |
 | Mapping Dataflow Generator | `docs.js` | 2.527 | **Portado** (llegó por v9) — `cids/documenter/*` |
@@ -128,7 +128,31 @@ Diferencias deliberadas:
 - **Se dice qué comprobación falla más.** Si nueve de cada diez rojos son la misma cosa, el trabajo no
   es revisar mil productos: es cargar una tabla.
 
-### Lo que falta de este módulo
+### El analizador de la red
+
+Es el hermano del anterior y comparte con él la clasificación de tipos de material: se hace **una vez**
+y sirve para los dos. v7 tenía dos pantallas y pedía clasificar dos veces, con lo que las dos podían
+acabar diciendo cosas distintas del mismo material.
+
+Lo que contesta son preguntas de **grafo**, las que no se pueden ver en una tabla:
+
+- ¿Desde las plantas que lo fabrican se llega a algún cliente?
+- ¿Hay bodegas que reciben producto y no lo mandan a ninguna parte? (**callejones**)
+- ¿Hay bodegas alimentadas cuya salida no lleva a ningún cliente? (**nodos sin salida útil** — el
+  hallazgo que nadie ve a mano: la bodega existe, tiene entrada y salida, y el producto que entra no
+  puede terminar en un cliente)
+- ¿Hay **ciclos**: A manda a B, B a C y C vuelve a A?
+- ¿Hay plantas que fabrican y no tienen salida hacia ningún cliente?
+
+Todas salen de recorrer el grafo dos veces: hacia adelante desde las plantas y hacia atrás desde los
+clientes. Lo que queda fuera de la intersección es lo que hay que arreglar.
+
+La **máquina de estados** de v7 se conserva con sus nombres —«Red completa», «Semiterminado local»,
+«Abastecimiento parcial», «Huérfano»…— porque cada rama contesta la pregunta que le toca a ese tipo de
+material: un terminado necesita ruta a cliente, un insumo un arco de abastecimiento, un semiterminado
+consumo local o transferencia. Preguntarles lo mismo a los tres no diría nada de ninguno.
+
+### Lo que falta de estos dos módulos
 
 v7 sacaba un Excel de ocho hojas: una por entidad (producto, ubicación, recurso, recurso-ubicación,
 cabecera, componente, recurso de receta) más la de tipos excluidos. **Aquí está la de productos**, que

@@ -26,7 +26,7 @@ const HERRAMIENTAS = [
   { id: 'descarga', label: 'Descargar' },
   { id: 'arbol', label: 'Árbol de materiales' },
   { id: 'red', label: 'Red de suministro' },
-  { id: 'calidad', label: 'Calidad de la jerarquía' },
+  { id: 'calidad', label: 'Calidad de datos' },
 ]
 
 /** Elige sola solo si hay UNA opción. Con varias, la cadena vacía obliga a elegir. */

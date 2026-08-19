@@ -259,6 +259,25 @@ export {
 } from './production-rules.js'
 
 export {
+  COLUMNAS as COLUMNAS_DE_LA_RED,
+  MAX_CICLOS,
+  analizarRed,
+  callejones,
+  ciclos,
+  claseDeProblema,
+  conjuntosDeRed,
+  estadoDeRed,
+  estadoEsperado,
+  filaDeRed,
+  grafoVacio,
+  llegaAUnCliente,
+  nodosFantasma,
+  plantasAisladas,
+  plazosFaltantes,
+  resumirRedes,
+} from './network-analysis.js'
+
+export {
   COLUMNAS as COLUMNAS_DEL_ANALISIS,
   analizarProducto,
   esCeroOVacio,
