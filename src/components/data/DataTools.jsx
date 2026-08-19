@@ -20,6 +20,7 @@ const ExplorerExtract = lazy(() => import('./ExplorerExtract.jsx'))
 const BomTree = lazy(() => import('./BomTree.jsx'))
 const SupplyNetwork = lazy(() => import('./SupplyNetwork.jsx'))
 const ProductionAnalyzer = lazy(() => import('./ProductionAnalyzer.jsx'))
+const PlanningAreaDoc = lazy(() => import('./PlanningAreaDoc.jsx'))
 
 const HERRAMIENTAS = [
   { id: 'origen', label: 'Origen de los datos' },
@@ -27,6 +28,7 @@ const HERRAMIENTAS = [
   { id: 'arbol', label: 'Árbol de materiales' },
   { id: 'red', label: 'Red de suministro' },
   { id: 'calidad', label: 'Calidad de datos' },
+  { id: 'documentar', label: 'Documentar el área' },
 ]
 
 /** Elige sola solo si hay UNA opción. Con varias, la cadena vacía obliga a elegir. */
@@ -211,6 +213,18 @@ export default function DataTools() {
         </Suspense>
       )}
       {/* La clasificación de tipos se guarda por área, así que el área baja como prop. */}
+      {/* El documentador NO trabaja sobre lo descargado: recibe los CSV de la configuración del área,
+          que SAP no expone por API. Lo único que lee en vivo son los trabajos del tenant. */}
+      {listo && herramienta === 'documentar' && (
+        <Suspense fallback={<div className="page-hint">Cargando el documentador…</div>}>
+          <PlanningAreaDoc
+            key={`${conexionId}|${area}|${version}`}
+            conexionId={conexionId}
+            tenant={conexion?.name ?? ''}
+            area={area}
+          />
+        </Suspense>
+      )}
       {listo && herramienta === 'calidad' && (
         <Suspense fallback={<div className="page-hint">Cargando el analizador…</div>}>
           <ProductionAnalyzer key={`${conexionId}|${area}|${version}`} area={area} />

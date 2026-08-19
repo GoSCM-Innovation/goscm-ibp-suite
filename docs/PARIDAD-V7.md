@@ -18,7 +18,7 @@ prueba. Por eso se porta módulo a módulo, y cada uno con sus pruebas antes de 
 | Network Visualizer | `visualizer.js` | 1.448 | **Portado** — `core/ibp/supply-network.js` + `src/lib/network-load.js` + `data/SupplyNetwork.jsx` |
 | Network Analyzer | `analyzer.js` + `snWebView.js` | 3.531 | **Portado (la hoja de productos)** — `core/ibp/network-analysis.js` + `src/lib/network-analyze.js` |
 | Glosario Analyzers | `glosario.js` | 1.409 | Pendiente |
-| Planning Area Documenter | `paDoc.js` | 1.055 | Pendiente |
+| Planning Area Documenter | `paDoc.js` | 1.055 | **Portado** — `core/ibp/pa-doc-model.js` + `src/lib/docx.js` + `pa-doc.js` + `data/PlanningAreaDoc.jsx` |
 | Mapping Dataflow Generator | `docs.js` | 2.527 | **Portado** (llegó por v9) — `cids/documenter/*` |
 | Integration Explorer | `explorer.js` | 1.724 | **Portado** (llegó por v9) — `cids/explorer/*` |
 
@@ -160,6 +160,40 @@ es la que contesta la pregunta del consultor —«qué materiales están mal arm
 vistas por tabla de los mismos problemas. Quedan pendientes, y el andamio para ellas ya existe: las
 tablas de vista `pa_location_web`, `pa_resource_web`, `pa_resloc_web`, `pa_psh_web`, `pa_psi_web` y
 `pa_psr_web` están declaradas en el esquema local.
+
+## Cómo se porta el documentador del área
+
+Produce un **Word** con la configuración del área: portada con el logo del cliente, índice, resumen
+ejecutivo y una sección por cada parte de la configuración, más dos anexos.
+
+Por qué los datos vienen de archivos y no de la API: la configuración de un área —los niveles de
+planificación, las definiciones de cálculo, los operadores— **no está expuesta** en los servicios de
+comunicación de IBP. Se exporta desde la pantalla de configuración del área, que saca una carpeta de
+CSV. Es una limitación de SAP, no una decisión de esta herramienta, y la pantalla lo dice en vez de
+dejar al consultor buscando un botón que no existe.
+
+Lo que **sí** se lee en vivo son los trabajos programados, que tienen API —la misma de `SAP_COM_0326`
+que usa el monitor—, así que el documento dice además con qué se carga y se ejecuta el área. De las 396
+plantillas del tenant de pruebas, se quedan las 268 del cliente: las que empiezan por `/IBP/` son
+estándar de SAP y no documentan nada de este cliente.
+
+El `.docx` se arma sin librerías de terceros, en `src/lib/docx.js`: un documento de Word es un ZIP con
+XML dentro, y JSZip ya estaba en el proyecto para leer los exports de CI-DS. Es el mismo criterio que
+`xlsx.js`, y por la misma razón: traer una librería de documentos para escribir párrafos y tablas sería
+añadir megabytes al paquete para doscientas líneas de XML.
+
+Tres detalles que se ganan leyendo el formato:
+
+- El **índice** no lo calcula el generador: se guarda la instrucción y Word lo rellena al abrir, porque
+  los ajustes piden actualizar campos. Sin eso hay que hacerlo a mano.
+- El **encabezado de cada tabla se repite** en cada página. Una tabla de cifras clave son cuarenta filas
+  y sin eso la segunda página es una lista de valores sin nombre.
+- Un carácter sin escapar rompe el archivo entero y Word solo dice «el documento está dañado», sin decir
+  dónde. Por eso todo el texto pasa por el escapado y hay una prueba que lo comprueba.
+
+El lector de CSV es el de SAP: separador punto y coma, y un salto de línea dentro de un campo
+entrecomillado es parte del campo —las definiciones de cálculo los llevan—, así que partir por líneas
+antes de mirar las comillas rompería esas filas.
 
 ## Sin estrenar
 

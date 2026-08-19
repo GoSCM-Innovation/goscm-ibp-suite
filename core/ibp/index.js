@@ -246,6 +246,22 @@ export {
 } from './master-data.js'
 
 export {
+  IDS_DE_SECCION,
+  MODULOS,
+  SECCIONES,
+  aObjetos,
+  areaDeArchivo,
+  campo as campoDelCsv,
+  ingerirCsv,
+  leerCsv,
+  limpiarEncabezado,
+  loRecibido,
+  resumirArea,
+  seccionDeArchivo,
+  seccionesQueFaltan,
+} from './pa-doc-model.js'
+
+export {
   CATEGORIAS,
   IDS_DE_CATEGORIA,
   MATRIZ,
