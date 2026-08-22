@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { api } from '../../lib/api.js'
 import { MODULES } from '../../lib/modules.js'
 
-export default function ClientsTab({ clients, onChanged, selectedClientId, onSelect }) {
+export default function ClientsTab({ clients, cargados = true, onChanged, selectedClientId, onSelect }) {
   const [name, setName] = useState('')
   const [slug, setSlug] = useState('')
   const [subscriptions, setSubscriptions] = useState(null)
@@ -91,7 +91,11 @@ export default function ClientsTab({ clients, onChanged, selectedClientId, onSel
             </thead>
             <tbody>
               {clients.length === 0 && (
-                <tr><td className="table-empty" colSpan={6}>Todavía no hay clientes.</td></tr>
+                <tr>
+                  <td className="table-empty" colSpan={6}>
+                    {cargados ? 'Todavía no hay clientes.' : 'Leyendo los clientes…'}
+                  </td>
+                </tr>
               )}
               {clients.map((client) => (
                 <tr

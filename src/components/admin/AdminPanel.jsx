@@ -14,6 +14,9 @@ export default function AdminPanel({ user }) {
   const esPlataforma = user.isPlatformAdmin
   const [tab, setTab] = useState(esPlataforma ? 'clients' : 'users')
   const [clients, setClients] = useState([])
+  // `null` hasta que vuelva la primera respuesta: sin esto la tabla afirma «todavía no hay
+  // clientes» mientras está preguntando, y eso no es un dato, es un hueco.
+  const [cargados, setCargados] = useState(false)
   const [clientId, setClientId] = useState(null)
   const [error, setError] = useState(null)
 
@@ -26,6 +29,7 @@ export default function AdminPanel({ user }) {
     let vivo = true
     api.get('/api/admin/clients')
       .then((data) => { if (vivo) { setClients(data.clients); setError(null) } })
+      .finally(() => { if (vivo) setCargados(true) })
       .catch((problem) => { if (vivo) setError(problem.message) })
     return () => { vivo = false }
   }, [esPlataforma, version])
@@ -88,6 +92,7 @@ export default function AdminPanel({ user }) {
       {tab === 'clients' && (
         <ClientsTab
           clients={clients}
+          cargados={cargados}
           onChanged={recargarClientes}
           selectedClientId={clientId}
           onSelect={setClientId}
