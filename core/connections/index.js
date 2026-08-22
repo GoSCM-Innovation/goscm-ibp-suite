@@ -16,5 +16,6 @@ export {
   getAnyCredentials,
   getCredentials,
   listConnections,
+  renameConnection,
   upsertAgreement,
 } from './connections.js'

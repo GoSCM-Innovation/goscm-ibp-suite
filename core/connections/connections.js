@@ -130,6 +130,32 @@ export async function createConnection(clientId, { kind, name, baseUrl, organiza
   ))
 }
 
+/**
+ * Le cambia el nombre a una conexión.
+ *
+ * Existe porque lo único que se podía hacer con una conexión mal nombrada era BORRARLA, y borrarla se
+ * lleva sus acuerdos de comunicación por la cascada del esquema —con sus usuarios y sus contraseñas
+ * cifradas—. Así que un nombre mal puesto costaba volver a registrar todas las credenciales, o
+ * quedarse con «Tenant IBP» y «Tenant IBP · my400444» y adivinar cuál es cuál en cada desplegable.
+ *
+ * Solo el nombre. La dirección NO se cambia acá a propósito: cambiarla convertiría la conexión en otro
+ * tenant conservando sus credenciales, que es la forma más silenciosa de mandar las contraseñas de un
+ * cliente a un servidor que no es el suyo. Para eso se crea una conexión nueva.
+ */
+export async function renameConnection(clientId, connectionId, name) {
+  if (!name?.trim()) throw new Error('La conexión necesita un nombre.')
+
+  const rows = await queryScoped(
+    clientId,
+    `update connections set name = $3
+      where id = $1 and client_id = $2
+      returning id, kind, name, base_url, organization, is_production, created_at`,
+    [connectionId, clientId, name.trim()],
+  )
+  if (rows.length === 0) throw new Error('Esa conexión no existe.')
+  return toConnection(rows[0])
+}
+
 export async function deleteConnection(clientId, connectionId) {
   // Los acuerdos se van con ella por la relación en cascada del esquema.
   const rows = await queryScoped(

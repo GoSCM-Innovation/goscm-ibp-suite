@@ -12,6 +12,7 @@ import { lazy, Suspense, useEffect, useState } from 'react'
 
 import { readStoredTzMode } from '../../lib/dates.js'
 import { listIbpConnections } from '../../lib/ibp.js'
+import { etiquetaDeConexion } from '../../lib/nombre-de-conexion.js'
 import { lectorDeIbp } from '../../lib/run-logs.js'
 
 const GlobalSummary = lazy(() => import('./GlobalSummary.jsx'))
@@ -112,7 +113,7 @@ export default function IbpTools() {
             aria-label="Tenant de IBP"
           >
             {conexiones.map((una) => (
-              <option key={una.id} value={una.id}>{una.name}</option>
+              <option key={una.id} value={una.id}>{etiquetaDeConexion(una)}</option>
             ))}
           </select>
           {conexion?.isProduction && <span className="tag tag-accent">Productivo</span>}

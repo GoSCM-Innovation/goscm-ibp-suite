@@ -9,6 +9,7 @@ import {
   createConnection,
   deleteAgreement,
   deleteConnection,
+  renameConnection,
   getConnection,
   listConnections,
   upsertAgreement,
@@ -47,6 +48,14 @@ export default async function handler(req, res) {
         isProduction: Boolean(req.body?.isProduction),
       })
       return res.status(201).json({ connection })
+    }
+
+    if (req.method === 'PATCH') {
+      const { connectionId, name } = req.body ?? {}
+      if (!connectionId) return res.status(400).json({ error: 'Falta la conexión.' })
+      // Solo el nombre: cambiar la dirección la convertiría en otro tenant conservando sus
+      // credenciales. Ver `renameConnection`.
+      return res.status(200).json({ connection: await renameConnection(clientId, connectionId, name) })
     }
 
     if (req.method === 'DELETE') {

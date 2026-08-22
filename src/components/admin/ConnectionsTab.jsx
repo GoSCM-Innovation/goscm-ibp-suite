@@ -21,6 +21,9 @@ export default function ConnectionsTab({ clientId }) {
   const [busy, setBusy] = useState(false)
   const [loading, setLoading] = useState(true)
   const [version, setVersion] = useState(0)
+  // Qué conexión se está renombrando, y con qué nombre. Lo único editable de una conexión: cambiarle
+  // la dirección la convertiría en otro tenant conservando sus credenciales.
+  const [renombrando, setRenombrando] = useState(null)
 
   const [nueva, setNueva] = useState({ kind: 'ibp', name: '', baseUrl: '', organization: '', isProduction: false })
   const [acuerdo, setAcuerdo] = useState({ agreement: 'SAP_COM_0326', sapUser: '', password: '' })
@@ -68,6 +71,17 @@ export default function ConnectionsTab({ clientId }) {
         isProduction: nueva.isProduction,
       })
       setNueva({ kind: 'ibp', name: '', baseUrl: '', organization: '', isProduction: false })
+      recargar()
+    })
+  }
+
+  const guardarNombre = (event) => {
+    event.preventDefault()
+    return run(async () => {
+      await api.patch('/api/admin/connections', {
+        clientId, connectionId: renombrando.id, name: renombrando.name,
+      })
+      setRenombrando(null)
       recargar()
     })
   }
@@ -127,7 +141,28 @@ export default function ConnectionsTab({ clientId }) {
               {!loading && connections.map((connection) => (
                 <tr key={connection.id} onClick={() => open(connection)} style={{ cursor: 'pointer' }}>
                   <td style={{ fontWeight: 600 }}>
-                    {connection.name}
+                    {renombrando?.id === connection.id ? (
+                      <form onSubmit={guardarNombre} style={{ display: 'flex', gap: 6 }}>
+                        <input
+                          className="input input-sm"
+                          value={renombrando.name}
+                          onChange={(e) => setRenombrando({ ...renombrando, name: e.target.value })}
+                          onClick={(e) => e.stopPropagation()}
+                          aria-label={`Nombre de ${connection.name}`}
+                          autoFocus
+                        />
+                        <button type="submit" className="btn btn-sm btn-primary" disabled={busy}>
+                          Guardar
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-sm"
+                          onClick={(e) => { e.stopPropagation(); setRenombrando(null) }}
+                        >
+                          Cancelar
+                        </button>
+                      </form>
+                    ) : connection.name}
                     {/* Para CI-DS no se muestra: la conexión no es de pruebas ni productiva, es las
                         dos, y la marca de la fila solo confundiría. */}
                     {connection.kind !== 'cids' && connection.isProduction && (
@@ -144,8 +179,19 @@ export default function ConnectionsTab({ clientId }) {
                   <td>{connection.agreementCount}</td>
                   <td style={{ textAlign: 'right' }}>
                     <button
+                      className="btn btn-sm"
+                      disabled={busy}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setRenombrando({ id: connection.id, name: connection.name })
+                      }}
+                    >
+                      Renombrar
+                    </button>
+                    <button
                       className="btn btn-sm btn-danger"
                       disabled={busy}
+                      style={{ marginLeft: 6 }}
                       onClick={(e) => { e.stopPropagation(); removeConnection(connection) }}
                     >
                       Borrar

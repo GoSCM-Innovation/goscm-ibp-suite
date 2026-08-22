@@ -3,6 +3,7 @@ import { randomBytes } from 'node:crypto'
 import {
   createConnection,
   deleteConnection,
+  renameConnection,
   getConnection,
   getCredentials,
   listConnections,
@@ -237,5 +238,51 @@ describe('deleteConnection', () => {
 
     queryScoped.mockResolvedValue([])
     await expect(deleteConnection(CLIENTE, 'ajena')).resolves.toBe(false)
+  })
+})
+
+// Lo unico que se podia hacer con una conexion mal nombrada era BORRARLA, y eso se lleva sus acuerdos
+// con sus contraseñas cifradas. Renombrar existe para no pagar eso por un nombre.
+describe('renameConnection', () => {
+  const fila = { id: CONEXION, kind: 'ibp', name: 'Tenant de calidad', base_url: 'https://x', organization: null, is_production: false, created_at: new Date(0) }
+
+  it('cambia el nombre y devuelve la conexión ya con el nuevo', async () => {
+    queryScoped.mockResolvedValue([fila])
+    const suya = await renameConnection(CLIENTE, CONEXION, 'Tenant de calidad')
+
+    expect(suya.name).toBe('Tenant de calidad')
+    const [, sql, params] = queryScoped.mock.calls.at(-1)
+    expect(sql).toContain('update connections set name')
+    expect(params).toEqual([CONEXION, CLIENTE, 'Tenant de calidad'])
+  })
+
+  it('recorta los espacios: un nombre con espacios alrededor se ordena distinto en la lista', async () => {
+    queryScoped.mockResolvedValue([fila])
+    await renameConnection(CLIENTE, CONEXION, '  Tenant de calidad  ')
+    expect(queryScoped.mock.calls.at(-1)[2][2]).toBe('Tenant de calidad')
+  })
+
+  it('un nombre vacío se rechaza antes de tocar la base', async () => {
+    queryScoped.mockClear()
+    await expect(renameConnection(CLIENTE, CONEXION, '   ')).rejects.toThrow('necesita un nombre')
+    await expect(renameConnection(CLIENTE, CONEXION, '')).rejects.toThrow('necesita un nombre')
+    expect(queryScoped).not.toHaveBeenCalled()
+  })
+
+  // El aislamiento por cliente: renombrar la conexión de otro no puede parecer que funcionó.
+  it('la conexión de otro cliente no se renombra, y se dice', async () => {
+    queryScoped.mockResolvedValue([])
+    await expect(renameConnection(CLIENTE, 'ajena', 'Mía')).rejects.toThrow('no existe')
+  })
+
+  // Cambiar la direccion convertiria la conexion en OTRO tenant conservando sus credenciales, que es
+  // la forma mas silenciosa de mandar las contraseñas de un cliente a un servidor que no es el suyo.
+  it('NO toca la dirección: la consulta solo actualiza el nombre', async () => {
+    queryScoped.mockResolvedValue([fila])
+    await renameConnection(CLIENTE, CONEXION, 'Otro nombre')
+
+    const sql = queryScoped.mock.calls.at(-1)[1]
+    expect(sql).not.toContain('base_url =')
+    expect(sql).not.toContain('kind =')
   })
 })

@@ -13,6 +13,7 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 
 import { listIbpConnections } from '../../lib/ibp.js'
+import { etiquetaDeConexion } from '../../lib/nombre-de-conexion.js'
 import { fetchMasterCatalog } from '../../lib/ibp-master-data.js'
 import { VERSION_BASE, versionEfectiva, versionParaSap } from '../../lib/version-elegida.js'
 
@@ -125,7 +126,7 @@ export default function DataTools() {
             aria-label="Tenant de IBP"
           >
             <option value="">Elegí un tenant…</option>
-            {conexiones.map((una) => <option key={una.id} value={una.id}>{una.name}</option>)}
+            {conexiones.map((una) => <option key={una.id} value={una.id}>{etiquetaDeConexion(una)}</option>)}
           </select>
 
           {catalogo && (
