@@ -100,6 +100,37 @@ Ninguno se inventó: los dos son los que leía v7, comprobados antes en el tenan
   códigos de cliente, y un mapa de a quién le vendés en el que los clientes son números no sirve para
   hablarlo con nadie.
 
+## Sin resolver: la descarga de la red no aguanta un tenant grande
+
+Medido el 2026-08-21 contra `my400444` / `ASIBPTS`, versión base:
+
+| Tabla | Filas |
+|---|---|
+| `AS1CUSTOMERPRODUCT` — producto por cliente | **1.412.426** |
+| `AS1SOURCECUSTOMER` — arcos hacia clientes | **1.285.635** |
+| `AS1LOCATIONPRODUCT` — producto por ubicación | 200.792 |
+| `AS1SOURCELOCATION` — arcos entre ubicaciones | 47.919 |
+| `AS1CUSTOMER` — maestro de clientes | 9.082 |
+
+Son **casi 3 millones de filas**. A 5.000 por página y los ~6 s por petición que cuesta este servicio
+—el cuello de botella es el costo fijo, no el `$skip` profundo—, la descarga del grupo «Red de
+suministro» son unas **600 peticiones y cerca de una hora**, en una sola sesión del navegador. Se
+comprobó cancelándola: en varios minutos iba por el 22 % de una sola de esas tablas.
+
+Dos tablas son el 90 % del volumen, y las dos son de clientes. El resto del grupo baja en minutos.
+
+Lo que hay que decidir, y es una decisión de producto:
+
+- **Bajar todo y analizar en frío** es lo que hace hoy, y es lo que heredó de v7. Con este tenant
+  significa dejar el navegador una hora antes de ver el primer informe.
+- **La red de UN producto no necesita las tablas completas**: son sus arcos y nada más. Esa pantalla
+  podría leer de SAP solo lo suyo y ser inmediata, a costa de una lectura por producto mirado.
+- **El analizador de red sí necesita el conjunto**, porque recorre el grafo entero. Ese es el que no
+  tiene salida barata.
+
+Mientras no se decida, el analizador de red está verificado contra tablas de decenas de miles de filas
+—los 47.919 arcos entre ubicaciones— y **no** contra el volumen real de las de cliente.
+
 ## Cómo se porta el analizador de la jerarquía
 
 Lo que hace es contestar, producto a producto: **¿está listo para que SAP planifique con él?** Y la
