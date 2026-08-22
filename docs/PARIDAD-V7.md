@@ -100,10 +100,12 @@ Ninguno se inventó: los dos son los que leía v7, comprobados antes en el tenan
   códigos de cliente, y un mapa de a quién le vendés en el que los clientes son números no sirve para
   hablarlo con nadie.
 
-## Pendiente de portar: el visualizador de red lee de SAP por producto, no de la descarga
+## Las dos pantallas de red se abastecen distinto, y por qué
 
-Recorriendo la pantalla se midió que el grupo «Red de suministro» son **casi 3 millones de filas** en
-`my400444` / `ASIBPTS`, versión base:
+Es la lección más cara de la migración: **el código pasaba todas sus pruebas, hacía lo correcto, y
+obtenía los datos de una forma que v7 no usa.** Ninguna prueba unitaria lo veía.
+
+En `my400444` / `ASIBPTS`, versión base, el grupo «Red de suministro» son **casi 3 millones de filas**:
 
 | Tabla | Filas |
 |---|---|
@@ -113,32 +115,31 @@ Recorriendo la pantalla se midió que el grupo «Red de suministro» son **casi 
 | `AS1SOURCELOCATION` — arcos entre ubicaciones | 47.919 |
 | `AS1CUSTOMER` — maestro de clientes | 9.082 |
 
-A ~6 s por petición son unas 600 peticiones: cerca de una hora. La primera lectura de esto fue que el
-diseño no escala. **Es incorrecta**, y v7 lo demuestra: ahí las dos pantallas de red se abastecen de
-formas distintas, y aquí las dos se colgaron de la misma.
+A ~6 s por petición son unas 600 peticiones: cerca de una hora. Y v7 convive con eso **en una sola de
+sus dos pantallas**:
 
-- **El analizador de red de v7 baja las tablas completas**, con el filtro del área y nada más
-  (`analyzer.js`: `fLocSrc = fCustSrc = fPsh = paFilter`), a las mismas tablas locales `sn_loc`,
-  `sn_cust`, `sn_plant`, `sn_psi`, `sn_loc_prod`, `sn_cust_prod`. Recorre el grafo entero, así que no
-  tiene alternativa. **Nuestro port coincide: no hay defecto y esa hora es también el costo de v7.**
-- **El visualizador de red de v7 filtra por producto EN SAP** (`visualizer.js`): arcos entre
-  ubicaciones, arcos a cliente y cabeceras por `PRDID eq <producto>`; los componentes por
-  `SOURCEID eq … or …` de las recetas de ese producto; los arcos de proveedor por `PRDID eq …` de esos
-  componentes —topado en 100 para no pasarse del largo de la URL—; y los maestros por los `LOCID` y
-  `CUSTID` que salieron. Son unas pocas peticiones pequeñas y es inmediato, sin descargar nada.
+- **El analizador** (`analyzer.js`) baja las tablas completas con el filtro del área y nada más
+  (`fLocSrc = fCustSrc = fPsh = paFilter`). Recorre el grafo entero, así que no hay alternativa: no se
+  puede recorrer un grafo que no se tiene. **Nuestro port coincide, y esa hora es también el costo de
+  v7.**
+- **El visualizador** (`visualizer.js`) **filtra por producto en SAP**: arcos y cabeceras por
+  `PRDID eq <producto>`, los componentes por `SOURCEID eq … or …` de las recetas de ese producto, los
+  arcos de proveedor por esos componentes, y los maestros por los `LOCID` y `CUSTID` que salieron.
 
-**Aquí el visualizador lee solo de la base local** (`src/lib/network-load.js`: `leerPorIndice`,
-`porCursor`), así que exige la descarga completa antes de dibujar la red de un producto. Eso convierte
-algo inmediato en una espera de una hora, y es un defecto de la migración, no una limitación.
+Este port había colgado las dos de la descarga. Corregido: `src/lib/network-load-sap.js` porta la
+secuencia de v7, y la pantalla usa lo descargado cuando está —instantáneo y sin tope— y lee de SAP
+cuando no. **Medido con las tablas vaciadas: 241 nodos y 320 arcos en 5,1 s.**
 
-Lo que falta escribir: un cargador hermano que traiga esas mismas filas de SAP filtradas por producto.
-El endpoint ya lo soporta —`/api/ibp/master-data` acepta `condiciones`, y varias valen `(F eq a or F eq
-b)`—, así que es portar la secuencia de v7. La pantalla puede quedarse con lo local cuando esté
-descargado, que es más rápido todavía, y caer a SAP cuando no; y decir de dónde salió lo que muestra,
-que es la regla de procedencia del resto de la aplicación.
+Dos cosas que la pantalla dice a propósito, porque la fuente cambia lo que el dato puede afirmar:
 
-Mientras eso no esté, el analizador de red está verificado contra decenas de miles de filas —los 47.919
-arcos entre ubicaciones— y **no** contra el volumen real de las tablas de cliente.
+- Leyendo de SAP, los arcos de proveedor se piden para los **primeros 100 componentes** de la receta.
+  El tope es el largo de la URL, el mismo motivo y el mismo número que v7. Leyendo de lo descargado no
+  hay tope, y el aviso lo dice con el número.
+- La lista de productos dice «con red» cuando se contó sobre las tablas de arcos, y «en el área» cuando
+  es el maestro entero: saber cuáles tienen red exigiría una consulta por producto.
+
+Queda pendiente la misma revisión —**de dónde saca los datos cada pantalla, comparado con el
+original**— en el resto de v7 y en v8 y v9. Es la clase de hueco que las pruebas no cubren.
 
 ## Cómo se porta el analizador de la jerarquía
 
