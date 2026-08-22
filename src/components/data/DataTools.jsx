@@ -14,6 +14,7 @@ import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 
 import { listIbpConnections } from '../../lib/ibp.js'
 import { fetchMasterCatalog } from '../../lib/ibp-master-data.js'
+import { VERSION_BASE, versionEfectiva, versionParaSap } from '../../lib/version-elegida.js'
 
 const ExplorerSetup = lazy(() => import('./ExplorerSetup.jsx'))
 const ExplorerExtract = lazy(() => import('./ExplorerExtract.jsx'))
@@ -35,6 +36,7 @@ const HERRAMIENTAS = [
 
 /** Elige sola solo si hay UNA opción. Con varias, la cadena vacía obliga a elegir. */
 const unicaOpcion = (opciones) => (opciones.length === 1 ? opciones[0] : '')
+
 
 export default function DataTools() {
   const [conexiones, setConexiones] = useState(null)
@@ -86,11 +88,10 @@ export default function DataTools() {
 
   const versiones = useMemo(() => catalogo?.[area]?.versions ?? [], [catalogo, area])
 
-  // La versión se DERIVA: al cambiar de área, la que estaba puesta casi nunca existe en la nueva.
-  // Solo se auto-elige si el área tiene una sola.
-  const version = versiones.some((una) => una.id === versionId)
-    ? versionId
-    : unicaOpcion(versiones.map((una) => una.id))
+  // La versión se DERIVA, y la base cuenta como una elección válida. La regla está en
+  // `src/lib/version-elegida.js`, con sus pruebas: que la base quedara fuera de alcance dejó las
+  // cinco pantallas de este módulo inservibles para el caso más común.
+  const version = versionEfectiva(versionId, versiones)
 
   const conexion = conexiones?.find((una) => una.id === conexionId) ?? null
   const listo = Boolean(conexionId && area && version)
@@ -146,9 +147,9 @@ export default function DataTools() {
                 value={version}
                 onChange={(evento) => setVersionId(evento.target.value)}
                 aria-label="Versión"
-                disabled={versiones.length === 0}
               >
                 <option value="">Elegí una versión…</option>
+                <option value={VERSION_BASE}>Versión base — el dato maestro del área</option>
                 {versiones.map((una) => (
                   <option key={una.id} value={una.id}>{una.name === una.id ? una.id : `${una.id} — ${una.name}`}</option>
                 ))}
@@ -190,7 +191,7 @@ export default function DataTools() {
         <Suspense fallback={<div className="page-hint">Cargando…</div>}>
           <ExplorerSetup
             key={`${conexionId}|${area}|${version}`}
-            destino={{ connectionId: conexionId, planningArea: area, versionId: version }}
+            destino={{ connectionId: conexionId, planningArea: area, versionId: versionParaSap(version) }}
           />
         </Suspense>
       )}
@@ -198,7 +199,7 @@ export default function DataTools() {
         <Suspense fallback={<div className="page-hint">Cargando…</div>}>
           <ExplorerExtract
             key={`${conexionId}|${area}|${version}`}
-            destino={{ connectionId: conexionId, planningArea: area, versionId: version }}
+            destino={{ connectionId: conexionId, planningArea: area, versionId: versionParaSap(version) }}
           />
         </Suspense>
       )}
