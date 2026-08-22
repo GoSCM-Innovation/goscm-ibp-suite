@@ -77,6 +77,7 @@ async function cargarHandler(server, file) {
 // funciones de Vercel; este plugin no participa del build (apply: 'serve').
 function devApiPlugin() {
   const apiDir = resolve(process.cwd(), 'api')
+  const handlersDir = resolve(process.cwd(), 'handlers')
   return {
     name: 'dev-api',
     apply: 'serve',
@@ -91,15 +92,25 @@ function devApiPlugin() {
         // El filtro es también la defensa contra rutas con ".." que se escapen de api/.
         if (!segments.every((segment) => /^[a-zA-Z0-9_-]+$/.test(segment))) return next()
 
-        // Se resuelve igual que en Vercel: primero api/<a>/<b>.js, y si no existe, api/<a>.js
-        // con el segmento sobrante como parámetro de ruta.
+        // Se resuelve por la MISMA TABLA que en producción.
+        //
+        // Si el área tiene mostrador —`handlers/<área>/index.js`— la operación sale de su tabla, que
+        // es exactamente la que lee la función de Vercel. Antes acá se resolvía por sistema de
+        // archivos y allá también, así que coincidían solas; con mostradores hay que compartir la
+        // tabla a propósito, o se llega a «en mi máquina funciona» por el peor camino: el frontend
+        // igual y el backend resolviendo distinto.
+        //
+        // Si no hay mostrador, se cae al archivo suelto de `api/<a>.js`, que es como siguen
+        // sirviéndose las tres operaciones de la raíz.
         let file = null
+        let enTabla = null
         let pathParam = null
+
         if (segments.length >= 2) {
-          const nested = resolve(apiDir, segments[0], `${segments[1]}.js`)
-          if (existsSync(nested)) {
-            file = nested
-            pathParam = segments[2]
+          const tabla = resolve(handlersDir, segments[0], 'index.js')
+          if (existsSync(tabla)) {
+            file = tabla
+            enTabla = segments.slice(1).join('/')
           }
         }
         if (!file) {
@@ -130,7 +141,19 @@ function devApiPlugin() {
 
           decorateRes(res)
           const mod = await cargarHandler(server, file)
-          await mod.default(req, res)
+
+          // Con mostrador, la operación se busca en su tabla; lo que no está en ella no existe, igual
+          // que en producción. Sin mostrador, es el `export default` del archivo suelto.
+          const operacion = enTabla === null
+            ? mod.default
+            : (Object.hasOwn(mod.RUTAS ?? {}, enTabla) ? mod.RUTAS[enTabla] : null)
+
+          if (typeof operacion !== 'function') {
+            decorateRes(res).status(404).json({ error: 'Esa operación no existe.' })
+            return
+          }
+
+          await operacion(req, res)
         } catch (err) {
           server.config.logger.error(`[dev-api] ${name}: ${err.stack || err.message}`)
           if (!res.headersSent) {

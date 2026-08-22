@@ -11,13 +11,30 @@ Lectura obligatoria antes de tocar `core/`: [`docs/FASE-0-LEVANTAMIENTO.md`](doc
 ## Arquitectura
 
 ```
-core/     Capa transversal. Toda la lógica que habla con SAP, persiste o resuelve identidad.
-api/      Funciones serverless de Vercel — handlers delgados sobre core/.
-src/      Frontend React.
-docs/     Arquitectura y decisiones.
+core/      Capa transversal. Toda la lógica que habla con SAP, persiste o resuelve identidad.
+handlers/  Un archivo por operación HTTP — handlers delgados sobre core/.
+api/       Funciones serverless de Vercel: un MOSTRADOR por área que reparte a handlers/.
+src/       Frontend React.
+docs/      Arquitectura y decisiones.
 ```
 
-- La dependencia va en un solo sentido: `src/` → `api/` → `core/`. **Nada en `core/` importa de `src/`.**
+- La dependencia va en un solo sentido: `src/` → `api/` → `handlers/` → `core/`. **Nada en `core/` importa de `src/`.**
+
+### Por qué `api/` y `handlers/` están separados
+
+Vercel cuenta **una función por archivo de `api/`**, y su plan gratuito permite 12. Este backend tiene
+29 operaciones, así que un archivo por operación no se puede desplegar. En `api/` hay un mostrador por
+área (`api/ibp/[...ruta].js` y sus hermanos) que reparte con la tabla de `handlers/<área>/index.js`;
+las tres operaciones de la raíz siguen siendo archivos sueltos. Son **7 funciones**.
+
+Las direcciones no cambiaron: `/api/ibp/master-data` sigue siendo `/api/ibp/master-data`.
+
+Dos reglas que esto impone:
+
+- **Un handler nuevo va también en la tabla de su área**, o es inalcanzable sin que nada avise. Hay una
+  prueba (`handlers/repartir.test.js`) que compara cada tabla con los archivos de su carpeta.
+- **El servidor de desarrollo lee LA MISMA tabla** (`vite.config.js`). Resolver distinto en desarrollo
+  y en producción es cómo se llega a «en mi máquina funciona» con el frontend igual y el backend no.
 - **Los módulos de negocio no hablan con SAP directamente.** Si a un módulo le falta una operación, se agrega a `core/` — así queda disponible también para el asistente de IA.
 - El mapa de módulos de la capa transversal está en [`core/README.md`](core/README.md).
 
