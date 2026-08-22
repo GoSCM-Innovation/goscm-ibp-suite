@@ -100,9 +100,10 @@ Ninguno se inventó: los dos son los que leía v7, comprobados antes en el tenan
   códigos de cliente, y un mapa de a quién le vendés en el que los clientes son números no sirve para
   hablarlo con nadie.
 
-## Sin resolver: la descarga de la red no aguanta un tenant grande
+## Pendiente de portar: el visualizador de red lee de SAP por producto, no de la descarga
 
-Medido el 2026-08-21 contra `my400444` / `ASIBPTS`, versión base:
+Recorriendo la pantalla se midió que el grupo «Red de suministro» son **casi 3 millones de filas** en
+`my400444` / `ASIBPTS`, versión base:
 
 | Tabla | Filas |
 |---|---|
@@ -112,24 +113,32 @@ Medido el 2026-08-21 contra `my400444` / `ASIBPTS`, versión base:
 | `AS1SOURCELOCATION` — arcos entre ubicaciones | 47.919 |
 | `AS1CUSTOMER` — maestro de clientes | 9.082 |
 
-Son **casi 3 millones de filas**. A 5.000 por página y los ~6 s por petición que cuesta este servicio
-—el cuello de botella es el costo fijo, no el `$skip` profundo—, la descarga del grupo «Red de
-suministro» son unas **600 peticiones y cerca de una hora**, en una sola sesión del navegador. Se
-comprobó cancelándola: en varios minutos iba por el 22 % de una sola de esas tablas.
+A ~6 s por petición son unas 600 peticiones: cerca de una hora. La primera lectura de esto fue que el
+diseño no escala. **Es incorrecta**, y v7 lo demuestra: ahí las dos pantallas de red se abastecen de
+formas distintas, y aquí las dos se colgaron de la misma.
 
-Dos tablas son el 90 % del volumen, y las dos son de clientes. El resto del grupo baja en minutos.
+- **El analizador de red de v7 baja las tablas completas**, con el filtro del área y nada más
+  (`analyzer.js`: `fLocSrc = fCustSrc = fPsh = paFilter`), a las mismas tablas locales `sn_loc`,
+  `sn_cust`, `sn_plant`, `sn_psi`, `sn_loc_prod`, `sn_cust_prod`. Recorre el grafo entero, así que no
+  tiene alternativa. **Nuestro port coincide: no hay defecto y esa hora es también el costo de v7.**
+- **El visualizador de red de v7 filtra por producto EN SAP** (`visualizer.js`): arcos entre
+  ubicaciones, arcos a cliente y cabeceras por `PRDID eq <producto>`; los componentes por
+  `SOURCEID eq … or …` de las recetas de ese producto; los arcos de proveedor por `PRDID eq …` de esos
+  componentes —topado en 100 para no pasarse del largo de la URL—; y los maestros por los `LOCID` y
+  `CUSTID` que salieron. Son unas pocas peticiones pequeñas y es inmediato, sin descargar nada.
 
-Lo que hay que decidir, y es una decisión de producto:
+**Aquí el visualizador lee solo de la base local** (`src/lib/network-load.js`: `leerPorIndice`,
+`porCursor`), así que exige la descarga completa antes de dibujar la red de un producto. Eso convierte
+algo inmediato en una espera de una hora, y es un defecto de la migración, no una limitación.
 
-- **Bajar todo y analizar en frío** es lo que hace hoy, y es lo que heredó de v7. Con este tenant
-  significa dejar el navegador una hora antes de ver el primer informe.
-- **La red de UN producto no necesita las tablas completas**: son sus arcos y nada más. Esa pantalla
-  podría leer de SAP solo lo suyo y ser inmediata, a costa de una lectura por producto mirado.
-- **El analizador de red sí necesita el conjunto**, porque recorre el grafo entero. Ese es el que no
-  tiene salida barata.
+Lo que falta escribir: un cargador hermano que traiga esas mismas filas de SAP filtradas por producto.
+El endpoint ya lo soporta —`/api/ibp/master-data` acepta `condiciones`, y varias valen `(F eq a or F eq
+b)`—, así que es portar la secuencia de v7. La pantalla puede quedarse con lo local cuando esté
+descargado, que es más rápido todavía, y caer a SAP cuando no; y decir de dónde salió lo que muestra,
+que es la regla de procedencia del resto de la aplicación.
 
-Mientras no se decida, el analizador de red está verificado contra tablas de decenas de miles de filas
-—los 47.919 arcos entre ubicaciones— y **no** contra el volumen real de las de cliente.
+Mientras eso no esté, el analizador de red está verificado contra decenas de miles de filas —los 47.919
+arcos entre ubicaciones— y **no** contra el volumen real de las tablas de cliente.
 
 ## Cómo se porta el analizador de la jerarquía
 
