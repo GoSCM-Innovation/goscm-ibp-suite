@@ -38,8 +38,9 @@ Lo verificado y limpio:
   pequeño e `$inlinecount`; y el `$select` que decide el nivel de agregación se construye **una vez** y
   se pasa igual al conteo y a la lectura, así que no pueden divergir.
 
-Queda por extender la misma revisión al eje de **alcance y filtros** en v8 y v9, y por recorrer nada:
-las cuatro áreas —Data Tools, IBP Tools, CI-DS Tools y Administración— están vistas.
+Las cuatro áreas —Data Tools, IBP Tools, CI-DS Tools y Administración— quedan recorridas por completo.
+Lo que falta de esta revisión es el eje de **alcance y filtros** en v8 y v9: si cada pantalla pide el
+mismo conjunto de datos que su original, no solo si lo pide al mismo sitio.
 
 **Los tres proyectos previos están portados.** No queda ningún hueco de funcionalidad abierto en
 ninguno de los tres, y cada uno tiene su inventario recorrido contra el repositorio de origen:
@@ -105,13 +106,19 @@ Sustituye a tres proyectos previos (`ibp-bom-v7`, `ibp-bom-v8`, `ibp-bom-v9`), q
 ## Estructura
 
 ```
-core/     Capa transversal: SAP, persistencia, identidad. Una sola implementación.
-api/      Funciones serverless — handlers delgados sobre core/.
-src/      Frontend React: shell, módulos, componentes.
-docs/     Documentación de arquitectura y decisiones.
+core/      Capa transversal: SAP, persistencia, identidad. Una sola implementación.
+handlers/  Un archivo por operación HTTP — handlers delgados sobre core/.
+api/       Funciones serverless de Vercel: un mostrador por área que reparte a handlers/.
+src/       Frontend React: shell, módulos, componentes.
+docs/      Documentación de arquitectura y decisiones.
 ```
 
-La dependencia va en un solo sentido: `src/` → `api/` → `core/`. Nada en `core/` importa de `src/`.
+La dependencia va en un solo sentido: `src/` → `api/` → `handlers/` → `core/`. Nada en `core/` importa
+de `src/`.
+
+`api/` y `handlers/` están separados porque Vercel cuenta **una función por archivo de `api/`** y su
+plan gratuito permite 12; este backend tiene 29 operaciones. Las direcciones no cambian. El detalle, y
+las dos reglas que impone, están en [`CLAUDE.md`](CLAUDE.md).
 
 ## Arranque
 
