@@ -12,7 +12,6 @@ import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
 import { cidsTargets, fetchPromotedTaskNames, listCidsConnections, promotedForTarget } from '../../lib/cids.js'
 import TaskMonitor from './TaskMonitor.jsx'
 import TaskLauncher from './TaskLauncher.jsx'
-import Orchestrations from './orchestrations/Orchestrations.jsx'
 import { lectorDeCids } from '../../lib/run-logs.js'
 
 // Los tableros se cargan aparte, solo al abrir su pestaña. Son los únicos que usan la librería de
@@ -23,6 +22,10 @@ const GlobalSummary = lazy(() => import('./GlobalSummary.jsx'))
 
 // El explorador trabaja sobre archivos del equipo, no contra SAP. Se carga aparte porque arrastra el
 // lector de ZIP, que no hace falta para nada más.
+// Perezoso como sus hermanos, y no por simetría: `IbpTools` ya lo cargaba así, y tenerlo aquí como
+// import directo anulaba ese perezoso —lo avisaba el build en cada compilación— y metía el módulo
+// de orquestaciones en el paquete principal de TODOS, incluido quien solo tiene IBP contratado.
+const Orchestrations = lazy(() => import('./orchestrations/Orchestrations.jsx'))
 const IntegrationExplorer = lazy(() => import('./explorer/IntegrationExplorer.jsx'))
 const MappingDocumenter = lazy(() => import('./documenter/MappingDocumenter.jsx'))
 
@@ -186,11 +189,13 @@ export default function CidsTools() {
         />
       )}
       {herramienta === 'orquestaciones' && destino && (
-        <Orchestrations
-          key={`orq-${destino.id}`}
-          destino={destino}
-          leerRegistro={lectorDeCids(destino)}
-        />
+        <Suspense fallback={<div className="page-hint">Cargando las orquestaciones…</div>}>
+          <Orchestrations
+            key={`orq-${destino.id}`}
+            destino={destino}
+            leerRegistro={lectorDeCids(destino)}
+          />
+        </Suspense>
       )}
       {herramienta === 'explorador' && (
         <Suspense fallback={<div className="page-hint">Cargando el explorador…</div>}>
