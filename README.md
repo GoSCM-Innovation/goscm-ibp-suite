@@ -16,6 +16,31 @@ Cada cliente contrata los módulos que necesita; los no contratados aparecen blo
 publica sola en esa misma dirección. El ingreso por código al correo está verificado de punta a punta
 contra el despliegue.
 
+### Recorrido de pantallas del 2026-08-21
+
+Se recorrieron **todas** las pantallas contra los tenants reales, comparando lo que muestran con lo que
+dicen los datos. Aparecieron **once fallos**, ninguno visible leyendo el código y ninguno que las
+pruebas pudieran detectar: todas prueban *qué* se calcula, no *qué se muestra* ni *de dónde salen las
+filas*. Están arreglados y con pruebas.
+
+El patrón que los une, y que conviene tener presente al escribir pantallas nuevas: **un hueco escrito
+como si fuera un dato.** Un tope de lista presentado como total, el conteo de la corrida anterior bajo
+un encabezado que dice «guardadas», «todavía no hay clientes» mientras se está preguntando, dos números
+en la misma tarjeta que no cuadran, un `403` sin decir qué acuerdo falló. En todos, la pantalla afirmaba
+algo que no le constaba.
+
+Lo verificado y limpio:
+
+- **De dónde saca los datos cada pantalla**, comparado con el original. Los lectores de base local son
+  todos de Data Tools y coinciden con v7 (su `bom.js` también lee de IndexedDB). El visualizador de red
+  era el único desajuste y quedó corregido. Las pantallas de v8 y v9 no usan base local.
+- **Las guardas de SAP que más muerden.** Nada de `$top=0` en Planning Data; el conteo va con `$top`
+  pequeño e `$inlinecount`; y el `$select` que decide el nivel de agregación se construye **una vez** y
+  se pasa igual al conteo y a la lectura, así que no pueden divergir.
+
+Queda por extender la misma revisión al eje de **alcance y filtros** en v8 y v9, y por recorrer nada:
+las cuatro áreas —Data Tools, IBP Tools, CI-DS Tools y Administración— están vistas.
+
 **Los tres proyectos previos están portados.** No queda ningún hueco de funcionalidad abierto en
 ninguno de los tres, y cada uno tiene su inventario recorrido contra el repositorio de origen:
 [`PARIDAD-V7.md`](docs/PARIDAD-V7.md), [`PARIDAD-V8.md`](docs/PARIDAD-V8.md) y
