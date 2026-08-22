@@ -19,6 +19,9 @@ import {
   ARCOS, CLASES, armarRed, nodosSueltos, repartirEnColumnas, vecinosDe,
 } from '../../../core/ibp/supply-network.js'
 import { cargarRed, productosConRed } from '../../lib/network-load.js'
+import { cargarRedDeSap, productosDeSap } from '../../lib/network-load-sap.js'
+import { fetchExplorerMap } from '../../lib/ibp-explorer.js'
+import { planificarExtraccion } from '../../../core/ibp/explorer-extract-plan.js'
 
 const numero = (valor) => Number(valor ?? 0).toLocaleString('es')
 
@@ -42,25 +45,53 @@ const ARCO = {
   [ARCOS.entrega]: 'entrega a',
 }
 
-export default function SupplyNetwork() {
+export default function SupplyNetwork({ destino = null }) {
   const [productos, setProductos] = useState(null)
   const [busqueda, setBusqueda] = useState('')
   const [error, setError] = useState('')
+
+  // De dónde salen las filas: `local` si el grupo de red está descargado, `sap` si no.
+  //
+  // Las dos fuentes dan lo mismo y por eso quien dibuja no las distingue, pero el consultor SÍ tiene
+  // que saberlo: leyendo de SAP los arcos de proveedor se topan en 100 componentes por el largo de la
+  // URL, y leyendo de la base local no. Un dato con un tope silencioso no es el mismo dato.
+  const [fuente, setFuente] = useState(null)
+  const [mapa, setMapa] = useState(null)
 
   const [elegido, setElegido] = useState('')
   const [cargando, setCargando] = useState(false)
   const [red, setRed] = useState(null)
   const [marcado, setMarcado] = useState('')
 
+  // Primero lo local, que es instantáneo y sin tope. Si no hay nada descargado, se lee de SAP: exigir
+  // la descarga completa —casi 3 millones de filas en un tenant real— para dibujar una red de veinte
+  // nodos convertía en una hora algo que en v7 era inmediato.
   useEffect(() => {
     let abandonado = false
 
     productosConRed()
-      .then((lista) => { if (!abandonado) setProductos(lista) })
+      .then(async (lista) => {
+        if (abandonado) return
+        if (lista.length > 0) { setProductos(lista); setFuente('local'); return }
+        if (!destino?.connectionId) { setProductos([]); setFuente('local'); return }
+
+        const leido = await fetchExplorerMap(destino)
+        if (abandonado) return
+        const plan = planificarExtraccion({
+          efectivo: leido.efectivo, mapa: leido.guardado.fields, grupos: ['arbol', 'red'],
+        })
+        const desdeSap = await productosDeSap({
+          conexionId: destino.connectionId, destino, plan, mapa: leido.guardado.fields,
+        })
+        if (abandonado) return
+        setMapa({ plan, campos: leido.guardado.fields })
+        setProductos(desdeSap)
+        setFuente('sap')
+      })
       .catch((fallo) => { if (!abandonado) { setError(fallo.message); setProductos([]) } })
 
     return () => { abandonado = true }
-  }, [])
+  }, [destino])
 
   const visibles = useMemo(() => {
     const texto = busqueda.trim().toUpperCase()
@@ -76,7 +107,11 @@ export default function SupplyNetwork() {
     setCargando(true)
 
     try {
-      const datos = await cargarRed(prdid)
+      const datos = fuente === 'sap'
+        ? await cargarRedDeSap({
+          conexionId: destino.connectionId, destino, plan: mapa.plan, mapa: mapa.campos, prdid,
+        })
+        : await cargarRed(prdid)
       setRed(armarRed(prdid, datos))
     } catch (fallo) {
       setError(fallo.message)
@@ -94,7 +129,9 @@ export default function SupplyNetwork() {
 
   const nombreDe = (id) => red?.nodos.find((uno) => uno.id === id)?.nombre ?? id
 
-  if (productos === null) return <div className="page-hint">Leyendo lo que hay descargado…</div>
+  if (productos === null) {
+    return <div className="page-hint">Buscando la red: primero lo descargado, y si no, en SAP…</div>
+  }
 
   if (productos.length === 0) {
     return (
@@ -103,8 +140,8 @@ export default function SupplyNetwork() {
           ? <div className="notice notice-error">✕ {error}</div>
           : (
             <div className="notice notice-info">
-              No hay red descargada. Andá a <b>Descargar</b> y bajá el grupo «Red de suministro»; esta
-              pantalla trabaja sobre lo que quedó guardado en este navegador.
+              No hay red descargada y tampoco se pudo leer el maestro de productos de SAP. Revisá
+              <b> Origen de los datos</b>: quizá haya que decirle a mano qué tabla cumple cada papel.
             </div>
           )}
       </div>
@@ -115,11 +152,27 @@ export default function SupplyNetwork() {
     <div className="module-body">
       {error && <div className="notice notice-error">✕ {error}</div>}
 
+      {/* La procedencia se dice siempre, como en el resto de la aplicación. Acá además cambia lo que
+          el dato PUEDE decir: leyendo de SAP los arcos de proveedor se topan en 100 componentes por el
+          largo de la URL, y leyendo de lo descargado no hay tope. */}
+      {fuente === 'sap' && (
+        <div className="notice notice-info">
+          Leyendo <b>de SAP</b>, solo lo de cada producto: no hace falta descargar nada. Con el grupo
+          «Red de suministro» descargado esta pantalla es instantánea y además no tiene tope — así, los
+          arcos de proveedor se piden para los <b>primeros 100 componentes</b> de la receta, que es el
+          límite del largo de una URL.
+        </div>
+      )}
+
       <div className="tablero">
         <div className="card">
           <div className="card-label">
             Producto
-            <span className="exp-sub">{numero(productos.length)} con red</span>
+            {/* Leyendo de SAP es el maestro entero: saber cuáles tienen red exigiría una consulta
+                por producto. Decir «con red» ahí sería prometer algo que no se comprobó. */}
+            <span className="exp-sub">
+              {numero(productos.length)} {fuente === 'sap' ? 'en el área' : 'con red'}
+            </span>
           </div>
 
           <input

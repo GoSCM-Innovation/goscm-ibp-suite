@@ -212,7 +212,10 @@ export default function DataTools() {
       )}
       {listo && herramienta === 'red' && (
         <Suspense fallback={<div className="page-hint">Cargando la red…</div>}>
-          <SupplyNetwork key={`${conexionId}|${area}|${version}`} />
+          <SupplyNetwork
+            key={`${conexionId}|${area}|${version}`}
+            destino={{ connectionId: conexionId, planningArea: area, versionId: versionParaSap(version) }}
+          />
         </Suspense>
       )}
       {/* La clasificación de tipos se guarda por área, así que el área baja como prop. */}

@@ -63,6 +63,37 @@ async function pedir({ conexionId, destino, paso, mapa, condiciones, signal }) {
 /** El paso del plan que baja esa tabla local. */
 const pasoDe = (plan, tabla) => plan.pasos.find((uno) => uno.tabla === tabla) ?? null
 
+/**
+ * Los productos que se pueden mirar, leídos del maestro.
+ *
+ * Sin descarga, la lista no puede salir de las tablas de arcos: no están. v7 la sacaba del maestro de
+ * productos filtrado por área, y aquí igual: son dos páginas —8.134 filas en el tenant de pruebas— y
+ * se leen una vez al abrir la pantalla.
+ *
+ * No dice cuántos arcos tiene cada uno, al contrario que la lista de la base local: saberlo exigiría
+ * una consulta por producto. Es la diferencia honesta entre tener las tablas y no tenerlas, y la
+ * pantalla lo dice en vez de enseñar ceros.
+ */
+export async function productosDeSap({ conexionId, destino, plan, mapa = {}, signal }) {
+  const paso = pasoDe(plan, 'bom_prd')
+  if (!paso?.sePuede) return []
+
+  const filas = await pedir({
+    conexionId,
+    destino,
+    mapa,
+    paso,
+    // Sin condiciones: es el maestro del área, y el área ya va en el filtro que arma el servidor.
+    condiciones: [],
+    signal,
+  })
+
+  return filas
+    .map((fila) => ({ prdid: texto(fila.PRDID), descripcion: texto(fila.PRDDESCR) }))
+    .filter((uno) => uno.prdid)
+    .sort((a, b) => a.prdid.localeCompare(b.prdid))
+}
+
 /** Los valores distintos de un campo, sin vacíos, listos para un `eq … or …`. */
 function valoresDe(filas, campo, tope = Infinity) {
   const vistos = new Set()
