@@ -23,8 +23,11 @@ personas, suscripciones y conexiones a SAP se administran desde el navegador.
 
 Lo que falta para poner esto delante de un cliente, y no es código de módulos:
 
-- **Un proveedor de correo de verdad** para los códigos de acceso. Es lo que bloquea el primer
-  despliegue.
+- **Dar de alta la cuenta de Resend** y poner `RESEND_API_KEY` y `MAIL_FROM`. El envío ya está
+  escrito y probado (`core/auth/email.js`); lo que falta es la cuenta, el dominio verificado y la
+  clave. Sin esas dos variables, en desarrollo el código se imprime en la consola y en producción el
+  ingreso falla **a propósito**: un código de acceso en los registros del servidor es una puerta
+  abierta para cualquiera que los pueda leer.
 - **Vercel Pro y los `crons`** de `vercel.json`, para lo que corre solo.
 - **El idioma (es/en)** es una fase propia y deliberadamente la última: hasta que todo esté portado,
   traducir es traducir dos veces.
