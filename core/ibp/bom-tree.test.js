@@ -550,3 +550,55 @@ describe('identidad de los nodos', () => {
     expect(nodo.hijos[0].id).toBe('L/S/1:ciclo-S')
   })
 })
+
+// Sin acotar, las raíces salen de TODO el índice que se le pase, que es lo correcto para un tenant
+// entero. Pero la pantalla carga el subárbol de UN producto —el producto, sus componentes, y los
+// componentes de esos— y con ese índice las raíces salen de más.
+//
+// `tenantDeJuguete` es justo ese caso: si se pide el árbol de TERMINADO, el índice trae también la
+// receta S3 de SEMI en PLANTA2, donde SEMI no es componente de nadie. Así que PLANTA2 aparecía como
+// planta del árbol de TERMINADO, y TERMINADO no se fabrica ahí.
+//
+// Medido en un tenant real: el producto `1020085` tiene 18 recetas —10 en la planta 1702 y 8 en la
+// 1901, ninguna en P042— y la pantalla ofrecía las tres con 127, 139 y 127 raíces.
+describe('raíces acotadas a un producto', () => {
+  it('sin acotar, las plantas son las de todo el índice', () => {
+    const todo = raicesPorPlanta(tenantDeJuguete())
+    expect(todo.plantas).toEqual(['PLANTA1', 'PLANTA2'])
+  })
+
+  it('acotado, desaparece la planta donde ese material no se fabrica', () => {
+    const solo = raicesPorPlanta(tenantDeJuguete(), { soloDe: 'TERMINADO' })
+    expect(solo.plantas).toEqual(['PLANTA1'])
+    expect(solo.porPlanta.PLANTA1.map((uno) => uno.prdid)).toEqual(['TERMINADO'])
+  })
+
+  // SEMI se produce en las dos plantas, pero en PLANTA1 ADEMÁS se consume, y la regla 3 dice que ahí
+  // no es raíz: aparece como hijo de TERMINADO, no como cabeza de árbol. Así que acotando a SEMI queda
+  // PLANTA2, que es donde sí encabeza.
+  //
+  // Queda una pregunta de producto que esto deja a la vista y que no se decide sola: si al pedir el
+  // árbol de un semiterminado conviene ofrecer también la planta donde se fabrica Y se consume. Hoy no
+  // se ofrece, y antes tampoco —solo aparecía de rebote, porque otros productos eran raíz ahí—.
+  it('un material que además se consume en una planta no encabeza árbol ahí', () => {
+    const solo = raicesPorPlanta(tenantDeJuguete(), { soloDe: 'SEMI' })
+    expect(solo.plantas).toEqual(['PLANTA2'])
+  })
+
+  // Esconder una receta donde el material es coproducto sería esconder de dónde sale.
+  it('una receta donde el material es COPRODUCTO también cuenta', () => {
+    const solo = raicesPorPlanta(tenantDeJuguete(), { soloDe: 'COPRODUCTO' })
+    expect(solo.plantas).toEqual(['PLANTA1'])
+    // La encabeza COPRODUCTO porque su principal, SEMI, es componente en esa planta.
+    expect(solo.porPlanta.PLANTA1.map((uno) => uno.prdid)).toEqual(['COPRODUCTO'])
+  })
+
+  it('un material que no se fabrica en ninguna parte no ofrece plantas', () => {
+    expect(raicesPorPlanta(tenantDeJuguete(), { soloDe: 'MATERIA' }).plantas).toEqual([])
+    expect(raicesPorPlanta(tenantDeJuguete(), { soloDe: 'NO_EXISTE' }).plantas).toEqual([])
+  })
+
+  it('acotar con vacío es no acotar', () => {
+    expect(raicesPorPlanta(tenantDeJuguete(), { soloDe: '' }).plantas).toEqual(['PLANTA1', 'PLANTA2'])
+  })
+})

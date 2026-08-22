@@ -180,7 +180,9 @@ export default function BomTree() {
       const { indices: leidos } = await cargarSubarbol(prdid, { onAvance: setCargando })
       indices.current = leidos
 
-      const armado = raicesPorPlanta(leidos)
+      // Acotado al producto elegido: el resto del índice está para armar sus descendientes, no para
+      // ser raíz. Ver la cabecera de `raicesPorPlanta`.
+      const armado = raicesPorPlanta(leidos, { soloDe: prdid })
       setArbol(armado)
       // La planta se elige sola solo si hay una: con varias, el árbol cambia por completo según cuál.
       setPlanta(armado.plantas.length === 1 ? armado.plantas[0] : '')

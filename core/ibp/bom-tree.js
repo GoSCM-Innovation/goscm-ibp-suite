@@ -354,9 +354,24 @@ export function soltarHijos(nodo) {
  *
  * Reglas 3 y 4: un producto es raíz en su planta si no es componente de nadie ahí, y cada receta se
  * construye una sola vez por planta aunque figure bajo varios productos.
+ *
+ * `soloDe` acota las raíces a las recetas que producen ESE material, y es lo que necesita la pantalla
+ * del árbol.
+ *
+ * Sin acotar, esta función devuelve las raíces de TODO el índice que se le pase, que es lo correcto
+ * para un tenant entero. Pero la pantalla carga el subárbol de un solo producto —el producto, sus
+ * componentes, los componentes de esos— y con ese índice las raíces salen de más: un componente que
+ * se fabrica en otra planta y que allí nadie consume es raíz de esa planta. Medido en un tenant real,
+ * el producto `1020085` tiene 18 recetas —10 en la planta 1702 y 8 en la 1901, ninguna en P042— y la
+ * pantalla ofrecía las tres plantas con 127, 139 y 127 raíces: casi todo eran recetas de sus
+ * componentes, y P042 no debería haber aparecido siquiera.
+ *
+ * Se acota por «la receta lo produce», no por «la receta lo encabeza»: una receta donde el material
+ * elegido es coproducto también lo produce, y esconderla sería esconder de dónde sale.
  */
-export function raicesPorPlanta(indices) {
+export function raicesPorPlanta(indices, { soloDe = '' } = {}) {
   const porPlanta = {}
+  const acotado = texto(soloDe)
 
   // Primero se junta, por receta y planta, con qué productos podría encabezarse. Después se elige uno.
   // v7 recorría los productos en orden alfabético y se quedaba con el primero que pillaba, así que la
@@ -389,6 +404,9 @@ export function raicesPorPlanta(indices) {
     // el primer coproducto que sí pueda: la receta produce algo que nadie consume, y eso es una raíz.
     const prdMostrado = principal || coproductos[0]
     if (!prdMostrado) continue
+
+    // Acotado: solo las recetas que producen el material elegido, sea como principal o como coproducto.
+    if (acotado && principal !== acotado && !coproductos.includes(acotado)) continue
 
     const nodo = armarNodo(receta, { nivel: 1, prdMostrado, locRaiz: planta, indices })
     if (!nodo) continue
