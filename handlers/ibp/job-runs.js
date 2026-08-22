@@ -12,6 +12,7 @@
 
 import { requireModule } from '../../core/auth/guards.js'
 import { getConnectionTarget, getCredentials } from '../../core/connections/index.js'
+import { explicarFallo } from '../../core/ibp/explicar-fallo.js'
 import {
   cancelJobRun,
   readJobRuns,
@@ -109,6 +110,6 @@ export default async function handler(req, res) {
     return req.method === 'GET' ? await conGet(req, res, ctx) : await conPost(req, res, ctx)
   } catch (error) {
     console.error(`[ibp/job-runs] ${error.stack || error.message}`)
-    return res.status(400).json({ error: error.message, detalle: error.detail ?? '' })
+    return res.status(400).json({ error: explicarFallo(error, ACUERDO), detalle: error.detail ?? '' })
   }
 }

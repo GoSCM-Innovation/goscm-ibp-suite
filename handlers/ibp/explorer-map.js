@@ -15,6 +15,7 @@
 
 import { requireModule } from '../../core/auth/guards.js'
 import { getAnyCredentials, getConnectionTarget } from '../../core/connections/index.js'
+import { explicarFallo } from '../../core/ibp/explicar-fallo.js'
 import {
   ROLES_DEL_ARBOL,
   ROLES_DE_RED,
@@ -120,6 +121,6 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Método no permitido.' })
   } catch (error) {
     console.error(`[ibp/explorer-map] ${error.stack || error.message}`)
-    return res.status(400).json({ error: error.message, detalle: error.detail ?? '' })
+    return res.status(400).json({ error: explicarFallo(error, ACUERDOS), detalle: error.detail ?? '' })
   }
 }

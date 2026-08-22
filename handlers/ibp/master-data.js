@@ -12,6 +12,7 @@
 
 import { requireModule } from '../../core/auth/guards.js'
 import { getAnyCredentials, getConnectionTarget } from '../../core/connections/index.js'
+import { explicarFallo } from '../../core/ibp/explicar-fallo.js'
 import {
   catalogoDesdeVsmt,
   countEntity,
@@ -131,6 +132,6 @@ export default async function handler(req, res) {
     }
   } catch (error) {
     console.error(`[ibp/master-data] ${error.stack || error.message}`)
-    return res.status(400).json({ error: error.message, detalle: error.detail ?? '' })
+    return res.status(400).json({ error: explicarFallo(error, ACUERDOS), detalle: error.detail ?? '' })
   }
 }

@@ -8,6 +8,7 @@
 
 import { requireModule } from '../../core/auth/guards.js'
 import { getConnectionTarget, getCredentials } from '../../core/connections/index.js'
+import { explicarFallo } from '../../core/ibp/explicar-fallo.js'
 import { readMetering, resumirConsumo } from '../../core/ibp/index.js'
 
 /** El acuerdo que habilita el servicio de actividad medida. */
@@ -64,6 +65,6 @@ export default async function handler(req, res) {
     })
   } catch (error) {
     console.error(`[ibp/metering] ${error.stack || error.message}`)
-    return res.status(400).json({ error: error.message, detalle: error.detail ?? '' })
+    return res.status(400).json({ error: explicarFallo(error, ACUERDO), detalle: error.detail ?? '' })
   }
 }

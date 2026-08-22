@@ -12,6 +12,7 @@
 
 import { requireModule } from '../../core/auth/guards.js'
 import { getAnyCredentials, getConnectionTarget } from '../../core/connections/index.js'
+import { explicarFallo } from '../../core/ibp/explicar-fallo.js'
 import { filtroDeCondiciones, migrarSegmento } from '../../core/ibp/index.js'
 
 const ACUERDOS = ['SAP_COM_0720', 'SAP_COM_0326']
@@ -86,6 +87,6 @@ export default async function handler(req, res) {
     return res.status(200).json(segmento)
   } catch (error) {
     console.error(`[ibp/migration-run] ${error.stack || error.message}`)
-    return res.status(400).json({ error: error.message, detalle: error.detail ?? '' })
+    return res.status(400).json({ error: explicarFallo(error, ACUERDOS), detalle: error.detail ?? '' })
   }
 }
