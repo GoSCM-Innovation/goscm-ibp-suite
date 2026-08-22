@@ -134,6 +134,7 @@ export default function Summary({ destino }) {
             label="Tasa de éxito"
             valor={resumen.tasaExito === null ? '—' : `${resumen.tasaExito}%`}
             color={colorDeTasa(resumen.tasaExito)}
+            nota={resumen.conAvisosTotal > 0 ? 'cuenta también las que terminaron con avisos' : ''}
           />
         </div>
 
@@ -234,11 +235,14 @@ function calcular(ejecuciones, zona) {
   }
 }
 
-function Kpi({ label, valor, color = 'var(--text)' }) {
+function Kpi({ label, valor, color = 'var(--text)', nota = '' }) {
   return (
     <div className="kpi">
       <div className="kpi-label">{label}</div>
       <div className="kpi-valor" style={{ color }}>{valor}</div>
+      {/* La nota existe por la tasa de éxito: cuenta más cosas que la tarjeta de «Correctas», y sin
+          decirlo los dos números no cuadran a la vista. */}
+      {nota && <div className="kpi-nota">{nota}</div>}
     </div>
   )
 }

@@ -505,6 +505,7 @@ a { color: var(--cyan); }
   text-transform: uppercase;
 }
 .kpi-valor { font-size: 23px; font-weight: 700; line-height: 1.15; }
+.kpi-nota { color: var(--text2); font-size: 10px; line-height: 1.3; margin-top: 4px; }
 
 .leyenda { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 8px; }
 .leyenda-item { align-items: center; color: var(--text2); display: flex; font-size: 10px; gap: 5px; }

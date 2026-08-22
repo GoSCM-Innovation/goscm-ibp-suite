@@ -125,6 +125,7 @@ export default function GlobalSummary({ destinos }) {
       enCola: todas.filter((fila) => isQueued(fila.statusCode)).length,
       correctas: todas.filter((fila) => fila.statusCode === 'SUCCESS').length,
       falladas: todas.filter((fila) => isFailed(fila.statusCode)).length,
+      conAvisosTotal: todas.filter((fila) => isWarning(fila.statusCode)).length,
       tasaExito: successRate(todas.map((fila) => fila.statusCode)),
       masEjecutadas: topTasks(todas, { claveExtra: (fila) => fila.destino.id }),
       ultimasFalladas: latestFailed(todas),
@@ -226,6 +227,7 @@ export default function GlobalSummary({ destinos }) {
             label="Tasa de éxito"
             valor={global.tasaExito === null ? '—' : `${global.tasaExito}%`}
             color={colorDeTasa(global.tasaExito)}
+            nota={global.conAvisosTotal > 0 ? 'cuenta también las que terminaron con avisos' : ''}
           />
         </div>
 
@@ -412,11 +414,14 @@ function EstadoConexion({ estado }) {
   )
 }
 
-function Kpi({ label, valor, color = 'var(--text)' }) {
+function Kpi({ label, valor, color = 'var(--text)', nota = '' }) {
   return (
     <div className="kpi">
       <div className="kpi-label">{label}</div>
       <div className="kpi-valor" style={{ color }}>{valor}</div>
+      {/* La nota existe por la tasa de éxito: cuenta más cosas que la tarjeta de «Correctas», y sin
+          decirlo los dos números no cuadran a la vista. */}
+      {nota && <div className="kpi-nota">{nota}</div>}
     </div>
   )
 }
