@@ -189,6 +189,32 @@ export const EXTRACCIONES = Object.freeze([
   },
 ])
 
+/**
+ * Si lo que se bajó dice que la VERSIÓN está vacía, y no que falte una tabla suelta.
+ *
+ * Son dos cosas distintas y se leen igual en pantalla si nadie las separa. Que una tabla accesoria
+ * venga en cero es normal —hay áreas sin producto por cliente—. Que vengan en cero TODAS las
+ * esenciales no es un dato: es que se eligió una versión sin nada dentro.
+ *
+ * Medido en el tenant de pruebas: de las seis versiones con nombre de `ASIBPTS`, dos —`BACKUPVSEM` y
+ * `UPSIDE`— no tienen ni una fila. Sin este aviso, elegir una de ellas deja un informe en blanco y
+ * la herramienta parece rota; el consultor no tiene forma de saber que el problema es su elección.
+ */
+export function versionSinDatos(pasos, hechos) {
+  const esenciales = (pasos ?? []).filter((uno) => uno.esencial && uno.sePuede)
+  if (esenciales.length === 0) return { vacia: false, tablas: [] }
+
+  const filasDe = (tabla) => (hechos ?? []).find((uno) => uno.tabla === tabla)
+
+  // Si alguna esencial ni siquiera se intentó —cancelada o con error— no se puede concluir nada:
+  // decir «la versión está vacía» cuando en realidad se cortó la descarga sería peor que callarse.
+  const suyos = esenciales.map((uno) => filasDe(uno.tabla))
+  if (suyos.some((uno) => !uno || uno.error || uno.cancelado)) return { vacia: false, tablas: [] }
+
+  const vacia = suyos.every((uno) => (uno.bajadas ?? 0) === 0)
+  return { vacia, tablas: vacia ? esenciales.map((uno) => uno.etiqueta) : [] }
+}
+
 /** Los grupos que se pueden bajar, con su nombre visible. */
 export const GRUPOS_DE_EXTRACCION = Object.freeze([
   { id: 'arbol', label: 'Árbol de materiales' },

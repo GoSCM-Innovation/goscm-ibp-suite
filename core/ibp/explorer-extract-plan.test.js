@@ -7,6 +7,7 @@ import {
   MARCA_DE_INVALIDA,
   descartarInvalidas,
   planificarExtraccion,
+  versionSinDatos,
 } from './explorer-extract-plan.js'
 
 /** Un papel resuelto, como lo devuelve `rolesEfectivos`. */
@@ -140,5 +141,71 @@ describe('planificarExtraccion', () => {
   it('no hay dos pasos que escriban en la misma tabla', () => {
     const tablas = EXTRACCIONES.map((una) => una.tabla)
     expect(new Set(tablas).size).toBe(tablas.length)
+  })
+})
+
+describe('cuando la versión elegida no tiene nada', () => {
+  const paso = (tabla, extra = {}) => ({
+    tabla, etiqueta: tabla, esencial: true, sePuede: true, ...extra,
+  })
+  const hecho = (tabla, bajadas, extra = {}) => ({ tabla, bajadas, guardadas: bajadas, ...extra })
+
+  it('todas las esenciales en cero es una versión vacía', () => {
+    const salida = versionSinDatos(
+      [paso('bom_psh'), paso('bom_psi')],
+      [hecho('bom_psh', 0), hecho('bom_psi', 0)],
+    )
+    expect(salida.vacia).toBe(true)
+    expect(salida.tablas).toEqual(['bom_psh', 'bom_psi'])
+  })
+
+  // Que una tabla accesoria venga vacía es normal: hay áreas sin producto por cliente.
+  it('una accesoria en cero no dice nada de la versión', () => {
+    const salida = versionSinDatos(
+      [paso('bom_psh'), paso('sn_cust_prod', { esencial: false })],
+      [hecho('bom_psh', 120), hecho('sn_cust_prod', 0)],
+    )
+    expect(salida.vacia).toBe(false)
+  })
+
+  it('con una sola esencial con filas, la versión no está vacía', () => {
+    const salida = versionSinDatos(
+      [paso('bom_psh'), paso('bom_psi')],
+      [hecho('bom_psh', 0), hecho('bom_psi', 3)],
+    )
+    expect(salida.vacia).toBe(false)
+  })
+
+  // Decir «la versión está vacía» cuando en realidad se corto la descarga es peor que callarse: manda
+  // al consultor a mirar SAP en vez de a reintentar.
+  it('si una esencial fallo o se cancelo, no se concluye nada', () => {
+    const conError = versionSinDatos(
+      [paso('bom_psh'), paso('bom_psi')],
+      [hecho('bom_psh', 0, { error: 'se cayo la red' }), hecho('bom_psi', 0)],
+    )
+    expect(conError.vacia).toBe(false)
+
+    const cancelada = versionSinDatos(
+      [paso('bom_psh'), paso('bom_psi')],
+      [hecho('bom_psh', 0, { cancelado: true }), hecho('bom_psi', 0)],
+    )
+    expect(cancelada.vacia).toBe(false)
+  })
+
+  it('una esencial que ni aparece en lo bajado tampoco concluye', () => {
+    expect(versionSinDatos([paso('bom_psh')], []).vacia).toBe(false)
+  })
+
+  it('una esencial que no se puede bajar no cuenta para el juicio', () => {
+    const salida = versionSinDatos(
+      [paso('bom_psh'), paso('bom_psi', { sePuede: false })],
+      [hecho('bom_psh', 0)],
+    )
+    expect(salida.vacia).toBe(true)
+  })
+
+  it('aguanta que no venga nada', () => {
+    expect(versionSinDatos([], []).vacia).toBe(false)
+    expect(versionSinDatos(null, null).vacia).toBe(false)
   })
 })

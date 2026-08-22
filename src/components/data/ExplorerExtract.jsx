@@ -9,7 +9,11 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-import { GRUPOS_DE_EXTRACCION, planificarExtraccion } from '../../../core/ibp/explorer-extract-plan.js'
+import {
+  GRUPOS_DE_EXTRACCION,
+  planificarExtraccion,
+  versionSinDatos,
+} from '../../../core/ibp/explorer-extract-plan.js'
 import { fetchExplorerMap } from '../../lib/ibp-explorer.js'
 import { contar } from '../../lib/explorer-db.js'
 import { extraer } from '../../lib/explorer-extract.js'
@@ -157,6 +161,15 @@ export default function ExplorerExtract({ destino }) {
         </div>
       )}
 
+      {/* «0 filas» a secas es cierto y no sirve: no dice que el problema es la versión elegida. */}
+      {salida && versionSinDatos(plan.pasos, salida.hechos).vacia && (
+        <div className="notice notice-error">
+          ✕ <b>Esta versión no tiene datos.</b> Ninguna de las tablas imprescindibles trajo una sola
+          fila, así que no hay nada que analizar. Casi siempre es que la versión elegida está vacía en
+          SAP: probá con la <b>versión base</b>, que es donde vive el dato maestro del área.
+        </div>
+      )}
+
       {salida && (
         <div className={`notice notice-${salida.ok ? 'ok' : 'info'}`}>
           {salida.ok ? '✓ ' : ''}
@@ -180,6 +193,8 @@ export default function ExplorerExtract({ destino }) {
               {plan.pasos.map((paso) => {
                 const suyo = salida?.hechos.find((uno) => uno.tabla === paso.tabla)
                 const antes = guardadasAntes?.[paso.tabla]
+                // Lo que va trayendo AHORA esta tabla, si es la que está en curso.
+                const enCurso = avance?.tabla === paso.tabla ? avance : null
 
                 return (
                   <tr key={paso.tabla}>
@@ -198,8 +213,17 @@ export default function ExplorerExtract({ destino }) {
                         </div>
                       )}
                     </td>
+                    {/* El número tiene que decir DE CUÁNDO es. Mientras la descarga corre, acá se
+                        veía el conteo de la corrida ANTERIOR bajo un encabezado que dice «Guardadas»:
+                        una tabla llena de ceros mientras la línea de progreso decía que esa misma
+                        tabla traía 47.919 filas. Un dato viejo sin fecha se lee como el de ahora. */}
                     <td>
-                      {suyo ? numero(suyo.guardadas) : antes === undefined ? '—' : numero(antes)}
+                      {suyo && numero(suyo.guardadas)}
+                      {!suyo && enCurso && numero(enCurso.guardadas)}
+                      {!suyo && !enCurso && (antes === undefined || antes === 0
+                        ? '—'
+                        : <span className="exp-sub">{numero(antes)} de antes</span>)}
+
                       {suyo && suyo.bajadas > suyo.guardadas && (
                         <div className="exp-sub">de {numero(suyo.bajadas)} bajadas</div>
                       )}
