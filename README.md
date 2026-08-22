@@ -12,6 +12,10 @@ Cada cliente contrata los módulos que necesita; los no contratados aparecen blo
 
 ## Estado
 
+**En línea: https://goscm-ibp-suite.vercel.app** — desde el 2026-08-21. Cada subida a `main` se
+publica sola en esa misma dirección. El ingreso por código al correo está verificado de punta a punta
+contra el despliegue.
+
 **Los tres proyectos previos están portados.** No queda ningún hueco de funcionalidad abierto en
 ninguno de los tres, y cada uno tiene su inventario recorrido contra el repositorio de origen:
 [`PARIDAD-V7.md`](docs/PARIDAD-V7.md), [`PARIDAD-V8.md`](docs/PARIDAD-V8.md) y
