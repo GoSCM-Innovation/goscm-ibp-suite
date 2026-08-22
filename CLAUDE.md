@@ -3,6 +3,11 @@
 ## Regla fundamental
 **No inventar información nunca.** Si se necesita un dato específico (endpoints SAP IBP, escenarios de comunicación, roles, configuraciones) y no está en el código, en `docs/` o en lo que el usuario ha proporcionado, **preguntar antes de escribir cualquier cosa**.
 
+## Si la instrucción es «continuemos»
+Leer primero [`docs/SIGUIENTE.md`](docs/SIGUIENTE.md): tiene el estado, lo siguiente en orden de
+prioridad acordado, y las decisiones abiertas que necesitan al usuario. Se actualiza al terminar cada
+sesión.
+
 ## Contexto
 Plataforma web unificada para SAP IBP y SAP CI-DS, comercializada por suscripción. Sustituye a tres proyectos previos (`ibp-bom-v7`, `ibp-bom-v8`, `ibp-bom-v9`) que están en carpetas hermanas y **siguen operativos durante la transición** — se leen como referencia para portar código y para verificar paridad, nunca se modifican.
 
