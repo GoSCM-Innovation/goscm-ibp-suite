@@ -6,7 +6,13 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { configuracionDeCorreo, deliverCode, resetCodeSender, setCodeSender } from './delivery.js'
+import {
+  configuracionDeCorreo,
+  deliverCode,
+  desvioDeCorreo,
+  resetCodeSender,
+  setCodeSender,
+} from './delivery.js'
 import { enviarPorResend } from './email.js'
 
 vi.mock('./email.js', async () => {
@@ -21,6 +27,7 @@ beforeEach(() => {
   resetCodeSender()
   delete process.env.RESEND_API_KEY
   delete process.env.MAIL_FROM
+  delete process.env.MAIL_REDIRECT_TO
   delete process.env.NODE_ENV
 })
 
@@ -83,6 +90,83 @@ describe('a quién se llama', () => {
 
     await expect(deliverCode({ email: 'p@c.com', code: '1', expiresInMinutes: 10 }))
       .rejects.toThrow('dominio sin verificar')
+  })
+})
+
+// El desvío temporal: todos los códigos a un solo buzón, para poder trabajar entre varias personas
+// antes de tener un dominio de correo verificado.
+describe('el desvío temporal', () => {
+  beforeEach(() => {
+    process.env.RESEND_API_KEY = 'clave'
+    process.env.MAIL_FROM = 'onboarding@resend.dev'
+  })
+
+  it('sin la variable, no hay desvío', () => {
+    expect(desvioDeCorreo({})).toBeNull()
+    expect(desvioDeCorreo({ MAIL_REDIRECT_TO: '  ' })).toBeNull()
+    expect(desvioDeCorreo({ MAIL_REDIRECT_TO: ' jefe@go-scm.com ' })).toBe('jefe@go-scm.com')
+  })
+
+  it('entrega al buzón del desvío y no al de quien pidió entrar', async () => {
+    process.env.MAIL_REDIRECT_TO = 'jefe@go-scm.com'
+
+    await deliverCode({ email: 'colega@go-scm.com', code: '482913', expiresInMinutes: 10 })
+
+    const suyo = enviarPorResend.mock.calls[0][0]
+    expect(suyo.to).toBe('jefe@go-scm.com')
+  })
+
+  // Con tres personas trabajando llegan varios códigos seguidos. Sin la dirección en el asunto son
+  // todos idénticos y se aplica el código equivocado.
+  it('el asunto dice para quién es el código', async () => {
+    process.env.MAIL_REDIRECT_TO = 'jefe@go-scm.com'
+
+    await deliverCode({ email: 'colega@go-scm.com', code: '482913', expiresInMinutes: 10 })
+
+    const suyo = enviarPorResend.mock.calls[0][0]
+    expect(suyo.asunto).toBe('Código para colega@go-scm.com: 482913')
+    expect(suyo.texto).toContain('Este código es para colega@go-scm.com, no para ti')
+    expect(suyo.html).toContain('colega@go-scm.com')
+    expect(suyo.texto).toContain('482913')
+  })
+
+  // La vuelta atrás tiene que ser borrar la variable y nada más. Si al quitarla quedara cualquier
+  // rastro del desvío, «temporal» sería mentira.
+  it('sin la variable, todo vuelve al comportamiento normal', async () => {
+    await deliverCode({ email: 'colega@go-scm.com', code: '482913', expiresInMinutes: 10 })
+
+    const suyo = enviarPorResend.mock.calls[0][0]
+    expect(suyo.to).toBe('colega@go-scm.com')
+    expect(suyo.asunto).toBe('Tu código de acceso: 482913')
+    expect(suyo.texto).not.toContain('desvío')
+    expect(suyo.html).not.toContain('desvío')
+  })
+
+  // Si el destino se pudiera influir desde fuera, cualquiera pediría el código de otro y se lo
+  // mandaría a sí mismo.
+  it('el destino del desvío sale de la configuración, nunca de quien pide entrar', async () => {
+    process.env.MAIL_REDIRECT_TO = 'jefe@go-scm.com'
+
+    await deliverCode({
+      email: 'atacante@ajeno.com, jefe@go-scm.com',
+      code: '1',
+      expiresInMinutes: 10,
+    })
+
+    expect(enviarPorResend.mock.calls[0][0].to).toBe('jefe@go-scm.com')
+  })
+
+  it('un proveedor inyectado no se ve afectado por el desvío', async () => {
+    process.env.MAIL_REDIRECT_TO = 'jefe@go-scm.com'
+    const inyectado = vi.fn()
+    setCodeSender(inyectado)
+
+    await deliverCode({ email: 'colega@go-scm.com', code: '1', expiresInMinutes: 10 })
+
+    expect(inyectado).toHaveBeenCalledWith({
+      email: 'colega@go-scm.com', code: '1', expiresInMinutes: 10,
+    })
+    expect(enviarPorResend).not.toHaveBeenCalled()
   })
 })
 

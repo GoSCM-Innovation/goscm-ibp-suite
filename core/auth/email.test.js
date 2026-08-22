@@ -55,6 +55,37 @@ describe('el mensaje', () => {
   it('le dice a quien no pidió entrar que no tiene que hacer nada', () => {
     expect(mensajeDeCodigo({ code: '1', expiresInMinutes: 5 }).texto).toContain('no pediste entrar')
   })
+
+  describe('cuando el desvío temporal está activo', () => {
+    it('el asunto lleva la dirección de verdad, no una genérica', () => {
+      const { asunto } = mensajeDeCodigo({
+        code: '482913', expiresInMinutes: 10, paraQuien: 'colega@go-scm.com',
+      })
+      expect(asunto).toBe('Código para colega@go-scm.com: 482913')
+    })
+
+    // Quien abre el correo NO es quien pidió entrar, y tiene que verlo en la primera línea.
+    it('dice desde el principio que el código es de otra persona', () => {
+      const { texto, html } = mensajeDeCodigo({
+        code: '482913', expiresInMinutes: 10, paraQuien: 'colega@go-scm.com',
+      })
+      expect(texto.split('\n')[0]).toContain('Este código es para colega@go-scm.com, no para ti')
+      expect(html).toContain('no para ti')
+    })
+
+    it('escapa la dirección dentro del HTML', () => {
+      const { html } = mensajeDeCodigo({
+        code: '1', expiresInMinutes: 5, paraQuien: '<img src=x>@go-scm.com',
+      })
+      expect(html).not.toContain('<img')
+      expect(html).toContain('&lt;img')
+    })
+
+    it('una dirección vacía o de espacios no activa el desvío', () => {
+      expect(mensajeDeCodigo({ code: '1', expiresInMinutes: 5, paraQuien: '   ' }).asunto)
+        .toBe('Tu código de acceso: 1')
+    })
+  })
 })
 
 describe('el envío', () => {

@@ -23,9 +23,17 @@ personas, suscripciones y conexiones a SAP se administran desde el navegador.
 
 Lo que falta para poner esto delante de un cliente, y no es código de módulos:
 
-- **Dar de alta la cuenta de Resend** y poner `RESEND_API_KEY` y `MAIL_FROM`. El envío ya está
-  escrito y probado (`core/auth/email.js`); lo que falta es la cuenta, el dominio verificado y la
-  clave. Sin esas dos variables, en desarrollo el código se imprime en la consola y en producción el
+- **Verificar un dominio de correo y quitar el desvío temporal.** El envío funciona
+  (`core/auth/email.js`, por Resend) pero hoy usa el remitente de pruebas, que **solo entrega al
+  dueño de la cuenta**. Mientras dure, `MAIL_REDIRECT_TO` desvía todos los códigos a ese único buzón:
+  cada persona entra con su propia dirección e identidad, y solo la entrega se desvía. El asunto dice
+  para quién es cada código.
+
+  **Mientras el desvío esté puesto, quien pueda leer ese buzón puede entrar como cualquier usuario.**
+  Es aceptable entre quienes construyen la plataforma; hay que quitarlo antes de que entre un cliente.
+  Se revierte borrando la variable: no hay nada más que deshacer.
+
+  Sin ninguna variable de correo, en desarrollo el código se imprime en la consola y en producción el
   ingreso falla **a propósito**: un código de acceso en los registros del servidor es una puerta
   abierta para cualquiera que los pueda leer.
 - **Vercel Pro y los `crons`** de `vercel.json`, para lo que corre solo.

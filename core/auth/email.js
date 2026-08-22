@@ -35,29 +35,55 @@ const escapar = (valor) => String(valor ?? '')
  *
  * El texto es corto a propósito: lo único que la persona necesita es el código y cuánto le dura. Todo
  * lo demás es ruido en una notificación que se lee en el teléfono en diez segundos.
+ *
+ * `paraQuien` solo viene puesto cuando el desvío temporal está activo, y entonces el correo cambia de
+ * destinatario real: quien lo abre NO es la persona que pidió entrar. El asunto lleva por eso la
+ * dirección de verdad. Con tres personas trabajando llegan varios códigos seguidos, y sin eso el
+ * asunto es idéntico en todos y se aplica el código equivocado.
  */
-export function mensajeDeCodigo({ code, expiresInMinutes }) {
+export function mensajeDeCodigo({ code, expiresInMinutes, paraQuien = '' }) {
   const minutos = Number(expiresInMinutes) || 0
   const duracion = minutos === 1 ? '1 minuto' : `${minutos} minutos`
+  const desviado = String(paraQuien ?? '').trim()
 
-  const asunto = `Tu código de acceso: ${code}`
+  const asunto = desviado
+    ? `Código para ${desviado}: ${code}`
+    : `Tu código de acceso: ${code}`
+
+  const encabezadoTexto = desviado
+    ? [
+      `Este código es para ${desviado}, no para ti.`,
+      'Te llega porque el desvío temporal de correo está activo.',
+      '',
+      `El código es: ${code}`,
+    ]
+    : [`Tu código de acceso a GoSCM Suite es: ${code}`]
 
   const texto = [
-    `Tu código de acceso a GoSCM Suite es: ${code}`,
+    ...encabezadoTexto,
     '',
     `El código vale ${duracion} y sirve una sola vez.`,
     '',
-    'Si no pediste entrar, no hace falta que hagas nada: sin el código nadie puede usar tu cuenta.',
+    desviado
+      ? 'Cuando el correo esté configurado con un dominio propio, cada persona recibirá el suyo.'
+      : 'Si no pediste entrar, no hace falta que hagas nada: sin el código nadie puede usar tu cuenta.',
   ].join('\n')
 
   const html = [
     '<div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;'
       + 'font-size:15px;line-height:1.5;color:#1a1a1a">',
-    '<p>Tu código de acceso a GoSCM Suite es:</p>',
+    desviado
+      ? `<p style="background:#fff4d6;border-left:3px solid #d9a200;padding:10px 12px;margin:0 0 16px">`
+        + `Este código es para <b>${escapar(desviado)}</b>, no para ti. Te llega porque el desvío `
+        + 'temporal de correo está activo.</p>'
+      : '<p>Tu código de acceso a GoSCM Suite es:</p>',
     `<p style="font-size:30px;font-weight:700;letter-spacing:4px;margin:20px 0">${escapar(code)}</p>`,
     `<p>El código vale <b>${escapar(duracion)}</b> y sirve una sola vez.</p>`,
-    '<p style="color:#666;font-size:13px">Si no pediste entrar, no hace falta que hagas nada: sin el '
-      + 'código nadie puede usar tu cuenta.</p>',
+    desviado
+      ? '<p style="color:#666;font-size:13px">Cuando el correo esté configurado con un dominio propio, '
+        + 'cada persona recibirá el suyo.</p>'
+      : '<p style="color:#666;font-size:13px">Si no pediste entrar, no hace falta que hagas nada: sin el '
+        + 'código nadie puede usar tu cuenta.</p>',
     '</div>',
   ].join('')
 

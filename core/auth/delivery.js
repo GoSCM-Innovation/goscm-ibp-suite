@@ -27,6 +27,24 @@ export function configuracionDeCorreo(entorno = process.env) {
   return apiKey && from ? { apiKey, from } : null
 }
 
+/**
+ * El desvío TEMPORAL: a qué único buzón se entregan todos los códigos, o `null` si no hay desvío.
+ *
+ * Existe para poder trabajar entre varias personas antes de tener un dominio de correo verificado:
+ * cada uno entra con SU dirección —su identidad, su sesión, su rastro— y lo único que se desvía es a
+ * qué buzón llega el mensaje.
+ *
+ * Es una dirección FIJA de la configuración, nunca una que venga de lo que alguien escriba en la
+ * pantalla: si el destino se pudiera influir desde fuera, cualquiera pediría un código de otro y se lo
+ * mandaría a sí mismo.
+ *
+ * MIENTRAS ESTÉ PUESTO, quien pueda leer ese buzón puede entrar como cualquier usuario de la
+ * plataforma. Se quita borrando la variable: no hay nada más que revertir.
+ */
+export function desvioDeCorreo(entorno = process.env) {
+  return entorno.MAIL_REDIRECT_TO?.trim() || null
+}
+
 /** Conecta el proveedor real. Recibe `{ email, code, expiresInMinutes }`. */
 export function setCodeSender(fn) {
   sender = fn
@@ -45,8 +63,14 @@ export async function deliverCode({ email, code, expiresInMinutes }) {
 
   const correo = configuracionDeCorreo()
   if (correo) {
-    const { asunto, texto, html } = mensajeDeCodigo({ code, expiresInMinutes })
-    await enviarPorResend({ ...correo, to: email, asunto, texto, html })
+    const desvio = desvioDeCorreo()
+    // Con desvío, el mensaje tiene que decir para quién es: quien lo abre no es quien pidió entrar.
+    const { asunto, texto, html } = mensajeDeCodigo({
+      code,
+      expiresInMinutes,
+      paraQuien: desvio ? email : '',
+    })
+    await enviarPorResend({ ...correo, to: desvio ?? email, asunto, texto, html })
     return
   }
 
