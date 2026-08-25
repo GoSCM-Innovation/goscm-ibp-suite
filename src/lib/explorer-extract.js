@@ -12,10 +12,15 @@
 // El avance se informa por página y no al final, porque una descarga de seis minutos sin señales de
 // vida se lee como un cuelgue.
 
-import { descartarInvalidas } from '../../core/ibp/explorer-extract-plan.js'
+import {
+  clavesDe,
+  clavesQueOtrosNecesitan,
+  descartarInvalidas,
+  soloDeClavesVivas,
+} from '../../core/ibp/explorer-extract-plan.js'
 import { normalizarFilas } from '../../core/ibp/explorer-fields.js'
 import { guardar, prepararPara, vaciar } from './explorer-db.js'
-import { fetchMasterRows } from './ibp-master-data.js'
+import { fetchMasterPage } from './ibp-master-data.js'
 
 /**
  * Filas por página.
@@ -43,17 +48,19 @@ const resultado = (paso, extra) => ({
  * inválidas, y decirla importa porque «bajé 8.000 y guardé 5.100» es información, mientras que
  * «guardé 5.100» a secas parece un error.
  */
-async function bajarPaso({ conexionId, destino, paso, mapa, onProgreso, cancelado }) {
+async function bajarPaso({ conexionId, destino, paso, mapa, onProgreso, cancelado, clavesVivas }) {
   await vaciar(paso.tabla)
 
   let desde = 0
   let bajadas = 0
   let guardadas = 0
+  let enSap = null
+  const propias = new Set()
 
   for (;;) {
-    if (cancelado?.()) return resultado(paso, { bajadas, guardadas, cancelado: true })
+    if (cancelado?.()) return resultado(paso, { bajadas, guardadas, enSap, cancelado: true })
 
-    const filas = await fetchMasterRows(conexionId, {
+    const { filas, total } = await fetchMasterPage(conexionId, {
       entidad: paso.entidad,
       planningArea: destino.planningArea,
       versionId: destino.versionId,
@@ -63,23 +70,48 @@ async function bajarPaso({ conexionId, destino, paso, mapa, onProgreso, cancelad
       orderby: paso.select.slice(0, 2),
       skip: desde,
       top: FILAS_POR_PAGINA,
+      // El total viene en la MISMA respuesta que la primera página, así que saber cuántas filas hay
+      // no cuesta una petición más. Y sin él no habría con qué comparar al final.
+      conTotal: desde === 0,
     })
+
+    if (desde === 0 && Number.isFinite(total)) enSap = total
 
     bajadas += filas.length
 
     // Primero se traducen los nombres a los canónicos, y DESPUÉS se descarta: la marca de invalidez
     // puede llamarse distinto en este tenant, y el filtro busca el nombre canónico.
-    const utiles = descartarInvalidas(normalizarFilas(mapa, paso.entidad, filas), paso.descartarSi)
+    const normalizadas = normalizarFilas(mapa, paso.entidad, filas)
+    const validas = descartarInvalidas(normalizadas, paso.descartarSi)
+    // Y por último las que su cabecera avala. Después de descartar inválidas, no antes: la cabecera
+    // que las avala ya pasó por su propio descarte.
+    const utiles = paso.atadoA
+      ? soloDeClavesVivas(validas, paso.atadoA.campo, clavesVivas?.get(paso.atadoA.tabla))
+      : validas
+
     guardadas += await guardar(paso.tabla, utiles)
+    // Lo que este paso deja para los que dependan de él sale de lo GUARDADO, no de lo bajado.
+    if (paso.claveParaOtros) for (const una of clavesDe(utiles, paso.claveParaOtros)) propias.add(una)
 
     onProgreso?.({ tabla: paso.tabla, etiqueta: paso.etiqueta, bajadas, guardadas })
 
-    // Menos filas de las pedidas quiere decir que la tabla se acabó, no que haya que insistir.
-    if (filas.length < FILAS_POR_PAGINA) break
+    // Una página corta NO es prueba de que la tabla se acabó: puede venir recortada por tamaño. Si
+    // SAP dijo cuántas filas hay, se sigue pidiendo hasta llegar a ese número; solo una página vacía
+    // cierra el asunto. Sin total, no queda más que el criterio de v8 y se anota el riesgo abajo.
+    if (filas.length === 0) break
     desde += filas.length
+    if (Number.isFinite(enSap) ? desde >= enSap : filas.length < FILAS_POR_PAGINA) break
   }
 
-  return resultado(paso, { bajadas, guardadas })
+  return resultado(paso, {
+    bajadas,
+    guardadas,
+    enSap,
+    // Lo que SAP dijo que había menos lo que llegó. Se anota siempre que se sepa el total, porque el
+    // único caso en que sale distinto de cero es el que antes no se veía.
+    faltan: Number.isFinite(enSap) ? Math.max(0, enSap - bajadas) : 0,
+    propias,
+  })
 }
 
 /**
@@ -94,6 +126,10 @@ export async function extraer({ conexionId, destino, plan, mapa = {}, onProgreso
   const { seVacio } = await prepararPara({ ...destino, connectionId: conexionId })
 
   const hechos = []
+  // Las claves que cada tabla deja para los pasos atados a ella, y si esa tabla se bajó completa.
+  const clavesVivas = new Map()
+  const tablasFiables = new Set()
+  const clavesNecesarias = clavesQueOtrosNecesitan(plan.pasos)
 
   for (const paso of plan.pasos) {
     if (!paso.sePuede) {
@@ -106,8 +142,33 @@ export async function extraer({ conexionId, destino, plan, mapa = {}, onProgreso
       continue
     }
 
+    // Un paso atado a una tabla que no se bajó entera no se baja: sus claves están incompletas, así
+    // que el filtro tiraría filas buenas. Y una tabla a la que le faltan filas buenas se lee igual
+    // que una tabla completa — es la clase de hueco que no se ve hasta que alguien decide con ella.
+    if (paso.atadoA && !tablasFiables.has(paso.atadoA.tabla)) {
+      hechos.push(resultado(paso, {
+        omitido: true,
+        motivo: 'No se pudo bajar entera la tabla de la que dependen estas filas, así que no hay con '
+          + 'qué decidir cuáles valen. Se salta en vez de guardar una parte.',
+      }))
+      continue
+    }
+
     try {
-      hechos.push(await bajarPaso({ conexionId, destino, paso, mapa, onProgreso, cancelado }))
+      const hecho = await bajarPaso({
+        conexionId,
+        destino,
+        paso: { ...paso, claveParaOtros: clavesNecesarias.get(paso.tabla) ?? null },
+        mapa,
+        onProgreso,
+        cancelado,
+        clavesVivas,
+      })
+
+      const { propias, ...anotado } = hecho
+      if (propias) clavesVivas.set(paso.tabla, propias)
+      if (!anotado.error && !anotado.cancelado && !anotado.faltan) tablasFiables.add(paso.tabla)
+      hechos.push(anotado)
     } catch (fallo) {
       hechos.push(resultado(paso, { error: fallo.message }))
     }
@@ -119,6 +180,9 @@ export async function extraer({ conexionId, destino, plan, mapa = {}, onProgreso
     guardadas: hechos.reduce((suma, uno) => suma + uno.guardadas, 0),
     descartadas: hechos.reduce((suma, uno) => suma + (uno.bajadas - uno.guardadas), 0),
     conError: hechos.filter((uno) => uno.error).length,
-    ok: hechos.every((uno) => !uno.error && !uno.cancelado),
+    // Una tabla a la que le faltan filas cuenta como problema, no como éxito: es exactamente lo que
+    // antes pasaba por «descarga terminada».
+    incompletas: hechos.filter((uno) => uno.faltan > 0).length,
+    ok: hechos.every((uno) => !uno.error && !uno.cancelado && !uno.faltan),
   }
 }

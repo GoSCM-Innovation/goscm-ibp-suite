@@ -9,7 +9,6 @@ La razón de existir de esta carpeta está en [`../docs/FASE-0-LEVANTAMIENTO.md`
 | Módulo | Responsabilidad | Origen |
 |---|---|---|
 | `transport/` | El **único** punto que hace peticiones a SAP. Basic Auth, timeouts, `redirect: manual`, reutilización de token CSRF entre POSTs de una transacción, guardia anti-truncamiento, extracción de errores OData (JSON y XML), lectura de `$metadata` en servidor | `api/proxy.js` de v8 + `_ssrf.js` de v9 + validadores de v7 |
-| `odata/` | Paginador (`$skip`/`$top` con `$orderby` estable y presupuesto de bytes), seguidor de `__next`, constructor de `$filter`, codificación de literales, helpers de OData v4 | v8 + v7 |
 | `soap/` | Cliente SOAP de SAP CI-DS: envelope, sesión en header, parseo de faults | `api/soap.js` de v9 |
 | `orchestrations/` | Orquestaciones de CI-DS: el grafo de tareas con dependencias, grupos, estrategias de error y reintentos. La definición en Postgres por cliente; el estado de una ejecución, en Redis | v9, sacándolo de una única clave global de Redis |
 | `cids/` | CI-DS de cara a los módulos: sesión guardada en el servidor, lista cerrada de operaciones, tabla única de estados de tarea, y el fin y la duración de las ejecuciones por tandas | v9 |
@@ -28,7 +27,6 @@ La razón de existir de esta carpeta está en [`../docs/FASE-0-LEVANTAMIENTO.md`
 | `persistence/` | Implementado y verificado contra Neon y Upstash reales: un cliente Postgres, un cliente Redis, guarda de aislamiento por cliente y migraciones (`npm run db:migrate`) |
 | `auth/` | Implementado y verificado de punta a punta: ingreso por **código de un solo uso al correo**, sesión de una jornada en cookie httpOnly, y guardas de sesión, administrador y módulo contratado. El envío del código sale por Resend (`auth/email.js`), aislado en su propio archivo; sin las variables del correo, en producción el ingreso falla a propósito en vez de imprimir el código en los registros. Microsoft y Google quedan para una iteración posterior — la estructura ya los contempla (`allowed_providers`) |
 | `transport/` | Implementado con tests: el único punto que llama a SAP. Portero anti-SSRF (validador de v9 + allowlist de host y de servicios de v7), Basic Auth, sin seguir redirecciones, reutilización del token de escritura, guardia anti-truncamiento y lectura de `$metadata` en servidor. **Sin verificar contra un tenant real todavía** |
-| `odata/` | Implementado con tests: construcción de filtros y consultas, paginación (por enlace de continuación y por posición), conteo, presupuesto de bytes por página y reintento de lecturas. Las reglas de SAP van como candados. **Sin verificar contra un tenant real todavía** |
 | `soap/` | Implementado con tests: cliente de CI-DS portado de `api/soap.js` de v9 sin cambiar comportamiento. Añade lo que allí faltaba: la dirección pasa por el portero anti-SSRF y hay tiempo máximo. **Sin verificar contra un tenant real todavía** |
 | `orchestrations/` | Modelo, guardado y motor implementados con tests: una fila por orquestación en Postgres con la guarda de cliente, el grafo validado como candado —conexiones a nodos inexistentes y ciclos se rechazan al guardar, porque el motor los descartaba en silencio—, y la ejecución por vueltas con cerrojo, reintentos, grupos, salteo por dependencia y retomar desde donde falló. Las reglas van aparte de la plomería y por eso se prueban sin SAP. Faltan la programación por cron y la interfaz. **Sin verificar contra un tenant real todavía** |
 | `cids/` | Implementado con tests: la sesión con CI-DS vive en el servidor (el navegador nunca la ve, al contrario que en v9), las operaciones que se pueden pedir son una lista cerrada, los estados de tarea están una sola vez, y el fin y la duración de las ejecuciones se juntan por tandas del lado del servidor. **Sin verificar contra un tenant real todavía** |
@@ -36,7 +34,26 @@ La razón de existir de esta carpeta está en [`../docs/FASE-0-LEVANTAMIENTO.md`
 | `accounts/` | Implementado y verificado de punta a punta: clientes, usuarios y suscripción por módulo, con dos niveles de administración |
 | El resto | Pendiente. Orden de construcción en `docs/FASE-0-LEVANTAMIENTO.md` §8 |
 
-Las reglas de SAP que van **codificadas como candados** en `transport/` y `odata/`, no como comentarios: `$top=0` prohibido en datos de planificación (tumba el servicio), `$select` obligatorio en datos de planificación (sin él SAP agrega a otro nivel), `ne 0` y `ne ''` rechazados (SAP los ignora en silencio), lectura en paralelo denegada sin `$orderby` estable (habría solapes y huecos), y un servicio de OData fuera de la lista no se llama.
+Las reglas de SAP que van **codificadas como candados** en `transport/`, `ibp/master-data-model.js` y `ibp/planning-data-model.js`, no como comentarios: `$top=0` prohibido en datos de planificación (tumba el servicio), `$select` obligatorio en datos de planificación (sin él SAP agrega a otro nivel), `ne 0` y `ne ''` rechazados (SAP los ignora en silencio), lectura en paralelo denegada sin `$orderby` estable (habría solapes y huecos), y un servicio de OData fuera de la lista no se llama.
+
+### Dónde vive la paginación
+
+Hubo un `odata/` con un paginador propio —`$skip`/`$top`, seguidor de `__next`, presupuesto de bytes,
+constructor de `$filter`— escrito como capa genérica y **nunca conectado a nada**: ningún archivo
+fuera de esa carpeta lo importaba. Mientras tanto los lectores de verdad, `ibp/master-data.js` y
+`ibp/planning-data.js`, hacían lo mismo por su cuenta, y son los que están verificados contra tenants
+reales. Dos implementaciones de lo mismo, una muerta, es justo la duplicación que esta capa vino a
+quitar — y es peor que tenerla en tres proyectos, porque acá las dos se leen como si fueran la de uso.
+
+Así que se borró. La paginación vive en:
+
+- `ibp/master-data.js` — `readEntityPageWithTotal` pide `$inlinecount` con la primera página, así que
+  quien pagina sabe cuántas filas hay sin pagar otra petición. Es lo que permite distinguir «la tabla
+  se acabó» de «llegaron menos filas de las que pedí», que es lo mismo que pasa con una respuesta
+  recortada.
+- `ibp/master-data-model.js` — `filasPorPagina`, el tamaño de página desde un presupuesto de bytes
+  medido (900 KB: por encima del megabyte las respuestas volvían cortadas).
+- `ibp/planning-data.js` — el lector de cifras clave, con su propio tope y `$top` chico para contar.
 
 El primer administrador se crea con `npm run db:seed` porque la base arranca vacía y el panel exige ser administrador para entrar. Es el único punto del sistema donde nace un usuario sin que otro lo autorice.
 

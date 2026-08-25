@@ -5,8 +5,12 @@ import {
   EXTRACCIONES,
   GRUPOS_DE_EXTRACCION,
   MARCA_DE_INVALIDA,
+  clavesDe,
+  clavesQueOtrosNecesitan,
   descartarInvalidas,
+  gruposQueLoNecesitan,
   planificarExtraccion,
+  soloDeClavesVivas,
   versionSinDatos,
 } from './explorer-extract-plan.js'
 
@@ -207,5 +211,100 @@ describe('cuando la versión elegida no tiene nada', () => {
   it('aguanta que no venga nada', () => {
     expect(versionSinDatos([], []).vacia).toBe(false)
     expect(versionSinDatos(null, null).vacia).toBe(false)
+  })
+})
+
+// La descarga de la red en v7 traía su propio maestro de productos y de ubicaciones. Acá viven en el
+// grupo del árbol, así que bajar solo «Red de suministro» dejaba la red sin descripciones y sin
+// `LOCTYPE`, que es lo único que distingue un proveedor de una planta: media red sin dibujar, y sin
+// que nada lo dijera.
+describe('los maestros que los dos grupos necesitan', () => {
+  const soloRed = () => planificarExtraccion({ efectivo: todoResuelto(), grupos: ['red'] })
+
+  it('bajar solo la red trae el maestro de productos y el de ubicaciones', () => {
+    const tablas = soloRed().pasos.map((uno) => uno.tabla)
+    expect(tablas).toContain('bom_prd')
+    expect(tablas).toContain('bom_loc')
+  })
+
+  it('bajar solo el árbol no arrastra las tablas de la red', () => {
+    const tablas = planificarExtraccion({ efectivo: todoResuelto(), grupos: ['arbol'] })
+      .pasos.map((uno) => uno.tabla)
+    expect(tablas).toContain('bom_prd')
+    expect(tablas).not.toContain('sn_loc')
+  })
+
+  it('con los dos grupos cada tabla aparece UNA vez', () => {
+    const tablas = planificarExtraccion({ efectivo: todoResuelto() }).pasos.map((uno) => uno.tabla)
+    expect(new Set(tablas).size).toBe(tablas.length)
+  })
+
+  it('un maestro compartido dice los dos grupos, y los demás solo el suyo', () => {
+    const prd = EXTRACCIONES.find((una) => una.tabla === 'bom_prd')
+    const psh = EXTRACCIONES.find((una) => una.tabla === 'bom_psh')
+    expect(gruposQueLoNecesitan(prd)).toEqual(['arbol', 'red'])
+    expect(gruposQueLoNecesitan(psh)).toEqual(['arbol'])
+  })
+
+  // Que la red no pueda enseñar descripciones no es motivo para prohibir bajar la red: el dueño del
+  // paso sigue siendo su grupo, y de él depende que un grupo sea imposible.
+  it('el maestro de productos sin resolver no vuelve imposible el grupo de la red', () => {
+    const sinProducto = todoResuelto()
+    delete sinProducto.arbol.product
+    expect(planificarExtraccion({ efectivo: sinProducto, grupos: ['red'] }).gruposPosibles)
+      .toEqual(['red'])
+  })
+})
+
+// v7 ataba los componentes, la validez y los recursos al SOURCEID de una cabecera que sobrevivió a
+// `PINVALID`. Su propia nota en el paso de la red lo decía: «Solo SOURCEIDs activos en PSH».
+describe('las tablas atadas a su cabecera', () => {
+  it('las cuatro que v7 filtraba están declaradas, y apuntan a su cabecera', () => {
+    const atado = (tabla) => EXTRACCIONES.find((una) => una.tabla === tabla)?.atadoA
+    expect(atado('bom_psi')).toEqual({ tabla: 'bom_psh', campo: 'SOURCEID' })
+    expect(atado('bom_psi_validity')).toEqual({ tabla: 'bom_psh', campo: 'SOURCEID' })
+    expect(atado('bom_psr')).toEqual({ tabla: 'bom_psh', campo: 'SOURCEID' })
+    expect(atado('sn_psi')).toEqual({ tabla: 'sn_plant', campo: 'SOURCEID' })
+  })
+
+  // El orden de la lista no es decorativo: la cabecera tiene que bajarse antes que lo que cuelga.
+  it('cada cabecera va antes que lo que depende de ella', () => {
+    const posicion = (tabla) => EXTRACCIONES.findIndex((una) => una.tabla === tabla)
+    for (const una of EXTRACCIONES.filter((otra) => otra.atadoA)) {
+      expect(posicion(una.atadoA.tabla)).toBeLessThan(posicion(una.tabla))
+    }
+  })
+
+  it('el plan deduce qué campo tiene que recordar cada cabecera', () => {
+    const { pasos } = planificarExtraccion({ efectivo: todoResuelto() })
+    const necesarias = clavesQueOtrosNecesitan(pasos)
+    expect(necesarias.get('bom_psh')).toBe('SOURCEID')
+    expect(necesarias.get('sn_plant')).toBe('SOURCEID')
+    expect(necesarias.has('bom_prd')).toBe(false)
+  })
+
+  it('soloDeClavesVivas se queda con las que su cabecera avala', () => {
+    const filas = [{ SOURCEID: 'S1' }, { SOURCEID: 'S2' }, { SOURCEID: 'S3' }]
+    expect(soloDeClavesVivas(filas, 'SOURCEID', new Set(['S1', 'S3'])))
+      .toEqual([{ SOURCEID: 'S1' }, { SOURCEID: 'S3' }])
+  })
+
+  it('compara sin que estorben los espacios ni el tipo', () => {
+    expect(soloDeClavesVivas([{ SOURCEID: ' S1 ' }], 'SOURCEID', new Set(['S1'])).length).toBe(1)
+    expect(soloDeClavesVivas([{ SOURCEID: 7 }], 'SOURCEID', new Set(['7'])).length).toBe(1)
+  })
+
+  // Sin claves NO es lo mismo que «con un conjunto vacío»: quien llama tiene que haber decidido ya
+  // si el paso se salta. Un `undefined` que filtrara todo borraría la tabla en silencio.
+  it('sin claves deja pasar todo, y con un conjunto vacío no deja nada', () => {
+    const filas = [{ SOURCEID: 'S1' }]
+    expect(soloDeClavesVivas(filas, 'SOURCEID', undefined)).toEqual(filas)
+    expect(soloDeClavesVivas(filas, null, new Set())).toEqual(filas)
+    expect(soloDeClavesVivas(filas, 'SOURCEID', new Set())).toEqual([])
+  })
+
+  it('clavesDe junta las que hay y descarta las vacías', () => {
+    const salida = clavesDe([{ S: 'A' }, { S: '' }, { S: null }, { S: ' B ' }, { S: 'A' }], 'S')
+    expect([...salida].sort()).toEqual(['A', 'B'])
   })
 })

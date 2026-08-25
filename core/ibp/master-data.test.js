@@ -5,7 +5,7 @@ vi.mock('../transport/sap-fetch.js', () => ({ sapFetch: vi.fn() }))
 const { sapFetch } = await import('../transport/sap-fetch.js')
 const {
   countEntity, masterDataRoot, readDistinctValues, readEntityPage,
-  readImportableMdts, readSchema, readVsmt,
+  readEntityPageWithTotal, readImportableMdts, readSchema, readVsmt,
 } = await import('./master-data.js')
 
 const BASE = 'https://tenant-api.scmibp1.ondemand.com'
@@ -129,5 +129,40 @@ describe('readDistinctValues', () => {
     await expect(readDistinctValues({ ...contexto, entidad: 'AS1PRODUCT', campo: 'BRAND' }))
       .resolves.toEqual(['A', 'B'])
     expect(urlDe()).toContain('$select=BRAND')
+  })
+})
+
+// El único criterio de fin sin esto es «llegaron menos filas de las pedidas», que es también lo que
+// pasa cuando la respuesta viene recortada: una descarga a medias se presenta como completa.
+describe('readEntityPageWithTotal', () => {
+  it('pide el total en la misma respuesta que las filas', async () => {
+    sapFetch.mockResolvedValueOnce({ json: { d: { results: [], __count: '1412426' } } })
+
+    const salida = await readEntityPageWithTotal({ ...contexto, entidad: 'X', conTotal: true })
+
+    expect(urlDe()).toContain('$inlinecount=allpages')
+    expect(salida.total).toBe(1412426)
+  })
+
+  it('sin pedirlo no lo pide, y el total sale nulo', async () => {
+    sapFetch.mockResolvedValueOnce({ json: { d: { results: [{ PRDID: '1' }] } } })
+
+    const salida = await readEntityPageWithTotal({ ...contexto, entidad: 'X' })
+
+    expect(urlDe()).not.toContain('$inlinecount')
+    expect(salida).toEqual({ filas: [{ PRDID: '1' }], total: null })
+  })
+
+  // `null` no es cero: quien pagina tiene que poder distinguir «no lo sé» de «no hay filas», o daría
+  // por terminada una tabla en la primera página.
+  it('un total ilegible sale nulo y no cero', async () => {
+    sapFetch.mockResolvedValueOnce({ json: { d: { results: [], __count: 'muchas' } } })
+    await expect(readEntityPageWithTotal({ ...contexto, entidad: 'X', conTotal: true }))
+      .resolves.toMatchObject({ total: null })
+  })
+
+  it('no cambia lo que devolvía readEntityPage', async () => {
+    sapFetch.mockResolvedValueOnce({ json: { d: { results: [{ PRDID: '1' }], __count: '9' } } })
+    await expect(readEntityPage({ ...contexto, entidad: 'X' })).resolves.toEqual([{ PRDID: '1' }])
   })
 })

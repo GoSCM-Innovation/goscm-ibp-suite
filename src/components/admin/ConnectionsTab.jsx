@@ -142,23 +142,26 @@ export default function ConnectionsTab({ clientId }) {
                 <tr key={connection.id} onClick={() => open(connection)} style={{ cursor: 'pointer' }}>
                   <td style={{ fontWeight: 600 }}>
                     {renombrando?.id === connection.id ? (
-                      <form onSubmit={guardarNombre} style={{ display: 'flex', gap: 6 }}>
+                      // El clic se detiene en el formulario, y tiene que ser en el FORMULARIO y no en
+                      // cada control: la fila entera abre el detalle, así que un clic en «Guardar»
+                      // llegaba a la fila, ponía `busy` y deshabilitaba el botón antes de que el
+                      // formulario llegara a enviarse. El nombre no se guardaba y no se decía por qué.
+                      <form
+                        onSubmit={guardarNombre}
+                        onClick={(e) => e.stopPropagation()}
+                        style={{ display: 'flex', gap: 6 }}
+                      >
                         <input
                           className="input input-sm"
                           value={renombrando.name}
                           onChange={(e) => setRenombrando({ ...renombrando, name: e.target.value })}
-                          onClick={(e) => e.stopPropagation()}
                           aria-label={`Nombre de ${connection.name}`}
                           autoFocus
                         />
                         <button type="submit" className="btn btn-sm btn-primary" disabled={busy}>
                           Guardar
                         </button>
-                        <button
-                          type="button"
-                          className="btn btn-sm"
-                          onClick={(e) => { e.stopPropagation(); setRenombrando(null) }}
-                        >
+                        <button type="button" className="btn btn-sm" onClick={() => setRenombrando(null)}>
                           Cancelar
                         </button>
                       </form>

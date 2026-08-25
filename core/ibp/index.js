@@ -240,6 +240,7 @@ export {
   masterDataRoot,
   readDistinctValues,
   readEntityPage,
+  readEntityPageWithTotal,
   readImportableMdts,
   readSchema,
   readVsmt,

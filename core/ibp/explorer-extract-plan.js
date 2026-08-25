@@ -28,6 +28,48 @@ export function descartarInvalidas(filas, campo) {
   return (filas ?? []).filter((una) => una[campo] !== MARCA_DE_INVALIDA)
 }
 
+/** El valor de un campo como texto comparable. */
+const clave = (valor) => (valor === null || valor === undefined ? '' : String(valor).trim())
+
+/**
+ * Se queda solo con las filas cuyo `campo` está en `claves`.
+ *
+ * Es cómo v7 ataba los componentes, la validez y los recursos a su cabecera: una receta que no
+ * sobrevivió a `PINVALID` no debe dejar sus piezas sueltas en la base local. Y no es cosmético —
+ * los analizadores recorren esas tablas ENTERAS, así que un componente que solo consume una receta
+ * descartada contaría como consumido, y un recurso que solo usa una receta descartada contaría como
+ * usado. Justo los veredictos que el informe da como hallazgo.
+ */
+export function soloDeClavesVivas(filas, campo, claves) {
+  if (!campo || !claves) return filas ?? []
+  return (filas ?? []).filter((una) => claves.has(clave(una[campo])))
+}
+
+/**
+ * Qué campo tiene que recordar cada tabla porque otro paso se ata a ella.
+ *
+ * Se deduce de los `atadoA` del propio plan en vez de declararse aparte: una lista a mano y otra
+ * derivada acaban discrepando, y el día que discrepen el paso dependiente se queda sin claves y
+ * borra todas sus filas en silencio.
+ */
+export function clavesQueOtrosNecesitan(pasos) {
+  const porTabla = new Map()
+  for (const uno of pasos ?? []) {
+    if (uno?.atadoA?.tabla && uno.atadoA.campo) porTabla.set(uno.atadoA.tabla, uno.atadoA.campo)
+  }
+  return porTabla
+}
+
+/** Las claves de `campo` que aparecen en `filas`, para atar a ellas los pasos que dependan. */
+export function clavesDe(filas, campo) {
+  const vistas = new Set()
+  for (const una of filas ?? []) {
+    const valor = clave(una[campo])
+    if (valor) vistas.add(valor)
+  }
+  return vistas
+}
+
 /**
  * Lo que se baja para cada módulo.
  *
@@ -37,6 +79,14 @@ export function descartarInvalidas(filas, campo) {
  * `esencial` distingue lo que hace inútil al módulo de lo que solo lo empobrece: sin la cabecera de
  * receta no hay árbol que dibujar; sin la validez de los componentes el árbol se dibuja igual, solo
  * que sin fechas. Es lo que permite decir "se puede seguir, pero sin esto" en vez de parar todo.
+ *
+ * `atadoA` dice que las filas de este paso solo valen si su clave está en una tabla ya bajada. El
+ * paso del que dependen va ANTES en esta lista, y de eso depende que funcione.
+ *
+ * `tambienPara` son los grupos que además necesitan el paso. Los dos maestros compartidos —productos
+ * y ubicaciones— los baja cualquiera de los dos grupos, porque en v7 la descarga de la red también
+ * los traía y las pantallas de red los leen. Sin esto, bajar solo «Red de suministro» dejaba la red
+ * sin descripciones y sin `LOCTYPE`, que es lo único que distingue un proveedor de una planta.
  */
 export const EXTRACCIONES = Object.freeze([
   // ── Árbol de materiales ────────────────────────────────────────────────────
@@ -55,6 +105,7 @@ export const EXTRACCIONES = Object.freeze([
     papel: 'item',
     etiqueta: 'Componentes de la receta',
     campos: ['SOURCEID', 'PRDID', 'COMPONENTCOEFFICIENT', 'ISALTITEM'],
+    atadoA: { tabla: 'bom_psh', campo: 'SOURCEID' },
     esencial: true,
   },
   {
@@ -63,6 +114,7 @@ export const EXTRACCIONES = Object.freeze([
     papel: 'itemValidity',
     etiqueta: 'Validez de los componentes',
     campos: ['SOURCEID', 'PRDID', 'COMPVALIDFR', 'COMPVALIDTO'],
+    atadoA: { tabla: 'bom_psh', campo: 'SOURCEID' },
     esencial: false,
   },
   {
@@ -79,6 +131,7 @@ export const EXTRACCIONES = Object.freeze([
     papel: 'resource',
     etiqueta: 'Recursos de la receta',
     campos: ['SOURCEID', 'RESID'],
+    atadoA: { tabla: 'bom_psh', campo: 'SOURCEID' },
     esencial: false,
   },
   {
@@ -87,6 +140,9 @@ export const EXTRACCIONES = Object.freeze([
     papel: 'product',
     etiqueta: 'Maestro de productos',
     campos: ['PRDID', 'PRDDESCR', 'MATTYPEID', 'UOMID', 'UOMDESCR'],
+    // También lo baja el grupo de red: el analizador de la red clasifica por tipo de material y el
+    // visualizador enseña la descripción. En v7 la descarga de la red traía su propio Product.
+    tambienPara: ['red'],
     esencial: true,
   },
   {
@@ -99,6 +155,9 @@ export const EXTRACCIONES = Object.freeze([
     // entra la materia prima, que es media red.
     campos: ['LOCID', 'LOCDESCR', 'LOCTYPE', 'LOCVALID'],
     descartarSi: 'LOCVALID',
+    // Igual que el maestro de productos: la red lo lee entero por cursor y sin `LOCTYPE` no puede
+    // dibujar de dónde entra la materia prima.
+    tambienPara: ['red'],
     esencial: false,
   },
   {
@@ -158,6 +217,8 @@ export const EXTRACCIONES = Object.freeze([
     papel: 'sourceItem',
     etiqueta: 'Componentes de la receta',
     campos: ['SOURCEID', 'PRDID', 'COMPONENTCOEFFICIENT'],
+    // La nota de v7 en este mismo paso decía «Solo SOURCEIDs activos en PSH».
+    atadoA: { tabla: 'sn_plant', campo: 'SOURCEID' },
     esencial: false,
   },
   {
@@ -215,6 +276,17 @@ export function versionSinDatos(pasos, hechos) {
   return { vacia, tablas: vacia ? esenciales.map((uno) => uno.etiqueta) : [] }
 }
 
+/**
+ * Los grupos que necesitan un paso: el suyo, más los de `tambienPara`.
+ *
+ * `grupo` sigue siendo el dueño —de él sale la resolución del papel y de él depende que un grupo sea
+ * imposible por faltarle algo esencial—. `tambienPara` solo AÑADE la descarga, y esa distinción es a
+ * propósito: que la red no pueda dibujar descripciones no es motivo para prohibir bajar la red.
+ */
+export const gruposQueLoNecesitan = (paso) => (paso?.tambienPara?.length
+  ? [paso.grupo, ...paso.tambienPara]
+  : [paso.grupo])
+
 /** Los grupos que se pueden bajar, con su nombre visible. */
 export const GRUPOS_DE_EXTRACCION = Object.freeze([
   { id: 'arbol', label: 'Árbol de materiales' },
@@ -230,7 +302,8 @@ export const GRUPOS_DE_EXTRACCION = Object.freeze([
  * entre una herramienta y un castigo.
  */
 export function planificarExtraccion({ efectivo, mapa = {}, grupos = ['arbol', 'red'] } = {}) {
-  const pasos = (EXTRACCIONES.filter((una) => grupos.includes(una.grupo))).map((una) => {
+  const pasos = (EXTRACCIONES.filter((una) => gruposQueLoNecesitan(una)
+    .some((grupo) => grupos.includes(grupo)))).map((una) => {
     const entidad = efectivo?.[una.grupo]?.[una.papel]?.entidad ?? null
 
     if (!entidad) {

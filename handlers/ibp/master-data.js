@@ -19,7 +19,7 @@ import {
   filasPorPagina,
   filtroDeCondiciones,
   readDistinctValues,
-  readEntityPage,
+  readEntityPageWithTotal,
   readImportableMdts,
   readSchema,
   readVsmt,
@@ -105,15 +105,18 @@ export default async function handler(req, res) {
         const select = req.query?.select ? String(req.query.select).split(',').filter(Boolean) : undefined
         const orderby = req.query?.orderby ? String(req.query.orderby).split(',').filter(Boolean) : undefined
 
-        const filas = await readEntityPage({
+        // `conTotal` viaja en la misma respuesta que las filas, así que quien pagina puede comparar
+        // lo que bajó con lo que SAP dice que hay sin pagar otra petición. Ver `readEntityPageWithTotal`.
+        const { filas, total } = await readEntityPageWithTotal({
           ...contexto,
           skip: Number(req.query?.skip) || 0,
           top: Math.min(Number(req.query?.top) || 500, TOPE_DE_PAGINA),
           select,
           orderby,
           extraFilter: filtroDeCondiciones(condicionesDe(req)),
+          conTotal: req.query?.conTotal === '1',
         })
-        return res.status(200).json({ filas })
+        return res.status(200).json({ filas, total })
       }
 
       case 'cuenta': {

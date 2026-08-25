@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { IDBFactory } from 'fake-indexeddb'
 
-vi.mock('./ibp-master-data.js', () => ({ fetchMasterRows: vi.fn() }))
+vi.mock('./ibp-master-data.js', () => ({ fetchMasterPage: vi.fn() }))
 
-const { fetchMasterRows } = await import('./ibp-master-data.js')
+const { fetchMasterPage } = await import('./ibp-master-data.js')
 const { contar, olvidarBase, origenGuardado } = await import('./explorer-db.js')
 const { FILAS_POR_PAGINA, extraer } = await import('./explorer-extract.js')
 
@@ -25,11 +25,17 @@ const paso = (extra = {}) => ({
   ...extra,
 })
 
-/** Sirve `n` filas repartidas en páginas del tamaño real. La ventana va en el SEGUNDO argumento. */
+/**
+ * Sirve `n` filas repartidas en páginas del tamaño real. La ventana va en el SEGUNDO argumento.
+ *
+ * Devuelve el total cuando se pide, que es lo que hace SAP con `$inlinecount`: viaja con la primera
+ * página y no cuesta otra petición.
+ */
 function conFilas(n, hacer = (i) => ({ SOURCEID: `S${i}`, PRDID: `P${i}` })) {
-  fetchMasterRows.mockImplementation((_conexionId, { skip, top }) => Promise.resolve(
-    Array.from({ length: Math.max(0, Math.min(top, n - skip)) }, (_, i) => hacer(skip + i)),
-  ))
+  fetchMasterPage.mockImplementation((_conexionId, { skip, top, conTotal }) => Promise.resolve({
+    filas: Array.from({ length: Math.max(0, Math.min(top, n - skip)) }, (_, i) => hacer(skip + i)),
+    total: conTotal ? n : null,
+  }))
 }
 
 beforeEach(() => {
@@ -59,15 +65,15 @@ describe('extraer', () => {
     const salida = await extraer({ conexionId: CONEXION, destino: DESTINO, plan: { pasos: [paso()] } })
 
     expect(salida.guardadas).toBe(FILAS_POR_PAGINA + 120)
-    expect(fetchMasterRows).toHaveBeenCalledTimes(2)
-    expect(fetchMasterRows.mock.calls[1][1].skip).toBe(FILAS_POR_PAGINA)
+    expect(fetchMasterPage).toHaveBeenCalledTimes(2)
+    expect(fetchMasterPage.mock.calls[1][1].skip).toBe(FILAS_POR_PAGINA)
   })
 
   // Sin orden estable, dos ventanas se solapan y dejan huecos: un hueco es un producto sin analizar.
   it('pide las páginas con un orden estable', async () => {
     conFilas(1)
     await extraer({ conexionId: CONEXION, destino: DESTINO, plan: { pasos: [paso()] } })
-    expect(fetchMasterRows.mock.calls[0][1].orderby).toEqual(['SOURCEID', 'PRDID'])
+    expect(fetchMasterPage.mock.calls[0][1].orderby).toEqual(['SOURCEID', 'PRDID'])
   })
 
   // «Bajé 8.000 y guardé 5.100» es información; «guardé 5.100» a secas parece un error.
@@ -102,14 +108,14 @@ describe('extraer', () => {
     })
 
     expect(salida.hechos[0]).toMatchObject({ omitido: true, motivo: 'No hay tabla.' })
-    expect(fetchMasterRows).not.toHaveBeenCalled()
+    expect(fetchMasterPage).not.toHaveBeenCalled()
   })
 
   // Perder una descarga de varios minutos porque una tabla accesoria dio error es inaceptable.
   it('un paso que falla no detiene a los demás', async () => {
-    fetchMasterRows.mockImplementation((_conexionId, { entidad }) => (entidad === 'MALA'
+    fetchMasterPage.mockImplementation((_conexionId, { entidad }) => (entidad === 'MALA'
       ? Promise.reject(new Error('SAP se cayó'))
-      : Promise.resolve([{ SOURCEID: 'S1', PRDID: 'P1' }])))
+      : Promise.resolve({ filas: [{ SOURCEID: 'S1', PRDID: 'P1' }], total: 1 })))
 
     const salida = await extraer({
       conexionId: CONEXION,
@@ -170,5 +176,120 @@ describe('extraer', () => {
     conFilas(0)
     const salida = await extraer({ conexionId: CONEXION, destino: DESTINO, plan: { pasos: [paso()] } })
     expect(salida).toMatchObject({ guardadas: 0, ok: true })
+  })
+})
+
+// Lo que antes no se veía: «llegaron menos filas de las que pedí» y «la tabla se acabó» se leían
+// igual, así que una respuesta recortada se presentaba como una descarga completa.
+describe('cuando SAP no manda todo lo que dice tener', () => {
+  it('una página corta no cierra la descarga si el total dice que falta', async () => {
+    // SAP dice 7.000 filas y contesta de 1.000 en 1.000: con el criterio viejo se paraba en la
+    // primera página y se guardaban 1.000 como si fueran todas.
+    fetchMasterPage.mockImplementation((_conexionId, { skip, conTotal }) => Promise.resolve({
+      filas: Array.from({ length: Math.max(0, Math.min(1000, 7000 - skip)) },
+        (_, i) => ({ SOURCEID: `S${skip + i}`, PRDID: `P${skip + i}` })),
+      total: conTotal ? 7000 : null,
+    }))
+
+    const salida = await extraer({ conexionId: CONEXION, destino: DESTINO, plan: { pasos: [paso()] } })
+
+    expect(salida.guardadas).toBe(7000)
+    expect(salida.hechos[0]).toMatchObject({ faltan: 0, enSap: 7000 })
+    expect(salida.ok).toBe(true)
+    await expect(contar('bom_psi')).resolves.toBe(7000)
+  })
+
+  it('si aun así faltan filas, lo dice en vez de darse por terminada', async () => {
+    // Dice 500 y solo entrega 200, y después nada. No se puede hacer más que decirlo.
+    fetchMasterPage.mockImplementation((_conexionId, { skip, conTotal }) => Promise.resolve({
+      filas: skip === 0
+        ? Array.from({ length: 200 }, (_, i) => ({ SOURCEID: `S${i}`, PRDID: `P${i}` }))
+        : [],
+      total: conTotal ? 500 : null,
+    }))
+
+    const salida = await extraer({ conexionId: CONEXION, destino: DESTINO, plan: { pasos: [paso()] } })
+
+    expect(salida.hechos[0]).toMatchObject({ bajadas: 200, enSap: 500, faltan: 300 })
+    expect(salida.incompletas).toBe(1)
+    expect(salida.ok).toBe(false)
+  })
+
+  it('sin total, una página corta sigue cerrando la tabla', async () => {
+    fetchMasterPage.mockImplementation((_conexionId, { skip }) => Promise.resolve({
+      filas: skip === 0 ? [{ SOURCEID: 'S1', PRDID: 'P1' }] : [],
+      total: null,
+    }))
+
+    const salida = await extraer({ conexionId: CONEXION, destino: DESTINO, plan: { pasos: [paso()] } })
+
+    expect(salida).toMatchObject({ guardadas: 1, incompletas: 0, ok: true })
+    expect(fetchMasterPage).toHaveBeenCalledTimes(1)
+  })
+})
+
+// v7 ataba los componentes, la validez y los recursos a su cabecera: una receta descartada por
+// `PINVALID` no deja sus piezas sueltas. Importa porque los analizadores recorren esas tablas
+// enteras, y un componente de una receta muerta contaría como consumido.
+describe('las filas atadas a su cabecera', () => {
+  const CABECERA = paso({
+    tabla: 'bom_psh',
+    papel: 'header',
+    etiqueta: 'Cabeceras',
+    entidad: 'GIDPRODUCTIONSOURCEHDR',
+    select: ['SOURCEID', 'PRDID', 'PINVALID'],
+    descartarSi: 'PINVALID',
+  })
+
+  const COMPONENTES = paso({ atadoA: { tabla: 'bom_psh', campo: 'SOURCEID' } })
+
+  it('solo se guardan las de una cabecera que sobrevivió', async () => {
+    fetchMasterPage.mockImplementation((_conexionId, { entidad, skip, conTotal }) => {
+      const filas = skip > 0 ? [] : (entidad === 'GIDPRODUCTIONSOURCEHDR'
+        // S2 está marcada como inválida, así que su cabecera no se guarda.
+        ? [
+          { SOURCEID: 'S1', PRDID: 'P1', PINVALID: '' },
+          { SOURCEID: 'S2', PRDID: 'P2', PINVALID: 'X' },
+        ]
+        : [
+          { SOURCEID: 'S1', PRDID: 'C1' },
+          { SOURCEID: 'S2', PRDID: 'C2' },
+          { SOURCEID: 'S9', PRDID: 'C9' },
+        ])
+      return Promise.resolve({ filas, total: conTotal ? filas.length : null })
+    })
+
+    const salida = await extraer({
+      conexionId: CONEXION, destino: DESTINO, plan: { pasos: [CABECERA, COMPONENTES] },
+    })
+
+    // De los tres componentes queda uno: el de S1. El de S2 cuelga de una receta inválida y el de
+    // S9 de una que no existe.
+    expect(salida.hechos[1]).toMatchObject({ bajadas: 3, guardadas: 1 })
+    await expect(contar('bom_psi')).resolves.toBe(1)
+  })
+
+  it('si la cabecera no se bajó entera, el paso atado se salta', async () => {
+    // La cabecera queda incompleta: dice 900 y entrega 100. Con claves a medias, el filtro tiraría
+    // componentes buenos, y una tabla a la que le faltan filas buenas se lee igual que una completa.
+    fetchMasterPage.mockImplementation((_conexionId, { entidad, skip, conTotal }) => {
+      if (entidad === 'GIDPRODUCTIONSOURCEHDR') {
+        return Promise.resolve({
+          filas: skip === 0
+            ? Array.from({ length: 100 }, (_, i) => ({ SOURCEID: `S${i}`, PRDID: `P${i}`, PINVALID: '' }))
+            : [],
+          total: conTotal ? 900 : null,
+        })
+      }
+      return Promise.resolve({ filas: [{ SOURCEID: 'S1', PRDID: 'C1' }], total: conTotal ? 1 : null })
+    })
+
+    const salida = await extraer({
+      conexionId: CONEXION, destino: DESTINO, plan: { pasos: [CABECERA, COMPONENTES] },
+    })
+
+    expect(salida.hechos[1]).toMatchObject({ omitido: true })
+    expect(salida.hechos[1].motivo).toMatch(/no se pudo bajar entera/i)
+    await expect(contar('bom_psi')).resolves.toBe(0)
   })
 })

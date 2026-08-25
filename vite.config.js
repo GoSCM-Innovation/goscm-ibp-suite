@@ -170,4 +170,14 @@ export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify(version),
   },
+  // El transformador que usan las PRUEBAS no pasa por el plugin de React, así que hay que decirle a
+  // esbuild que el JSX es del runtime automático. Sin esto, un componente montado en una prueba sale
+  // con `React.createElement` y muere con «React is not defined», que no dice nada del problema real.
+  // En el build no cambia nada: allí el plugin transforma el JSX antes de que esbuild lo vea.
+  esbuild: { jsx: 'automatic', jsxImportSource: 'react' },
+  test: {
+    // Montar un componente de verdad exige que el entorno se declare como entorno de `act`. Es una
+    // bandera global de React, no una opción de Vitest, y va antes de que se cargue cualquier prueba.
+    setupFiles: ['./src/test-setup.js'],
+  },
 })

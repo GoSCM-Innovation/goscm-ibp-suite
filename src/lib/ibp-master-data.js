@@ -29,10 +29,22 @@ export async function fetchMasterCount(connectionId, { entidad, planningArea, ve
 }
 
 /** Una página de filas. `orderby` son las claves, para que las ventanas no se solapen. */
-export async function fetchMasterRows(connectionId, {
-  entidad, planningArea, versionId, condiciones, select, orderby, skip = 0, top = 500, signal,
+export async function fetchMasterRows(connectionId, opciones) {
+  const { filas } = await fetchMasterPage(connectionId, opciones)
+  return filas
+}
+
+/**
+ * Lo mismo, y además cuántas filas dice SAP que hay.
+ *
+ * `conTotal` no cuesta otra petición —el total viaja con las filas— y es lo que permite que quien
+ * pagina sepa si terminó de verdad. `total` sale `null` si no se pidió: `null` no es cero.
+ */
+export async function fetchMasterPage(connectionId, {
+  entidad, planningArea, versionId, condiciones, select, orderby,
+  skip = 0, top = 500, conTotal = false, signal,
 }) {
-  const { filas } = await api.get('/api/ibp/master-data', {
+  const { filas, total } = await api.get('/api/ibp/master-data', {
     connectionId,
     accion: 'filas',
     entidad,
@@ -40,11 +52,12 @@ export async function fetchMasterRows(connectionId, {
     versionId,
     skip,
     top,
+    ...(conTotal ? { conTotal: '1' } : {}),
     ...(select?.length ? { select: select.join(',') } : {}),
     ...(orderby?.length ? { orderby: orderby.join(',') } : {}),
     ...conCondiciones(condiciones),
   }, { signal })
-  return filas
+  return { filas, total: total ?? null }
 }
 
 /** Los valores distintos de un campo, para ofrecerlos en un desplegable. */

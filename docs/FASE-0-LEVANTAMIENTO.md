@@ -50,11 +50,33 @@ Base: `api/proxy.js` de **v8**, que es el más maduro. Aporta:
 
 Se le suma de **v9** el validador `_ssrf.js` (cubre IPv6, CGNAT, link-local, multicast — el de v7 no) y de **v7** la allowlist de sufijo de host y de servicios permitidos.
 
-### 3.2 `core/odata` — cliente OData
-- Paginador con `$skip`/`$top`, `$orderby` estable obligatorio y **presupuesto de bytes por página** (de v8), más el seguidor de `__next`/`@odata.nextLink` (de v7).
-- Constructor de `$filter` y codificación de literales OData, incluidas fechas (de v8).
-- Helpers de OData v4 (de v8, usados por Metering).
-- Helper de conteo con la regla "nunca `$top=0` en Planning Data" incorporada en el código.
+### 3.2 Cliente OData — lo que se planeó y dónde acabó
+
+Este apartado planeaba un `core/odata` genérico: paginador con `$skip`/`$top`, `$orderby` estable
+obligatorio, presupuesto de bytes por página (de v8), seguidor de `__next`/`@odata.nextLink` (de v7),
+constructor de `$filter`, y el conteo con la regla «nunca `$top=0` en Planning Data».
+
+**Se escribió y no se conectó nunca.** Ningún archivo fuera de esa carpeta lo importaba, mientras los
+lectores de verdad —`core/ibp/master-data.js` y `core/ibp/planning-data.js`— hacían lo mismo por su
+cuenta y eran los verificados contra tenants reales. Se borró en 2026-08-25: dos implementaciones de
+lo mismo, una muerta, es la duplicación que esta capa vino a quitar, y acá era peor que en v7/v8/v9
+porque las dos se leían como si fueran la de uso.
+
+Dónde vive cada pieza hoy:
+
+| Pieza | Dónde |
+|---|---|
+| Paginación por posición, con el total en la misma respuesta | `core/ibp/master-data.js` (`readEntityPageWithTotal`) |
+| Tamaño de página desde un presupuesto de bytes medido | `core/ibp/master-data-model.js` (`filasPorPagina`) |
+| Constructor de `$filter` y literales | `core/ibp/master-data-model.js`, `core/ibp/planning-data-model.js` |
+| Conteo, con `$top=0` prohibido en Planning Data | `countEntity` y `countKf`, cada uno en su lector |
+| Helpers de OData v4 | `core/ibp/metering.js`, que es lo único que los usa |
+
+**El seguidor de `__next` no se portó.** v7 lo usaba como camino principal y `$skip` como respaldo; v8
+paginaba solo con `$skip` contra el mismo servicio y funcionaba. En vez de replicar el protocolo, la
+descarga pide el total con `$inlinecount` en la primera página —viaja con las filas, no cuesta otra
+petición— y sigue pidiendo hasta llegar a ese número. Así una respuesta corta no se confunde con el
+fin de la tabla, que era el riesgo real, y si aun así faltan filas la pantalla lo dice.
 
 ### 3.3 `core/soap` — cliente CI-DS
 Base: `api/soap.js` de **v9**, sin cambios de fondo. Se descarta el duplicado de v7.
@@ -126,7 +148,7 @@ v8 acumuló **17 reglas confirmadas contra tenants reales**. No son opiniones: s
 - `$orderby` estable es obligatorio al paginar, o hay solapes y huecos con lecturas concurrentes.
 - Master Data deduplica del lado del servidor cuando se proyecta un solo campo; Planning Data rechaza ese mismo patrón.
 
-Estas reglas deben quedar **codificadas como guardas** en `core/odata` y `core/sap-transaction`, no como documentación que alguien pueda pasar por alto.
+Estas reglas deben quedar **codificadas como guardas** en los lectores de `core/ibp` y en `core/sap-transaction`, no como documentación que alguien pueda pasar por alto. Dónde acabó cada una: §3.2.
 
 ---
 
@@ -167,7 +189,7 @@ Más piezas de soporte: configuración de tipos de material, campos adicionales 
 1. Repositorio, estructura del monorepo, tooling.
 2. `core/persistence` + esquema de Postgres (clientes, usuarios, permisos, suscripción, conexiones, credenciales cifradas).
 3. `core/auth` (SSO + sesión + guardas de permiso). **Antes de cualquier módulo**, porque todo lo demás cuelga de aquí.
-4. `core/transport` + `core/odata` + `core/soap` (portados, con las guardas de las reglas SAP).
+4. `core/transport` + `core/soap` y los lectores de OData (portados, con las guardas de las reglas SAP). El `core/odata` genérico que este plan preveía no sobrevivió; ver §3.2.
 5. `core/connections` + panel admin mínimo: alta de cliente, alta de usuario, permisos por módulo, conexiones con sus acuerdos y usuarios.
 6. Shell de la aplicación: barra, menú de módulos, estados de "no contratado".
 

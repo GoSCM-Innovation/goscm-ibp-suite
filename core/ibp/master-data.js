@@ -85,18 +85,41 @@ export async function countEntity({ baseUrl, credentials, entidad, planningArea,
  * tabla que alguien está tocando se solapan y dejan huecos. Quien llama pasa las claves de negocio,
  * que es lo único que desempata siempre.
  */
-export async function readEntityPage({
+export async function readEntityPage(opciones) {
+  const { filas } = await readEntityPageWithTotal(opciones)
+  return filas
+}
+
+/**
+ * Lo mismo, y además cuántas filas hay en total.
+ *
+ * `conTotal` añade `$inlinecount=allpages`, que en ESTE servicio viaja en la misma respuesta que las
+ * filas: saber el total no cuesta una petición más. Importa porque el único criterio de fin que queda
+ * sin él es «llegaron menos filas de las pedidas», y eso también es lo que pasa cuando la respuesta
+ * viene recortada. Sin un total con el que comparar, una descarga cortada por la mitad se presenta
+ * como una tabla completa.
+ *
+ * `total` sale `null` si no se pidió o si SAP no lo mandó. `null` no es cero: quien llama tiene que
+ * distinguir «no lo sé» de «no hay filas».
+ */
+export async function readEntityPageWithTotal({
   baseUrl, credentials, entidad, skip = 0, top = 2000,
-  planningArea, versionId, extraFilter, select, orderby,
+  planningArea, versionId, extraFilter, select, orderby, conTotal = false,
 }) {
   const filtro = filtroDeDatos({ planningArea, versionId, extraFilter })
   const partes = [`$top=${top}`, `$skip=${skip}`]
   if (orderby?.length) partes.push(`$orderby=${encodeURIComponent(orderby.join(','))}`)
   if (select?.length) partes.push(`$select=${encodeURIComponent(select.join(','))}`)
   if (filtro) partes.push(`$filter=${encodeURIComponent(filtro)}`)
+  if (conTotal) partes.push('$inlinecount=allpages')
 
   const d = await leer({ baseUrl, credentials, entidad, consulta: partes.join('&') })
-  return (d.results ?? []).map(sinMetadatos)
+  const leido = Number.parseInt(d.__count ?? '', 10)
+
+  return {
+    filas: (d.results ?? []).map(sinMetadatos),
+    total: Number.isFinite(leido) ? leido : null,
+  }
 }
 
 /**

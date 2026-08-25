@@ -138,8 +138,55 @@ Dos cosas que la pantalla dice a propósito, porque la fuente cambia lo que el d
 - La lista de productos dice «con red» cuando se contó sobre las tablas de arcos, y «en el área» cuando
   es el maestro entero: saber cuáles tienen red exigiría una consulta por producto.
 
-Queda pendiente la misma revisión —**de dónde saca los datos cada pantalla, comparado con el
-original**— en el resto de v7 y en v8 y v9. Es la clase de hueco que las pruebas no cubren.
+## Lo que pide la descarga, comparado con lo que pedía v7
+
+Recorrido el 2026-08-25 contra `doFetchAll` de `main.js` y la fase 1 de `analyzer.js`. Es el otro eje
+de la misma revisión: no de dónde salen los datos, sino **con qué alcance y qué filtros**. Los `$select`
+coinciden tabla por tabla —los dos campos que añadimos están arriba—, y el filtro es el mismo del área
+y la versión. Salieron tres diferencias, las tres corregidas:
+
+**1. Las piezas de una receta descartada se quedaban en la base.** v7 filtraba `bom_psi`,
+`bom_psi_validity`, `bom_psr` y `sn_psi` por el `SOURCEID` de una cabecera que sobrevivió a `PINVALID`
+—su propia nota en el paso de la red lo dice: «Solo SOURCEIDs activos en PSH»—. Nuestro port aplicaba
+solo la marca de invalidez de cada tabla, y esas cuatro no tienen ninguna.
+
+El árbol no se veía afectado, porque arma desde la cabecera y a una receta descartada no llega nunca.
+**Los analizadores sí**: recorren esas tablas enteras por cursor, así que un componente que solo
+consume una receta muerta contaba como consumido, y un recurso que solo usa una receta muerta contaba
+como usado. Son justo los veredictos que el informe da como hallazgo — los «335 recursos que no
+aparecen en ninguna receta» de más arriba salen de ese conteo.
+
+Corregido con `atadoA` en el plan: cada paso declara de qué cabecera cuelga, y la descarga solo guarda
+las filas que esa cabecera avala. Si la cabecera no se bajó entera, el paso atado **se salta** en vez
+de guardar una parte: con claves a medias el filtro tiraría filas buenas, y una tabla a la que le
+faltan filas buenas se lee igual que una completa.
+
+**2. Bajar solo «Red de suministro» dejaba media red.** La descarga de la red de v7 traía su propio
+maestro de productos (`PRDID`, `PRDDESCR`, `MATTYPEID`) y de ubicaciones (`LOCID`, `LOCDESCR`,
+`LOCTYPE`). Acá los dos vivían solo en el grupo del árbol, y los botones de grupo se activan por
+separado — con lo que elegir solo la red dejaba el visualizador sin descripciones y **sin `LOCTYPE`,
+que es lo único que distingue un proveedor de una planta**: sin él no se dibuja de dónde entra la
+materia prima, que es media red. Y el analizador de la red clasifica por tipo de material, así que se
+quedaba sin poder clasificar. Nada avisaba, y la propia pantalla de red **recomendaba** bajar ese grupo.
+
+Corregido con `tambienPara: ['red']` en los dos maestros: los baja cualquiera de los dos grupos, una
+sola vez, como en v7. El dueño del paso sigue siendo su grupo, así que no poder resolver el maestro de
+productos no vuelve imposible bajar la red.
+
+**3. Una respuesta corta se leía como el fin de la tabla.** v7 pedía páginas de 50.000 filas y seguía
+el enlace `__next` de SAP, con `$skip` de respaldo. Nuestra descarga pide 5.000 con `$skip` y cortaba
+cuando llegaban menos de 5.000 — que es lo mismo que pasa cuando la respuesta viene **recortada**, y
+`core/odata/page-size.js` decía, medido, que por encima del megabyte volvían cortadas. Las dos cosas se
+leían igual, y lo bajado se presentaba como el total: un hueco escrito como si fuera un dato.
+
+Corregido sin replicar el protocolo de v7: la primera página se pide con `$inlinecount`, que viaja en
+la misma respuesta y no cuesta otra petición. Con ese total, la descarga sigue pidiendo hasta llegar a
+él y solo una página vacía la cierra; si aun así faltan filas, la pantalla lo dice tabla por tabla y no
+se presenta como terminada. Las tablas grandes nunca se habían bajado de verdad —lo medido son 478
+ubicaciones y 545 recursos; los 1,4 millones de filas solo se contaron—, así que esto no se había podido
+ver.
+
+Queda pendiente la misma revisión de alcance y filtros en **v8 y v9**.
 
 ## Cómo se porta el analizador de la jerarquía
 

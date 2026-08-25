@@ -11,6 +11,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import {
   GRUPOS_DE_EXTRACCION,
+  gruposQueLoNecesitan,
   planificarExtraccion,
   versionSinDatos,
 } from '../../../core/ibp/explorer-extract-plan.js'
@@ -180,6 +181,19 @@ export default function ExplorerExtract({ destino }) {
         </div>
       )}
 
+      {/* Una descarga a la que le faltan filas no se puede presentar como terminada: todo lo que se
+          analice después sale de menos datos de los que hay, y ningún informe podría notarlo. */}
+      {salida && salida.incompletas > 0 && (
+        <div className="notice notice-error">
+          ✕ <b>Faltan filas.</b> {salida.incompletas === 1
+            ? 'Una tabla trajo menos filas de las que SAP dice que tiene'
+            : `${numero(salida.incompletas)} tablas trajeron menos filas de las que SAP dice que tienen`}
+          . Abajo se ve cuáles. <b>No conviene analizar con esto</b>: los informes saldrían de datos
+          incompletos sin poder avisarlo. Volvé a bajar; si se repite, es que SAP está recortando las
+          respuestas y hay que pedir páginas más chicas.
+        </div>
+      )}
+
       <div className="card">
         <div className="card-label">Qué se baja</div>
         <div className="table-scroll">
@@ -201,7 +215,12 @@ export default function ExplorerExtract({ destino }) {
                     <td>
                       {paso.etiqueta}
                       <div className="exp-sub">
-                        {GRUPOS_DE_EXTRACCION.find((uno) => uno.id === paso.grupo)?.label}
+                        {/* Los dos maestros compartidos sirven a los dos grupos, y decir solo uno
+                            haría pensar que bajando el otro no hacen falta. */}
+                        {gruposQueLoNecesitan(paso)
+                          .map((id) => GRUPOS_DE_EXTRACCION.find((uno) => uno.id === id)?.label)
+                          .filter(Boolean)
+                          .join(' y ')}
                         {!paso.esencial && ' · accesoria'}
                       </div>
                     </td>
@@ -232,7 +251,20 @@ export default function ExplorerExtract({ destino }) {
                       {!paso.sePuede && <span style={{ color: 'var(--text3)' }}>No se puede</span>}
                       {paso.sePuede && suyo?.error && <span style={{ color: 'var(--red)' }}>✕ {suyo.error}</span>}
                       {paso.sePuede && suyo?.cancelado && <span style={{ color: 'var(--accent)' }}>Cancelada</span>}
-                      {paso.sePuede && suyo && !suyo.error && !suyo.cancelado && (
+                      {/* Un paso que se salta por depender de una tabla incompleta lo dice acá: si
+                          solo dijera «—» se leería como que no había nada que bajar. */}
+                      {paso.sePuede && suyo?.omitido && (
+                        <span style={{ color: 'var(--accent)' }}>Saltada · {suyo.motivo}</span>
+                      )}
+                      {/* Faltan filas: SAP dijo un total y llegaron menos. Es la diferencia entre una
+                          tabla completa y una a medias, y sin decirlo las dos se ven igual. */}
+                      {paso.sePuede && suyo?.faltan > 0 && (
+                        <span style={{ color: 'var(--red)' }}>
+                          ✕ Incompleta · SAP dice {numero(suyo.enSap)} filas y llegaron {numero(suyo.bajadas)}
+                        </span>
+                      )}
+                      {paso.sePuede && suyo && !suyo.error && !suyo.cancelado && !suyo.omitido
+                        && !suyo.faltan && (
                         <span style={{ color: 'var(--green)' }}>✓ Lista</span>
                       )}
                       {paso.sePuede && !suyo && avance?.tabla === paso.tabla && <span>Bajando…</span>}
