@@ -8,6 +8,7 @@
 // salió bien. No se pierde nada; simplemente deja de avanzar.
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { avisarFinDeCorrida, pedirPermisoDeAviso } from '../../../lib/aviso-de-corrida.js'
 import {
   cancelRun,
   getRun,
@@ -26,7 +27,7 @@ import {
  */
 const VUELTA_MS = 5000
 
-export function useOrchestrationRun(orchestrationId) {
+export function useOrchestrationRun(orchestrationId, nombre) {
   const [run, setRun] = useState(null)
   const [error, setError] = useState('')
   const [ocupado, setOcupado] = useState(false)
@@ -34,6 +35,16 @@ export function useOrchestrationRun(orchestrationId) {
   // Impide encimar dos vueltas si una tarda más que el reloj: la segunda no aportaría nada y
   // duplicaría las consultas a SAP.
   const enVuelo = useRef(false)
+
+  // El estado de la vuelta anterior, para avisar SOLO en el momento en que pasa de en marcha a
+  // terminada. Sin esto, cada vuelta sobre una corrida ya terminada volvería a avisar; y al abrir la
+  // pantalla de una corrida vieja avisaría de algo que pasó ayer.
+  const estadoAnterior = useRef(null)
+  // El nombre en una ref porque el aviso se dispara desde el reloj, que se armó con el nombre que
+  // había entonces: si se renombra a mitad, el aviso tiene que decir el nuevo. Se pone en un efecto y
+  // no en el cuerpo, que es escribir una ref durante el render.
+  const nombreActual = useRef(nombre)
+  useEffect(() => { nombreActual.current = nombre }, [nombre])
 
   useEffect(() => {
     let abandonado = false
@@ -55,7 +66,13 @@ export function useOrchestrationRun(orchestrationId) {
       enVuelo.current = true
       try {
         const siguiente = await tickRun(orchestrationId)
-        if (!abandonado) setRun(siguiente)
+        if (!abandonado) {
+          if (estadoAnterior.current === 'running' && isRunFinished(siguiente)) {
+            avisarFinDeCorrida(nombreActual.current, siguiente?.status)
+          }
+          estadoAnterior.current = siguiente?.status ?? null
+          setRun(siguiente)
+        }
       } catch (fallo) {
         if (!abandonado) setError(fallo.message)
       } finally {
@@ -85,8 +102,17 @@ export function useOrchestrationRun(orchestrationId) {
     error,
     ocupado,
     enMarcha,
-    arrancar: (defaults) => accion(() => startRun(orchestrationId, defaults)),
-    retomar: () => accion(() => resumeRun(orchestrationId)),
+    arrancar: (defaults) => accion(() => {
+      // El permiso se pide aquí y no al montar: ver `aviso-de-corrida.js`.
+      pedirPermisoDeAviso()
+      estadoAnterior.current = null
+      return startRun(orchestrationId, defaults)
+    }),
+    retomar: () => accion(() => {
+      pedirPermisoDeAviso()
+      estadoAnterior.current = null
+      return resumeRun(orchestrationId)
+    }),
     cortar: () => accion(() => cancelRun(orchestrationId)),
   }
 }

@@ -11,6 +11,7 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
 
 import { readStoredTzMode } from '../../lib/dates.js'
+import { puedeSalir } from '../../lib/guarda-de-salida.js'
 import { listIbpConnections } from '../../lib/ibp.js'
 import { etiquetaDeConexion } from '../../lib/nombre-de-conexion.js'
 import { lectorDeIbp } from '../../lib/run-logs.js'
@@ -121,13 +122,15 @@ export default function IbpTools() {
         )}
       </div>
 
+      {/* Cambiar de pestaña corta una copia en marcha, porque la cadena de segmentos la lleva esta
+          pantalla y no el servidor. Ver `guarda-de-salida.js`. */}
       <div className="tabs">
         {HERRAMIENTAS.filter((una) => !una.soloConVarios || conexiones.length > 1).map((una) => (
           <button
             key={una.id}
             type="button"
             className={`tab${herramienta === una.id ? ' active' : ''}`}
-            onClick={() => setHerramienta(una.id)}
+            onClick={() => { if (puedeSalir()) setHerramienta(una.id) }}
             aria-pressed={herramienta === una.id}
           >
             {una.label}

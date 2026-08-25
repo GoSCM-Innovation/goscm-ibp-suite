@@ -16,6 +16,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
+import { usePantallaCompleta } from '../../lib/usePantallaCompleta.js'
+import BotonPantallaCompleta from '../ui/BotonPantallaCompleta.jsx'
+
 import {
   CAMPOS_DE_SOLO_LECTURA, columnasPorOmision, etiquetaDeCondicion, OPERADORES, valorLegible,
 } from '../../../core/ibp/master-data-model.js'
@@ -122,6 +125,8 @@ export default function MasterDataViewer({ conexionId, tenant = '', productivo =
 
   const [volcado, setVolcado] = useState(null)
   const cortarVolcado = useRef(null)
+  const lienzo = useRef(null)
+  const pantalla = usePantallaCompleta(lienzo)
 
   useEffect(() => {
     let abandonado = false
@@ -390,8 +395,9 @@ export default function MasterDataViewer({ conexionId, tenant = '', productivo =
     && valorLegible(fila[columna]) === String(fila[columna] ?? '')
 
   return (
-    <div className="module-body">
+    <div className="module-body a-pantalla-completa" ref={lienzo}>
       <div className="monitor-bar">
+        <BotonPantallaCompleta {...pantalla} que="la tabla" />
         <select
           className="select input-sm"
           value={area}

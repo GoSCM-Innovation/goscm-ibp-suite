@@ -12,6 +12,7 @@ import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import { revisarEntrada, sePuedeCopiar } from '../../../core/ibp/migration-plan.js'
 import { listIbpConnections } from '../../lib/ibp.js'
 import { fetchMasterCatalog } from '../../lib/ibp-master-data.js'
+import { useGuardaDeSalida } from '../../lib/guarda-de-salida.js'
 import { fetchMigrationPlan, runMigrationSegment } from '../../lib/ibp-migration.js'
 import FiltroDeTabla from './FiltroDeTabla.jsx'
 import Modal from '../ui/Modal.jsx'
@@ -129,6 +130,9 @@ export default function MigrationPlan() {
   const [confirmando, setConfirmando] = useState(false)
   const [escrito, setEscrito] = useState('')
   const [carga, setCarga] = useState(null)
+
+  // La cadena de segmentos la lleva esta pantalla, así que salir la corta. Ver `guarda-de-salida.js`.
+  useGuardaDeSalida(Boolean(carga?.enCurso), 'Hay una carga de dato maestro en marcha. Si sales, se corta ahí: lo que ya se confirmó en SAP se queda, y el resto no se copia. ¿Salir igual?')
 
   useEffect(() => {
     listIbpConnections().then(setConexiones).catch((fallo) => setError(fallo.message))

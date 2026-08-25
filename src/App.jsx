@@ -6,6 +6,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { api } from './lib/api.js'
+import { puedeSalir } from './lib/guarda-de-salida.js'
 import { applyTheme, readStoredTheme } from './lib/theme.js'
 import { MODULES, moduleById } from './lib/modules.js'
 import Login from './components/Login.jsx'
@@ -59,13 +60,17 @@ export default function App() {
       .finally(() => setCargando(false))
   }, [])
 
+  // Navegar corta una copia en marcha, porque la cadena de segmentos la lleva el navegador. Cambiar de
+  // módulo no dispara `beforeunload`, así que hay que preguntar aquí. Ver `guarda-de-salida.js`.
   const navegar = useCallback((destino) => {
+    if (!puedeSalir()) return
     window.location.hash = `#/${destino}`
     setRoute(destino)
     refrescarSesion()
   }, [refrescarSesion])
 
   async function salir() {
+    if (!puedeSalir()) return
     await api.post('/api/auth/logout').catch(() => {})
     setSession(null)
     window.location.hash = ''

@@ -1889,3 +1889,22 @@ a { color: var(--cyan); }
   padding: 6px 8px;
   white-space: pre;
 }
+
+/* ── Pantalla completa ─────────────────────────────────────────────────────────
+   Portado de v7 (`bom.js`, `visualizer.js`, `snWebView.js`, `explorer.js`), v8 (los dos visores y el
+   constructor de orquestaciones) y v9 (el lienzo). Estaba en las ocho pantallas de datos de los tres y
+   en ninguna de aquí.
+
+   El navegador pone el elemento a pantalla completa sobre un fondo NEGRO propio, así que sin esto una
+   tabla con fondo transparente queda flotando en negro y con la altura que tenía en el panel: se ve
+   peor que antes de pulsar. Por eso el fondo y el alto van explícitos.                             */
+.a-pantalla-completa:fullscreen {
+  background: var(--bg);
+  padding: 16px 20px;
+  overflow: auto;
+}
+
+/* El tope de altura de las tablas y del árbol existe para que quepan en el panel. A pantalla completa
+   ese tope es justo lo que sobra: se sube al alto disponible. */
+.a-pantalla-completa:fullscreen .table-alta { max-height: calc(100vh - 190px); }
+.a-pantalla-completa:fullscreen .lienzo-cuerpo { height: calc(100vh - 150px); }

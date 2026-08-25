@@ -16,6 +16,7 @@ import {
   NIVELES_DE_TIEMPO, cifrasPegadas, esCampoDeTiempo, nivelDeTiempoDe,
 } from '../../../core/ibp/kf-migration-plan.js'
 import { duracionLegible, resumirCorrida } from '../../../core/ibp/kf-run-report.js'
+import { useGuardaDeSalida } from '../../lib/guarda-de-salida.js'
 import { listIbpConnections } from '../../lib/ibp.js'
 import { fetchConversions, fetchPlanningCatalog } from '../../lib/ibp-planning-data.js'
 import {
@@ -126,6 +127,9 @@ export default function KfMigration() {
   const [confirmando, setConfirmando] = useState(false)
   const [escrito, setEscrito] = useState('')
   const [avance, setAvance] = useState(null)
+
+  // La cadena de segmentos la lleva esta pantalla, así que salir la corta. Ver `guarda-de-salida.js`.
+  useGuardaDeSalida(Boolean(avance), 'Hay una copia de cifras clave en marcha. Si sales, se corta ahí: los segmentos ya confirmados en SAP se quedan, y el resto no se copia. ¿Salir igual?')
   const [salida, setSalida] = useState(null)
   // La corrida entera, segmento a segmento: es lo que se enseña al acabar y lo que va al informe.
   const [corrida, setCorrida] = useState(null)

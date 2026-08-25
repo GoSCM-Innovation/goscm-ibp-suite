@@ -9,6 +9,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
+import { usePantallaCompleta } from '../../lib/usePantallaCompleta.js'
+import BotonPantallaCompleta from '../ui/BotonPantallaCompleta.jsx'
+
 import { cifraLegible, periodoLegible } from '../../../core/ibp/planning-data-model.js'
 import { OPERADORES } from '../../../core/ibp/master-data-model.js'
 import { TOPES, revisarVolumen } from '../../../core/ibp/export-csv.js'
@@ -92,6 +95,8 @@ export default function PlanningDataViewer({ conexionId }) {
 
   const [volcado, setVolcado] = useState(null)
   const cortarVolcado = useRef(null)
+  const lienzo = useRef(null)
+  const pantalla = usePantallaCompleta(lienzo)
 
   useEffect(() => {
     let abandonado = false
@@ -225,8 +230,9 @@ export default function PlanningDataViewer({ conexionId }) {
   const paginas = contadas ? Math.ceil(contadas / consulta.top) : 0
 
   return (
-    <div className="module-body">
+    <div className="module-body a-pantalla-completa" ref={lienzo}>
       <div className="monitor-bar">
+        <BotonPantallaCompleta {...pantalla} que="la tabla" />
         <span className="tag tag-accent">{catalogo.area}</span>
         <span className="page-hint">
           {numero(catalogo.dims.length)} atributos · {numero(catalogo.cifras.length)} cifras clave

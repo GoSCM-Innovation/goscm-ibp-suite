@@ -8,14 +8,18 @@ actualiza al terminar cada sesión, y su orden es el de prioridad acordada.
 ## Dónde estamos
 
 - **En línea**: https://goscm-ibp-suite.vercel.app — cada subida a `main` se publica sola.
-- **2.436 pruebas**, lint y build limpios, y el build **sin ningún aviso**. Bajaron de 2.476 porque se
-  borró `core/odata/` con las suyas: estaba escrito y sin conectar a nada (ver `core/README.md`).
+- **2.458 pruebas**, lint y build limpios, y el build **sin ningún aviso**.
 - Los tres proyectos previos están portados: sin huecos de funcionalidad en v7, v8 ni v9.
 - Las cuatro áreas —Data Tools, IBP Tools, CI-DS Tools y Administración— están **recorridas pantalla
   por pantalla contra los tenants reales**. De ahí salieron once fallos, todos arreglados.
 - **La revisión de alcance y filtros está terminada** en v7, v8 y v9: cada pantalla pide el mismo
   conjunto de datos que su original. Salieron cinco diferencias y las cinco están corregidas — están
   contadas en los tres documentos de paridad, en la sección «Lo que pide cada pantalla».
+- Y salieron **tres huecos de funcionalidad** que el inventario de archivos no podía ver, porque vivían
+  dentro de archivos ya dados por portados: el aviso del navegador al terminar una orquestación, la
+  guarda al salir con una copia en marcha, y la pantalla completa en las seis pantallas de datos. Los
+  tres portados. Ver «Tres huecos que el inventario de archivos no podía ver» en los tres documentos de
+  paridad — incluye **cómo se encontraron**, que es lo reutilizable.
 
 ## Lo siguiente, en orden
 
@@ -33,7 +37,15 @@ pero **`vercel.json` no declara ningún `crons`**, así que nada se dispara. Fal
 usuario: **cada cuánto debe avanzar una orquestación en marcha**. Con eso se escriben las
 declaraciones. Necesita además Vercel Pro.
 
-### 3. Una revisión de aspecto, con la pantalla señalada
+### 3. Mirar la pantalla completa, diez segundos por pantalla
+
+Lo único de esta sesión que no se pudo comprobar con los ojos: no se pudo entrar a la aplicación —el
+ingreso pide el código que llega al correo—. El botón, el estado y la salida están probados, y el CSS
+pone fondo y altura, pero **cómo queda** no lo vio nadie. Son seis: árbol de materiales, red de
+suministro, visor de dato maestro, visor de cifras, lienzo de orquestaciones y explorador de
+integraciones.
+
+### 4. Una revisión de aspecto, con la pantalla señalada
 
 El usuario pidió que la interfaz sea «bonita e intuitiva». No se hizo, a propósito: es un criterio suyo
 y tocar espaciados y colores a ciegas rompe cosas sin poder verificarlo. **Pedirle dos o tres pantallas
@@ -43,7 +55,7 @@ Lo que sí se observó recorriéndolas: son consistentes y explican lo que hacen
 de «cómo se lee esto», los avisos dicen qué hacer, y la procedencia del dato está siempre visible—. Los
 once fallos encontrados fueron de **veracidad**, no de aspecto.
 
-### 4. El idioma (es/en)
+### 5. El idioma (es/en)
 
 Fase propia y deliberadamente la última. Toca cada pantalla. No bloquea nada.
 

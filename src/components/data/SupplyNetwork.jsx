@@ -13,12 +13,14 @@
 // Los arcos se listan además de dibujarse porque en una red real son decenas, y «¿de dónde le llega a
 // esta planta?» se contesta antes leyendo una lista que persiguiendo flechas.
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 import {
   ARCOS, CLASES, armarRed, nodosSueltos, repartirEnColumnas, vecinosDe,
 } from '../../../core/ibp/supply-network.js'
 import { cargarRed, productosConRed } from '../../lib/network-load.js'
+import { usePantallaCompleta } from '../../lib/usePantallaCompleta.js'
+import BotonPantallaCompleta from '../ui/BotonPantallaCompleta.jsx'
 import { cargarRedDeSap, productosDeSap } from '../../lib/network-load-sap.js'
 import { fetchExplorerMap } from '../../lib/ibp-explorer.js'
 import { planificarExtraccion } from '../../../core/ibp/explorer-extract-plan.js'
@@ -62,6 +64,8 @@ export default function SupplyNetwork({ destino = null }) {
   const [cargando, setCargando] = useState(false)
   const [red, setRed] = useState(null)
   const [marcado, setMarcado] = useState('')
+  const lienzo = useRef(null)
+  const pantalla = usePantallaCompleta(lienzo)
 
   // Primero lo local, que es instantáneo y sin tope. Si no hay nada descargado, se lee de SAP: exigir
   // la descarga completa —casi 3 millones de filas en un tenant real— para dibujar una red de veinte
@@ -149,7 +153,7 @@ export default function SupplyNetwork({ destino = null }) {
   }
 
   return (
-    <div className="module-body">
+    <div className="module-body a-pantalla-completa" ref={lienzo}>
       {error && <div className="notice notice-error">✕ {error}</div>}
 
       {/* La procedencia se dice siempre, como en el resto de la aplicación. Acá además cambia lo que
@@ -251,6 +255,7 @@ export default function SupplyNetwork({ destino = null }) {
                 Quitar la marca
               </button>
             )}
+            <BotonPantallaCompleta {...pantalla} que="la red" />
           </div>
 
           {sueltos.length > 0 && (

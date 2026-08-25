@@ -10,7 +10,10 @@
 // cada movimiento sería una escritura por cada píxel arrastrado. El botón dice si hay cambios sin
 // guardar, que es lo que hace falta saber.
 
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
+
+import { usePantallaCompleta } from '../../../lib/usePantallaCompleta.js'
+import BotonPantallaCompleta from '../../ui/BotonPantallaCompleta.jsx'
 import {
   Background,
   Controls,
@@ -43,7 +46,9 @@ export default function OrchestrationCanvas({ leerRegistro, Paleta = TaskPalette
   const [aristas, setAristas] = useState(orquestacion.edges ?? [])
   const [elegido, setElegido] = useState(null)
   const [sucio, setSucio] = useState(false)
-  const ejecucion = useOrchestrationRun(orquestacion.id)
+  const ejecucion = useOrchestrationRun(orquestacion.id, orquestacion.name)
+  const lienzoRef = useRef(null)
+  const pantalla = usePantallaCompleta(lienzoRef)
 
   // No hay efecto que copie la orquestación al estado: quien monta este componente le pone una clave
   // con su identificador, así que cambiar de orquestación lo remonta y el estado nace del grafo
@@ -179,7 +184,7 @@ export default function OrchestrationCanvas({ leerRegistro, Paleta = TaskPalette
   const editable = !ejecucion.enMarcha
 
   return (
-    <div className="lienzo">
+    <div className="lienzo a-pantalla-completa" ref={lienzoRef}>
       <div className="lienzo-barra">
         <span className="lienzo-nombre">{orquestacion.name}</span>
         <span className="lienzo-cuenta">
@@ -187,6 +192,7 @@ export default function OrchestrationCanvas({ leerRegistro, Paleta = TaskPalette
           {sucio && <span className="lienzo-sucio"> · sin guardar</span>}
         </span>
         <div style={{ flex: 1 }} />
+        <BotonPantallaCompleta {...pantalla} que="el lienzo" />
         <button
           type="button"
           className="btn btn-primary btn-sm"

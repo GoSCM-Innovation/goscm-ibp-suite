@@ -83,9 +83,49 @@ fecha, porque un campo de fecha comparado como texto lo rechaza SAP: «Invalid p
 function 'eq'». Aquí llegó duplicado en dos módulos, y la copia del lado de las cifras entrecomillaba
 siempre. Corregido volviendo a una sola función, que es como estaba.
 
+## Tres huecos que el inventario de archivos no podía ver
+
+Encontrados el 2026-08-25, al contestar «¿qué nos va quedando?» recorriendo los árboles en vez de
+contestar de memoria. **Este documento decía «huecos abiertos: ninguno» y no era cierto.**
+
+Por qué se escaparon a dos revisiones: el inventario compara ARCHIVOS, y los tres vivían dentro de
+archivos que el inventario daba por portados. Un archivo asignado no quiere decir un archivo agotado.
+
+Lo que sí los encontró: barrer los tres originales por las APIs del navegador que se ven —
+`Notification`, `beforeunload`, `requestFullscreen`, `keydown`, `clipboard`— y comparar la cuenta con
+la nuestra. Vale repetirlo cuando se añada una pantalla.
+
+| Qué faltaba | Estaba en | Aquí |
+|---|---|---|
+| Aviso del navegador al terminar una orquestación | v9 | **0** — `src/lib/aviso-de-corrida.js` |
+| Guarda al salir con una copia en marcha | v8, en las dos migraciones | **0** — `src/lib/guarda-de-salida.js` |
+| Pantalla completa | v7 (4 pantallas), v8 (4), v9 (2) | **0** — `src/lib/usePantallaCompleta.js` |
+
+**El aviso al terminar.** Una orquestación de CI-DS tarda entre minutos y horas, así que nadie se queda
+mirando. Sin el aviso hay que volver a la pestaña a comprobar. Se conserva la decisión de v9 de pedir el
+permiso al ARRANCAR y no al abrir la pantalla: pedirlo sin que la persona haya hecho nada es lo que hace
+que lo niegue de entrada, y una vez negado la página no puede volver a preguntar.
+
+**La guarda al salir.** Las dos copias —dato maestro y cifras clave— las encadena el NAVEGADOR: la
+pantalla pide un segmento, espera, pide el siguiente. Cambiar de módulo, de pestaña, cerrar o pulsar
+«Salir» a mitad cortaba la cadena sin decir nada. v8 tenía las dos capas y aquí no había ninguna:
+`beforeunload` para cerrar o recargar, y una confirmación propia para navegar dentro de la aplicación
+—que no dispara `beforeunload`—. El texto dice lo que de verdad pasa: lo ya confirmado en SAP se queda,
+el resto no se copia.
+
+**Pantalla completa.** Son las pantallas de una tabla de sesenta columnas y de un grafo de trescientos
+nodos; en un panel de media pantalla, con la barra y el menú al lado, son otra herramienta. Va con la
+API del navegador y no con un panel de CSS —que es lo que hacía v9— porque es lo que hacían v7 y v8, y
+porque el navegador ya sale con Escape solo. El envoltorio es el cuerpo del módulo, así que los
+controles siguen a mano.
+
+**Lo único sin comprobar:** cómo QUEDA a pantalla completa. El botón, el estado y la salida están
+probados, y el CSS pone fondo y altura, pero no se pudo entrar a la aplicación para verlo con los ojos.
+Es una mirada de diez segundos en las seis pantallas.
+
 ## Huecos abiertos
 
-Ninguno. El último que quedaba —el informe de una corrida de cifras clave— se cerró el 2026-08-11,
+Ninguno, contando los tres de arriba como cerrados. El último que quedaba —el informe de una corrida de cifras clave— se cerró el 2026-08-11,
 **rediseñado en vez de traducido**, porque traducir el de v8 habría dado un informe que miente:
 
 - v8 copiaba **una cifra por transacción**, así que su informe tenía una fila por cifra con su estado,

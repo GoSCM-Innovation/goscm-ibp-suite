@@ -23,6 +23,8 @@ import {
   TIPOS, abrirTodo, armarHijos, profundidad, raicesPorPlanta, soltarHijos,
 } from '../../../core/ibp/bom-tree.js'
 import { cargarSubarbol, descripcionesDe, productosConReceta } from '../../lib/bom-load.js'
+import { usePantallaCompleta } from '../../lib/usePantallaCompleta.js'
+import BotonPantallaCompleta from '../ui/BotonPantallaCompleta.jsx'
 
 const numero = (valor) => Number(valor ?? 0).toLocaleString('es')
 
@@ -118,6 +120,8 @@ export default function BomTree() {
   // Los nodos NO viven en el estado de React: se mutan al abrir y cerrar, y son muchos. El contador es
   // lo que pide el redibujo.
   const indices = useRef(null)
+  const lienzo = useRef(null)
+  const pantalla = usePantallaCompleta(lienzo)
   const [redibujo, setRedibujo] = useState(0)
   const pedirRedibujo = useCallback(() => setRedibujo((previo) => previo + 1), [])
 
@@ -274,7 +278,7 @@ export default function BomTree() {
   }
 
   return (
-    <div className="module-body">
+    <div className="module-body a-pantalla-completa" ref={lienzo}>
       {error && <div className="notice notice-error">✕ {error}</div>}
 
       <div className="tablero">
@@ -372,6 +376,7 @@ export default function BomTree() {
               <>
                 <button type="button" className="btn btn-sm" onClick={abrirTodoElArbol}>Abrir todo</button>
                 <button type="button" className="btn btn-sm" onClick={cerrarTodo}>Cerrar todo</button>
+                <BotonPantallaCompleta {...pantalla} que="el árbol" />
                 <span className="page-hint">
                   {numero(raices.length)} {raices.length === 1 ? 'raíz' : 'raíces'} ·{' '}
                   {numero(filas.length)} filas a la vista

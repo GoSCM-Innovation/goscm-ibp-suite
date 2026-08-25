@@ -16,7 +16,10 @@
 //
 // Cuando hay UNA sola opción se elige sola —no hay nada que decidir—; con varias no se adivina.
 
-import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react'
+
+import { usePantallaCompleta } from '../../../lib/usePantallaCompleta.js'
+import BotonPantallaCompleta from '../../ui/BotonPantallaCompleta.jsx'
 
 import { conConflicto, enrichWithAtl } from '../../../lib/atl-enrich.js'
 import { parseATL } from '../../../lib/cids-atl.js'
@@ -147,6 +150,8 @@ export default function IntegrationExplorer() {
   // La pila de navegación: el tope es lo que se está viendo y el fondo es desde dónde se empezó.
   // Es lo que permite saltar de una integración a la que la alimenta y poder volver.
   const [pila, setPila] = useState([])
+  const lienzo = useRef(null)
+  const pantalla = usePantallaCompleta(lienzo)
   const [clave, setClave] = useState(null)
 
   const [planAreas, setPlanAreas] = useState(new Set())
@@ -358,7 +363,7 @@ export default function IntegrationExplorer() {
   }
 
   return (
-    <div className="exp-page">
+    <div className="exp-page a-pantalla-completa" ref={lienzo}>
       {analisis.errores.length > 0 && (
         <div className="notice notice-error">
           ✕ No se pudieron leer {analisis.errores.length === 1 ? 'un archivo' : 'algunos archivos'}:
@@ -388,6 +393,8 @@ export default function IntegrationExplorer() {
             value={texto}
             onChange={(evento) => { setTexto(evento.target.value); setClave(null) }}
           />
+
+          <BotonPantallaCompleta {...pantalla} que="el explorador" />
 
           {dimension === 'integracion' && (
             <div className="tabs tabs-inline">
