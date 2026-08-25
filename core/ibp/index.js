@@ -98,6 +98,7 @@ export {
   conversionQueFalta,
   esCero,
   filtroDeCifra,
+  filtroDeCifras,
   filtroDeFechas,
   filtroDePlanificacion,
   nivelDeAgregacion,
@@ -105,6 +106,7 @@ export {
   periodoLegible,
   selectDePlanificacion,
   sinCeros,
+  sinFilasEnCero,
 } from './planning-data-model.js'
 
 export {

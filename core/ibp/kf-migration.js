@@ -23,6 +23,7 @@ import {
   waitForProcessed,
 } from './planning-data-write.js'
 import { countKf, readKfPage } from './planning-data.js'
+import { sinFilasEnCero } from './planning-data-model.js'
 import {
   FILAS_POR_SEGMENTO, filaParaEscribir, nombreEnDestino, planificarSegmentos, selectDeLaMigracion,
 } from './kf-migration-plan.js'
@@ -108,14 +109,24 @@ async function escribirSegmento({
  * Se cuenta antes de empezar porque de eso depende todo lo demás: cuántos segmentos, si conviene
  * partir por periodo, y si vale la pena avisar de que esto va a tardar.
  */
-export async function contarLoQueSeCopia({ origen, area, nivel, cifras, filtro }) {
-  const total = await countKf({
-    ...origen,
-    area,
-    select: selectDeLaMigracion(nivel, cifras),
-    filtro,
-  })
-  return planificarSegmentos(total)
+export async function contarLoQueSeCopia({ origen, area, nivel, cifras, filtro, filtroBase }) {
+  const select = selectDeLaMigracion(nivel, cifras)
+  const contar = (cual) => countKf({ ...origen, area, select, filtro: cual })
+
+  // Primero acotando a las filas que tienen valor: un nivel de planificación es casi todo ceros y
+  // leerlo entero para copiar las pocas celdas con dato es la diferencia entre minutos y una tarde.
+  try {
+    return { ...planificarSegmentos(await contar(filtro)), soloConValor: true }
+  } catch (error) {
+    // Si SAP no acepta ese filtro —hay cifras que no lo admiten— se cuenta sin él y se sigue. El
+    // original hacía exactamente esto, y la alternativa sería no poder copiar.
+    if (filtroBase === undefined || filtroBase === filtro) throw error
+    return {
+      ...planificarSegmentos(await contar(filtroBase)),
+      soloConValor: false,
+      porQueTodo: error.detail || error.message,
+    }
+  }
 }
 
 /**
@@ -141,7 +152,15 @@ export async function migrarSegmentoDeCifras({
   }
 
   const agotado = filas.length < cuantas
-  if (filas.length === 0) return { desde, filas: 0, ok: true, agotado: true, mensajes: [] }
+  if (filas.length === 0) return { desde, filas: 0, escritas: 0, ok: true, agotado: true, mensajes: [] }
+
+  // Las filas donde TODAS las cifras valen cero no se escriben: no aportan nada y pisarían con un
+  // cero un valor que el destino ya tenía. `filas.length` sigue siendo lo LEÍDO, porque de eso
+  // depende el `$skip` del segmento siguiente; lo escrito se cuenta aparte.
+  const escribibles = sinFilasEnCero(filas, cifras)
+  if (escribibles.length === 0) {
+    return { desde, filas: filas.length, escritas: 0, ok: true, agotado, mensajes: [] }
+  }
 
   let ultimoFallo = null
   let hecho = null
@@ -150,8 +169,8 @@ export async function migrarSegmentoDeCifras({
   for (let intento = 1; intento <= INTENTOS_POR_SEGMENTO && !hecho; intento += 1) {
     try {
       hecho = await escribirSegmento({
-        destino, area: areaDestino ?? area, nivel, cifras, filas, nombre, csrf: sesion, onProgreso,
-        destinoDe,
+        destino, area: areaDestino ?? area, nivel, cifras, filas: escribibles, nombre,
+        csrf: sesion, onProgreso, destinoDe,
       })
     } catch (error) {
       ultimoFallo = error.detail || error.message
@@ -167,7 +186,10 @@ export async function migrarSegmentoDeCifras({
   }
 
   if (!hecho) {
-    return { desde, filas: filas.length, ok: false, agotado, fase: 'escritura', error: ultimoFallo, cifraCalculada }
+    return {
+      desde, filas: filas.length, escritas: 0, ok: false, agotado,
+      fase: 'escritura', error: ultimoFallo, cifraCalculada,
+    }
   }
 
   let mensajes = []
@@ -178,7 +200,7 @@ export async function migrarSegmentoDeCifras({
     mensajes = []
   }
 
-  return { desde, filas: filas.length, ok: true, agotado, mensajes, ...hecho }
+  return { desde, filas: filas.length, escritas: escribibles.length, ok: true, agotado, mensajes, ...hecho }
 }
 
 /**

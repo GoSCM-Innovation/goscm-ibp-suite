@@ -1,15 +1,18 @@
 import { describe, it, expect } from 'vitest'
 
+import { filtroDeCondiciones } from './master-data-model.js'
 import {
   areasDesdeConjuntos,
   cifraLegible,
   conversionQueFalta,
   esCero,
   filtroDeCifra,
+  filtroDeCifras,
   filtroDeFechas,
   filtroDePlanificacion,
   nivelDeAgregacion,
   parseKfMetadata,
+  sinFilasEnCero,
   periodoLegible,
   selectDePlanificacion,
   sinCeros,
@@ -223,5 +226,87 @@ describe('conversionQueFalta', () => {
   it('un error de otra cosa no es una conversión', () => {
     expect(conversionQueFalta('You must pass at least one attribute')).toBeNull()
     expect(conversionQueFalta(undefined)).toBeNull()
+  })
+})
+
+// Un nivel de planificación es casi todo ceros, y la copia de cifras clave lo lee acotado a las que
+// tienen valor. `ne 0` no sirve: SAP lo ignora en silencio.
+describe('filtroDeCifras', () => {
+  it('pide los dos lados de cada cifra, unidos con or', () => {
+    expect(filtroDeCifras(['KFA', 'KFB']))
+      .toBe('(KFA gt 0 or KFA lt 0 or KFB gt 0 or KFB lt 0)')
+  })
+
+  it('una sola cifra queda igual que con filtroDeCifra', () => {
+    expect(filtroDeCifras(['KFA'])).toBe(filtroDeCifra('KFA'))
+    expect(filtroDeCifras(['KFA'])).toBe('(KFA gt 0 or KFA lt 0)')
+  })
+
+  it('sin cifras no hay filtro, y no un paréntesis vacío', () => {
+    expect(filtroDeCifras([])).toBe('')
+    expect(filtroDeCifras(null)).toBe('')
+    expect(filtroDeCifras([null, ''])).toBe('')
+    expect(filtroDeCifra('')).toBe('')
+  })
+
+  it('el filtro de planificación acepta varias cifras a la vez', () => {
+    const salida = filtroDePlanificacion({ cifras: ['KFA', 'KFB'], soloConValor: true })
+    expect(salida).toBe('(KFA gt 0 or KFA lt 0 or KFB gt 0 or KFB lt 0)')
+  })
+
+  it('sin soloConValor no se acota por valor aunque se pasen cifras', () => {
+    expect(filtroDePlanificacion({ cifras: ['KFA'] })).toBe('')
+  })
+})
+
+describe('sinFilasEnCero', () => {
+  const fila = (a, b) => ({ KFA: a, KFB: b })
+
+  it('descarta las filas donde TODAS las cifras valen cero', () => {
+    const filas = [fila('0', '0.000000'), fila('0', '7'), fila('-3', '0')]
+    expect(sinFilasEnCero(filas, ['KFA', 'KFB'])).toEqual([fila('0', '7'), fila('-3', '0')])
+  })
+
+  it('sin cifras no descarta nada: no hay contra qué juzgar', () => {
+    const filas = [fila('0', '0')]
+    expect(sinFilasEnCero(filas, [])).toEqual(filas)
+    expect(sinFilasEnCero(filas, null)).toEqual(filas)
+  })
+
+  it('aguanta que no venga nada', () => {
+    expect(sinFilasEnCero(null, ['KFA'])).toEqual([])
+  })
+})
+
+// En v8 el constructor de condiciones era UNO para dato maestro y para cifras (`filterUtils.js`).
+// Aquí había dos copias, y la de cifras entrecomillaba siempre: una condición sobre un campo de fecha
+// salía como texto y SAP la rechazaba con «Invalid parametertype used at function 'eq'».
+describe('las condiciones de una consulta de cifras', () => {
+  it('un valor de fecha sale como literal de fecha, no entrecomillado', () => {
+    const salida = filtroDePlanificacion({
+      condiciones: [{ field: 'VALIDFROM', op: 'in', value: '/Date(1753734272000+0000)/' }],
+    })
+    expect(salida).toBe("VALIDFROM eq datetimeoffset'2025-07-28T20:24:32Z'")
+  })
+
+  it('un valor de texto sigue entrecomillado, con la comilla duplicada', () => {
+    expect(filtroDePlanificacion({ condiciones: [{ field: 'PRDID', op: 'in', value: "O'HARA" }] }))
+      .toBe("PRDID eq 'O''HARA'")
+  })
+
+  it('varios valores se unen con or, y las condiciones entre sí con and', () => {
+    const salida = filtroDePlanificacion({
+      condiciones: [
+        { field: 'PRDID', op: 'in', value: 'A, B' },
+        { field: 'LOCID', op: 'sw', value: 'PL' },
+        { field: 'BRAND', op: 'nb' },
+      ],
+    })
+    expect(salida).toBe("(PRDID eq 'A' or PRDID eq 'B') and startswith(LOCID,'PL') and BRAND gt ''")
+  })
+
+  it('da lo mismo que el constructor del dato maestro', () => {
+    const condiciones = [{ field: 'PRDID', op: 'in', value: 'A,B' }, { field: 'BRAND', op: 'nb' }]
+    expect(filtroDePlanificacion({ condiciones })).toBe(filtroDeCondiciones(condiciones))
   })
 })

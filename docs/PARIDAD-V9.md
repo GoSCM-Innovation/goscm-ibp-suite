@@ -79,6 +79,22 @@ como un descuido.
   repetidas entran con un número detrás o no entran: una orquestación se configura una vez, y
   sobrescribirla por un nombre igual es una pérdida que no se deshace.
 
+## Lo que pide cada pantalla, comparado con lo que pedía v9
+
+Recorrido el 2026-08-25 contra `api/soap.js`, `api/cids.js` y las pantallas de `src/`. **Sin
+diferencias.** Los cuerpos de las peticiones SOAP son los mismos elemento por elemento —incluido el
+orden que el XSD de SAP exige en `taskLogsRequest`—, la lista de operaciones permitidas es la misma, y
+el monitor de tareas pide el mismo rango: tope de 90 días, siete de arranque, y el extremo de arriba
+llevado a `59.999` para que el último día entre.
+
+El explorador de integraciones y el documentador de mapeos no consultan a SAP: leen el export del
+proyecto que se sube a la pantalla, igual que en v9.
+
+Nota: v9 avanzó de `82108cf` a `609e282` (0.5.38 → 0.5.45) desde la revisión anterior. Los 44 commits
+son pruebas, lint, tokens de diseño y dos arreglos de seguridad que aquí ya estaban resueltos mejor
+(`_ssrf.js` con IPv4 embebida en IPv6, y el token de `api-fetch` limitado al mismo origen). **Nada
+funcional que portar.**
+
 ## Huecos abiertos
 
 Ninguno. El último —importar sin ver qué trae el archivo— se cerró el 2026-08-12: ahora se enseña

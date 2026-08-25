@@ -41,6 +41,48 @@ atrasada—. Existe porque «¿ya está v8?» se contestó dos veces de memoria 
 - **`DataViewer/DataGrid.jsx`, `ColumnPicker.jsx`, `CollapsibleSection.jsx`, `ViewerTabs.jsx`** —
   presentación. Lo que hacían está repartido en los visores.
 
+## Lo que pide cada pantalla, comparado con lo que pedía v8
+
+Recorrido el 2026-08-25 contra `services/masterDataApi.js`, `planningDataApi.js`, `filterUtils.js`,
+`metering.js`, `jobHeaders.js` y las pantallas que los usan. El eje es el alcance y los filtros, no de
+dónde salen los datos.
+
+**Igual que v8, comprobado campo por campo:**
+
+| Pantalla | Qué se comparó |
+|---|---|
+| Visor de dato maestro | `$select`, `$orderby` por claves, `$top`, y el constructor de condiciones —incluido el literal `datetimeoffset` de los campos de fecha— |
+| Migración de dato maestro | `$select` de las columnas comunes, y leer todas cuando el esquema del destino no se pudo verificar |
+| Monitor de trabajos | La misma lista de trece campos en el `$select`, el mismo `$top=2000`, y el mismo reintento sin filtro cuando el tenant lo rechaza con 400 |
+| Estadísticas de recurso | El mismo filtro y los mismos cinco rangos. Se añade `$top=10.000`, que a una fila cada diez minutos son 69 días: el rango más largo que ofrece la pantalla son 30 |
+| Consumo (metering) | Los diez conjuntos de v8. Los topes son mayores a propósito y ya estaba documentado: v8 se quedaba con las primeras 1.000 de 15.623 y dibujaba el ranking con eso |
+
+**Dos diferencias, las dos corregidas:**
+
+**1. La copia de cifras clave leía el nivel entero.** v8 acotaba la lectura del origen a las filas
+donde ALGUNA de las cifras del grupo tiene valor —`(KF gt 0 or KF lt 0)`, porque `ne 0` SAP lo ignora
+en silencio— y su propio comentario dice por qué: «reads far less than the whole planning level». Un
+nivel de planificación es casi todo ceros.
+
+Aquí ese filtro existía (`filtroDeCifra`) y **no lo usaba nadie**. La copia leía el nivel completo.
+
+No es solo lentitud: escribir una fila en cero **pisa con un cero un valor que el destino ya tenía**.
+v8 no las escribía porque no las leía.
+
+Corregido: se cuenta y se lee acotando a las filas con valor, con el mismo respaldo que v8 —si SAP no
+acepta el predicado para esas cifras, se cuenta sin él y la pantalla dice que se va a leer el nivel
+entero—. Y en cualquiera de los dos casos, una fila donde TODAS las cifras valen cero no se escribe.
+Una fila con una cifra en cero y otra con valor sí: ese cero es parte del dato.
+
+La cuenta de lo leído y la de lo escrito se dicen por separado, porque el `$skip` del segmento
+siguiente depende de lo leído.
+
+**2. El filtro de cifras no sabía de fechas.** En v8 el constructor de condiciones era **una** función
+(`filterUtils.js`) para los dos servicios, y emitía un literal `datetimeoffset'…'` para los valores de
+fecha, porque un campo de fecha comparado como texto lo rechaza SAP: «Invalid parametertype used at
+function 'eq'». Aquí llegó duplicado en dos módulos, y la copia del lado de las cifras entrecomillaba
+siempre. Corregido volviendo a una sola función, que es como estaba.
+
 ## Huecos abiertos
 
 Ninguno. El último que quedaba —el informe de una corrida de cifras clave— se cerró el 2026-08-11,

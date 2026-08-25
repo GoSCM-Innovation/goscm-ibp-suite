@@ -210,3 +210,84 @@ describe('migrarCifras', () => {
     })
   })
 })
+
+// Lo que hacía el original y aquí no se hacía: acotar la lectura del origen a las filas que TIENEN
+// valor. Un nivel de planificación es casi todo ceros; leerlo entero para copiar las pocas celdas con
+// dato es la diferencia entre minutos y una tarde. Y escribir esos ceros no es inocuo: pisan con un
+// cero lo que el destino ya tenía.
+describe('la copia no arrastra las filas en cero', () => {
+  it('el conteo acota primero a las filas con valor, y lo dice', async () => {
+    countKf.mockResolvedValue(235)
+
+    const plan = await contarLoQueSeCopia({
+      ...comun, filtro: '(KF gt 0 or KF lt 0)', filtroBase: '',
+    })
+
+    expect(plan).toMatchObject({ total: 235, soloConValor: true })
+    expect(countKf.mock.calls[0][0].filtro).toBe('(KF gt 0 or KF lt 0)')
+    expect(countKf).toHaveBeenCalledTimes(1)
+  })
+
+  // Hay cifras a las que SAP no acepta ese predicado. El original volvía al filtro de todo antes que
+  // dejar de poder copiar.
+  it('si SAP rechaza ese filtro, cuenta sin él y avisa de por qué', async () => {
+    countKf.mockRejectedValueOnce(Object.assign(new Error('no soportado'), { detail: 'Not supported' }))
+    countKf.mockResolvedValueOnce(1594)
+
+    const plan = await contarLoQueSeCopia({
+      ...comun, filtro: '(KF gt 0 or KF lt 0)', filtroBase: "PRDID eq 'X'",
+    })
+
+    expect(plan).toMatchObject({ total: 1594, soloConValor: false, porQueTodo: 'Not supported' })
+    expect(countKf.mock.calls[1][0].filtro).toBe("PRDID eq 'X'")
+  })
+
+  it('sin filtro de respaldo, el fallo del conteo se propaga', async () => {
+    countKf.mockRejectedValue(new Error('SAP se cayó'))
+    await expect(contarLoQueSeCopia({ ...comun, filtro: 'X' }))
+      .rejects.toThrow('SAP se cayó')
+  })
+
+  it('una fila con todas las cifras en cero no se escribe', async () => {
+    readKfPage.mockResolvedValueOnce([
+      { PRDID: 'P1', PERIODID4_TSTAMP: '/Date(1)/', ADJUSTEDPRODUCTION: '10' },
+      { PRDID: 'P2', PERIODID4_TSTAMP: '/Date(1)/', ADJUSTEDPRODUCTION: '0.000000' },
+      { PRDID: 'P3', PERIODID4_TSTAMP: '/Date(1)/', ADJUSTEDPRODUCTION: '-4' },
+    ])
+
+    const salida = await migrarSegmentoDeCifras({ ...comun, cuantas: 10 })
+
+    // Se leyeron tres y se escribieron dos. Las dos cuentas se dicen: `filas` es lo leído, de lo que
+    // depende el `$skip` del segmento siguiente.
+    expect(salida).toMatchObject({ ok: true, filas: 3, escritas: 2 })
+    const enviadas = postKfChunk.mock.calls[0][0].filas
+    expect(enviadas).toHaveLength(2)
+    expect(enviadas.map((una) => una.PRDID)).toEqual(['P1', 'P3'])
+  })
+
+  // El caso que obliga a mirar «alguna» y no «todas»: el cero de esa fila es parte del dato.
+  it('una fila con una cifra en cero y otra con valor sí se escribe', async () => {
+    readKfPage.mockResolvedValueOnce([
+      { PRDID: 'P1', PERIODID4_TSTAMP: '/Date(1)/', KFA: '0', KFB: '7' },
+    ])
+
+    const salida = await migrarSegmentoDeCifras({
+      ...comun, cifras: ['KFA', 'KFB'], cuantas: 10,
+    })
+
+    expect(salida).toMatchObject({ ok: true, filas: 1, escritas: 1 })
+  })
+
+  // Si el segmento entero venía en ceros no hay nada que escribir, y NO es un fallo: hay que seguir
+  // paginando desde donde se quedó, no darlo por agotado.
+  it('un segmento entero en cero no escribe, no falla y no corta la paginación', async () => {
+    readKfPage.mockResolvedValueOnce(Array.from({ length: 10 }, (_, i) => ({
+      PRDID: `P${i}`, PERIODID4_TSTAMP: '/Date(1)/', ADJUSTEDPRODUCTION: '0',
+    })))
+
+    const salida = await migrarSegmentoDeCifras({ ...comun, cuantas: 10 })
+
+    expect(salida).toMatchObject({ ok: true, filas: 10, escritas: 0, agotado: false })
+    expect(getTransactionId).not.toHaveBeenCalled()
+  })
+})

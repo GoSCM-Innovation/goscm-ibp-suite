@@ -54,7 +54,7 @@ export default async function handler(req, res) {
 
   const {
     accion, origen = {}, destino = {}, cifras = [], dimensiones = [], condiciones = [],
-    destinoDe = {}, desdeFecha = '', hastaFecha = '', atributo = '',
+    destinoDe = {}, desdeFecha = '', hastaFecha = '', atributo = '', soloConValor,
     desde = 0, cuantas = 5000, confirmacion, nombre,
   } = req.body ?? {}
 
@@ -106,13 +106,17 @@ export default async function handler(req, res) {
 
     // El rango de fechas va sobre el campo de periodo del nivel elegido: sin nivel de tiempo no hay
     // sobre qué acotar, y pedirlo igual daría un filtro contra un campo que no se está leyendo.
-    const filtro = filtroDePlanificacion({
+    const comun = {
       conversiones: origen.conversiones ?? {},
       condiciones,
       campoDeTiempo: revision.nivelDeTiempo?.campo ?? '',
       desde: desdeFecha,
       hasta: hastaFecha,
-    })
+    }
+    // Dos filtros: el que acota a las filas con valor —el que se usa— y el de todo, que es el
+    // respaldo para las cifras a las que SAP no le acepta ese predicado.
+    const filtroConValor = filtroDePlanificacion({ ...comun, cifras, soloConValor: true })
+    const filtroBase = filtroDePlanificacion(comun)
 
     if (accion === 'contar') {
       return res.status(200).json({
@@ -121,7 +125,8 @@ export default async function handler(req, res) {
           area: origen.area,
           nivel: revision.nivel,
           cifras,
-          filtro,
+          filtro: filtroConValor,
+          filtroBase,
         }),
       })
     }
@@ -138,7 +143,9 @@ export default async function handler(req, res) {
         areaDestino: destino.area,
         nivel: revision.nivel,
         cifras,
-        filtro,
+        // El MISMO filtro con el que se contó. Contar acotando y leer sin acotar daría un total que
+        // no describe lo que se está copiando, y el avance mentiría de principio a fin.
+        filtro: soloConValor === false ? filtroBase : filtroConValor,
         destinoDe,
         desde: Number(desde) || 0,
         cuantas: Math.min(Number(cuantas) || 5000, MAX_POR_SEGMENTO),

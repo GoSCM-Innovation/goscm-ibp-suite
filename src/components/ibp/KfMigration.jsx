@@ -302,7 +302,11 @@ export default function KfMigration() {
       const empezo = Date.now()
       let segmento
       try {
-        segmento = await copiarSegmentoDeCifras({ ...peticion, desde, cuantas: 5000 })
+        // `soloConValor` viene del conteo: leer con un filtro distinto del que se contó daría un
+        // total que no describe lo que se copia, y el avance mentiría de principio a fin.
+        segmento = await copiarSegmentoDeCifras({
+          ...peticion, desde, cuantas: 5000, soloConValor: plan?.soloConValor !== false,
+        })
       } catch (fallo) {
         cerrar({ error: fallo.message })
         return
@@ -322,12 +326,15 @@ export default function KfMigration() {
       segmentos.push({
         desde,
         filas: segmento.filas,
+        // Lo escrito puede ser menos que lo leído: las filas donde todas las cifras valen cero no se
+        // escriben, porque pisarían con un cero un valor que el destino ya tenía.
+        escritas: segmento.escritas ?? segmento.filas,
         transactionId: segmento.transactionId,
         estado: segmento.estado,
         ms: Date.now() - empezo,
       })
 
-      copiadas += segmento.filas
+      copiadas += segmento.escritas ?? segmento.filas
       mensajes.push(...(segmento.mensajes ?? []))
       if (segmento.agotado) break
       desde += segmento.filas
@@ -665,9 +672,23 @@ export default function KfMigration() {
           <span className="page-hint">
             {numero(plan.total)} filas · {plan.segmentos} {plan.segmentos === 1 ? 'segmento' : 'segmentos'}
             {plan.partirPorTiempo && ' · conviene partir por periodo'}
+            {/* De qué son esas filas. «12.000 filas» significa una cosa si son las que tienen valor y
+                otra si es el nivel entero, y la diferencia suele ser de dos órdenes de magnitud. */}
+            {plan.soloConValor === false ? ' · el nivel entero' : ' · solo las que tienen valor'}
           </span>
         )}
       </div>
+
+      {/* Si SAP no aceptó acotar a las filas con valor hay que decirlo: se va a leer el nivel entero,
+          que puede ser cien veces más, y las filas en cero no se escriben aunque se lean. */}
+      {plan?.soloConValor === false && (
+        <div className="notice notice-info">
+          SAP no aceptó pedir <b>solo las filas con valor</b> para estas cifras, así que se lee el
+          nivel entero — puede tardar bastante más. Las filas donde todas las cifras valen cero no se
+          escriben igual: pisarían con un cero lo que el destino ya tenga.
+          {plan.porQueTodo && <div className="exp-sub" style={{ marginTop: 4 }}>{plan.porQueTodo}</div>}
+        </div>
+      )}
 
       {revision?.revision?.impedimentos.map((uno) => (
         <div className="notice notice-error" key={uno}>✕ {uno}</div>

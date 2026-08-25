@@ -1,11 +1,16 @@
 // Cómo se le pregunta a SAP por una cifra clave, y por qué así y no de otra forma.
 //
-// Portado de `services/planningDataApi.js` de v8. Sin dependencias: lo necesitan el servidor y la
-// pantalla.
+// Portado de `services/planningDataApi.js` de v8. Puro: lo necesitan el servidor y la pantalla.
+//
+// Lo único que importa es el constructor de condiciones del dato maestro, y es a propósito: en v8 era
+// UNA función (`filterUtils.js`) para los dos servicios. Aquí llegó duplicada, y la copia de aquí no
+// sabía de fechas.
 //
 // Este servicio es el más traicionero de los que usa la aplicación, porque casi todos sus fallos son
 // SILENCIOSOS: devuelve un resultado creíble que no es el que se pidió. Todo lo de aquí está
 // comprobado contra un tenant real (área ASIBPTS), y los números de los comentarios son de ahí.
+
+import { filtroDeCondiciones } from './master-data-model.js'
 
 /** Los conjuntos que el servicio expone y NO son un área de planificación. */
 const CONJUNTOS_GENERICOS = new Set(['KeyFigureDeltaDefinitionSet', 'ValueResultSet'])
@@ -81,12 +86,6 @@ export function parseKfMetadata(xml, area) {
 const escapar = (valor) => String(valor ?? '').replace(/'/g, "''")
 
 /**
- * El `$filter` de una consulta de cifras clave.
- *
- * `conversiones` es lo que la cifra EXIGE —la unidad o la moneda de destino—; sin eso no hay
- * lectura. `soloConValor` aprovecha una regla de SAP a propósito: ver `filtroDeCifra`.
- */
-/**
  * El tramo de tiempo, sobre el campo de periodo que se esté usando.
  *
  * El literal es el de OData v2 —`datetime'2024-01-01T00:00:00'`— y las horas no son adorno: sin
@@ -104,8 +103,14 @@ export function filtroDeFechas(campoDeTiempo, desde, hasta) {
   return partes.join(' and ')
 }
 
+/**
+ * El `$filter` de una consulta de cifras clave.
+ *
+ * `conversiones` es lo que la cifra EXIGE —la unidad o la moneda de destino—; sin eso no hay
+ * lectura. `soloConValor` aprovecha una regla de SAP a propósito: ver `filtroDeCifras`.
+ */
 export function filtroDePlanificacion({
-  conversiones = {}, condiciones = [], cifra, soloConValor, campoDeTiempo, desde, hasta,
+  conversiones = {}, condiciones = [], cifra, cifras, soloConValor, campoDeTiempo, desde, hasta,
 } = {}) {
   const partes = []
 
@@ -117,22 +122,17 @@ export function filtroDePlanificacion({
     if (valor) partes.push(`${campo} eq '${escapar(valor)}'`)
   }
 
-  for (const una of condiciones) {
-    if (!una?.field) continue
-    if (una.op === 'nb') {
-      partes.push(`${una.field} gt ''`)
-      continue
-    }
+  // El MISMO constructor que el dato maestro, que es como estaba en el original: una sola función
+  // para los dos. Tenía dos copias, y la de aquí entrecomillaba siempre — con lo que una condición
+  // sobre un campo de FECHA salía como texto y SAP la rechazaba con «Invalid parametertype used at
+  // function 'eq'». Un campo de fecha necesita un literal de fecha; lo resuelve `literalOdata`.
+  const deCondiciones = filtroDeCondiciones(condiciones)
+  if (deCondiciones) partes.push(deCondiciones)
 
-    const valores = String(una.value ?? '').split(',').map((uno) => uno.trim()).filter(Boolean)
-    if (valores.length === 0) continue
-
-    if (una.op === 'sw') partes.push(`startswith(${una.field},'${escapar(valores[0])}')`)
-    else if (valores.length === 1) partes.push(`${una.field} eq '${escapar(valores[0])}'`)
-    else partes.push(`(${valores.map((uno) => `${una.field} eq '${escapar(uno)}'`).join(' or ')})`)
-  }
-
-  const deCifra = soloConValor ? filtroDeCifra(cifra) : ''
+  // Una cifra o varias: el visor pide de a una, la copia pide todas las del grupo a la vez.
+  const deCifra = soloConValor
+    ? filtroDeCifras(cifras?.length ? cifras : [cifra])
+    : ''
   if (deCifra) partes.push(deCifra)
 
   return partes.join(' and ')
@@ -145,7 +145,20 @@ export function filtroDePlanificacion({
  * tenant: sin filtro 1.594 filas, con `ne 0` las mismas 1.594 —y la primera vale 0,000000—, con
  * `gt 0` 235. Por eso se piden los dos lados por separado y unidos con `or`, que sí funciona.
  */
-export const filtroDeCifra = (cifra) => (cifra ? `(${cifra} gt 0 or ${cifra} lt 0)` : '')
+export const filtroDeCifra = (cifra) => filtroDeCifras(cifra ? [cifra] : [])
+
+/**
+ * Lo mismo para varias cifras: pasa la fila si ALGUNA tiene valor.
+ *
+ * Es lo que hace la copia de cifras clave, y es lo que la vuelve viable: un nivel de planificación es
+ * casi todo ceros, y leerlo entero para copiar las pocas celdas con dato es la diferencia entre unos
+ * minutos y una tarde. Con «alguna» y no «todas» porque una fila con una cifra en cero y otra con
+ * valor hay que copiarla igual: el cero de esa fila es parte del dato.
+ */
+export const filtroDeCifras = (cifras) => {
+  const partes = (cifras ?? []).filter(Boolean).flatMap((una) => [`${una} gt 0`, `${una} lt 0`])
+  return partes.length > 0 ? `(${partes.join(' or ')})` : ''
+}
 
 /** Un valor de cifra que SAP devuelve como texto: `"0.000000"` es cero. */
 export const esCero = (valor) => Number.parseFloat(valor) === 0
@@ -158,6 +171,22 @@ export const esCero = (valor) => Number.parseFloat(valor) === 0
  * exactamente lo que quien pidió "solo con valor" no quiere ver.
  */
 export const sinCeros = (filas, cifra) => (filas ?? []).filter((una) => !esCero(una[cifra]))
+
+/**
+ * Descarta las filas donde TODAS las cifras valen cero.
+ *
+ * Para la copia. Una fila así no aporta nada al destino, y escribirla no es inocuo: pisaría con un
+ * cero un valor que el destino ya tenía. El original no las copiaba porque no las leía, y con el
+ * filtro caído —que es el respaldo— este descarte es lo único que lo evita.
+ *
+ * Si no se pasan cifras no se descarta nada: no hay contra qué juzgar, y tirar filas a ciegas sería
+ * peor que copiar algún cero.
+ */
+export const sinFilasEnCero = (filas, cifras) => {
+  const cuales = (cifras ?? []).filter(Boolean)
+  if (cuales.length === 0) return filas ?? []
+  return (filas ?? []).filter((una) => cuales.some((cifra) => !esCero(una[cifra])))
+}
 
 /**
  * A qué nivel va a agregar SAP la consulta.
