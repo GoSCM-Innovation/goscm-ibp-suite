@@ -229,7 +229,7 @@ export default function Orchestrations({ destino, Paleta = TaskPalette, leerRegi
           ) : (
             <div className="orq-vacio">
               <div className="orq-vacio-titulo">Ninguna orquestación abierta</div>
-              <p className="page-hint">Elegí una de la lista, o creá una nueva con el <b>+</b>.</p>
+              <p className="page-hint">Elige una de la lista, o crea una nueva con el <b>+</b>.</p>
             </div>
           )}
         </div>
@@ -277,7 +277,7 @@ export default function Orchestrations({ destino, Paleta = TaskPalette, leerRegi
             {porImportar.nuevas.length + porImportar.repetidas.length === 1 ? 'orquestación' : 'orquestaciones'}.
             {porImportar.repetidas.length > 0 && (
               <>
-                {' '}<b>{porImportar.repetidas.length}</b> ya {porImportar.repetidas.length === 1 ? 'existe' : 'existen'} acá con
+                {' '}<b>{porImportar.repetidas.length}</b> ya {porImportar.repetidas.length === 1 ? 'existe' : 'existen'} aquí con
                 ese nombre.
               </>
             )}

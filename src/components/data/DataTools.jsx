@@ -125,7 +125,7 @@ export default function DataTools() {
             onChange={(evento) => { setConexionId(evento.target.value); setArea(''); setVersionId('') }}
             aria-label="Tenant de IBP"
           >
-            <option value="">Elegí un tenant…</option>
+            <option value="">Elige un tenant…</option>
             {conexiones.map((una) => <option key={una.id} value={una.id}>{etiquetaDeConexion(una)}</option>)}
           </select>
 
@@ -137,7 +137,7 @@ export default function DataTools() {
                 onChange={(evento) => { setArea(evento.target.value); setVersionId('') }}
                 aria-label="Área de planificación"
               >
-                <option value="">Elegí un área…</option>
+                <option value="">Elige un área…</option>
                 {Object.entries(catalogo).map(([id, una]) => (
                   <option key={id} value={id}>{una.desc === id ? id : `${id} — ${una.desc}`}</option>
                 ))}
@@ -149,7 +149,7 @@ export default function DataTools() {
                 onChange={(evento) => setVersionId(evento.target.value)}
                 aria-label="Versión"
               >
-                <option value="">Elegí una versión…</option>
+                <option value="">Elige una versión…</option>
                 <option value={VERSION_BASE}>Versión base — el dato maestro del área</option>
                 {versiones.map((una) => (
                   <option key={una.id} value={una.id}>{una.name === una.id ? una.id : `${una.id} — ${una.name}`}</option>
@@ -181,7 +181,7 @@ export default function DataTools() {
 
       {!listo && !cargandoCatalogo && (
         <div className="notice notice-info">
-          Elegí el tenant, el área de planificación y la versión. Nada se elige solo cuando hay más de
+          Elige el tenant, el área de planificación y la versión. Nada se elige solo cuando hay más de
           una opción: contra cuál de tus tenants corre un análisis no es algo que deba adivinarse.
         </div>
       )}

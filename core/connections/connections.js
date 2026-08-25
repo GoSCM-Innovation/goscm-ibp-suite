@@ -138,7 +138,7 @@ export async function createConnection(clientId, { kind, name, baseUrl, organiza
  * cifradas—. Así que un nombre mal puesto costaba volver a registrar todas las credenciales, o
  * quedarse con «Tenant IBP» y «Tenant IBP · my400444» y adivinar cuál es cuál en cada desplegable.
  *
- * Solo el nombre. La dirección NO se cambia acá a propósito: cambiarla convertiría la conexión en otro
+ * Solo el nombre. La dirección NO se cambia aquí a propósito: cambiarla convertiría la conexión en otro
  * tenant conservando sus credenciales, que es la forma más silenciosa de mandar las contraseñas de un
  * cliente a un servidor que no es el suyo. Para eso se crea una conexión nueva.
  */

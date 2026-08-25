@@ -43,7 +43,7 @@ constructor de `$filter`— escrito como capa genérica y **nunca conectado a na
 fuera de esa carpeta lo importaba. Mientras tanto los lectores de verdad, `ibp/master-data.js` y
 `ibp/planning-data.js`, hacían lo mismo por su cuenta, y son los que están verificados contra tenants
 reales. Dos implementaciones de lo mismo, una muerta, es justo la duplicación que esta capa vino a
-quitar — y es peor que tenerla en tres proyectos, porque acá las dos se leen como si fueran la de uso.
+quitar — y es peor que tenerla en tres proyectos, porque aquí las dos se leen como si fueran la de uso.
 
 Así que se borró. La paginación vive en:
 
@@ -53,7 +53,7 @@ Así que se borró. La paginación vive en:
   recortada.
 - `ibp/master-data-model.js` — `filasPorPagina`, el tamaño de página desde un presupuesto de bytes
   medido (900 KB: por encima del megabyte las respuestas volvían cortadas).
-- `ibp/planning-data.js` — el lector de cifras clave, con su propio tope y `$top` chico para contar.
+- `ibp/planning-data.js` — el lector de cifras clave, con su propio tope y `$top` pequeño para contar.
 
 El primer administrador se crea con `npm run db:seed` porque la base arranca vacía y el panel exige ser administrador para entrar. Es el único punto del sistema donde nace un usuario sin que otro lo autorice.
 

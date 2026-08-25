@@ -47,7 +47,7 @@ function decorateRes(res) {
  * el backend con el que arrancó: se editaba un endpoint o algo de `core/`, el archivo cambiaba en el
  * disco, y el servidor seguía ejecutando el viejo. Y en silencio — el frontend SÍ se recargaba solo,
  * así que quedaba una mezcla de frontend nuevo con backend viejo, que es lo peor de los dos mundos:
- * la pantalla se ve como esperás y los datos vienen de otro código.
+ * la pantalla se ve como esperas y los datos vienen de otro código.
  *
  * `ssrLoadModule` de Vite sí sabe qué archivos cambiaron —lleva el grafo de módulos y lo invalida al
  * guardar—, así que recarga el handler y todo lo que importa de `core/`.
@@ -66,7 +66,7 @@ async function cargarHandler(server, file) {
     avisoDeRespaldoDado = true
     server.config.logger.warn(
       '[dev-api] Esta versión de Vite no ofrece ssrLoadModule: los cambios en api/ y core/ NO se '
-      + 'recargan solos. Reiniciá `npm run dev` después de editarlos.',
+      + 'recargan solos. Reinicia `npm run dev` después de editarlos.',
     )
   }
   return import(pathToFileURL(file).href)
@@ -95,7 +95,7 @@ function devApiPlugin() {
         // Se resuelve por la MISMA TABLA que en producción.
         //
         // Si el área tiene mostrador —`handlers/<área>/index.js`— la operación sale de su tabla, que
-        // es exactamente la que lee la función de Vercel. Antes acá se resolvía por sistema de
+        // es exactamente la que lee la función de Vercel. Antes aquí se resolvía por sistema de
         // archivos y allá también, así que coincidían solas; con mostradores hay que compartir la
         // tabla a propósito, o se llega a «en mi máquina funciona» por el peor camino: el frontend
         // igual y el backend resolviendo distinto.

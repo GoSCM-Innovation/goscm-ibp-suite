@@ -57,7 +57,7 @@ export const saltoDePagina = () => '<w:p><w:r><w:br w:type="page"/></w:r></w:p>'
 export const indice = () => '<w:p><w:r><w:fldChar w:fldCharType="begin"/></w:r>'
   + '<w:r><w:instrText xml:space="preserve"> TOC \\o "1-3" \\h \\z \\u </w:instrText></w:r>'
   + '<w:r><w:fldChar w:fldCharType="separate"/></w:r>'
-  + '<w:r><w:t>Actualizá este campo en Word para ver el índice.</w:t></w:r>'
+  + '<w:r><w:t>Actualiza este campo en Word para ver el índice.</w:t></w:r>'
   + '<w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>'
 
 /** Una celda de tabla. */

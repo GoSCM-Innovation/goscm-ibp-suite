@@ -1,6 +1,6 @@
 // La decisión de a quién llamar para entregar un código.
 //
-// Lo que se prueba acá no es el correo —eso está en `email.test.js`— sino el árbol de decisión, que es
+// Lo que se prueba aquí no es el correo —eso está en `email.test.js`— sino el árbol de decisión, que es
 // donde está el riesgo: si en producción se cae al camino de la consola, el código de acceso queda en
 // los registros del servidor y cualquiera que los pueda leer entra como cualquier usuario.
 

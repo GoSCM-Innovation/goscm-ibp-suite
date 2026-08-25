@@ -116,7 +116,7 @@ export default function ExplorerSetup({ destino }) {
    * Lo que se está viendo: lo detectado con las correcciones encima, incluidas las sin guardar.
    *
    * Se combina con la MISMA función que usa el servidor, y no con una versión propia. Escribirla dos
-   * veces fue justamente el primer fallo: la de aquí no quitaba de las alternativas la tabla recién
+   * veces fue justamente el primer fallo: la de aquí no quitaba de las alternativas la tabla ya
    * elegida, así que aparecía dos veces en la lista.
    */
   const efectivo = useMemo(

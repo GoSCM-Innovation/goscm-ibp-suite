@@ -1,6 +1,6 @@
 // La red de un producto leída de SAP, sin descargar tablas.
 //
-// Lo que se prueba acá no es que las filas lleguen —eso lo hace el transporte— sino QUÉ SE PIDE: con
+// Lo que se prueba aquí no es que las filas lleguen —eso lo hace el transporte— sino QUÉ SE PIDE: con
 // qué filtro y en qué orden. Es donde estaba el defecto: la pantalla exigía la descarga completa de
 // casi 3 millones de filas para dibujar una red de veinte nodos.
 

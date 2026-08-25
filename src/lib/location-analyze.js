@@ -240,7 +240,7 @@ export function hechosDe(locid, indices) {
   })
 
   // Los componentes que las recetas de esta planta consumen y para los que no hay ningún arco que los
-  // traiga hasta acá. Es el error más caro de encontrar a mano.
+  // traiga hasta aquí. Es el error más caro de encontrar a mano.
   const componentesSinArco = []
   const llegan = indices.productosQueLlegan.get(locid) ?? new Set()
   const componentes = new Set()
@@ -248,7 +248,7 @@ export function hechosDe(locid, indices) {
     for (const comp of indices.componentesDeReceta.get(receta) ?? []) componentes.add(comp)
   }
   for (const comp of componentes) {
-    // Si se fabrica acá mismo, no necesita arco de entrada.
+    // Si se fabrica aquí mismo, no necesita arco de entrada.
     if (productos.includes(comp)) continue
     if (!llegan.has(comp)) componentesSinArco.push(comp)
   }

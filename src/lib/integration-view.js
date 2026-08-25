@@ -1,7 +1,7 @@
 // Lo que el explorador muestra: filtros, agrupaciones y dimensiones.
 //
 // Separado de `integration-index.js` porque son dos cosas distintas: allá se analiza el proyecto una
-// vez, acá se decide qué se ve en pantalla, que cambia con cada tecla que se escribe. Está aparte de
+// vez, aquí se decide qué se ve en pantalla, que cambia con cada tecla que se escribe. Está aparte de
 // los componentes para poder probarlo sin montar nada.
 
 /** Las dimensiones por las que se puede explorar un proyecto, en el orden de v9. */

@@ -2,7 +2,7 @@
 //
 // Portado de `enrichMappingsFromIbp` y `backfillFromCache` de `docs.js` de v9.
 //
-// Lo caro acá no son las cuentas, son las consultas: una por entidad destino. Dos cachés evitan
+// Lo caro aquí no son las cuentas, son las consultas: una por entidad destino. Dos cachés evitan
 // casi todas. El de entidades no vuelve a preguntar por la misma tabla, y el de campos aprovecha que
 // un campo que se llama igual vale lo mismo en cualquier tabla —`PRDID` es `PRDID` en todas—, así
 // que una integración cuyos campos ya se vieron no genera ninguna consulta.

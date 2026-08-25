@@ -59,7 +59,7 @@ constructor de `$filter`, y el conteo con la regla «nunca `$top=0` en Planning 
 **Se escribió y no se conectó nunca.** Ningún archivo fuera de esa carpeta lo importaba, mientras los
 lectores de verdad —`core/ibp/master-data.js` y `core/ibp/planning-data.js`— hacían lo mismo por su
 cuenta y eran los verificados contra tenants reales. Se borró en 2026-08-25: dos implementaciones de
-lo mismo, una muerta, es la duplicación que esta capa vino a quitar, y acá era peor que en v7/v8/v9
+lo mismo, una muerta, es la duplicación que esta capa vino a quitar, y aquí era peor que en v7/v8/v9
 porque las dos se leían como si fueran la de uso.
 
 Dónde vive cada pieza hoy:
@@ -144,7 +144,7 @@ v8 acumuló **17 reglas confirmadas contra tenants reales**. No son opiniones: s
 - Las key figures de cantidad o valor **exigen** `UOMTOID`/`CURRTOID` en el filtro, y SAP solo informa **un** atributo faltante por respuesta — hay que reintentar iterativamente.
 - **`KF ne 0` se ignora silenciosamente**: SAP devuelve todo. Hay que usar `gt 0`/`lt 0` y descartar ceros también en el cliente. Y cualquier predicado sobre un atributo descarta además las filas donde ese atributo está vacío.
 - Un área debe habilitarse **por separado en cada servicio**: puede existir en Master Data y dar 404 en Planning Data.
-- El cuello de botella **no es `$skip` profundo**, es un costo fijo de ~6 s por petición. Conviene pocas páginas grandes y concurrencia moderada, no muchas peticiones chicas.
+- El cuello de botella **no es `$skip` profundo**, es un costo fijo de ~6 s por petición. Conviene pocas páginas grandes y concurrencia moderada, no muchas peticiones pequeñas.
 - `$orderby` estable es obligatorio al paginar, o hay solapes y huecos con lecturas concurrentes.
 - Master Data deduplica del lado del servidor cuando se proyecta un solo campo; Planning Data rechaza ese mismo patrón.
 

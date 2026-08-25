@@ -99,7 +99,7 @@ export function promotedForTarget(guardadas, destino) {
  * Fin y duración de un puñado de ejecuciones, en tandas.
  *
  * Las tandas van **una tras otra, no en paralelo**. Si salieran a la vez, cada una consultaría a
- * SAP de a seis y el tenant recibiría veinticuatro consultas simultáneas en vez de seis. El
+ * SAP en tandas de seis y el tenant recibiría veinticuatro consultas simultáneas en vez de seis. El
  * precio es una pequeña espera entre tandas; a cambio, el tope de concurrencia contra SAP es el
  * mismo que tenía v9.
  *

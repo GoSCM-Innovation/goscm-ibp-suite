@@ -19,7 +19,7 @@ const enMayuscula = (valor) => String(valor ?? '').toUpperCase()
 /**
  * El paso que corresponde a una sesión de ATL, entre todos los jobs elegidos.
  *
- * Se prueba primero la coincidencia exacta y recién después la parcial: con nombres largos y
+ * Se prueba primero la coincidencia exacta y solo después la parcial: con nombres largos y
  * parecidos, buscar por "contiene" desde el principio empareja el proceso equivocado.
  */
 export function buscarPaso(pasosPorJob, sessionName) {

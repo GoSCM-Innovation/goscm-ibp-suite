@@ -67,6 +67,10 @@ Las 17 reglas confirmadas (documentadas en `docs/FASE-0-LEVANTAMIENTO.md` §5) v
 
 ## Convenciones
 - Español para texto de interfaz, documentación y comentarios. Código y nombres de símbolos en inglés.
+- **Español neutro latinoamericano, nunca rioplatense.** Formas de tú («elige», «pulsa», «vuelve»),
+  no de vos («elegí», «pulsá», «volvé»). Tampoco «acá» por «aquí», «chico» por «pequeño», «de a una»
+  por «una por una», ni «recién» con el sentido de «solo entonces». Vale para la interfaz, los
+  comentarios, los documentos **y las respuestas al usuario**.
 - **Sin iframes para los módulos.** Todo se reescribe a React; es una decisión de producto, no una preferencia.
 - **Todo módulo de `core/` lleva tests** (Vitest). Es la única forma de sostener la paridad con proyectos que no tienen ninguno.
 - **Paridad antes de dar un módulo por terminado**: checklist de funcionalidad y verificación lado a lado contra la app vieja correspondiente. Los de v7, v8 y v9 están en [`docs/PARIDAD-V7.md`](docs/PARIDAD-V7.md), [`docs/PARIDAD-V8.md`](docs/PARIDAD-V8.md) y [`docs/PARIDAD-V9.md`](docs/PARIDAD-V9.md) — **antes de contestar «¿ya está v7/v8/v9?», recorrer su árbol en `origin/master` y actualizar el checklist**, no contestar de memoria. En v9 hay que recorrer también `api/` y `public/legacy/`: dos módulos enteros vivían ahí. El clon de v7 está anidado (`ibp-bom-v7/ibp-bom-v7`) y su remoto es `GoSCM-Innovation/ibp-bom-v7`.

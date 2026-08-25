@@ -8,7 +8,7 @@ import { COLOR_DE_TIPO, dimensionPorId, filasPorIntegracion } from '../../../lib
 import { ListaDeFiltros, Seccion, TablaDeMapeos } from './IntegrationDetail.jsx'
 
 export default function DimensionDetail({ dimension, entrada, integraciones, onIrAIntegracion }) {
-  if (!entrada) return <p className="exp-empty">Elegí algo de la lista para ver quién lo usa.</p>
+  if (!entrada) return <p className="exp-empty">Elige algo de la lista para ver quién lo usa.</p>
 
   const definicion = dimensionPorId(dimension)
   const esDeFiltro = definicion.fila === 'fIdx'

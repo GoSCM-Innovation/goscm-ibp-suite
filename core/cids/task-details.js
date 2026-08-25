@@ -24,7 +24,7 @@ export const DETAIL_CONCURRENCY = 6
  * Cuántas ejecuciones acepta una tanda.
  *
  * Es un límite del despliegue, no de SAP: una función de Vercel se corta a los diez segundos, y
- * cincuenta consultas de a seis no entran ahí. El navegador parte la página en tandas y las
+ * cincuenta consultas en tandas de seis no entran ahí. El navegador parte la página en tandas y las
  * pide en paralelo, así que cada función queda corta. Subir este número es la forma de que el
  * monitor empiece a fallar por tiempo justo cuando el tenant está lento.
  */

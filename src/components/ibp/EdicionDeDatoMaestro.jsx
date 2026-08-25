@@ -81,7 +81,7 @@ export default function EdicionDeDatoMaestro({
           </div>
         )}
 
-        <p className="exp-sub">Volvé a consultar la tabla para ver cómo quedó.</p>
+        <p className="exp-sub">Vuelve a consultar la tabla para ver cómo quedó.</p>
       </Modal>
     )
   }
@@ -140,7 +140,7 @@ export default function EdicionDeDatoMaestro({
             <p>
               Se van a escribir <b>{numero(resumen.campos)}</b> {resumen.campos === 1 ? 'cambio' : 'cambios'} en{' '}
               <b>{numero(resumen.filas)}</b> {resumen.filas === 1 ? 'fila' : 'filas'}. Los valores que no
-              aparecen acá no se tocan.
+              aparecen aquí no se tocan.
             </p>
             <div className="table-scroll table-alta">
               <table className="table-dense">
@@ -170,7 +170,7 @@ export default function EdicionDeDatoMaestro({
       )}
 
       <label className="exp-enriq">
-        <span className="exp-k">Escribí «{PALABRA[accion]}» para confirmar</span>
+        <span className="exp-k">Escribe «{PALABRA[accion]}» para confirmar</span>
         <input
           className="input input-sm"
           value={escrito}

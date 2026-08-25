@@ -112,7 +112,7 @@ export default function Summary({ destino }) {
 
       {rangoIncompleto && (
         <div className="notice notice-info">
-          Elegí las dos fechas. Sin rango, CI-DS devuelve todas las ejecuciones que existan en el
+          Elige las dos fechas. Sin rango, CI-DS devuelve todas las ejecuciones que existan en el
           tenant.
         </div>
       )}

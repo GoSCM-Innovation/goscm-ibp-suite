@@ -111,7 +111,7 @@ export default function MappingDocumenter() {
       let resultado = leidas
 
       if (modo === 'jobs') {
-        if (jobsElegidos.length === 0) throw new Error('Elegí al menos un trabajo de IBP.')
+        if (jobsElegidos.length === 0) throw new Error('Elige al menos un trabajo de IBP.')
 
         setPaso('Leyendo los pasos de los trabajos…')
         const { pasos, avisoDeTaskId } = await fetchJobSteps(conexionId, jobsElegidos.map(plantillaDe))
@@ -268,8 +268,8 @@ export default function MappingDocumenter() {
             archivos={zips}
             onCambiar={setZips}
             accept=".zip"
-            titulo="Arrastrá los ZIP acá, o hacé clic para elegirlos"
-            ayuda="Podés cargar varios proyectos a la vez"
+            titulo="Arrastra los ZIP aquí, o haz clic para elegirlos"
+            ayuda="Puedes cargar varios proyectos a la vez"
           />
         </div>
 
@@ -286,7 +286,7 @@ export default function MappingDocumenter() {
             accept=".atl,.txt"
             como="texto"
             icono="📄"
-            titulo="Arrastrá los ATL acá, o hacé clic para elegirlos"
+            titulo="Arrastra los ATL aquí, o haz clic para elegirlos"
             ayuda="Se emparejan con los dataflows por su identificador"
           />
         </div>

@@ -80,7 +80,7 @@ const ESTADOS_DE_RED = [
 /**
  * De qué se deduce cada rol de una ubicación.
  *
- * Los nombres salen de `ROLES`, así que no pueden desalinearse del informe; lo que se escribe acá es de
+ * Los nombres salen de `ROLES`, así que no pueden desalinearse del informe; lo que se escribe aquí es de
  * dónde sale cada uno, que es lo que el consultor necesita para defender la lectura delante del cliente.
  */
 const DE_DONDE_SALE_EL_ROL = {

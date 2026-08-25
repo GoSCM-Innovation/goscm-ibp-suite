@@ -153,7 +153,7 @@ export async function duplicateOrchestration(clientId, id) {
  * Borra una orquestación. Devuelve si había algo que borrar.
  *
  * PENDIENTE (sesión del motor): v9 se negaba a borrar una que tuviera una ejecución en curso. Esa
- * comprobación necesita el estado de ejecución, que todavía no existe; va acá cuando exista.
+ * comprobación necesita el estado de ejecución, que todavía no existe; va aquí cuando exista.
  */
 export async function deleteOrchestration(clientId, id) {
   const rows = await queryScoped(

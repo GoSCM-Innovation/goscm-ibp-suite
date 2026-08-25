@@ -126,7 +126,7 @@ describe('createOrchestration', () => {
     expect(queryOneScoped).not.toHaveBeenCalled()
   })
 
-  // La validación del grafo es de graph.js; acá solo importa que se aplique antes de escribir.
+  // La validación del grafo es de graph.js; aquí solo importa que se aplique antes de escribir.
   it('no guarda un grafo que no se podría ejecutar', async () => {
     await expect(createOrchestration(CLIENTE, {
       ...nueva,

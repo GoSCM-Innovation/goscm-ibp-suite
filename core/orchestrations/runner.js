@@ -399,6 +399,6 @@ export async function cancelRun(clientId, orchestrationId, ahora = Date.now()) {
     })
   })
 
-  if (!cortado) throw new Error('La ejecución está avanzando en este momento; probá de nuevo en unos segundos.')
+  if (!cortado) throw new Error('La ejecución está avanzando en este momento; prueba de nuevo en unos segundos.')
   return cortado
 }

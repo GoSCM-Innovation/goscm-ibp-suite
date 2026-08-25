@@ -1,6 +1,6 @@
 // El dataflow dibujado como lo dibuja CI-DS: lectores, transformaciones y escritores.
 //
-// v9 usaba vis-network, que se cargaba de un CDN. Acá se usa `@xyflow/react`, que ya está en el
+// v9 usaba vis-network, que se cargaba de un CDN. Aquí se usa `@xyflow/react`, que ya está en el
 // proyecto para el lienzo de orquestaciones: una librería menos y ninguna descarga externa.
 //
 // Se carga aparte del resto (`lazy`) porque pesa, y a este diagrama se entra solo cuando se abre su
@@ -45,7 +45,7 @@ function subtitulo(nodo) {
 /**
  * Una caja del diagrama.
  *
- * Los conectores van escondidos: acá no se dibuja nada a mano, pero sin ellos la librería no sabe de
+ * Los conectores van escondidos: aquí no se dibuja nada a mano, pero sin ellos la librería no sabe de
  * dónde a dónde tirar la flecha y el diagrama sale sin ninguna.
  */
 function NodoDelDataflow({ data }) {

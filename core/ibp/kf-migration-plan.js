@@ -6,7 +6,7 @@
 // Migrar una cifra clave NO es como migrar dato maestro, y la diferencia que importa es el NIVEL:
 // una cifra no tiene "filas" propias. Existe a la vez a nivel de producto, de producto y ubicación, de
 // producto por semana… y el `$select` decide cuál se lee. Elegir mal el nivel no da un error: da un
-// número creíble y equivocado, normalmente más chico, porque SAP suma sin avisar.
+// número creíble y equivocado, normalmente más pequeño, porque SAP suma sin avisar.
 //
 // Por eso aquí el nivel es una decisión explícita y con nombre, no un detalle del `$select`.
 //
@@ -59,7 +59,7 @@ export const FILAS_POR_SEGMENTO = 20_000
  * Las cifras de una lista pegada, clasificadas.
  *
  * Portado de la ventana de pegar de `KeyFigureMigration.jsx` de v8. Una migración de verdad son
- * treinta o cincuenta cifras que vienen de una hoja de cálculo o de un correo; marcarlas de a una en
+ * treinta o cincuenta cifras que vienen de una hoja de cálculo o de un correo; marcarlas una por una en
  * un catálogo de mil ciento treinta y siete es donde se cometen los errores.
  *
  * Se parte por cualquier separador razonable —salto de línea, coma, punto y coma, tabulación— porque
@@ -148,7 +148,7 @@ export function revisarMigracionDeCifras({
   if (nivel.length > 0 && !nivelDeTiempoDe(nivel)) {
     avisos.push(
       'El nivel no incluye ningún periodo. SAP va a sumar TODO el horizonte en un solo valor por '
-      + 'combinación, y eso es lo que se va a escribir en el destino. Si no es lo que querés, agregá '
+      + 'combinación, y eso es lo que se va a escribir en el destino. Si no es lo que quieres, agrega '
       + 'un nivel de tiempo.',
     )
   }

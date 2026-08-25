@@ -9,7 +9,7 @@
 // planes y llaman a los dataflows directamente.
 //
 // Es un formato de texto plano, así que se lee línea por línea. No hay gramática publicada; lo que
-// hay acá es lo que aparece en los ATL de los proyectos reales.
+// hay aquí es lo que aparece en los ATL de los proyectos reales.
 
 const CREAR_PLAN = /^CREATE\s+PLAN\s+(\S+)::'[^']*'\s*\(/
 const CREAR_SESION = /^CREATE\s+SESSION\s+(\S+)::'[^']*'\s*\(/

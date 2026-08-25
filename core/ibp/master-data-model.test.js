@@ -176,8 +176,8 @@ describe('catalogoDesdeVsmt', () => {
 })
 
 describe('tamaño de página', () => {
-  // Contar columnas subestima feo las tablas de pocas columnas con valores largos.
-  it('a filas más pesadas, páginas más chicas', () => {
+  // Contar columnas subestima mucho las tablas de pocas columnas con valores largos.
+  it('a filas más pesadas, páginas más pequeñas', () => {
     expect(filasPorPagina(100)).toBeGreaterThan(filasPorPagina(10_000))
   })
 

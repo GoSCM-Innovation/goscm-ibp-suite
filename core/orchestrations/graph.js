@@ -189,7 +189,7 @@ export function normalizeGraph({ nodes = [], edges = [] } = {}) {
   if (atascados.length > 0) {
     throw new Error(
       `Hay un ciclo en las conexiones y por eso estos pasos no se ejecutarían nunca: ${atascados.join(', ')}. `
-      + 'Quitá alguna conexión para que el orden quede claro.',
+      + 'Quita alguna conexión para que el orden quede claro.',
     )
   }
 

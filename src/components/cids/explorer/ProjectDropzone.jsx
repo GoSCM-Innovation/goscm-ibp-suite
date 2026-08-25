@@ -8,15 +8,15 @@ export default function ProjectDropzone({ archivos, onCambiar, atls, onAtls, onE
       <div className="card exp-upload">
         <div className="card-title">📦 Exports de proyecto de CI-DS</div>
         <div className="card-hint">
-          Los ZIP se leen acá mismo, en tu navegador. No se suben a ningún servidor.
+          Los ZIP se leen aquí mismo, en tu navegador. No se suben a ningún servidor.
         </div>
 
         <FileDropzone
           archivos={archivos}
           onCambiar={onCambiar}
           accept=".zip"
-          titulo="Arrastrá los ZIP acá, o hacé clic para elegirlos"
-          ayuda="Podés cargar varios proyectos a la vez"
+          titulo="Arrastra los ZIP aquí, o haz clic para elegirlos"
+          ayuda="Puedes cargar varios proyectos a la vez"
         />
       </div>
 
@@ -34,7 +34,7 @@ export default function ProjectDropzone({ archivos, onCambiar, atls, onAtls, onE
           accept=".atl,.txt"
           como="texto"
           icono="📄"
-          titulo="Arrastrá los ATL acá, o hacé clic para elegirlos"
+          titulo="Arrastra los ATL aquí, o haz clic para elegirlos"
           ayuda="Se emparejan con los dataflows por su identificador"
         />
       </div>

@@ -268,7 +268,7 @@ export default function BomTree() {
           ? <div className="notice notice-error">✕ {error}</div>
           : (
             <div className="notice notice-info">
-              No hay recetas descargadas. Andá a <b>Descargar</b> y bajá el grupo «Árbol de
+              No hay recetas descargadas. Abre <b>Descargar</b> y trae el grupo «Árbol de
               materiales»; este visor trabaja sobre lo que quedó guardado en este navegador, sin volver
               a preguntarle a SAP.
             </div>
@@ -316,7 +316,7 @@ export default function BomTree() {
 
           {productos.length > visibles.length && (
             <div className="exp-sub">
-              Se ven {visibles.length} de {numero(productos.length)}; buscá para acotar.
+              Se ven {visibles.length} de {numero(productos.length)}; busca para acotar.
             </div>
           )}
         </div>
@@ -350,7 +350,7 @@ export default function BomTree() {
       {arbol && arbol.plantas.length === 0 && (
         <div className="notice notice-info">
           {elegido} tiene receta, pero ninguna de sus recetas encabeza un árbol: es componente de otros
-          en todas sus plantas. Buscá el producto terminado que lo lleva.
+          en todas sus plantas. Busca el producto terminado que lo lleva.
         </div>
       )}
 
@@ -363,7 +363,7 @@ export default function BomTree() {
               onChange={(evento) => { setPlanta(evento.target.value); setAbiertos(new Set()) }}
               aria-label="Planta"
             >
-              <option value="">Elegí una planta…</option>
+              <option value="">Elige una planta…</option>
               {arbol.plantas.map((una) => (
                 <option key={una} value={una}>
                   {arbol.resumen[una].descripcion === una ? una : `${una} — ${arbol.resumen[una].descripcion}`}

@@ -4,7 +4,7 @@
 // CI-DS, y la comparten el explorador de integraciones y el documentador.
 //
 // El problema que resuelve: en un dataflow, un campo destino casi nunca apunta a una tabla real.
-// Apunta a `Transform3.CAMPO`, que a su vez apunta a `Transform1.OTRO`, que recién ahí apunta a
+// Apunta a `Transform3.CAMPO`, que a su vez apunta a `Transform1.OTRO`, que solo ahí apunta a
 // `MARA.MATNR`. Para documentar de dónde sale un dato hay que seguir esa cadena hasta el fondo.
 //
 // Va en el navegador y no en `core/` porque el ZIP del proyecto nunca sale del equipo: se abre, se

@@ -248,7 +248,7 @@ export default function OrchestrationCanvas({ leerRegistro, Paleta = TaskPalette
             <div className="lienzo-vacio">
               <div className="orq-vacio-titulo">Todavía no hay pasos</div>
               <p className="page-hint">
-                Elegí una tarea de la lista de la izquierda para agregar el primero. Después se
+                Elige una tarea de la lista de la izquierda para agregar el primero. Después se
                 conectan arrastrando de un paso al siguiente.
               </p>
             </div>

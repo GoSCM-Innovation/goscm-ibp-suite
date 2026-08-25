@@ -53,7 +53,7 @@ export function revisarVolumen(total, topes) {
     return {
       estado: 'bloqueado',
       mensaje: `Son ${n(filas)} filas y el tope de un volcado es ${n(maximo)}. `
-        + 'Acotá el filtro y volvé a intentarlo.',
+        + 'Acota el filtro y vuelve a intentarlo.',
     }
   }
   if (filas > aviso) {

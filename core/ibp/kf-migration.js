@@ -174,7 +174,7 @@ export async function migrarSegmentoDeCifras({
       })
     } catch (error) {
       ultimoFallo = error.detail || error.message
-      // Una cifra CALCULADA no se arregla reintentando: no se puede escribir nunca. Se corta acá en
+      // Una cifra CALCULADA no se arregla reintentando: no se puede escribir nunca. Se corta aquí en
       // vez de gastar tres intentos y dar un mensaje que no explica nada.
       if (error.cifraCalculada) {
         cifraCalculada = error.cifraCalculada

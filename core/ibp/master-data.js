@@ -6,7 +6,7 @@
 // Dos cosas que este servicio hace y el de datos de planificación NO:
 //
 //   1. `$top=0` con `$inlinecount` es SEGURO aquí. En `PLANNING_DATA_API_SRV` revienta el tenant con
-//      `TSV_TNEW_PAGE_ALLOC_FAILED` y hay que contar con un `$top` chico.
+//      `TSV_TNEW_PAGE_ALLOC_FAILED` y hay que contar con un `$top` pequeño.
 //   2. Deduplica del lado del servidor cuando el `$select` proyecta un campo que no es clave, así
 //      que los valores distintos de un campo salen en una sola consulta barata. El servicio de
 //      planificación rechaza esas lecturas con "This service cannot be used to extract master data".

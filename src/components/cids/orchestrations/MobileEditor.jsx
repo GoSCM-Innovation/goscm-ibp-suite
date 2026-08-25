@@ -1,7 +1,7 @@
 // Editar una orquestación desde el teléfono.
 //
 // Portado del editor móvil de v9 (`mobile/`). Existe porque un lienzo con nodos que se arrastran es
-// inservible con el dedo: los nodos son más chicos que la yema, el zoom pelea con el desplazamiento
+// inservible con el dedo: los nodos son más pequeños que la yema, el zoom pelea con el desplazamiento
 // de la página, y no hay dónde poner tres columnas.
 //
 // La idea es la misma que en v9: en el teléfono una orquestación se edita como una LISTA en orden,
@@ -31,7 +31,7 @@ export default function MobileEditor({ orquestacion, onGuardar, guardando, error
         <div className="orq-vacio-titulo">Esta orquestación no se puede editar desde el teléfono</div>
         <p className="page-hint">
           Tiene ramas que se abren o pasos agrupados, y eso no entra en una lista. Se puede ver y
-          ejecutar desde acá, pero para cambiarla hace falta el lienzo de la computadora.
+          ejecutar desde aquí, pero para cambiarla hace falta el lienzo de la computadora.
         </p>
       </div>
     )
@@ -91,7 +91,7 @@ export default function MobileEditor({ orquestacion, onGuardar, guardando, error
       <div className="movil-lista">
         {ordenados.length === 0 && (
           <div className="page-hint" style={{ padding: 20, textAlign: 'center' }}>
-            Todavía no hay pasos. Agregá el primero con el botón de abajo.
+            Todavía no hay pasos. Agrega el primero con el botón de abajo.
           </div>
         )}
 

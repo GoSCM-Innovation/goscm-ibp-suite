@@ -115,7 +115,7 @@ export default function PlanningAreaDoc({ conexionId = '', tenant = '', area = '
       <div className="notice notice-info">
         La configuración de un área de planificación no se puede leer por API: SAP no la expone en los
         servicios de comunicación. Se exporta desde la pantalla de configuración del área —sale una
-        carpeta de CSV— y se suelta acá, comprimida o suelta. Los <b>trabajos programados</b> sí se leen
+        carpeta de CSV— y se suelta aquí, comprimida o suelta. Los <b>trabajos programados</b> sí se leen
         en vivo del tenant.
       </div>
 
@@ -238,7 +238,7 @@ export default function PlanningAreaDoc({ conexionId = '', tenant = '', area = '
 
       {hecho && (
         <div className="notice notice-ok">
-          ✓ El documento lleva un índice que Word rellena al abrirlo. Si sale en blanco, hacé clic
+          ✓ El documento lleva un índice que Word rellena al abrirlo. Si sale en blanco, haz clic
           derecho sobre él y «Actualizar campos».
         </div>
       )}

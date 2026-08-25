@@ -2,7 +2,7 @@
 //
 // Está aislada a propósito: conectar un proveedor de correo de verdad tiene que ser reemplazar esta
 // pieza, no tocar el mecanismo de códigos ni el de sesión. El proveedor concreto —Resend— vive en
-// `email.js`; acá solo está la decisión de a quién llamar.
+// `email.js`; aquí solo está la decisión de a quién llamar.
 //
 // Hay tres caminos, en este orden:
 //

@@ -84,7 +84,7 @@ export default function NodeConfigPanel({ destino, nodo, onCambiar, onBorrar }) 
             {(esDeIbp ? datos.templateName : datos.taskName) ?? '— sin elegir —'}
           </div>
           <span className="card-hint">
-            Se elige desde la lista al agregar el paso. Para cambiarla, quitá este paso y agregá el
+            Se elige desde la lista al agregar el paso. Para cambiarla, quita este paso y agrega el
             correcto.
           </span>
         </div>

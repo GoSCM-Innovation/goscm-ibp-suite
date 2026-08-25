@@ -36,9 +36,9 @@ describe('layoutDataflow', () => {
 
   // Es lo que hace que el diagrama se lea igual venga de donde venga la escala del XMI.
   it('la escala del origen no cambia el resultado', () => {
-    const chico = layoutDataflow([{ location: { x: 1, y: 1 } }, { location: { x: 4, y: 9 } }])
+    const pequeño = layoutDataflow([{ location: { x: 1, y: 1 } }, { location: { x: 4, y: 9 } }])
     const grande = layoutDataflow([{ location: { x: 1000, y: 1000 } }, { location: { x: 4000, y: 9000 } }])
-    expect(chico).toEqual(grande)
+    expect(pequeño).toEqual(grande)
   })
 
   it('dos nodos alineados quedan en la misma fila', () => {

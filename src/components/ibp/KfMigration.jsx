@@ -5,7 +5,7 @@
 // Lo que esta pantalla insiste en dejar claro es el NIVEL, porque es donde se equivoca cualquiera: una
 // cifra clave no tiene filas propias. Existe a la vez por producto, por producto y ubicación, por
 // producto y semana… y lo que se elija decide qué se lee Y qué se escribe. Elegir mal no da un error:
-// da un número creíble y equivocado, casi siempre más chico, porque SAP suma sin avisar.
+// da un número creíble y equivocado, casi siempre más pequeño, porque SAP suma sin avisar.
 //
 // El caso peligroso —un nivel SIN periodo, que aplasta todo el horizonte en un valor por combinación—
 // se avisa con todas las letras y no se impide, porque hay cifras que de verdad no llevan tiempo.
@@ -38,7 +38,7 @@ function Lado({ titulo, conexiones, valor, onCambiar, catalogo, cargando }) {
         onChange={(evento) => onCambiar({ connectionId: evento.target.value, area: '', versionId: '' })}
         aria-label={`Tenant de ${titulo}`}
       >
-        <option value="">Elegí un tenant…</option>
+        <option value="">Elige un tenant…</option>
         {conexiones.map((una) => <option key={una.id} value={una.id}>{una.name}</option>)}
       </select>
 
@@ -52,7 +52,7 @@ function Lado({ titulo, conexiones, valor, onCambiar, catalogo, cargando }) {
             onChange={(evento) => onCambiar({ ...valor, area: evento.target.value })}
             aria-label={`Área de ${titulo}`}
           >
-            <option value="">Elegí un área…</option>
+            <option value="">Elige un área…</option>
             {catalogo.areas.map((una) => <option key={una} value={una}>{una}</option>)}
           </select>
 
@@ -429,7 +429,7 @@ export default function KfMigration() {
                 placeholder="Buscar una cifra"
               />
               {/* Una migración de verdad son treinta o cincuenta cifras que vienen de una hoja de
-                  cálculo. Marcarlas de a una en un catálogo de mil es donde se cometen los errores. */}
+                  cálculo. Marcarlas una por una en un catálogo de mil es donde se cometen los errores. */}
               <button type="button" className="btn btn-sm" onClick={() => { setPegando(true); setLoPegado(null) }}>
                 Pegar una lista
               </button>
@@ -519,7 +519,7 @@ export default function KfMigration() {
           <div className="card-label">Estas cifras exigen una conversión</div>
           <p className="exp-sub">
             SAP no las deja leer sin estos atributos en el filtro, ni para contar. Si el resultado sale
-            vacío, probá con otra unidad: en el tenant de pruebas «KG» tiene datos y «EA» no.
+            vacío, prueba con otra unidad: en el tenant de pruebas «KG» tiene datos y «EA» no.
           </p>
           <div className="condicion">
             {pedidas.map((campo) => (
@@ -606,7 +606,7 @@ export default function KfMigration() {
           </div>
           <p className="exp-sub">
             Vacío quiere decir «con el mismo nombre». Se lee del origen y se escribe con el nombre de
-            acá, así que tiene que existir en el destino: la revisión lo comprueba.
+            aquí, así que tiene que existir en el destino: la revisión lo comprueba.
           </p>
           <div className="columnas columnas-anchas">
             {aRenombrar.map((uno) => (
@@ -641,7 +641,7 @@ export default function KfMigration() {
       {sinPeriodo && (
         <div className="notice notice-info">
           ⚠ El nivel no incluye ningún periodo. SAP va a sumar <b>todo el horizonte</b> en un solo
-          valor por combinación, y eso es lo que se escribiría. Si no es lo que querés, elegí un periodo.
+          valor por combinación, y eso es lo que se escribiría. Si no es lo que quieres, elige un periodo.
         </div>
       )}
 
@@ -848,7 +848,7 @@ export default function KfMigration() {
           </p>
 
           <label className="exp-enriq">
-            <span className="exp-k">Escribí «copiar» para confirmar</span>
+            <span className="exp-k">Escribe «copiar» para confirmar</span>
             <input
               className="input input-sm"
               value={escrito}

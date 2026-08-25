@@ -97,7 +97,7 @@ Ninguno se inventó: los dos son los que leía v7, comprobados antes en el tenan
 - `LOCTYPE` en el maestro de ubicaciones. Es lo único que distingue un proveedor de una planta. En el
   tenant de pruebas, 137 de 481 ubicaciones son proveedores.
 - El **maestro de clientes** (`AS1CUSTOMER`, 631 filas) con su descripción. Sin él la red enseñaba
-  códigos de cliente, y un mapa de a quién le vendés en el que los clientes son números no sirve para
+  códigos de cliente, y un mapa de a quién le vendes en el que los clientes son números no sirve para
   hablarlo con nadie.
 
 ## Las dos pantallas de red se abastecen distinto, y por qué
@@ -163,7 +163,7 @@ faltan filas buenas se lee igual que una completa.
 
 **2. Bajar solo «Red de suministro» dejaba media red.** La descarga de la red de v7 traía su propio
 maestro de productos (`PRDID`, `PRDDESCR`, `MATTYPEID`) y de ubicaciones (`LOCID`, `LOCDESCR`,
-`LOCTYPE`). Acá los dos vivían solo en el grupo del árbol, y los botones de grupo se activan por
+`LOCTYPE`). Aquí los dos vivían solo en el grupo del árbol, y los botones de grupo se activan por
 separado — con lo que elegir solo la red dejaba el visualizador sin descripciones y **sin `LOCTYPE`,
 que es lo único que distingue un proveedor de una planta**: sin él no se dibuja de dónde entra la
 materia prima, que es media red. Y el analizador de la red clasifica por tipo de material, así que se

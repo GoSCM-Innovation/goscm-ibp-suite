@@ -55,7 +55,7 @@ describe('quitarParentesisExterior', () => {
     expect(quitarParentesisExterior('(((a)))')).toBe('a')
   })
 
-  // Acá el paréntesis NO envuelve todo: quitarlo daría `a) + (b`.
+  // Aquí el paréntesis NO envuelve todo: quitarlo daría `a) + (b`.
   it('no toca dos grupos seguidos', () => {
     expect(quitarParentesisExterior('(a) + (b)')).toBe('(a) + (b)')
   })

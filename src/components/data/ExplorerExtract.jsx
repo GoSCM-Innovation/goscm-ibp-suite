@@ -158,7 +158,7 @@ export default function ExplorerExtract({ destino }) {
       {plan.gruposPosibles.length === 0 && (
         <div className="notice notice-error">
           ✕ No se puede bajar nada: a los grupos elegidos les falta alguna tabla imprescindible.
-          Revisá «Origen de los datos» — quizá haya que decirle a mano qué tabla usar.
+          Revisa «Origen de los datos» — quizá haya que decirle a mano qué tabla usar.
         </div>
       )}
 
@@ -167,7 +167,7 @@ export default function ExplorerExtract({ destino }) {
         <div className="notice notice-error">
           ✕ <b>Esta versión no tiene datos.</b> Ninguna de las tablas imprescindibles trajo una sola
           fila, así que no hay nada que analizar. Casi siempre es que la versión elegida está vacía en
-          SAP: probá con la <b>versión base</b>, que es donde vive el dato maestro del área.
+          SAP: prueba con la <b>versión base</b>, que es donde vive el dato maestro del área.
         </div>
       )}
 
@@ -189,8 +189,8 @@ export default function ExplorerExtract({ destino }) {
             ? 'Una tabla trajo menos filas de las que SAP dice que tiene'
             : `${numero(salida.incompletas)} tablas trajeron menos filas de las que SAP dice que tienen`}
           . Abajo se ve cuáles. <b>No conviene analizar con esto</b>: los informes saldrían de datos
-          incompletos sin poder avisarlo. Volvé a bajar; si se repite, es que SAP está recortando las
-          respuestas y hay que pedir páginas más chicas.
+          incompletos sin poder avisarlo. Vuelve a bajar; si se repite, es que SAP está recortando las
+          respuestas y hay que pedir páginas más pequeñas.
         </div>
       )}
 
@@ -232,7 +232,7 @@ export default function ExplorerExtract({ destino }) {
                         </div>
                       )}
                     </td>
-                    {/* El número tiene que decir DE CUÁNDO es. Mientras la descarga corre, acá se
+                    {/* El número tiene que decir DE CUÁNDO es. Mientras la descarga corre, aquí se
                         veía el conteo de la corrida ANTERIOR bajo un encabezado que dice «Guardadas»:
                         una tabla llena de ceros mientras la línea de progreso decía que esa misma
                         tabla traía 47.919 filas. Un dato viejo sin fecha se lee como el de ahora. */}
@@ -251,7 +251,7 @@ export default function ExplorerExtract({ destino }) {
                       {!paso.sePuede && <span style={{ color: 'var(--text3)' }}>No se puede</span>}
                       {paso.sePuede && suyo?.error && <span style={{ color: 'var(--red)' }}>✕ {suyo.error}</span>}
                       {paso.sePuede && suyo?.cancelado && <span style={{ color: 'var(--accent)' }}>Cancelada</span>}
-                      {/* Un paso que se salta por depender de una tabla incompleta lo dice acá: si
+                      {/* Un paso que se salta por depender de una tabla incompleta lo dice aquí: si
                           solo dijera «—» se leería como que no había nada que bajar. */}
                       {paso.sePuede && suyo?.omitido && (
                         <span style={{ color: 'var(--accent)' }}>Saltada · {suyo.motivo}</span>

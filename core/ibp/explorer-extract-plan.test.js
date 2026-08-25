@@ -214,7 +214,7 @@ describe('cuando la versión elegida no tiene nada', () => {
   })
 })
 
-// La descarga de la red en v7 traía su propio maestro de productos y de ubicaciones. Acá viven en el
+// La descarga de la red en v7 traía su propio maestro de productos y de ubicaciones. Aquí viven en el
 // grupo del árbol, así que bajar solo «Red de suministro» dejaba la red sin descripciones y sin
 // `LOCTYPE`, que es lo único que distingue un proveedor de una planta: media red sin dibujar, y sin
 // que nada lo dijera.

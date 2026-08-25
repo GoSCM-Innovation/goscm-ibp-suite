@@ -8,11 +8,11 @@
 //     mismo y no hay alternativa: no se puede recorrer un grafo que no se tiene.
 //   - El VISUALIZADOR dibuja un producto. Sus arcos son unas decenas de filas, y pedírselas a SAP
 //     filtradas cuesta unas pocas peticiones pequeñas. Exigir la descarga completa para eso convierte
-//     algo inmediato en una hora de espera, que es lo que pasaba acá y no en v7.
+//     algo inmediato en una hora de espera, que es lo que pasaba aquí y no en v7.
 //
 // La secuencia es la de `visualizer.js` de v7, incluido el tope de componentes: los arcos de proveedor
 // se piden con un `PRDID eq … or …` por cada componente, y sin tope la URL se pasa de largo y SAP la
-// rechaza. v7 cortaba en 100 y acá se conserva el mismo número, porque el motivo sigue siendo el mismo.
+// rechaza. v7 cortaba en 100 y aquí se conserva el mismo número, porque el motivo sigue siendo el mismo.
 
 import { descartarInvalidas } from '../../core/ibp/explorer-extract-plan.js'
 import { normalizarFilas } from '../../core/ibp/explorer-fields.js'

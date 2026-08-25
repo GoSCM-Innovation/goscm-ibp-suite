@@ -7,7 +7,7 @@
 // Dos cosas que este archivo tiene que hacer bien porque nadie más las va a mirar:
 //
 //   - EL CÓDIGO NO SE REGISTRA NUNCA. Ni al fallar. Un código en los registros del servidor es una
-//     puerta abierta para cualquiera que los pueda leer, así que los mensajes de error de acá dicen
+//     puerta abierta para cualquiera que los pueda leer, así que los mensajes de error de aquí dicen
 //     qué falló y a qué dirección, y nunca el código.
 //   - La dirección del proveedor es una CONSTANTE de este archivo, no un dato de entrada. Por eso no
 //     pasa por el portero anti-SSRF de `core/transport`, que además es específico de SAP: no hay

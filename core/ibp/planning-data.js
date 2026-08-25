@@ -28,7 +28,7 @@ export const planningRoot = (baseUrl) => serviceRoot(baseUrl, 'PLANNING_DATA_API
  *
  * El cuello de botella NO es la profundidad del `$skip`: es un costo casi fijo por petición —unos
  * 2,5 s en el tenant de pruebas, plano con la profundidad—. Así que conviene leer pocas páginas
- * grandes y no muchas chicas.
+ * grandes y no muchas pequeñas.
  */
 export const FILAS_POR_PAGINA = 5000
 

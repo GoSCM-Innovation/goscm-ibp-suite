@@ -144,7 +144,7 @@ export default function SupplyNetwork({ destino = null }) {
           ? <div className="notice notice-error">✕ {error}</div>
           : (
             <div className="notice notice-info">
-              No hay red descargada y tampoco se pudo leer el maestro de productos de SAP. Revisá
+              No hay red descargada y tampoco se pudo leer el maestro de productos de SAP. Revisa
               <b> Origen de los datos</b>: quizá haya que decirle a mano qué tabla cumple cada papel.
             </div>
           )}
@@ -156,7 +156,7 @@ export default function SupplyNetwork({ destino = null }) {
     <div className="module-body a-pantalla-completa" ref={lienzo}>
       {error && <div className="notice notice-error">✕ {error}</div>}
 
-      {/* La procedencia se dice siempre, como en el resto de la aplicación. Acá además cambia lo que
+      {/* La procedencia se dice siempre, como en el resto de la aplicación. Aquí además cambia lo que
           el dato PUEDE decir: leyendo de SAP los arcos de proveedor se topan en 100 componentes por el
           largo de la URL, y leyendo de lo descargado no hay tope. */}
       {fuente === 'sap' && (
@@ -208,7 +208,7 @@ export default function SupplyNetwork({ destino = null }) {
 
           {productos.length > visibles.length && (
             <div className="exp-sub">
-              Se ven {visibles.length} de {numero(productos.length)}; buscá para acotar.
+              Se ven {visibles.length} de {numero(productos.length)}; busca para acotar.
             </div>
           )}
         </div>
@@ -346,7 +346,7 @@ export default function SupplyNetwork({ destino = null }) {
 
           {!marcado && (
             <div className="page-hint">
-              Pulsá una ubicación para ver de dónde le llega y a dónde manda.
+              Pulsa una ubicación para ver de dónde le llega y a dónde manda.
             </div>
           )}
         </>

@@ -54,7 +54,7 @@ export default function TaskNode({ data, selected }) {
       </div>
 
       <div className="nodo-tarea-pie">
-        {/* Sin tarea elegida el paso no se puede ejecutar, así que se dice acá y no al guardar. */}
+        {/* Sin tarea elegida el paso no se puede ejecutar, así que se dice aquí y no al guardar. */}
         {!data.taskName && <span className="nodo-aviso">Falta elegir la tarea</span>}
 
         {data.taskName && (

@@ -56,7 +56,7 @@ export default function CidsTools() {
   const [error, setError] = useState('')
   const [herramienta, setHerramienta] = useState('resumen')
 
-  // La búsqueda del monitor vive acá arriba y no dentro del monitor. Es lo que permite que al
+  // La búsqueda del monitor vive aquí arriba y no dentro del monitor. Es lo que permite que al
   // lanzar una tarea se salte al monitor ya filtrado por ella —lo que hacía v9— sin que el monitor
   // tenga que enterarse de que existe el lanzador.
   const [busqueda, setBusqueda] = useState('')
@@ -168,7 +168,7 @@ export default function CidsTools() {
 
           Cada herramienta se monta y se desmonta al cambiar de pestaña, igual que en v9. La
           alternativa —dejarlas montadas y solo esconderlas— haría que el monitor y el resumen
-          siguieran consultando a SAP en sus relojes mientras mirás otra cosa. */}
+          siguieran consultando a SAP en sus relojes mientras miras otra cosa. */}
       {herramienta === 'global' && (
         <Suspense fallback={<div className="page-hint">Cargando el tablero…</div>}>
           <GlobalSummary destinos={destinos} />

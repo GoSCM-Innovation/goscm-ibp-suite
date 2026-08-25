@@ -54,7 +54,7 @@ export async function juntarHechos({ onAvance } = {}) {
 
   onAvance?.({ paso: 'asignaciones' })
   const plantasDeRecurso = new Map()
-  // El tipo de recurso vive acá y no en el maestro, porque en IBP el mismo recurso puede ser de un
+  // El tipo de recurso vive aquí y no en el maestro, porque en IBP el mismo recurso puede ser de un
   // tipo distinto en cada planta. Se guarda el primero que aparezca: enseñar los cinco tipos de un
   // recurso asignado a cinco plantas no cabe en una columna y no cambia ninguna comprobación.
   const tipoDeRecurso = new Map()

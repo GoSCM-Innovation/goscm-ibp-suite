@@ -15,7 +15,7 @@
 // "Destino" es una conexión y uno de sus dos repositorios, así que cada conexión aporta DOS filas:
 // pruebas y productivo. Es el doble de consultas que si fuera una sola, y es el precio de que el
 // tablero diga la verdad — los dos repositorios existen y tienen ejecuciones distintas. El filtro de
-// arriba está justamente para acotar cuando no querés verlos todos.
+// arriba está justamente para acotar cuando no quieres verlos todos.
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { isFailed, isQueued, isWarning, statusMeta, successRate } from '../../../core/cids/task-status.js'
@@ -200,7 +200,7 @@ export default function GlobalSummary({ destinos }) {
 
       {rangoIncompleto && (
         <div className="notice notice-info">
-          Elegí las dos fechas. Sin rango, CI-DS devuelve todas las ejecuciones que existan en cada
+          Elige las dos fechas. Sin rango, CI-DS devuelve todas las ejecuciones que existan en cada
           repositorio.
         </div>
       )}

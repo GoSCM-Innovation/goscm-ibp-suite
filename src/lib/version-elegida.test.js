@@ -28,7 +28,7 @@ describe('lo que se le manda a SAP', () => {
     expect(versionParaSap(undefined)).toBe('')
   })
 
-  // Si la base fuera la cadena vacía, «base» y «todavía no elegí» serían indistinguibles, y la
+  // Si la base fuera la cadena vacía, «base» y «todavía no elige» serían indistinguibles, y la
   // pantalla —que exige haber elegido— dejaría la base fuera de alcance.
   it('el identificador de la base NO es la cadena vacía', () => {
     expect(VERSION_BASE).not.toBe('')

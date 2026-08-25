@@ -84,7 +84,7 @@ export default function RunBar({ run, error, ocupado, enMarcha, sinGuardar, onAr
               className="btn btn-sm btn-run"
               onClick={() => setPidiendoDatos(true)}
               disabled={ocupado || sinGuardar}
-              title={sinGuardar ? 'Guardá los cambios antes de ejecutar' : 'Ejecutar la orquestación'}
+              title={sinGuardar ? 'Guarda los cambios antes de ejecutar' : 'Ejecutar la orquestación'}
             >
               ▶ Ejecutar
             </button>

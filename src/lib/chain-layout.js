@@ -4,7 +4,7 @@
 // cada integración una columna a la derecha de la última que la alimenta. Así se lee el orden en que
 // hay que ejecutarlas, que es para lo que se mira este grafo.
 //
-// v9 delegaba esto en el modo jerárquico de vis-network. Acá se calcula, porque `@xyflow/react`
+// v9 delegaba esto en el modo jerárquico de vis-network. Aquí se calcula, porque `@xyflow/react`
 // —que ya está en el proyecto— no trae layout propio y no hace falta traer otra librería para esto.
 
 /** Cuánto separan dos columnas y dos filas. Una caja mide ~190×48. */

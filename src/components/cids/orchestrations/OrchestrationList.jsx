@@ -133,7 +133,7 @@ export default function OrchestrationList({
           <div className="page-hint" style={{ padding: 12 }}>Cargando…</div>
         ) : ordenadas.length === 0 ? (
           <div className="page-hint" style={{ padding: 12 }}>
-            Todavía no hay ninguna. Creá la primera con el <b>+</b>.
+            Todavía no hay ninguna. Crea la primera con el <b>+</b>.
           </div>
         ) : ordenadas.map((orquestacion) => (
           <div

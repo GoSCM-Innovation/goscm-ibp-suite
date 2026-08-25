@@ -165,7 +165,7 @@ export const EXTRACCIONES = Object.freeze([
     grupo: 'arbol',
     papel: 'resMaster',
     etiqueta: 'Maestro de recursos',
-    // El maestro de recursos tiene el código y la descripción, y nada más que sirva acá. En particular
+    // El maestro de recursos tiene el código y la descripción, y nada más que sirva aquí. En particular
     // NO tiene el tipo de recurso: comprobado contra dos tenants, el tipo vive en `RESOURCETYPE` de
     // Resource Location, porque en IBP un mismo recurso puede ser de un tipo distinto en cada planta.
     campos: ['RESID', 'RESDESCR'],
@@ -242,7 +242,7 @@ export const EXTRACCIONES = Object.freeze([
     grupo: 'red',
     papel: 'custMaster',
     etiqueta: 'Maestro de clientes',
-    // Sin la descripción, la red enseña códigos de cliente. Un mapa de a quién le vendés en el que
+    // Sin la descripción, la red enseña códigos de cliente. Un mapa de a quién le vendes en el que
     // los clientes son números no sirve para hablarlo con nadie.
     campos: ['CUSTID', 'CUSTDESCR', 'CUSTVALID'],
     descartarSi: 'CUSTVALID',

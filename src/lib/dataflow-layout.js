@@ -2,7 +2,7 @@
 //
 // El XMI trae las coordenadas con las que CI-DS lo dibuja, pero en su propia escala: en un proyecto
 // los nodos están a 40 unidades y en otro a 4.000. v9 lo resolvía con un factor de escala adaptativo
-// y un ajuste vertical a ojo; acá se hace de otra forma, que da el mismo dibujo sin depender de la
+// y un ajuste vertical a ojo; aquí se hace de otra forma, que da el mismo dibujo sin depender de la
 // escala del origen.
 //
 // La idea: lo único que importa de una coordenada es el ORDEN y qué nodos están alineados entre sí.

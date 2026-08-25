@@ -46,7 +46,7 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Hay que elegir al menos una tabla.' })
   }
   if (tablas.length > MAX_TABLAS) {
-    return res.status(400).json({ error: `De a ${MAX_TABLAS} tablas como mucho; elegí menos y repetí el plan.` })
+    return res.status(400).json({ error: `Como máximo ${MAX_TABLAS} tablas; elige menos y repite el plan.` })
   }
   // Copiar un tenant sobre sí mismo con la misma área y versión sobrescribiría el origen con el
   // origen: no rompe nada, pero no es lo que nadie quiere, y es un error fácil de cometer.

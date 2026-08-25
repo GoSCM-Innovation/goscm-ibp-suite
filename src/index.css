@@ -1557,7 +1557,7 @@ a { color: var(--cyan); }
 .exp-legend-item { align-items: center; color: var(--text2); display: flex; gap: 6px; }
 .exp-legend-line { border-radius: 2px; height: 2px; width: 22px; }
 
-/* Los conectores existen para que la librería sepa por dónde tirar la flecha, pero acá nadie
+/* Los conectores existen para que la librería sepa por dónde tirar la flecha, pero aquí nadie
    conecta nada a mano: se dejan invisibles. */
 .exp-handle { background: transparent; border: none; height: 1px; min-height: 0; min-width: 0; width: 1px; }
 

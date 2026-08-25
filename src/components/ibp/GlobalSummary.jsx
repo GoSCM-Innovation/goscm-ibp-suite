@@ -115,7 +115,7 @@ export default function GlobalSummary() {
         </span>
       </div>
 
-      {rangoIncompleto && <div className="notice notice-info">Elegí las dos fechas del rango para consultar.</div>}
+      {rangoIncompleto && <div className="notice notice-info">Elige las dos fechas del rango para consultar.</div>}
       {rangoExcedido && <div className="notice notice-info">El rango es de {dias} días y el tope son {MAX_DIAS}.</div>}
 
       <div className="tablero">

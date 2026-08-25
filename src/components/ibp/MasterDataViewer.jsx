@@ -47,7 +47,7 @@ function Condicion({ condicion, columnas, valores, onCambiar, onQuitar, onPedirV
         onChange={(evento) => onCambiar({ ...condicion, field: evento.target.value, value: '' })}
         aria-label="Campo"
       >
-        <option value="">Elegí un campo…</option>
+        <option value="">Elige un campo…</option>
         {columnas.map((columna) => <option key={columna} value={columna}>{columna}</option>)}
       </select>
 
@@ -115,7 +115,7 @@ export default function MasterDataViewer({ conexionId, tenant = '', productivo =
 
   const [modo, setModo] = useState('leer')
   // Los cambios y las filas marcadas se guardan por CLAVE DE NEGOCIO, con su fila original dentro.
-  // Así sobreviven a pasar de página: el ciclo real es corregir tres valores acá, dos allá, y
+  // Así sobreviven a pasar de página: el ciclo real es corregir tres valores aquí, dos allá, y
   // guardar una vez. Perderlos al avanzar obligaría a guardar página por página.
   const [edits, setEdits] = useState({})
   const [marcadas, setMarcadas] = useState({})
@@ -433,7 +433,7 @@ export default function MasterDataViewer({ conexionId, tenant = '', productivo =
           onChange={(evento) => { olvidarLoMirado(); setTabla(evento.target.value) }}
           aria-label="Tabla"
         >
-          <option value="">Elegí una tabla…</option>
+          <option value="">Elige una tabla…</option>
           {tablas.map((una) => (
             <option key={una} value={una}>{una}{importables.includes(una) ? ' ·' : ''}</option>
           ))}
@@ -656,7 +656,7 @@ export default function MasterDataViewer({ conexionId, tenant = '', productivo =
           {hayPendientes && !clavesTraidas && (
             <div className="notice notice-info">
               Hay {numero(pendientes.campos)} cambios y {numero(cuantasMarcadas)} filas marcadas sin
-              escribir. Volvé a incluir las claves entre las columnas para poder guardarlos.
+              escribir. Vuelve a incluir las claves entre las columnas para poder guardarlos.
             </div>
           )}
 

@@ -40,7 +40,7 @@ describe('buscarPaso', () => {
     expect(buscarPaso(dos, 'PROC_MD').paso.pos).toBe(2)
   })
 
-  it('recién si nada coincide exacto prueba por partes', () => {
+  it('solo si nada coincide exacto prueba por partes', () => {
     expect(buscarPaso([[paso(1, 'Cargar PROC_MD diario')]], 'PROC_MD').paso.pos).toBe(1)
   })
 

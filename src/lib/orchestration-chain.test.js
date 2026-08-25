@@ -61,7 +61,7 @@ describe('enOrden', () => {
     expect(orden.map((nodo) => nodo.id)).toEqual(['a', 'b', 'x', 'y'])
   })
 
-  // Red de seguridad: un ciclo no debería llegar acá —el servidor lo rechaza al guardar— pero si
+  // Red de seguridad: un ciclo no debería llegar aquí —el servidor lo rechaza al guardar— pero si
   // llegara, los pasos tienen que aparecer igual en vez de desaparecer de la pantalla.
   it('un ciclo no hace desaparecer pasos', () => {
     const orden = enOrden([tarea('a'), tarea('b')], [arista('a', 'b'), arista('b', 'a')])

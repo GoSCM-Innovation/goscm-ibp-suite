@@ -84,7 +84,7 @@ export function abrirBase() {
 
     peticion.onerror = () => rechazar(peticion.error)
     peticion.onblocked = () => rechazar(new Error(
-      'Hay otra pestaña de la aplicación con la base local abierta. Cerrala y volvé a intentar.',
+      'Hay otra pestaña de la aplicación con la base local abierta. Cerrala y vuelve a intentar.',
     ))
   })
 }
@@ -172,7 +172,7 @@ export async function contar(tabla, { indice, valor } = {}) {
  * Recorre una tabla entera pasando cada registro a `porCadaUno`, sin acumularla.
  *
  * Es la operación central de toda esta capa: es lo que permite analizar doscientas mil filas sin
- * tenerlas nunca juntas. Si `porCadaUno` devuelve `false`, se corta —sirve para "buscá el primero
+ * tenerlas nunca juntas. Si `porCadaUno` devuelve `false`, se corta —sirve para "busca el primero
  * que cumpla" sin recorrer el resto—.
  */
 export async function porCursor(tabla, porCadaUno, { indice, valor } = {}) {

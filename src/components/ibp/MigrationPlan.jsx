@@ -43,7 +43,7 @@ function Lado({ titulo, conexiones, valor, onCambiar, catalogo, cargando }) {
         onChange={(evento) => onCambiar({ connectionId: evento.target.value, planningArea: '', versionId: '' })}
         aria-label={`Tenant de ${titulo}`}
       >
-        <option value="">Elegí un tenant…</option>
+        <option value="">Elige un tenant…</option>
         {conexiones.map((una) => <option key={una.id} value={una.id}>{una.name}</option>)}
       </select>
 
@@ -57,7 +57,7 @@ function Lado({ titulo, conexiones, valor, onCambiar, catalogo, cargando }) {
             onChange={(evento) => onCambiar({ ...valor, planningArea: evento.target.value, versionId: '' })}
             aria-label={`Área de ${titulo}`}
           >
-            <option value="">Elegí un área…</option>
+            <option value="">Elige un área…</option>
             {Object.entries(catalogo).map(([id, una]) => (
               <option key={id} value={id}>{una.desc === id ? id : `${id} — ${una.desc}`}</option>
             ))}
@@ -70,7 +70,7 @@ function Lado({ titulo, conexiones, valor, onCambiar, catalogo, cargando }) {
             aria-label={`Versión de ${titulo}`}
             disabled={versiones.length === 0}
           >
-            <option value="">Elegí una versión…</option>
+            <option value="">Elige una versión…</option>
             {versiones.map((una) => (
               <option key={una.id} value={una.id}>{una.name === una.id ? una.id : `${una.id} — ${una.name}`}</option>
             ))}
@@ -308,7 +308,7 @@ export default function MigrationPlan() {
         <span className="page-hint">
           {calculando
             ? 'Se leen las dos tablas de cada par y se cuentan las filas; tarda unos segundos por tabla.'
-            : listo ? `${elegidas.length} tablas por analizar` : 'Elegí origen, destino y al menos una tabla.'}
+            : listo ? `${elegidas.length} tablas por analizar` : 'Elige origen, destino y al menos una tabla.'}
         </span>
       </div>
 
@@ -467,7 +467,7 @@ export default function MigrationPlan() {
                             })}
                           />
                           <div className="exp-sub">
-                            Volvé a analizar para ver cuántas filas quedan con el filtro puesto.
+                            Vuelve a analizar para ver cuántas filas quedan con el filtro puesto.
                           </div>
                         </td>
                       </tr>
@@ -521,7 +521,7 @@ export default function MigrationPlan() {
           {/* Escribir la palabra, y no solo pulsar: es la unica operacion de la aplicacion que
               modifica dato maestro, y conviene que cueste un segundo más que un clic distraído. */}
           <label className="exp-enriq">
-            <span className="exp-k">Escribí «copiar» para confirmar</span>
+            <span className="exp-k">Escribe «copiar» para confirmar</span>
             <input
               className="input input-sm"
               value={escrito}

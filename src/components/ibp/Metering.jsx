@@ -442,7 +442,7 @@ export default function Metering({ conexionId }) {
           {cargando
             ? 'Consultando… puede tardar unos segundos'
             : contexto
-              ? `Solo ${contexto.tipo === 'usuario' ? 'esta persona' : 'esta área'}; pulsá la etiqueta para volver al tenant entero`
+              ? `Solo ${contexto.tipo === 'usuario' ? 'esta persona' : 'esta área'}; pulsa la etiqueta para volver al tenant entero`
               : `${datos?.adopcion?.activos ?? 0} de ${datos?.adopcion?.licenciados ?? 0} usuarios activos en el período`}
         </span>
       </div>

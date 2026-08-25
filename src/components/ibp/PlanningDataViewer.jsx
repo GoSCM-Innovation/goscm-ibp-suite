@@ -68,7 +68,7 @@ function Buscable({ etiqueta, opciones, elegidas, etiquetas, onAlternar, unaSola
         ))}
         {visibles.length === 0 && <span className="exp-sub">Nada coincide con «{busqueda}».</span>}
         {opciones.length > visibles.length && !busqueda && (
-          <span className="exp-sub">y {numero(opciones.length - visibles.length)} más; buscá para verlas.</span>
+          <span className="exp-sub">y {numero(opciones.length - visibles.length)} más; busca para verlas.</span>
         )}
       </div>
     </div>
@@ -277,7 +277,7 @@ export default function PlanningDataViewer({ conexionId }) {
           <div className="card-label">Esta cifra exige una conversión</div>
           <p className="exp-sub">
             SAP no la deja leer sin estos atributos en el filtro. En el tenant de pruebas, por
-            ejemplo, «KG» tiene datos y «EA» no: si sale vacío, probá con otra unidad.
+            ejemplo, «KG» tiene datos y «EA» no: si sale vacío, prueba con otra unidad.
           </p>
           <div className="condicion">
             {pedidas.map((campo) => (
@@ -306,7 +306,7 @@ export default function PlanningDataViewer({ conexionId }) {
               onChange={(evento) => setCondiciones((previas) => previas.map((otra) => (otra.id === una.id ? { ...otra, field: evento.target.value } : otra)))}
               aria-label="Atributo"
             >
-              <option value="">Elegí un atributo…</option>
+              <option value="">Elige un atributo…</option>
               {catalogo.dims.map((dim) => <option key={dim} value={dim}>{dim}</option>)}
             </select>
 

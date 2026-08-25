@@ -554,7 +554,7 @@ export default function IntegrationExplorer() {
                     onIr={saltarA}
                   />
                 )
-                : <p className="exp-empty">Elegí una integración de la lista para ver sus campos.</p>)
+                : <p className="exp-empty">Elige una integración de la lista para ver sus campos.</p>)
               : (
                 <DimensionDetail
                   dimension={dimension}

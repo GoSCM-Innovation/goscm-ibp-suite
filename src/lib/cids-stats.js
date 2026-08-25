@@ -29,7 +29,7 @@ export function statusBreakdown(ejecuciones, statusMeta) {
  * Ejecuciones por día, en tres pilas: correctas, falladas y el resto.
  *
  * El día se calcula en la zona elegida, no en UTC: una carga de las 2 de la mañana en UTC es del día
- * anterior si mirás en UTC-4, y el gráfico tiene que coincidir con lo que dice la tabla.
+ * anterior si miras en UTC-4, y el gráfico tiene que coincidir con lo que dice la tabla.
  */
 export function perDayBreakdown(ejecuciones, zona) {
   const porDia = new Map()

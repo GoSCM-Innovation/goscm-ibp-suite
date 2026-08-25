@@ -92,7 +92,7 @@ describe('porCursor', () => {
     expect(vistas.sort()).toEqual(['S1', 'S2', 'S3'])
   })
 
-  // Sirve para "buscá el primero que cumpla" sin recorrer doscientas mil filas.
+  // Sirve para "busca el primero que cumpla" sin recorrer doscientas mil filas.
   it('devolver false corta el recorrido', async () => {
     await guardar('bom_psi', Array.from({ length: 50 }, (_, i) => fuente(`S${i}`)))
 

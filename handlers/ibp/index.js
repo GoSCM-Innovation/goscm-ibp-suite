@@ -5,7 +5,7 @@
 // pedir un archivo que no es un endpoint. Con la tabla, lo que no está en esta lista no existe.
 //
 // Y es la MISMA tabla que usa el servidor de desarrollo. Que producción y desarrollo resuelvan las
-// direcciones por caminos distintos es cómo se llega a «en mi máquina funciona»: acá hay una sola
+// direcciones por caminos distintos es cómo se llega a «en mi máquina funciona»: aquí hay una sola
 // lista y los dos la leen.
 
 import catalog from './catalog.js'

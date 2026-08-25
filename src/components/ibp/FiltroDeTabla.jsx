@@ -21,7 +21,7 @@ function Condicion({ condicion, campos, onCambiar, onQuitar }) {
         onChange={(evento) => onCambiar({ ...condicion, field: evento.target.value, value: '' })}
         aria-label="Campo del filtro"
       >
-        <option value="">Elegí un campo…</option>
+        <option value="">Elige un campo…</option>
         {campos.map((campo) => <option key={campo} value={campo}>{campo}</option>)}
       </select>
 

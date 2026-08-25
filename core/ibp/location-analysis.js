@@ -60,7 +60,7 @@ export function rolesDe(hechos) {
  * Qué se le exige a cada rol. Es la matriz de este informe.
  *
  * Va como TABLA y no como una cadena de `if`, por lo mismo que la matriz de tipos de material: el
- * glosario la lee de acá para explicarla, así que no puede quedarse contando una versión vieja de las
+ * glosario la lee de aquí para explicarla, así que no puede quedarse contando una versión vieja de las
  * reglas. Si mañana una comprobación cambia de rojo a aviso, la guía de lectura lo dice sin que nadie
  * la toque.
  *
@@ -75,18 +75,18 @@ export const EXIGENCIAS = Object.freeze({
     {
       campo: 'componentesSinArco',
       severidad: 'red',
-      texto: 'componentes sin arco de abastecimiento hacia acá',
+      texto: 'componentes sin arco de abastecimiento hacia aquí',
     },
     { campo: 'recetasConPlazoCero', severidad: 'red', texto: 'recetas con plazo de producción en cero' },
     // Un recurso asignado a la planta que ninguna receta usa no es un error: es capacidad que nadie
     // planifica.
     { campo: 'recursosOciosos', severidad: 'yel', texto: 'recursos asignados que ninguna receta usa' },
-    // Un material clasificado como comprado que tiene receta acá: o la clasificación está mal, o la
+    // Un material clasificado como comprado que tiene receta aquí: o la clasificación está mal, o la
     // receta no debería existir. Las dos cosas hay que mirarlas, ninguna es concluyente.
     {
       campo: 'fabricaLoQueSeCompra',
       severidad: 'yel',
-      texto: 'materiales clasificados como comprados que se fabrican acá',
+      texto: 'materiales clasificados como comprados que se fabrican aquí',
     },
   ]),
   [ROLES.proveedor]: Object.freeze([
@@ -119,7 +119,7 @@ export const EXIGENCIAS = Object.freeze({
     {
       campo: 'recibeComponentesSinProducir',
       severidad: 'yel',
-      texto: 'componentes que recibe y no se fabrica nada acá',
+      texto: 'componentes que recibe y no se fabrica nada aquí',
     },
   ]),
   // Este no tiene lista: el hecho de no aparecer en ninguna parte ES el aviso.

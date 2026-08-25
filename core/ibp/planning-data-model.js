@@ -129,7 +129,7 @@ export function filtroDePlanificacion({
   const deCondiciones = filtroDeCondiciones(condiciones)
   if (deCondiciones) partes.push(deCondiciones)
 
-  // Una cifra o varias: el visor pide de a una, la copia pide todas las del grupo a la vez.
+  // Una cifra o varias: el visor pide una sola, la copia pide todas las del grupo a la vez.
   const deCifra = soloConValor
     ? filtroDeCifras(cifras?.length ? cifras : [cifra])
     : ''

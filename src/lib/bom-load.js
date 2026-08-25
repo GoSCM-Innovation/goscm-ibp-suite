@@ -114,7 +114,7 @@ export async function cargarSubarbol(prdid, { onAvance, conValidez = true } = {}
  *
  * El producto se pide por su CLAVE y no por un índice: `bom_prd` está guardada con `PRDID` como clave
  * primaria, así que no tiene —ni necesita— un índice por ese campo. Las plantas se recorren enteras por
- * cursor, porque son pocas y no hay por dónde pedirlas de a una.
+ * cursor, porque son pocas y no hay por dónde pedirlas una por una.
  */
 async function cargarMaestros(indices, productos) {
   const filas = await Promise.all([...productos]

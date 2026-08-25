@@ -160,7 +160,7 @@ describe('lo que se le exige a una planta', () => {
   })
 
   // Es la comprobación más cara de hacer a mano: hay que cruzar el BOM con la red arco por arco.
-  it('un componente que se fabrica acá mismo NO cuenta como falta de arco', async () => {
+  it('un componente que se fabrica aquí mismo NO cuenta como falta de arco', async () => {
     const indices = await juntarHechos({ configuracion: CONFIG })
     // S1 lleva SEMI y CAJA. SEMI se fabrica en P1, así que no necesita arco; CAJA llega por arco de
     // PROV, y MAT también. Así que a P1 no le falta ninguno.
@@ -200,7 +200,7 @@ describe('la cobertura de Location Product', () => {
   it('un proveedor cuyo material sí está cubierto en el destino no se marca', async () => {
     const indices = await juntarHechos({ configuracion: CONFIG })
     // MAT y CAJA están los dos en sn_loc_prod de P1, así que los arcos de PROV son usables. PALLET no
-    // se mira acá: no lo consume nadie, así que sale por la vía de transferencia, no por la de proveedor.
+    // se mira aquí: no lo consume nadie, así que sale por la vía de transferencia, no por la de proveedor.
     expect(hechosDe('PROV', indices).mandaSinCobertura).toEqual([])
   })
 

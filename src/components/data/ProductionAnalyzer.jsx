@@ -175,7 +175,7 @@ export default function ProductionAnalyzer({ area = '' }) {
           ? <div className="notice notice-error">✕ {error}</div>
           : (
             <div className="notice notice-info">
-              No hay maestro de productos descargado. Andá a <b>Descargar</b> y bajá el grupo «Árbol de
+              No hay maestro de productos descargado. Abre <b>Descargar</b> y trae el grupo «Árbol de
               materiales» y el de «Red de suministro»: estos análisis cruzan los dos.
             </div>
           )}
@@ -234,7 +234,7 @@ export default function ProductionAnalyzer({ area = '' }) {
           <div className="notice notice-info">
             Un análisis que trate a todos los materiales igual no sirve: exigirle una receta a una
             materia prima da miles de errores falsos, y no exigírsela a un producto terminado deja pasar
-            el de verdad. Decí qué es cada tipo <b>una vez</b> y queda guardado para esta área; sirve
+            el de verdad. Indica qué es cada tipo <b>una vez</b> y queda guardado para esta área; sirve
             para los dos informes.
           </div>
 
@@ -376,8 +376,8 @@ export default function ProductionAnalyzer({ area = '' }) {
           ? (
             <div className="notice notice-info">
               Para este informe hacen falta el <b>maestro de recursos</b> y <b>Recurso por ubicación</b>,
-              que se bajan con el grupo «Árbol de materiales». Volvé a <b>Descargar</b> y corré ese grupo
-              otra vez: son dos tablas chicas.
+              que se bajan con el grupo «Árbol de materiales». Vuelve a <b>Descargar</b> y trae ese grupo
+              otra vez: son dos tablas pequeñas.
             </div>
           )
           : (

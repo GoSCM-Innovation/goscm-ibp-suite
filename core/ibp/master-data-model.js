@@ -183,7 +183,7 @@ export function catalogoDesdeVsmt(filas) {
 //
 // El límite real no son filas, son BYTES, y leer y escribir tienen presupuestos distintos. Al
 // relevar respuestas de varios megas, el cuerpo llegaba cortado a la mitad de una cadena y el JSON
-// ya no se podía interpretar; páginas más chicas mantienen cada respuesta lejos de esa zona.
+// ya no se podía interpretar; páginas más pequeñas mantienen cada respuesta lejos de esa zona.
 
 /** Techo de una respuesta de lectura, por debajo de donde aparecían los cortes. */
 export const PRESUPUESTO_DE_LECTURA = 900_000
@@ -200,7 +200,7 @@ export const bytesDeLecturaPorFila = (campos) => 500 + campos * 30
 /**
  * Filas por página a partir de los bytes que ocupa una fila de verdad.
  *
- * Medido es mucho mejor que estimado: contar columnas subestima feo las tablas de pocas columnas
+ * Medido es mucho mejor que estimado: contar columnas subestima mucho las tablas de pocas columnas
  * con valores largos, que son justo las que revientan.
  */
 export function filasPorPagina(bytesPorFila) {

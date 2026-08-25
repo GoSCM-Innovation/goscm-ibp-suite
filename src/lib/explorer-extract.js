@@ -25,7 +25,7 @@ import { fetchMasterPage } from './ibp-master-data.js'
 /**
  * Filas por página.
  *
- * Es el tope del endpoint. Pocas páginas grandes y no muchas chicas: el costo de una petición a IBP
+ * Es el tope del endpoint. Pocas páginas grandes y no muchas pequeñas: el costo de una petición a IBP
  * es casi todo latencia fija, así que partirla en pedacitos multiplica la espera sin ahorrar memoria
  * —lo que la acota es escribir y soltar, no el tamaño de la página—.
  */

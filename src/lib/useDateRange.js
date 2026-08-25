@@ -7,7 +7,7 @@
 //   1. El rango se exige COMPLETO. Un campo de fecha va emitiendo lo que se escribe, incluido el
 //      instante en que queda vacío, y una consulta sin rango hace que CI-DS devuelva el histórico
 //      entero del tenant. v9 tenía este agujero en las tres copias.
-//   2. Se aplica cuando dejás de escribir. Si no, escribir una fecha a mano son tres o cuatro
+//   2. Se aplica cuando dejas de escribir. Si no, escribir una fecha a mano son tres o cuatro
 //      consultas de varios segundos cada una.
 //   3. Hay un tope de días, que lo pone quien llama porque es una regla del servicio, no de aquí.
 

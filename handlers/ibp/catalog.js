@@ -1,7 +1,7 @@
 // GET /api/ibp/catalog?connectionId=… — las etiquetas y los tipos de campo del tenant.
 //
 // El `$metadata` de dato maestro pesa unos 4,8 MB y una función de Vercel no puede devolver una
-// respuesta así. Recibirla sí puede: se lee acá y se devuelve solo el catálogo, que son unos pocos
+// respuesta así. Recibirla sí puede: se lee aquí y se devuelve solo el catálogo, que son unos pocos
 // cientos de kB.
 //
 // `entityProps` se manda como listas y no como conjuntos porque tiene que viajar en JSON; quien lo

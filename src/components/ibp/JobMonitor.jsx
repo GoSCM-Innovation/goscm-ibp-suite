@@ -170,7 +170,7 @@ export default function JobMonitor({ conexionId }) {
         </span>
       </div>
 
-      {rangoIncompleto && <div className="notice notice-info">Elegí las dos fechas del rango para consultar.</div>}
+      {rangoIncompleto && <div className="notice notice-info">Elige las dos fechas del rango para consultar.</div>}
       {rangoExcedido && (
         <div className="notice notice-info">
           El rango es de {dias} días y el tope son {MAX_DIAS}. Acortalo para consultar.
@@ -339,7 +339,7 @@ export default function JobMonitor({ conexionId }) {
           onClose={() => setAccion(null)}
           footer={<button type="button" className="btn btn-sm" onClick={() => setAccion(null)}>Cancelar</button>}
         >
-          <p>Elegí desde dónde:</p>
+          <p>Elige desde dónde:</p>
           <div className="job-modos">
             {JOB_RESTART_MODES.map((modo) => (
               <button

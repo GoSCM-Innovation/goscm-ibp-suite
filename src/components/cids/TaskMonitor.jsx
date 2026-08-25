@@ -5,7 +5,7 @@
 //   - La tabla de estados con sus colores se importa de la capa transversal en vez de estar
 //     copiada aquí. Era la razón de ser de `core/cids/task-status.js`.
 //   - El fin y la duración los junta el servidor por tandas, no el navegador fila por fila.
-//   - El rango de fechas se exige completo y se aplica cuando dejás de escribir. En v9 un campo
+//   - El rango de fechas se exige completo y se aplica cuando dejas de escribir. En v9 un campo
 //     de fecha a medio escribir salía como consulta sin rango, y CI-DS sin rango devuelve el
 //     histórico completo del tenant.
 //   - Los estilos son clases del sistema de la aplicación, no estilos incrustados.
@@ -260,7 +260,7 @@ export default function TaskMonitor({ destino, busqueda, onBuscar, transportadas
             className="btn btn-sm"
             onClick={copiarPagina}
             disabled={enPagina.length === 0 || cargandoDetalles}
-            title={cargandoDetalles ? 'Esperá a que terminen de cargar el fin y la duración' : 'Copiar esta página para pegarla en Excel'}
+            title={cargandoDetalles ? 'Espera a que terminen de cargar el fin y la duración' : 'Copiar esta página para pegarla en Excel'}
           >
             {copiado === 'ok' ? '✓ Copiado' : copiado === 'error' ? '✕ No se pudo' : '⧉ Copiar'}
           </button>
@@ -294,7 +294,7 @@ export default function TaskMonitor({ destino, busqueda, onBuscar, transportadas
 
       {rangoIncompleto && (
         <div className="notice notice-info">
-          Elegí las dos fechas. Sin rango, CI-DS devuelve todas las ejecuciones que existan en el
+          Elige las dos fechas. Sin rango, CI-DS devuelve todas las ejecuciones que existan en el
           tenant, y eso ni se puede mostrar ni conviene pedirlo.
         </div>
       )}
