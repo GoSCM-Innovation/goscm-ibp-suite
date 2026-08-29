@@ -135,9 +135,53 @@ controles siguen a mano.
 probados, y el CSS pone fondo y altura, pero no se pudo entrar a la aplicación para verlo con los ojos.
 Es una mirada de diez segundos en las seis pantallas.
 
+## La interfaz de v9, restaurada
+
+Revisión del 2026-08-29, con el mismo método que v7 y v8: recorrer los controles del original uno a
+uno contra `origin/master` (`609e282`).
+
+### Nombres y orden de las pestañas
+
+| v9 | Estaba como | Ahora |
+|---|---|---|
+| Resumen | Resumen | Resumen |
+| Projects & Tasks | Proyectos y tareas | **Projects & Tasks** |
+| Task Monitor | Monitor de tareas | **Task Monitor** |
+| Orquestaciones | Orquestaciones | Orquestaciones |
+| Integration Explorer | Explorador de integraciones | **Integration Explorer** |
+| Mapping Dataflow Generator | Documentador de mapeos | **Mapping Dataflow Generator** |
+
+Y el orden: «Projects & Tasks» va antes que «Task Monitor», que estaba al revés.
+
+Las dos últimas eran entradas del menú lateral en v9 y no pestañas de una conexión, porque no miran
+ningún repositorio: leen los ZIP del equipo. Aquí el menú lateral es de módulos, así que van como
+pestañas y se marcan sin destino.
+
+### Controles que no existían aquí
+
+| Qué | En v9 | Aquí |
+|---|---|---|
+| Tira de pestañas de conexiones abiertas | `ConnectionTabs.jsx` | `ui/ConnectionTabs.jsx` + `lib/pestanas-de-conexion.js` |
+| Panel de «Requisitos Técnicos» propio | `Header.jsx` | `lib/requisitos-tecnicos.js` |
+| Menú lateral minimizable | `Sidebar.jsx` | `Shell.jsx` |
+
+**La tira de pestañas** se usa en los DOS módulos, no solo en CI-DS: es la respuesta a que en v8 los
+tenants colgaran del menú lateral y aquí ese menú liste los tres módulos de la suite. Varios destinos
+abiertos a la vez, con avatar y cierre, y recordados entre sesiones.
+
+Una diferencia con v9, escrita al lado del código: su punto verde decía si la conexión tenía sesión
+abierta contra SAP, porque allí la sesión la abría el navegador. Aquí vive en el servidor y se renueva
+sola, así que ese punto estaría siempre verde. En su lugar va la marca de **productivo**, que es el
+estado que sí cambia lo que uno debe hacer con esa pestaña.
+
+### Etiquetas devueltas a su redacción
+
+`↺ Refresh` · `Buscar proyecto o task…` · `Top tasks ejecutadas` · `Últimas fallidas` · `Warnings` ·
+`Ejecución seleccionada` · `Auto-refresh 5 min` · `🔄 Auto 30s`. Estaban traducidas.
+
 ## Huecos abiertos
 
-Ninguno, contando los tres de arriba como cerrados. El último —importar sin ver qué trae el archivo— se cerró el 2026-08-12: ahora se enseña
+Ninguno, contando los tres del inventario y los de la interfaz como cerrados. El último —importar sin ver qué trae el archivo— se cerró el 2026-08-12: ahora se enseña
 cuántas vienen, cuáles ya existen, sus pasos y uniones, y en qué repositorio van a nacer.
 
 ## Sin estrenar

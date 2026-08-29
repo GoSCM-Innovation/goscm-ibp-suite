@@ -123,9 +123,78 @@ controles siguen a mano.
 probados, y el CSS pone fondo y altura, pero no se pudo entrar a la aplicación para verlo con los ojos.
 Es una mirada de diez segundos en las seis pantallas.
 
+## La interfaz de v8, restaurada
+
+Revisión del 2026-08-29, pedida por el usuario tras la de v7 y con el mismo método: **recorrer los
+controles del original uno a uno** contra `origin/master` (`ed718ed`), no comparar archivos.
+
+Salieron **once diferencias**. Todas corregidas.
+
+### Nombres y orden de las pestañas
+
+Siete de las nueve estaban traducidas y el orden cambiado. Vuelven las de `SystemView.jsx`:
+
+| v8 | Estaba como | Ahora |
+|---|---|---|
+| Resumen | Resumen | Resumen |
+| Job Templates | Trabajos | **Job Templates** |
+| Job Monitor | Monitor de trabajos | **Job Monitor** |
+| Orquestador | Orquestaciones | **Orquestador** |
+| Resource Stats | Recursos | **Resource Stats** |
+| Telemetría | Consumo | **Telemetría** |
+| Migración | Migración + «Migrar cifras» | **Migración**, con sus dos modos dentro |
+| Ver Dato Maestro | Dato maestro | **Ver Dato Maestro** |
+| Ver Dato Transaccional | Cifras clave | **Ver Dato Transaccional** |
+
+«Migración» vuelve a ser UNA pestaña con dos modos —«Dato maestro» y «Dato transaccional»— en vez de
+dos pestañas de primer nivel. Comparten origen, destino y la guarda de salida; separadas, saltar de
+una a otra parece gratis y no lo es.
+
+### Controles que no existían aquí
+
+| Qué | En v8 | Aquí |
+|---|---|---|
+| Pestañas en los dos visores de datos | `ViewerTabs.jsx` | `ibp/VisorConPestanas.jsx` + `lib/pestanas-de-visor.js` |
+| Secciones de configuración plegables | `CollapsibleSection.jsx` | `ui/SeccionPlegable.jsx` |
+| Buscador de columnas y preselecciones guardadas | `ColumnPicker.jsx` | `ibp/SelectorDeColumnas.jsx` + `lib/preselecciones-de-columnas.js` |
+| Ordenar pulsando la cabecera | `DataGrid.jsx` | `MasterDataViewer.jsx` |
+| Reordenar columnas arrastrando la cabecera | `DataGrid.jsx` | `MasterDataViewer.jsx` |
+| Filtro por columna sobre la página | `DataGrid.jsx` | `MasterDataViewer.jsx` |
+| Pestañas según el acuerdo configurado | `SystemView.jsx` | `IbpTools.jsx` |
+| Cabecera de la conexión con «Abrir en SAP IBP ↗» | `SystemView.jsx` | `ui/CabeceraDeConexion.jsx` + `lib/url-de-sap.js` |
+| Aviso de auto-refresco | `JobMonitor`, `Resumen` | los dos, aquí |
+| Panel de «Requisitos Técnicos» propio | `Header.jsx` + `es.json` | `lib/requisitos-tecnicos.js` |
+| Menú lateral minimizable | `Sidebar.jsx` | `Shell.jsx` |
+
+**Las pestañas de los visores** son lo que más cambia el trabajo diario. Revisar dato maestro es
+cruzar tablas —«este producto está en Product, ¿tiene fila en Location Product?»—, y con un visor solo
+hay que ir, mirar, volver y reconstruir el filtro. Se conservan las cuatro decisiones de v8 que las
+hacen sostenibles: montaje perezoso, quedarse montadas, que solo la activa dibuje su tabla, y guardar
+la definición y nunca las filas.
+
+**La condición de las pestañas** exigió que `/api/connections` diga QUÉ acuerdos tiene cada conexión y
+no solo cuántos. Sin `SAP_COM_0068` no hay «Resource Stats»: una pestaña que al abrirse falla con un
+403 parece un fallo de la herramienta.
+
+### Una corrección sobre v8
+
+**El orden que se le pide a SAP lleva las claves detrás de la columna elegida.** v8 ordenaba solo por
+ella, y con valores repetidos —lo normal en una descripción— dos páginas seguidas pueden traer la
+misma fila y perder otra. Es la regla de SAP que ya estaba escrita para la paginación, aplicada
+también al orden que elige quien mira.
+
+### Lo que queda de v8 en el visor
+
+**El ancho de columna a mano** —arrastrar el borde de la cabecera, doble clic para ajustar al
+contenido— sigue sin portarse. Es el único control de `DataGrid.jsx` que falta.
+
 ## Huecos abiertos
 
-Ninguno, contando los tres de arriba como cerrados. El último que quedaba —el informe de una corrida de cifras clave— se cerró el 2026-08-11,
+**Uno:** el ancho de columna a mano del visor —arrastrar el borde de la cabecera, doble clic para
+ajustar al contenido—. Es el único control de `DataGrid.jsx` que falta; está anotado arriba, en
+[La interfaz de v8, restaurada](#la-interfaz-de-v8-restaurada).
+
+Los demás están cerrados, contando los tres del inventario y los once de la interfaz. El último que quedaba —el informe de una corrida de cifras clave— se cerró el 2026-08-11,
 **rediseñado en vez de traducido**, porque traducir el de v8 habría dado un informe que miente:
 
 - v8 copiaba **una cifra por transacción**, así que su informe tenía una fila por cifra con su estado,

@@ -3,58 +3,43 @@
 Este archivo es el punto de entrada cuando la instrucción es **«continuemos»**. Se lee primero, se
 actualiza al terminar cada sesión, y su orden es el de prioridad acordada.
 
-Última actualización: **2026-08-28**.
+Última actualización: **2026-08-29**.
 
 ## Dónde estamos
 
 - **En línea**: https://goscm-ibp-suite.vercel.app — cada subida a `main` se publica sola.
-- **2.564 pruebas**, lint y build limpios, y el build **sin ningún aviso**.
+- **2.603 pruebas**, lint y build limpios, y el build **sin ningún aviso**.
 - Los tres proyectos previos están portados en funcionalidad.
-- **La interfaz de v7 está restaurada tal cual era**: asistente de conexión de tres pasos, sus seis
-  aplicaciones en el menú con sus nombres, el acordeón numerado ① a ⑤ dentro de los analizadores, y el
-  grafo interactivo de la red con la misma librería. Ver
-  [«La interfaz de v7, restaurada»](PARIDAD-V7.md#la-interfaz-de-v7-restaurada).
-- De esa revisión salieron **cinco huecos de funcionalidad** que el inventario de archivos no podía
-  ver, los cinco portados: exportar una lista de materiales a un Excel, exportar el árbol que se mira,
-  el paso ④ de campos adicionales, el **árbol invertido** (dónde se usa un insumo) y el **panel de
-  rutas** (si lo que sale de cada planta llega a alguien).
+- **La interfaz de los TRES está restaurada tal cual era.** Es una decisión del usuario y ahora es
+  regla del proyecto: ver [«Respetar la interfaz de origen»](../CLAUDE.md#respetar-la-interfaz-de-origen).
+  - v7: asistente de tres pasos, sus seis aplicaciones con sus nombres, el acordeón ① a ⑤ y el grafo
+    interactivo. [Detalle](PARIDAD-V7.md#la-interfaz-de-v7-restaurada).
+  - v8: sus nueve pestañas con sus nombres y su orden, la condición por acuerdo, la cabecera de la
+    conexión, y los cinco controles del visor —pestañas, secciones plegables, preselecciones de
+    columnas, ordenar y filtrar por columna—. [Detalle](PARIDAD-V8.md#la-interfaz-de-v8-restaurada).
+  - v9: sus nombres, su orden y la tira de pestañas de conexiones abiertas.
+    [Detalle](PARIDAD-V9.md#la-interfaz-de-v9-restaurada).
+- Comparar CONTROLES —y no archivos— destapó **dieciséis huecos de funcionalidad**, todos dentro de
+  archivos que el inventario daba por portados. Quince cerrados; queda uno, el ancho de columna a mano
+  del visor de v8.
 
 ## Lo siguiente, en orden
 
-### 1. La misma restauración de interfaz para v8 y v9
-
-Es lo acordado con el usuario y es lo que sigue. **La interfaz de los proyectos de origen se respeta
-tal cual**: llevan años de uso delante de clientes y está trabajada.
-
-El método que funcionó en v7, y que conviene repetir literalmente:
-
-1. Traer `public/index.html` (o el equivalente) de `origin/master` y **recorrer sus botones uno a uno**,
-   comprobando cuál existe aquí. No comparar archivos: comparar CONTROLES.
-2. Anotar la forma —qué es un asistente, qué es un acordeón, qué se despliega y cuándo— antes de tocar
-   nada, y presentarla al usuario.
-3. Portar el CSS del original **copiado, no reinterpretado**, con sus variables de espaciado si hace
-   falta. Traducir a mano es donde se cuelan las diferencias de dos píxeles.
-4. Los nombres de las aplicaciones se quedan como estaban, aunque sean en inglés.
-
-Lo que hay que mirar primero en cada uno: **cuántas aplicaciones tenía su menú y qué recorrido pedía
-cada una.** En v7 eran seis aplicaciones y un asistente de tres pasos; aquí se habían convertido en
-siete pestañas y tres desplegables.
-
-### 2. Estrenar las escrituras contra SAP, con el usuario delante
+### 1. Estrenar las escrituras contra SAP, con el usuario delante
 
 Está todo construido y probado en lectura, y **nada se ha ejecutado**: lanzar un trabajo, cargar una
 migración, modificar y borrar dato maestro, copiar cifras clave, lanzar una orquestación y lanzar una
 tarea de CI-DS. No se hace en una corrida desatendida. Cada documento de paridad lo lista en su sección
 «Sin estrenar».
 
-### 3. Las tareas programadas
+### 2. Las tareas programadas
 
 La guarda ya está escrita —`handlers/cids/cron-tick.js` valida `CRON_SECRET` y rechaza si es corto—
 pero **`vercel.json` no declara ningún `crons`**, así que nada se dispara. Falta una decisión del
 usuario: **cada cuánto debe avanzar una orquestación en marcha**. Con eso se escriben las
 declaraciones. Necesita además Vercel Pro.
 
-### 4. El idioma (es/en)
+### 3. El idioma (es/en)
 
 Fase propia y deliberadamente la última. Toca cada pantalla. No bloquea nada.
 
@@ -84,10 +69,16 @@ Fase propia y deliberadamente la última. Toca cada pantalla. No bloquea nada.
 ## Lo que no se pudo comprobar con los ojos
 
 **No se puede entrar a la aplicación en desarrollo**: el ingreso pide el código que llega al correo.
-Para mirar la interfaz de v7 se montó un andamio temporal —un `preview.html` con una sesión falsa— que
-se borró al terminar; si hace falta otra vez, se vuelve a montar y se vuelve a borrar. Con él se vio el
-menú, el asistente, la cinta, la pantalla de módulo restringido y el acordeón. Lo que sigue sin verse
-es todo lo que necesita datos de un tenant: el árbol, el lienzo, las rutas y los informes.
+Para mirar la interfaz se montó las dos veces un andamio temporal —un `preview.html` con una sesión
+falsa— que se borró al terminar. **Si hace falta otra vez, se vuelve a montar y se vuelve a borrar**:
+es la única forma de ver una pantalla sin poder entrar.
+
+Con él se vieron el menú, el asistente de v7, el acordeón, la tira de pestañas de conexiones, la
+cabecera de la conexión, las pestañas de los visores, las secciones plegables, la cabecera de tabla
+con orden y filtro, y el menú minimizado.
+
+Lo que sigue sin verse es todo lo que necesita datos de un tenant: el árbol, el lienzo de la red, las
+rutas, los informes y las tablas con filas de verdad.
 
 ## El patrón que unía los once fallos
 
