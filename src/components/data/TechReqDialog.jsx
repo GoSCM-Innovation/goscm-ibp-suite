@@ -10,17 +10,43 @@
 // La pestaña «Conexión» es la única que cambió de contenido: en v7 explicaba qué escribir en el
 // formulario de credenciales; aquí las credenciales las da de alta el administrador y viven cifradas,
 // así que explica eso.
+//
+// Y los OTROS DOS módulos tienen el suyo, porque hablan con sistemas distintos: v8 con los cuatro
+// acuerdos `SAP_COM_xxxx` que gobiernan sus pestañas, v9 con el tenant de CI-DS y su usuario de
+// WebService. Los tres proyectos tenían su panel y aquí solo estaba el de v7; el texto de cada uno
+// está en `src/lib/requisitos-tecnicos.js`, copiado del original.
 
 import { useState } from 'react'
 
 import Modal from '../ui/Modal.jsx'
+import { REQUISITOS_CIDS, REQUISITOS_IBP } from '../../lib/requisitos-tecnicos.js'
 
 const PESTANAS = [
   { id: 'conexion', label: 'Conexión' },
   { id: 'usuario', label: 'Usuario SAP IBP' },
   { id: 'comm', label: 'Acceso a SAP IBP' },
   { id: 'entidades', label: 'Datos por aplicación' },
+  { id: 'ibp', label: 'IBP Tools' },
+  { id: 'cids', label: 'CI-DS Tools' },
 ]
+
+/** Una ficha de requisito: el título en el acento y el detalle debajo. */
+const Requisito = ({ titulo, detalle }) => (
+  <div style={{
+    background: 'var(--bg)',
+    border: '1px solid var(--border)',
+    borderLeft: '3px solid var(--accent)',
+    borderRadius: 6,
+    marginBottom: 8,
+    padding: '10px 14px',
+  }}
+  >
+    <div style={{ color: 'var(--accent)', fontSize: 11.5, fontWeight: 600, marginBottom: 4 }}>
+      {titulo}
+    </div>
+    <div style={{ color: 'var(--text2)', fontSize: 11.5, lineHeight: 1.6 }}>{detalle}</div>
+  </div>
+)
 
 /** El encabezado naranja en versalitas que v7 usa para cada bloque del diálogo. */
 const Titulo = ({ children }) => (
@@ -273,6 +299,24 @@ export default function TechReqDialog({ onClose }) {
               </div>
             ))}
           </div>
+        </>
+      )}
+
+      {pestana === 'ibp' && (
+        <>
+          <Titulo>Requisitos Técnicos de la API — IBP Tools</Titulo>
+          {REQUISITOS_IBP.map((uno) => (
+            <Requisito key={uno.titulo} titulo={uno.titulo} detalle={uno.detalle} />
+          ))}
+        </>
+      )}
+
+      {pestana === 'cids' && (
+        <>
+          <Titulo>Requisitos Técnicos — CI-DS Tools</Titulo>
+          {REQUISITOS_CIDS.map((uno) => (
+            <Requisito key={uno.titulo} titulo={uno.titulo} detalle={uno.detalle} />
+          ))}
         </>
       )}
 

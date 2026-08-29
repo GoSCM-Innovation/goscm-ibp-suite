@@ -2727,3 +2727,31 @@ a { color: var(--cyan); }
 }
 .visor-pestanas-tira::-webkit-scrollbar { display: none; }
 .visor-pestana-caja { align-items: center; display: flex; flex-shrink: 0; }
+
+/* ── El menú lateral, minimizable ──────────────────────────────────────────────────────────────
+   Portado de v8 y v9 («Minimizar» / «Expandir»). Minimizado deja solo los iconos: en un portátil,
+   232 píxeles de menú son la diferencia entre ver seis columnas de una tabla y ver nueve. */
+.sidebar { position: relative; transition: width .18s ease; }
+.sidebar.minimizado { width: 56px; }
+.sidebar.minimizado .nav-label,
+.sidebar.minimizado .sidebar-label,
+.sidebar.minimizado .conn-status-row span:not(.status-dot),
+.sidebar.minimizado .nav-lock,
+.sidebar.minimizado .nav-lock-badge { display: none; }
+.sidebar.minimizado .nav-item { justify-content: center; padding-left: 0; padding-right: 0; }
+.sidebar.minimizado .sidebar-connect-btn { padding: 7px 0; }
+.sidebar.minimizado .conn-status-row { justify-content: center; }
+
+.sidebar-minimizar {
+  align-self: flex-end;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--text3);
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  padding: 3px 7px;
+}
+.sidebar-minimizar:hover { background: var(--surface-glass); color: var(--text); }
+.sidebar.minimizado .sidebar-minimizar { align-self: center; }

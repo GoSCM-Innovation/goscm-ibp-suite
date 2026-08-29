@@ -31,6 +31,27 @@ export default function Shell({ user, modules, theme, onToggleTheme, onSignOut, 
   const abrirConexion = useAsistenteAbierto()
   const [abrirRequisitos, setAbrirRequisitos] = useState(false)
 
+  // El menú se minimiza a solo iconos, como en v8 y v9. Se recuerda: quien trabaja en un portátil lo
+  // deja cerrado y no quiere volver a cerrarlo cada mañana.
+  const [minimizado, setMinimizado] = useState(() => {
+    try {
+      return localStorage.getItem('menu_minimizado') === '1'
+    } catch {
+      return false
+    }
+  })
+
+  function alternarMenu() {
+    setMinimizado((previo) => {
+      try {
+        localStorage.setItem('menu_minimizado', previo ? '0' : '1')
+      } catch {
+        // Sin espacio o en modo privado: se minimiza igual, solo no se recuerda.
+      }
+      return !previo
+    })
+  }
+
   // El bloque de conexión es el de Data Tools. A quien no lo tenga contratado le sobra: ofrecerle
   // conectar a SAP IBP para algo que no puede abrir es prometer lo que el servidor va a negar.
   const tieneDataTools = contratados.has('explorer')
@@ -62,7 +83,17 @@ export default function Shell({ user, modules, theme, onToggleTheme, onSignOut, 
       </header>
 
       <div className="layout">
-        <nav className="sidebar">
+        <nav className={`sidebar${minimizado ? ' minimizado' : ''}`}>
+          <button
+            type="button"
+            className="sidebar-minimizar"
+            onClick={alternarMenu}
+            title={minimizado ? 'Expandir' : 'Minimizar'}
+            aria-label={minimizado ? 'Expandir el menú' : 'Minimizar el menú'}
+          >
+            {minimizado ? '»' : '«'}
+          </button>
+
           {/* ── El estado de la conexión, arriba del todo como en v7 ────────────────────────── */}
           {tieneDataTools && (
             <div className="sidebar-conn">
@@ -79,7 +110,11 @@ export default function Shell({ user, modules, theme, onToggleTheme, onSignOut, 
                 className="btn btn-primary btn-sm sidebar-connect-btn"
                 onClick={() => verAsistente(true)}
               >
-                {conectado ? '🔗 Conexión activa' : '🔗 Conectar SAP IBP'}
+                {/* El icono se queda con el menú minimizado; el texto no cabe. */}
+                <span aria-hidden="true">🔗</span>
+                <span className="nav-label">
+                  {conectado ? ' Conexión activa' : ' Conectar SAP IBP'}
+                </span>
               </button>
             </div>
           )}
@@ -138,15 +173,15 @@ export default function Shell({ user, modules, theme, onToggleTheme, onSignOut, 
             )}
           </div>
 
-          {/* ── El pie del menú, con los requisitos técnicos: igual que v7 ──────────────────── */}
-          {tieneDataTools && (
-            <div className="sidebar-footer">
-              <button className="nav-item" onClick={() => setAbrirRequisitos(true)}>
-                <span className="nav-icon">⚙</span>
-                <span className="nav-label">Requisitos técnicos</span>
-              </button>
-            </div>
-          )}
+          {/* ── El pie del menú, con los requisitos técnicos ────────────────────────────────
+              Está siempre, no solo con Data Tools: los tres proyectos tenían su panel y ahora los
+              tres están dentro, cada uno en su pestaña. */}
+          <div className="sidebar-footer">
+            <button className="nav-item" onClick={() => setAbrirRequisitos(true)}>
+              <span className="nav-icon">⚙</span>
+              <span className="nav-label">Requisitos técnicos</span>
+            </button>
+          </div>
         </nav>
 
         {/* El panel de diagnóstico va UNA vez aquí y no en cada módulo: lee todo el tráfico de la
