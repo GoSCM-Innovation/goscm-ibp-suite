@@ -76,6 +76,11 @@ async function detectar({ baseUrl, credentials }, { planningArea, versionId }) {
     prefijo,
     version: version?.id ?? null,
     entidades: candidatas.map((una) => una.name).sort(),
+    // Los campos de cada tabla del área. Van aquí porque ya se leyeron para detectar los papeles —no
+    // cuesta ninguna petición más a SAP— y porque sin ellos el paso ④ de los analizadores, «campos
+    // adicionales de datos maestros», no tiene qué ofrecer: v7 los sacaba del `$metadata` que ya
+    // tenía en memoria (`ENTITIES`), y ese `$metadata` es exactamente esto.
+    campos: Object.fromEntries(candidatas.map((una) => [una.name, una.fields])),
     detectado: Object.fromEntries(
       Object.entries(GRUPOS).map(([grupo, roles]) => [grupo, detectarRoles(candidatas, roles, prefijo)]),
     ),

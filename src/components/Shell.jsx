@@ -1,15 +1,39 @@
 // El armazón: barra superior, menú lateral y el contenido del módulo activo.
 //
+// El menú es el de v7, con un nivel más. En v7 las seis aplicaciones colgaban directamente del menú
+// lateral porque v7 ERA un solo producto; aquí conviven tres, así que las aplicaciones cuelgan de su
+// módulo y se despliegan cuando está abierto. El resto —los iconos, el candado a la derecha, el
+// estado de la conexión arriba y los requisitos técnicos en el pie— es suyo, tal cual.
+//
 // Los módulos no contratados aparecen con candado en vez de desaparecer, siguiendo lo que
 // hacía v7. Y son clicables a propósito: llevan a una pantalla que explica qué hace ese
 // módulo. Un módulo escondido no se vende.
 
-import { MODULES } from '../lib/modules.js'
+import { Fragment, useState } from 'react'
+
+import { MODULES, partirRuta } from '../lib/modules.js'
+import {
+  estaConectado, useAsistenteAbierto, useConexionActiva, verAsistente,
+} from '../lib/conexion-activa.js'
+import ConnectDialog from './data/ConnectDialog.jsx'
+import TechReqDialog from './data/TechReqDialog.jsx'
 import TechLogs from './ui/TechLogs.jsx'
 
 export default function Shell({ user, modules, theme, onToggleTheme, onSignOut, route, onNavigate, children }) {
   const contratados = new Set(modules)
   const esAdmin = user.isAdmin || user.isPlatformAdmin
+  const { moduleId, appId } = partirRuta(route)
+
+  const conexion = useConexionActiva()
+  const conectado = estaConectado(conexion)
+  // El asistente se abre también desde la pantalla de módulo restringido de cada aplicación, que no
+  // está debajo de este componente. Por eso su estado vive fuera, igual que la conexión.
+  const abrirConexion = useAsistenteAbierto()
+  const [abrirRequisitos, setAbrirRequisitos] = useState(false)
+
+  // El bloque de conexión es el de Data Tools. A quien no lo tenga contratado le sobra: ofrecerle
+  // conectar a SAP IBP para algo que no puede abrir es prometer lo que el servidor va a negar.
+  const tieneDataTools = contratados.has('explorer')
 
   return (
     <>
@@ -39,34 +63,89 @@ export default function Shell({ user, modules, theme, onToggleTheme, onSignOut, 
 
       <div className="layout">
         <nav className="sidebar">
-          <span className="sidebar-label">Módulos</span>
-          {MODULES.map((module) => {
-            const bloqueado = !contratados.has(module.id)
-            return (
+          {/* ── El estado de la conexión, arriba del todo como en v7 ────────────────────────── */}
+          {tieneDataTools && (
+            <div className="sidebar-conn">
+              <div className="conn-status-row">
+                <span className={`status-dot ${conectado ? 'on' : 'off'}`} />
+                <span>
+                  {conectado
+                    ? `${conexion.planningArea} · ${conexion.nombre}`
+                    : 'Desconectado'}
+                </span>
+              </div>
               <button
-                key={module.id}
-                className={`nav-item${route === module.id ? ' active' : ''}${bloqueado ? ' locked' : ''}`}
-                onClick={() => onNavigate(module.id)}
+                type="button"
+                className="btn btn-primary btn-sm sidebar-connect-btn"
+                onClick={() => verAsistente(true)}
               >
-                <span className="nav-icon">{module.icon}</span>
-                <span className="nav-label">{module.name}</span>
-                {bloqueado && <span className="nav-lock" title="No contratado">🔒</span>}
+                {conectado ? '🔗 Conexión activa' : '🔗 Conectar SAP IBP'}
               </button>
-            )
-          })}
+            </div>
+          )}
 
-          {esAdmin && (
-            <>
-              <div className="sidebar-divider" />
-              <span className="sidebar-label">Gestión</span>
-              <button
-                className={`nav-item${route === 'admin' ? ' active' : ''}`}
-                onClick={() => onNavigate('admin')}
-              >
-                <span className="nav-icon">🛠️</span>
-                <span className="nav-label">Administración</span>
+          <div className="sidebar-nav">
+            <span className="sidebar-label">Módulos</span>
+            {MODULES.map((module) => {
+              const bloqueado = !contratados.has(module.id)
+              const abierto = moduleId === module.id && !bloqueado
+              return (
+                <Fragment key={module.id}>
+                  <button
+                    className={`nav-item${moduleId === module.id ? ' active' : ''}${bloqueado ? ' locked' : ''}`}
+                    onClick={() => onNavigate(module.id)}
+                  >
+                    <span className="nav-icon">{module.icon}</span>
+                    <span className="nav-label">{module.name}</span>
+                    {bloqueado && <span className="nav-lock" title="No contratado">🔒</span>}
+                  </button>
+
+                  {/* Las aplicaciones del módulo abierto. El candado de cada una NO dice «no
+                      contratada» —el módulo entero ya lo está— sino «hace falta conectarse»: es el
+                      `req-conn` de v7. */}
+                  {abierto && module.apps?.map((app) => {
+                    const sinConexion = app.requiereConexion && !conectado
+                    return (
+                      <button
+                        key={app.id}
+                        className={`nav-item nav-app${appId === app.id ? ' active' : ''}${sinConexion ? ' locked' : ''}`}
+                        onClick={() => onNavigate(`${module.id}/${app.id}`)}
+                      >
+                        <span className="nav-icon">{app.icon}</span>
+                        <span className="nav-label">{app.name}</span>
+                        {sinConexion && (
+                          <span className="nav-lock-badge" title="Requiere conexión a SAP IBP">🔒</span>
+                        )}
+                      </button>
+                    )
+                  })}
+                </Fragment>
+              )
+            })}
+
+            {esAdmin && (
+              <>
+                <div className="sidebar-divider" />
+                <span className="sidebar-label">Gestión</span>
+                <button
+                  className={`nav-item${route === 'admin' ? ' active' : ''}`}
+                  onClick={() => onNavigate('admin')}
+                >
+                  <span className="nav-icon">🛠️</span>
+                  <span className="nav-label">Administración</span>
+                </button>
+              </>
+            )}
+          </div>
+
+          {/* ── El pie del menú, con los requisitos técnicos: igual que v7 ──────────────────── */}
+          {tieneDataTools && (
+            <div className="sidebar-footer">
+              <button className="nav-item" onClick={() => setAbrirRequisitos(true)}>
+                <span className="nav-icon">⚙</span>
+                <span className="nav-label">Requisitos técnicos</span>
               </button>
-            </>
+            </div>
           )}
         </nav>
 
@@ -77,6 +156,9 @@ export default function Shell({ user, modules, theme, onToggleTheme, onSignOut, 
           <TechLogs />
         </main>
       </div>
+
+      {abrirConexion && <ConnectDialog onClose={() => verAsistente(false)} />}
+      {abrirRequisitos && <TechReqDialog onClose={() => setAbrirRequisitos(false)} />}
     </>
   )
 }

@@ -12,6 +12,7 @@ import {
   indexarMaestro,
   indexarPorReceta,
   indicesVacios,
+  invertirArbol,
   profundidad,
   raicesPorPlanta,
   soltarHijos,
@@ -600,5 +601,94 @@ describe('raíces acotadas a un producto', () => {
 
   it('acotar con vacío es no acotar', () => {
     expect(raicesPorPlanta(tenantDeJuguete(), { soloDe: '' }).plantas).toEqual(['PLANTA1', 'PLANTA2'])
+  })
+})
+
+describe('invertirArbol', () => {
+  /** Un nodo del árbol ya construido, con lo que mira la inversión. */
+  const nodo = (prdid, hijos = []) => ({
+    id: `n-${prdid}`,
+    tipo: hijos.length > 0 ? TIPOS.componente : TIPOS.hoja,
+    receta: hijos.length > 0 ? `S-${prdid}` : '',
+    prdid,
+    planta: 'P1',
+    nivel: 1,
+    hijos,
+    sePuedeAbrir: hijos.length > 0,
+  })
+
+  /** TERMINADO ← SEMI ← MP. Tres niveles, una sola rama. */
+  const conUnaRama = () => nodo('TERMINADO', [nodo('SEMI', [nodo('MP')])])
+
+  it('la materia prima pasa a colgar de la raíz', () => {
+    // Es lo que contesta la pregunta: «esta materia prima, ¿dónde se usa?».
+    const [raiz] = invertirArbol([conUnaRama()])
+    expect(raiz.prdid).toBe('TERMINADO')
+    expect(raiz.hijos.map((uno) => uno.prdid)).toEqual(['MP'])
+  })
+
+  it('debajo de la hoja cuelga quien la consume, subiendo hasta la raíz', () => {
+    // La raíz NO se repite abajo: ya es la cabecera del árbol. La cadena termina en su hijo directo.
+    const [raiz] = invertirArbol([conUnaRama()])
+    const mp = raiz.hijos[0]
+    expect(mp.hijos.map((uno) => uno.prdid)).toEqual(['SEMI'])
+    expect(mp.hijos[0].hijos).toEqual([])
+  })
+
+  it('un insumo usado en dos ramas sale UNA vez, con sus dos consumidores debajo', () => {
+    // Es el caso que hace útil la vista: el tornillo que está en media planta.
+    const arbol = nodo('TERMINADO', [
+      nodo('SEMI_A', [nodo('TORNILLO')]),
+      nodo('SEMI_B', [nodo('TORNILLO')]),
+    ])
+
+    const [raiz] = invertirArbol([arbol])
+    expect(raiz.hijos.map((uno) => uno.prdid)).toEqual(['TORNILLO'])
+    expect(raiz.hijos[0].hijos.map((uno) => uno.prdid).sort()).toEqual(['SEMI_A', 'SEMI_B'])
+  })
+
+  it('una hoja que además es hoja de otra rama no se duplica', () => {
+    const arbol = nodo('TERMINADO', [nodo('MP1'), nodo('MP2'), nodo('MP1')])
+    const [raiz] = invertirArbol([arbol])
+    expect(raiz.hijos.map((uno) => uno.prdid).sort()).toEqual(['MP1', 'MP2'])
+  })
+
+  it('los niveles se recalculan: la hoja queda en el 2', () => {
+    const [raiz] = invertirArbol([conUnaRama()])
+    expect(raiz.nivel).toBe(1)
+    expect(raiz.hijos[0].nivel).toBe(2)
+    expect(raiz.hijos[0].hijos[0].nivel).toBe(3)
+  })
+
+  it('marca como abribles solo los que tienen algo debajo', () => {
+    const [raiz] = invertirArbol([conUnaRama()])
+    expect(raiz.sePuedeAbrir).toBe(true)
+    expect(raiz.hijos[0].sePuedeAbrir).toBe(true)
+    expect(raiz.hijos[0].hijos[0].sePuedeAbrir).toBe(false)
+  })
+
+  it('NO toca el árbol original: los dos conviven en la misma pestaña', () => {
+    const arbol = conUnaRama()
+    invertirArbol([arbol])
+    expect(arbol.hijos[0].prdid).toBe('SEMI')
+    expect(arbol.id).toBe('n-TERMINADO')
+  })
+
+  it('los identificadores no chocan con los del árbol normal', () => {
+    // Comparten el estado de qué está abierto; con identificadores iguales, abrir uno abriría el otro.
+    const [raiz] = invertirArbol([conUnaRama()])
+    expect(raiz.id).not.toBe('n-TERMINADO')
+    expect(raiz.id.startsWith('inv_')).toBe(true)
+  })
+
+  it('una raíz sin hijos se queda como está', () => {
+    const [raiz] = invertirArbol([nodo('COMPRADO')])
+    expect(raiz.prdid).toBe('COMPRADO')
+    expect(raiz.hijos).toEqual([])
+  })
+
+  it('con un bosque vacío devuelve vacío', () => {
+    expect(invertirArbol([])).toEqual([])
+    expect(invertirArbol(undefined)).toEqual([])
   })
 })

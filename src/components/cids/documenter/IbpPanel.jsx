@@ -59,7 +59,7 @@ export default function IbpPanel({
     return (
       <div className="notice notice-info">
         No hay ninguna conexión a IBP configurada para tu empresa. El documento se puede generar
-        igual: las columnas de tipo de dato y ejemplo quedan vacías. Para llenarlas, pedile a quien
+        igual: las columnas de tipo de dato y ejemplo quedan vacías. Para llenarlas, pídele a quien
         administra la cuenta que dé de alta la conexión en Administración → Conexiones.
       </div>
     )

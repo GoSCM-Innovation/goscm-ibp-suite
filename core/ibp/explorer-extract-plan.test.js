@@ -308,3 +308,53 @@ describe('las tablas atadas a su cabecera', () => {
     expect([...salida].sort()).toEqual(['A', 'B'])
   })
 })
+
+describe('planificarExtraccion · campos adicionales (paso ④ de v7)', () => {
+  /** Un mapeo mínimo donde el maestro de productos resuelve a una tabla de este tenant. */
+  const efectivo = {
+    arbol: {
+      header: { entidad: 'GIDPSH' },
+      item: { entidad: 'GIDPSI' },
+      product: { entidad: 'GIDPRODUCT' },
+      locMaster: { entidad: 'GIDLOCATION' },
+    },
+  }
+
+  const pasoDe = (plan, tabla) => plan.pasos.find((uno) => uno.tabla === tabla)
+
+  it('añade al $select los campos pedidos para esa tabla', () => {
+    const plan = planificarExtraccion({
+      efectivo, grupos: ['arbol'], extras: { bom_prd: ['ZGRUPOCOMPRAS'] },
+    })
+    expect(pasoDe(plan, 'bom_prd').select).toContain('ZGRUPOCOMPRAS')
+    expect(pasoDe(plan, 'bom_prd').extras).toEqual(['ZGRUPOCOMPRAS'])
+  })
+
+  it('no toca las tablas para las que no se pidió nada', () => {
+    const plan = planificarExtraccion({
+      efectivo, grupos: ['arbol'], extras: { bom_prd: ['ZGRUPOCOMPRAS'] },
+    })
+    expect(pasoDe(plan, 'bom_psh').extras).toEqual([])
+  })
+
+  it('no repite un campo que ya estaba en el $select', () => {
+    // SAP rechaza la consulta entera si un campo aparece dos veces, y el error no dice cuál.
+    const plan = planificarExtraccion({
+      efectivo, grupos: ['arbol'], extras: { bom_prd: ['PRDID', 'PRDID', 'ZOTRO'] },
+    })
+    const select = pasoDe(plan, 'bom_prd').select
+    expect(select.filter((uno) => uno === 'PRDID')).toHaveLength(1)
+    expect(pasoDe(plan, 'bom_prd').extras).toEqual(['ZOTRO'])
+  })
+
+  it('sin extras se comporta igual que antes', () => {
+    const con = planificarExtraccion({ efectivo, grupos: ['arbol'], extras: {} })
+    const sin = planificarExtraccion({ efectivo, grupos: ['arbol'] })
+    expect(con.pasos.map((uno) => uno.select)).toEqual(sin.pasos.map((uno) => uno.select))
+  })
+
+  it('un paso que no se puede bajar sale con la lista de extras vacía, no indefinida', () => {
+    const plan = planificarExtraccion({ efectivo: {}, grupos: ['arbol'], extras: { bom_prd: ['Z'] } })
+    expect(pasoDe(plan, 'bom_prd').extras).toEqual([])
+  })
+})

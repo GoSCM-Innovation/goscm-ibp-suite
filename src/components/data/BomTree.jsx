@@ -20,9 +20,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import {
-  TIPOS, abrirTodo, armarHijos, profundidad, raicesPorPlanta, soltarHijos,
+  TIPOS, abrirTodo, armarHijos, invertirArbol, profundidad, raicesPorPlanta, soltarHijos,
 } from '../../../core/ibp/bom-tree.js'
 import { cargarSubarbol, descripcionesDe, productosConReceta } from '../../lib/bom-load.js'
+import { aplanarArbol, armarLibroDeUnProducto, descargarLibro, nombreDeArchivo } from '../../lib/bom-export.js'
 import { usePantallaCompleta } from '../../lib/usePantallaCompleta.js'
 import BotonPantallaCompleta from '../ui/BotonPantallaCompleta.jsx'
 
@@ -105,8 +106,9 @@ function Fila({ nodo, abierto, onAlternar }) {
   )
 }
 
-export default function BomTree() {
+export default function BomTree({ sinPantallaCompleta = false }) {
   const [productos, setProductos] = useState(null)
+  const [exportando, setExportando] = useState(false)
   const [descripciones, setDescripciones] = useState({})
   const [busqueda, setBusqueda] = useState('')
   const [error, setError] = useState('')
@@ -126,6 +128,10 @@ export default function BomTree() {
   const pedirRedibujo = useCallback(() => setRedibujo((previo) => previo + 1), [])
 
   const [abiertos, setAbiertos] = useState(() => new Set())
+
+  // El árbol al revés: qué usa cada insumo, en vez de qué lleva cada producto. Portado de
+  // `bomToggleInvert` de v7. Se guarda aparte del normal para poder alternar sin reconstruir.
+  const [invertido, setInvertido] = useState(null)
 
   useEffect(() => {
     let abandonado = false
@@ -175,6 +181,7 @@ export default function BomTree() {
   async function abrirProducto(prdid) {
     setElegido(prdid)
     setArbol(null)
+    setInvertido(null)
     setCiclos([])
     setAbiertos(new Set())
     setError('')
@@ -197,45 +204,99 @@ export default function BomTree() {
     }
   }
 
-  const raices = planta ? (arbol?.porPlanta[planta] ?? []) : []
+  const normales = planta ? (arbol?.porPlanta[planta] ?? []) : []
+  const raices = invertido ?? normales
 
-  /** Abre o cierra un nodo. Cerrar SUELTA el subárbol: es lo que sostiene un árbol grande. */
+  /**
+   * Abre o cierra un nodo. Cerrar SUELTA el subárbol: es lo que sostiene un árbol grande.
+   *
+   * En el árbol invertido NO se suelta nada: sus nodos no salen de los índices —se calculan a partir
+   * del árbol ya construido— y soltarlos los borraría sin poder rehacerlos.
+   */
   function alternar(nodo) {
     setAbiertos((previos) => {
       const siguientes = new Set(previos)
       if (siguientes.has(nodo.id)) {
         siguientes.delete(nodo.id)
-        soltarHijos(nodo)
+        if (!invertido) soltarHijos(nodo)
       } else {
         siguientes.add(nodo.id)
-        const nuevos = armarHijos(nodo, indices.current)
-        if (nuevos.length > 0) setCiclos((antes) => juntarCiclos(antes, nuevos))
+        if (!invertido) {
+          const nuevos = armarHijos(nodo, indices.current)
+          if (nuevos.length > 0) setCiclos((antes) => juntarCiclos(antes, nuevos))
+        }
       }
       return siguientes
     })
     pedirRedibujo()
   }
 
-  function abrirTodoElArbol() {
-    const nuevos = abrirTodo(raices, indices.current)
-    setCiclos((antes) => juntarCiclos(antes, nuevos))
-
+  /** Marca como abiertos todos los nodos abribles de un bosque. */
+  function marcarTodosAbiertos(nodos) {
     const puestos = new Set()
-    const marcar = (nodos) => {
-      for (const nodo of nodos ?? []) {
+    const marcar = (lista) => {
+      for (const nodo of lista ?? []) {
         if (nodo.sePuedeAbrir) puestos.add(nodo.id)
         marcar(nodo.hijos)
       }
     }
-    marcar(raices)
-    setAbiertos(puestos)
+    marcar(nodos)
+    return puestos
+  }
+
+  function abrirTodoElArbol() {
+    if (!invertido) {
+      const nuevos = abrirTodo(raices, indices.current)
+      setCiclos((antes) => juntarCiclos(antes, nuevos))
+    }
+    setAbiertos(marcarTodosAbiertos(raices))
     pedirRedibujo()
   }
 
   function cerrarTodo() {
-    for (const raiz of raices) soltarHijos(raiz)
+    if (!invertido) for (const raiz of raices) soltarHijos(raiz)
     setAbiertos(new Set())
     pedirRedibujo()
+  }
+
+  /**
+   * Alterna entre «qué lleva este producto» y «dónde se usa cada insumo».
+   *
+   * Portado de `bomToggleInvert` de v7. Invertir exige el árbol ENTERO construido: la vista se arma
+   * recorriendo todos los caminos hoja→raíz, y una rama sin abrir no tiene caminos que recorrer.
+   */
+  function alternarInvertido() {
+    if (invertido) { setInvertido(null); setAbiertos(new Set()); pedirRedibujo(); return }
+
+    const nuevos = abrirTodo(normales, indices.current)
+    if (nuevos.length > 0) setCiclos((antes) => juntarCiclos(antes, nuevos))
+    const alReves = invertirArbol(normales)
+    setInvertido(alReves)
+    setAbiertos(marcarTodosAbiertos(alReves))
+    pedirRedibujo()
+  }
+
+  /**
+   * El árbol a Excel, con las columnas de v7.
+   *
+   * Se construye ENTERO antes de volcar, esté abierto o no en pantalla: lo que se lleva a una reunión
+   * es la jerarquía completa, no lo que quedó desplegado. Ver `bomExportExcel` de v7.
+   */
+  async function exportar() {
+    setExportando(true)
+    try {
+      // Se vuelca SIEMPRE el árbol normal: las columnas del Excel —material padre, nivel, coeficiente
+      // de entrada— son las de una explosión de arriba abajo, y en la vista invertida significarían
+      // otra cosa. v7 hacía lo mismo.
+      const nuevos = abrirTodo(normales, indices.current)
+      if (nuevos.length > 0) setCiclos((antes) => juntarCiclos(antes, nuevos))
+      const libro = await armarLibroDeUnProducto(aplanarArbol(normales))
+      descargarLibro(libro, nombreDeArchivo(elegido, new Date().toISOString().slice(0, 10)))
+    } catch (fallo) {
+      setError(fallo.message)
+    } finally {
+      setExportando(false)
+    }
   }
 
   /** Aplana el bosque a las filas que hay que dibujar, según qué está abierto. */
@@ -268,9 +329,9 @@ export default function BomTree() {
           ? <div className="notice notice-error">✕ {error}</div>
           : (
             <div className="notice notice-info">
-              No hay recetas descargadas. Abre <b>Descargar</b> y trae el grupo «Árbol de
-              materiales»; este visor trabaja sobre lo que quedó guardado en este navegador, sin volver
-              a preguntarle a SAP.
+              No hay recetas descargadas. Vuelve al paso <b>① Mapeo de entidades</b> y pulsa
+              «Descargar datos y construir jerarquía»; este visor trabaja sobre lo que quedó guardado
+              en este navegador, sin volver a preguntarle a SAP.
             </div>
           )}
       </div>
@@ -360,7 +421,7 @@ export default function BomTree() {
             <select
               className="select input-sm"
               value={planta}
-              onChange={(evento) => { setPlanta(evento.target.value); setAbiertos(new Set()) }}
+              onChange={(evento) => { setPlanta(evento.target.value); setAbiertos(new Set()); setInvertido(null) }}
               aria-label="Planta"
             >
               <option value="">Elige una planta…</option>
@@ -376,7 +437,24 @@ export default function BomTree() {
               <>
                 <button type="button" className="btn btn-sm" onClick={abrirTodoElArbol}>Abrir todo</button>
                 <button type="button" className="btn btn-sm" onClick={cerrarTodo}>Cerrar todo</button>
-                <BotonPantallaCompleta {...pantalla} que="el árbol" />
+                <button
+                  type="button"
+                  className={`btn btn-sm${invertido ? ' btn-primary' : ''}`}
+                  onClick={alternarInvertido}
+                  title="Ver dónde se usa cada insumo, en vez de qué lleva cada producto"
+                >
+                  {invertido ? '⇅ Volver al árbol normal' : '⇅ Invertir'}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  onClick={exportar}
+                  disabled={exportando}
+                  title="La jerarquía completa a Excel, esté o no desplegada en pantalla"
+                >
+                  {exportando ? 'Generando…' : '⬇ Exportar Excel'}
+                </button>
+                {!sinPantallaCompleta && <BotonPantallaCompleta {...pantalla} que="el árbol" />}
                 <span className="page-hint">
                   {numero(raices.length)} {raices.length === 1 ? 'raíz' : 'raíces'} ·{' '}
                   {numero(filas.length)} filas a la vista

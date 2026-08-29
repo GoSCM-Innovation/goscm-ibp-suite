@@ -9,7 +9,12 @@ import {
   nodosSueltos,
   repartirEnColumnas,
   resumirRed,
+  FINALES,
+  plantasHuerfanas,
   plazoLegible,
+  posicionesEnLienzo,
+  resumirRutas,
+  rutasDeLaRed,
   texto,
   vecinosDe,
 } from './supply-network.js'
@@ -303,5 +308,198 @@ describe('texto', () => {
   it('limpia los espacios con los que llegan los identificadores de SAP', () => {
     expect(texto('  X  ')).toBe('X')
     expect(texto(undefined)).toBe('')
+  })
+})
+
+describe('posicionesEnLienzo', () => {
+  const nodo = (id, clase) => ({ id, clase, nombre: id })
+  const arco = (desde, hasta) => ({ id: `${desde}->${hasta}`, desde, hasta, clase: ARCOS.transporte })
+
+  it('pone cada clase en su columna, de origen a destino', () => {
+    const nodos = [
+      nodo('PROV', CLASES.proveedor),
+      nodo('PLANTA', CLASES.planta),
+      nodo('CD', CLASES.ubicacion),
+      nodo('PRD', CLASES.producto),
+      nodo('CLI', CLASES.cliente),
+    ]
+    const puestos = posicionesEnLienzo(nodos, [])
+    const x = Object.fromEntries(puestos.map((uno) => [uno.id, uno.x]))
+
+    expect(x.PROV).toBeLessThan(x.PLANTA)
+    expect(x.PLANTA).toBeLessThan(x.CD)
+    expect(x.CD).toBeLessThan(x.PRD)
+    expect(x.PRD).toBeLessThan(x.CLI)
+  })
+
+  it('ancla las plantas en x = 0 y las ordena alfabéticamente', () => {
+    const puestos = posicionesEnLienzo(
+      [nodo('P2', CLASES.planta), nodo('P1', CLASES.planta)],
+      [],
+    )
+    expect(puestos.filter((uno) => uno.clase === CLASES.planta).every((uno) => uno.x === 0)).toBe(true)
+    const porAltura = puestos.slice().sort((a, b) => a.y - b.y).map((uno) => uno.id)
+    expect(porAltura).toEqual(['P1', 'P2'])
+  })
+
+  it('ordena los proveedores por la altura de las plantas a las que llegan', () => {
+    // Sin esto, dos proveedores alfabéticamente juntos que abastecen plantas opuestas cruzan sus
+    // flechas por todo el lienzo. Es lo único que hace legible una red de treinta nodos.
+    const nodos = [
+      nodo('P1', CLASES.planta), nodo('P2', CLASES.planta), nodo('P3', CLASES.planta),
+      nodo('AAA', CLASES.proveedor), nodo('ZZZ', CLASES.proveedor),
+    ]
+    // AAA abastece la planta de más abajo; ZZZ, la de más arriba.
+    const arcos = [arco('AAA', 'P3'), arco('ZZZ', 'P1')]
+
+    const puestos = posicionesEnLienzo(nodos, arcos)
+    const y = Object.fromEntries(puestos.map((uno) => [uno.id, uno.y]))
+    expect(y.ZZZ).toBeLessThan(y.AAA)
+  })
+
+  it('parte una columna larga en varias en vez de estirarla sin fin', () => {
+    const muchas = Array.from({ length: 20 }, (_, i) => nodo(`U${i}`, CLASES.ubicacion))
+    const puestos = posicionesEnLienzo(muchas, [])
+    const columnas = new Set(puestos.map((uno) => uno.x))
+    expect(columnas.size).toBe(3)
+  })
+
+  it('no toca los nodos que recibe', () => {
+    // Los comparte con la lista de arcos de la pantalla: mutarlos aquí los cambiaría también allí.
+    const original = nodo('P1', CLASES.planta)
+    posicionesEnLienzo([original], [])
+    expect(original.x).toBeUndefined()
+  })
+
+  it('con una red vacía devuelve una lista vacía', () => {
+    expect(posicionesEnLienzo([], [])).toEqual([])
+    expect(posicionesEnLienzo(undefined, undefined)).toEqual([])
+  })
+})
+
+describe('rutasDeLaRed', () => {
+  const nodo = (id, clase) => ({ id, clase, nombre: id })
+  const traslado = (desde, hasta) => ({ id: `${desde}->${hasta}`, desde, hasta, clase: ARCOS.transporte })
+  const entrega = (desde, hasta) => ({ id: `${desde}->${hasta}`, desde, hasta, clase: ARCOS.entrega })
+
+  it('una ruta que llega a cliente se marca como buena', () => {
+    const nodos = [nodo('P1', CLASES.planta), nodo('CD', CLASES.ubicacion), nodo('C1', CLASES.cliente)]
+    const arcos = [traslado('P1', 'CD'), entrega('CD', 'C1')]
+
+    const { rutas } = rutasDeLaRed(nodos, arcos)
+    expect(rutas).toHaveLength(1)
+    expect(rutas[0]).toMatchObject({
+      planta: 'P1', cliente: 'C1', llegaACliente: true, nodos: ['P1', 'CD'],
+    })
+  })
+
+  it('una ruta que muere en un nodo sin salidas se marca «sin salida»', () => {
+    // El material llega ahí y se queda. En el dibujo no se distingue de una buena.
+    const nodos = [nodo('P1', CLASES.planta), nodo('CD', CLASES.ubicacion)]
+    const { rutas } = rutasDeLaRed(nodos, [traslado('P1', 'CD')])
+
+    expect(rutas).toHaveLength(1)
+    expect(rutas[0]).toMatchObject({ llegaACliente: false, final: FINALES.sinSalida, ultimo: 'CD' })
+  })
+
+  it('una ruta cuyas salidas ya se visitaron se marca como ciclo, no como sin salida', () => {
+    // Son cosas distintas: «no manda a nadie» es un dato que falta; «se muerde la cola» es un error.
+    const nodos = [nodo('P1', CLASES.planta), nodo('A', CLASES.ubicacion), nodo('B', CLASES.ubicacion)]
+    const arcos = [traslado('P1', 'A'), traslado('A', 'B'), traslado('B', 'A')]
+
+    const { rutas } = rutasDeLaRed(nodos, arcos)
+    expect(rutas).toHaveLength(1)
+    expect(rutas[0]).toMatchObject({ final: FINALES.ciclo, ultimo: 'B' })
+  })
+
+  it('una planta con varias salidas da una ruta por cada una', () => {
+    const nodos = [
+      nodo('P1', CLASES.planta), nodo('CD1', CLASES.ubicacion), nodo('CD2', CLASES.ubicacion),
+      nodo('C1', CLASES.cliente),
+    ]
+    const arcos = [traslado('P1', 'CD1'), traslado('P1', 'CD2'), entrega('CD1', 'C1')]
+
+    const { rutas } = rutasDeLaRed(nodos, arcos)
+    expect(rutas).toHaveLength(2)
+    expect(rutas.filter((una) => una.llegaACliente)).toHaveLength(1)
+  })
+
+  it('la planta que entrega directo cuenta como ruta con cliente', () => {
+    const nodos = [nodo('P1', CLASES.planta), nodo('C1', CLASES.cliente)]
+    const { rutas } = rutasDeLaRed(nodos, [entrega('P1', 'C1')])
+    expect(rutas[0]).toMatchObject({ planta: 'P1', cliente: 'C1', llegaACliente: true })
+  })
+
+  it('los arcos de suministro y de fabricación no son rutas: no llevan producto a nadie', () => {
+    const nodos = [nodo('P1', CLASES.planta), nodo('PROV', CLASES.proveedor), nodo('PRD', CLASES.producto)]
+    const arcos = [
+      { id: 'a', desde: 'PROV', hasta: 'P1', clase: ARCOS.suministro },
+      { id: 'b', desde: 'P1', hasta: 'PRD', clase: ARCOS.fabricacion },
+    ]
+    const { rutas } = rutasDeLaRed(nodos, arcos)
+    expect(rutas).toHaveLength(1)
+    expect(rutas[0].final).toBe(FINALES.sinSalida)
+  })
+
+  it('avisa cuando corta por el tope, en vez de entregar una lista recortada como completa', () => {
+    const nodos = [
+      nodo('P1', CLASES.planta), nodo('A', CLASES.ubicacion),
+      nodo('C1', CLASES.cliente), nodo('C2', CLASES.cliente), nodo('C3', CLASES.cliente),
+    ]
+    const arcos = [traslado('P1', 'A'), entrega('A', 'C1'), entrega('A', 'C2'), entrega('A', 'C3')]
+
+    const { rutas, truncado } = rutasDeLaRed(nodos, arcos, { tope: 2 })
+    expect(rutas).toHaveLength(2)
+    expect(truncado).toBe(true)
+  })
+
+  it('sin plantas no hay rutas', () => {
+    expect(rutasDeLaRed([nodo('CD', CLASES.ubicacion)], []).rutas).toEqual([])
+    expect(rutasDeLaRed(undefined, undefined).rutas).toEqual([])
+  })
+})
+
+describe('plantasHuerfanas', () => {
+  it('es huérfana la planta cuyo CIEN POR CIEN de rutas muere', () => {
+    const rutas = [
+      { planta: 'P1', llegaACliente: false },
+      { planta: 'P1', llegaACliente: false },
+      { planta: 'P2', llegaACliente: true },
+    ]
+    expect(plantasHuerfanas(rutas)).toEqual(['P1'])
+  })
+
+  it('una planta con nueve rutas muertas y UNA buena no es huérfana', () => {
+    // Lo que fabrica sale. Marcarla escondería a las que de verdad no llegan a nadie.
+    const rutas = [
+      ...Array.from({ length: 9 }, () => ({ planta: 'P1', llegaACliente: false })),
+      { planta: 'P1', llegaACliente: true },
+    ]
+    expect(plantasHuerfanas(rutas)).toEqual([])
+  })
+
+  it('sin rutas no hay huérfanas', () => {
+    expect(plantasHuerfanas([])).toEqual([])
+    expect(plantasHuerfanas(undefined)).toEqual([])
+  })
+})
+
+describe('resumirRutas', () => {
+  it('separa las que llegan de las que no, y estas por cómo mueren', () => {
+    const rutas = [
+      { llegaACliente: true },
+      { llegaACliente: false, final: FINALES.sinSalida },
+      { llegaACliente: false, final: FINALES.ciclo },
+      { llegaACliente: false, final: FINALES.ciclo },
+    ]
+    expect(resumirRutas(rutas)).toEqual({
+      total: 4, conCliente: 1, sinCliente: 3, sinSalida: 1, ciclos: 2,
+    })
+  })
+
+  it('con nada devuelve ceros, no indefinidos', () => {
+    expect(resumirRutas(undefined)).toEqual({
+      total: 0, conCliente: 0, sinCliente: 0, sinSalida: 0, ciclos: 0,
+    })
   })
 })

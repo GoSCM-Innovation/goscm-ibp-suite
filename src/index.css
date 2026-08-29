@@ -39,7 +39,7 @@
 
   --font:   'DM Sans', sans-serif;
   --mono:   'JetBrains Mono', monospace;
-  --sidebar-w: 232px;
+  --sidebar-w: 252px;
   --header-h:  52px;
   --radius:    10px;
 }
@@ -1908,3 +1908,617 @@ a { color: var(--cyan); }
    ese tope es justo lo que sobra: se sube al alto disponible. */
 .a-pantalla-completa:fullscreen .table-alta { max-height: calc(100vh - 190px); }
 .a-pantalla-completa:fullscreen .lienzo-cuerpo { height: calc(100vh - 150px); }
+
+/* ═══════════════════════════════════════════════════════════════════════════════════════════════
+   LA INTERFAZ DE v7, TAL CUAL ERA
+
+   Lo de abajo está copiado de `public/css/styles.css` de v7 (`GoSCM-Innovation/ibp-bom-v7`,
+   `origin/master`), no reinterpretado. El motivo es una decisión del usuario: v7, v8 y v9 llevan años
+   de uso delante de clientes y su interfaz está trabajada; portar la funcionalidad y rehacer la forma
+   convierte una migración en un producto nuevo que nadie pidió.
+
+   Los nombres de las clases son los de v7 a propósito. Cuando haya que comparar una pantalla con su
+   original, lo que se busca en el navegador se llama igual en los dos.
+
+   Las variables de espaciado y tipografía de v7 se declaran aquí abajo para que estos bloques sean
+   copia literal y no una traducción a mano, que es donde se cuelan las diferencias de dos píxeles.
+   ═══════════════════════════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  --sp-1: 4px;  --sp-2: 8px;   --sp-3: 12px; --sp-4: 16px;
+  --sp-5: 20px; --sp-6: 24px;  --sp-8: 32px; --sp-12: 48px;
+  --r-sm: 4px;  --r: 6px;  --r-md: 8px;  --r-lg: 10px;  --r-xl: 14px;
+  --dur-fast: 150ms;
+  --dur-std:  250ms;
+  --ease-out: cubic-bezier(0, 0, .2, 1);
+  --text-sm:   12px;
+  --text-base: 15px;
+  --amber: var(--accent);
+  --blue:  var(--cyan);
+}
+
+/* v7 llamaba a sus botones `btn-secondary` y `btn-small`; la suite, `btn` y `btn-sm`. Se declaran los
+   dos nombres en vez de reescribir el marcado portado: así una pantalla de aquí y su original se
+   pueden poner lado a lado sin traducir clases. */
+.btn-secondary { background: var(--surface); border-color: var(--border); color: var(--text); }
+.btn-secondary:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.btn-small { font-size: 12px; padding: 6px 10px; }
+
+.hidden { display: none !important; }
+
+/* ── Cinta de presentación de cada app ────────────────────────────────────────────────────────── */
+.tab-info-banner {
+  background: linear-gradient(135deg, rgba(41, 171, 226, .07) 0%, rgba(247, 168, 0, .05) 100%);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 12px 18px;
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+.tab-info-icon { font-size: 22px; flex-shrink: 0; margin-top: 1px; }
+.tab-info-content { flex: 1; }
+.tab-info-desc { font-size: 12.5px; color: var(--text2); line-height: 1.6; }
+
+/* ── Panel ────────────────────────────────────────────────────────────────────────────────────── */
+.panel {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  margin: 0 0 16px;
+  padding: 20px;
+}
+.panel-title {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  margin-bottom: 14px;
+  border-left: 3px solid var(--accent2);
+  padding-left: 10px;
+}
+.panel-title.collapsible { cursor: pointer; user-select: none; }
+.panel-desc { font-size: 12px; color: var(--text2); line-height: 1.6; margin-bottom: 10px; }
+
+@keyframes panel-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.panel-animate-in { animation: panel-in var(--dur-std) var(--ease-out) forwards; }
+
+/* ── Formulario ───────────────────────────────────────────────────────────────────────────────── */
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.form-group { display: flex; flex-direction: column; gap: 4px; }
+.form-group.full { grid-column: 1 / -1; }
+.form-group label {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--text2);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+.form-group input,
+.form-group select {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: var(--text-sm);
+  padding: 8px 12px;
+  outline: none;
+  transition: border var(--dur-fast) var(--ease-out);
+}
+.form-group input:focus,
+.form-group select:focus { border-color: var(--accent); }
+.form-group input::placeholder { color: var(--text3); }
+.form-group select:disabled { opacity: .4; cursor: not-allowed; }
+.form-group select option { background: var(--bg2); color: var(--text); }
+
+.btn-row { display: flex; gap: 8px; align-items: center; margin-top: 14px; flex-wrap: wrap; }
+
+/* ── Registro técnico ─────────────────────────────────────────────────────────────────────────── */
+.log-area {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 14px;
+  max-height: 200px;
+  overflow-y: auto;
+  margin-top: 12px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.7;
+  color: var(--text2);
+}
+.log-area .ok   { color: var(--accent); }
+.log-area .err  { color: var(--red); }
+.log-area .warn { color: var(--amber); }
+.log-area .info { color: var(--blue); }
+
+/* ── Mapeo de entidades ───────────────────────────────────────────────────────────────────────── */
+.mdt-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 12px; }
+.mdt-card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+}
+.mdt-card .mdt-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--text3);
+  margin-bottom: 6px;
+}
+.mdt-card select {
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: 5px;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 6px 8px;
+}
+.mdt-card .mdt-fields {
+  margin-top: 6px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text3);
+  max-height: 60px;
+  overflow-y: auto;
+}
+@media (max-width: 1100px) { .mdt-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 700px)  { .mdt-grid { grid-template-columns: 1fr; } }
+
+/* ── Buscador con lista (el `ss-` de v7: search select) ───────────────────────────────────────── */
+.ss-wrap { position: relative; }
+.ss-input-vis {
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: 5px;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 6px 8px;
+  outline: none;
+  cursor: text;
+}
+.ss-input-vis:focus { border-color: var(--accent); }
+.ss-input-vis::placeholder { color: var(--text3); }
+.ss-list {
+  position: absolute;
+  top: calc(100% + 3px);
+  left: 0;
+  right: 0;
+  background: var(--bg2);
+  border: 1px solid var(--border2);
+  border-radius: 6px;
+  max-height: 180px;
+  overflow-y: auto;
+  z-index: 600;
+  display: none;
+  box-shadow: var(--shadow-lg);
+}
+.ss-list.open { display: block; }
+.ss-opt {
+  padding: 6px 10px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text2);
+  cursor: pointer;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  width: 100%;
+  background: none;
+  border-left: none;
+  border-right: none;
+  border-top: none;
+  display: block;
+}
+.ss-opt:last-child { border-bottom: none; }
+.ss-opt:hover { background: var(--surface); color: var(--accent); }
+.ss-opt.active { color: var(--accent); background: rgba(247, 168, 0, .07); }
+.ss-none { padding: 8px 10px; font-size: 11px; color: var(--text3); font-style: italic; }
+
+/* ── Barra de avance ──────────────────────────────────────────────────────────────────────────── */
+.progress-bar {
+  height: 4px;
+  background: var(--surface);
+  border-radius: 2px;
+  margin-top: 10px;
+  overflow: hidden;
+}
+.progress-bar .fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent2), var(--accent), var(--cyan));
+  border-radius: 2px;
+  transition: width .3s;
+}
+
+/* ── Vacío / bloqueado ────────────────────────────────────────────────────────────────────────── */
+.empty-state { text-align: center; padding: 60px 20px; color: var(--text3); }
+.empty-state .icon { font-size: 40px; margin-bottom: 12px; }
+
+/* ── Los pasos opcionales del analizador (el acordeón de `mattype-config.js`) ─────────────────── */
+.mattype-panel {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  margin: 0 0 12px;
+}
+.mattype-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  cursor: pointer;
+  user-select: none;
+  gap: 12px;
+  width: 100%;
+  background: none;
+  border: none;
+  font-family: var(--font);
+  text-align: left;
+}
+.mattype-panel-header:hover { background: var(--surface-glass-soft); border-radius: 10px; }
+.mattype-panel-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  border-left: 3px solid var(--accent2);
+  padding-left: 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.mattype-optional-badge {
+  font-size: 10px;
+  font-weight: 600;
+  background: rgba(247, 168, 0, .15);
+  color: var(--accent);
+  border: 1px solid rgba(247, 168, 0, .3);
+  border-radius: 10px;
+  padding: 1px 7px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.mattype-panel-actions { display: flex; align-items: center; gap: 8px; }
+.mattype-summary { font-size: 11px; color: var(--text3); font-style: italic; }
+.mattype-reset-btn {
+  font-size: 11px;
+  color: var(--text3);
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 2px 8px;
+  cursor: pointer;
+  font-family: var(--font);
+  transition: color .2s, border-color .2s;
+}
+.mattype-reset-btn:hover { color: var(--red); border-color: var(--red); }
+.mattype-arr { font-size: 11px; color: var(--text3); margin-left: 4px; }
+.mattype-panel-body { padding: 0 16px 16px; }
+.mattype-note {
+  font-size: 11px;
+  color: var(--text3);
+  margin: 10px 0 0;
+  padding: 8px 10px;
+  background: rgba(41, 171, 226, .06);
+  border-left: 2px solid var(--cyan);
+  border-radius: 4px;
+}
+
+/* ── El asistente de conexión ─────────────────────────────────────────────────────────────────── */
+.conn-wizard-stepper {
+  display: flex;
+  align-items: center;
+  padding: var(--sp-3) var(--sp-6);
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+  gap: 0;
+}
+.stepper-step { display: flex; align-items: center; gap: var(--sp-2); flex-shrink: 0; cursor: default; }
+.step-circle {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 2px solid var(--border2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text3);
+  background: var(--bg3);
+  flex-shrink: 0;
+  transition: border-color var(--dur-std) var(--ease-out),
+              background var(--dur-std) var(--ease-out),
+              color var(--dur-std) var(--ease-out);
+}
+.step-label {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--text3);
+  white-space: nowrap;
+  transition: color var(--dur-std) var(--ease-out);
+}
+.stepper-step.active .step-circle {
+  border-color: var(--accent);
+  background: var(--accent-bg-soft);
+  color: var(--accent);
+}
+.stepper-step.active .step-label { color: var(--text); }
+.stepper-step.completed .step-circle {
+  border-color: var(--green);
+  background: rgba(52, 211, 153, .12);
+  color: var(--green);
+}
+.stepper-step.completed .step-label { color: var(--text2); }
+.stepper-connector {
+  flex: 1;
+  height: 2px;
+  background: var(--border2);
+  min-width: var(--sp-4);
+  max-width: 48px;
+  border-radius: 1px;
+  transition: background var(--dur-std) var(--ease-out);
+}
+.stepper-connector.completed { background: var(--green); }
+
+.conn-step { display: none; }
+.conn-step.active { display: block; animation: panel-in var(--dur-std) var(--ease-out) forwards; }
+
+.conn-active-status {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-weight: 600;
+  font-size: var(--text-base);
+  color: var(--green);
+  margin-bottom: var(--sp-4);
+}
+.conn-active-grid {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  overflow: hidden;
+}
+.conn-active-row {
+  display: grid;
+  grid-template-columns: 130px 1fr;
+  gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-4);
+  border-bottom: 1px solid var(--border);
+  align-items: center;
+}
+.conn-active-row:last-child { border-bottom: none; }
+.conn-active-label {
+  font-size: var(--text-sm);
+  color: var(--text3);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  white-space: nowrap;
+}
+.conn-active-value {
+  font-size: var(--text-sm);
+  color: var(--text);
+  font-family: var(--mono);
+  word-break: break-all;
+}
+.conn-select {
+  width: 100%;
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: var(--text-sm);
+  outline: none;
+}
+.conn-select:focus { border-color: var(--accent); }
+.conn-select option { background: var(--bg2); color: var(--text); }
+
+/* ── El estado de la conexión en el menú lateral ──────────────────────────────────────────────── */
+.status-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.status-dot.off { background: var(--red); }
+.status-dot.on  { background: var(--accent); box-shadow: 0 0 8px rgba(247, 168, 0, .7); }
+
+.sidebar-conn {
+  padding: var(--sp-3) var(--sp-2);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  flex-shrink: 0;
+  margin: 8px 0;
+}
+.conn-status-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-size: var(--text-sm);
+  color: var(--text2);
+  padding: 0 var(--sp-1);
+}
+.sidebar-connect-btn { width: 100%; justify-content: center; }
+
+.nav-lock-badge { font-size: 10px; opacity: .45; flex-shrink: 0; margin-left: auto; }
+.nav-section-label {
+  display: block;
+  padding: var(--sp-1) var(--sp-3);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .08em;
+  color: var(--text3);
+  text-transform: uppercase;
+}
+
+/* Las apps de un módulo cuelgan de él, sangradas: es el mismo menú de v7, con un nivel más porque
+   aquí conviven tres productos donde v7 era uno solo. */
+.nav-item.nav-app { font-size: 12px; gap: 8px; padding: 7px 8px 7px 24px; }
+.nav-item.nav-app .nav-icon { font-size: 13px; width: 16px; }
+.nav-item.nav-app .nav-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ── El aviso de ciclos del árbol ─────────────────────────────────────────────────────────────── */
+.cycle-banner {
+  background: rgba(255, 107, 107, .08);
+  border: 1px solid rgba(255, 107, 107, .25);
+  border-radius: 8px;
+  margin: 0 0 12px;
+  padding: 10px 16px;
+  font-size: 12px;
+  color: var(--red);
+}
+
+/* ── Las pestañas de producto del árbol ───────────────────────────────────────────────────────── */
+.bom-tabs-bar {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 6px 0 0;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg2);
+  overflow: hidden;
+}
+.bom-tabs-scroll {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  overflow-x: auto;
+  flex: 1;
+  scrollbar-width: none;
+}
+.bom-tabs-scroll::-webkit-scrollbar { display: none; }
+.bom-tab-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  font-size: 11.5px;
+  font-family: var(--font);
+  color: var(--text2);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  max-width: 180px;
+  transition: color .15s, border-color .15s;
+}
+.bom-tab-btn:hover { color: var(--text); }
+.bom-tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+.bom-tab-close {
+  font-size: 13px;
+  color: var(--text3);
+  cursor: pointer;
+  margin-left: 4px;
+  line-height: 1;
+  border: none;
+  background: none;
+  padding: 0 2px;
+}
+.bom-tab-close:hover { color: var(--red); }
+.bom-fs-btn { flex-shrink: 0; margin-left: 8px; margin-bottom: 6px; white-space: nowrap; }
+
+/* ── El lienzo de la red (vis-network, igual que v7) ──────────────────────────────────────────── */
+.viz-controls-bar {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg) var(--r-lg) 0 0;
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.viz-legend {
+  background: var(--bg2);
+  border-left: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  padding: 8px 16px;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+  font-size: 11px;
+  color: var(--text2);
+}
+.viz-legend label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.viz-legend input { width: auto; margin: 0; }
+.viz-swatch { width: 11px; height: 11px; border-radius: 3px; display: inline-block; flex-shrink: 0; }
+.viz-detail {
+  background: var(--bg2);
+  border-left: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  padding: 10px 16px;
+  font-size: 12px;
+}
+.viz-canvas {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-top: none;
+  border-radius: 0 0 var(--r-lg) var(--r-lg);
+}
+.viz-canvas:fullscreen { border-radius: 0; height: 100vh !important; }
+
+/* ── Insignias del detalle de un nodo (las de v7) ─────────────────────────────────────────────── */
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .04em;
+}
+.badge-main   { background: rgba(247, 168, 0, .15);  color: var(--accent); }
+.badge-comp   { background: rgba(41, 171, 226, .15); color: var(--cyan); }
+.badge-leaf   { background: rgba(52, 211, 153, .15); color: var(--green); }
+.badge-coprod { background: rgba(167, 139, 250, .15); color: var(--purple); }
+
+/* El indicador de progreso va a sangre dentro del diálogo, como en v7: pegado bajo el encabezado y
+   con su propia línea inferior. Depende de que `.modal-body` tenga 16px por 18px. */
+.modal-stepper { margin: -16px -18px 16px; }
+
+/* El menú lateral crece con las aplicaciones desplegadas, así que se desplaza; el pie se queda
+   abajo. */
+.sidebar-nav { display: flex; flex-direction: column; gap: 3px; min-height: 0; overflow-y: auto; }
+.sidebar-footer { margin-top: auto; padding-top: 8px; border-top: 1px solid var(--border); }
+
+/* ── El panel de rutas del visualizador de red ─────────────────────────────────────────────────
+   Portado del `vizRutasPanel` de v7: plegado enseña el resumen, abierto la tabla con sus filtros. */
+.viz-rutas {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-top: none;
+  border-radius: 0 0 var(--r-lg) var(--r-lg);
+  margin-top: -1px;
+}
+.viz-rutas-cabecera {
+  align-items: center;
+  background: none;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  font-family: var(--font);
+  font-size: 12px;
+  gap: 8px;
+  padding: 10px 16px;
+  text-align: left;
+  width: 100%;
+  color: var(--text);
+}
+.viz-rutas-cabecera:hover { background: var(--surface-glass-soft); }
+.viz-rutas-cuerpo { border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 10px; padding: 12px 16px; }

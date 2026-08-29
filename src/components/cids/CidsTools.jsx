@@ -102,7 +102,7 @@ export default function CidsTools() {
   if (conexiones.length === 0) {
     return (
       <div className="notice notice-info">
-        No hay ninguna conexión a CI-DS configurada para tu empresa. Pedile a quien administra la
+        No hay ninguna conexión a CI-DS configurada para tu empresa. Pídele a quien administra la
         cuenta que la dé de alta en Administración → Conexiones.
       </div>
     )

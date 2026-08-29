@@ -1,7 +1,13 @@
 // Bajar el dato maestro del tenant a la base local, viendo qué pasa.
 //
-// Portada de las dos pantallas de descarga de v7 —la del árbol y la de la red—, que eran la misma
-// cosa duplicada con distintas etiquetas.
+// Portada de las dos descargas de v7 —la del árbol (`doFetchAll` de `main.js`) y la de la red (fase 1
+// de `analyzer.js`)—, que eran la misma cosa duplicada con distintas etiquetas.
+//
+// En v7 la descarga NO era una pantalla: era el botón con que terminaba el paso ① de cada
+// aplicación, y bajaba justo lo que esa aplicación necesita. Por eso acepta `gruposFijos`: cuando
+// viene puesto, no se ofrece elegir grupos —el árbol de materiales no tiene por qué preguntarle a
+// nadie si además quiere la red—. Sin él se comporta como la pantalla suelta, con los dos grupos a
+// elección.
 //
 // Lo que la pantalla dice antes de empezar es la mitad del valor: qué tablas se van a bajar, cuáles no
 // se van a poder y por qué. Enterarse a los seis minutos de que falta la tabla principal, después de
@@ -21,10 +27,12 @@ import { extraer } from '../../lib/explorer-extract.js'
 
 const numero = (valor) => Number(valor ?? 0).toLocaleString('es')
 
-export default function ExplorerExtract({ destino }) {
+export default function ExplorerExtract({
+  destino, gruposFijos = null, extras = null, onTerminada = null,
+}) {
   const [mapa, setMapa] = useState(null)
   const [error, setError] = useState('')
-  const [grupos, setGrupos] = useState(['arbol', 'red'])
+  const [grupos, setGrupos] = useState(gruposFijos ?? ['arbol', 'red'])
 
   const [bajando, setBajando] = useState(false)
   const [avance, setAvance] = useState(null)
@@ -51,8 +59,12 @@ export default function ExplorerExtract({ destino }) {
   }, [destino])
 
   const plan = useMemo(
-    () => (mapa ? planificarExtraccion({ efectivo: mapa.efectivo, mapa: mapa.guardado.fields, grupos }) : null),
-    [mapa, grupos],
+    () => (mapa
+      ? planificarExtraccion({
+        efectivo: mapa.efectivo, mapa: mapa.guardado.fields, grupos, extras: extras ?? {},
+      })
+      : null),
+    [mapa, grupos, extras],
   )
 
   /** Cuántas filas hay ya guardadas de cada tabla, para saber si vale la pena volver a bajar. */
@@ -91,6 +103,7 @@ export default function ExplorerExtract({ destino }) {
       })
       setSalida(hecho)
       contarLoGuardado()
+      onTerminada?.(hecho)
     } catch (fallo) {
       setError(fallo.message)
     } finally {
@@ -109,22 +122,24 @@ export default function ExplorerExtract({ destino }) {
       {error && <div className="notice notice-error">✕ {error}</div>}
 
       <div className="monitor-bar">
-        <div className="seg">
-          {GRUPOS_DE_EXTRACCION.map(({ id, label }) => (
-            <button
-              key={id}
-              type="button"
-              className={`seg-btn${grupos.includes(id) ? ' active' : ''}`}
-              onClick={() => setGrupos((previos) => (previos.includes(id)
-                ? previos.filter((otro) => otro !== id)
-                : [...previos, id]))}
-              aria-pressed={grupos.includes(id)}
-              disabled={bajando}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+        {!gruposFijos && (
+          <div className="seg">
+            {GRUPOS_DE_EXTRACCION.map(({ id, label }) => (
+              <button
+                key={id}
+                type="button"
+                className={`seg-btn${grupos.includes(id) ? ' active' : ''}`}
+                onClick={() => setGrupos((previos) => (previos.includes(id)
+                  ? previos.filter((otro) => otro !== id)
+                  : [...previos, id]))}
+                aria-pressed={grupos.includes(id)}
+                disabled={bajando}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
 
         <button
           type="button"
@@ -157,8 +172,8 @@ export default function ExplorerExtract({ destino }) {
 
       {plan.gruposPosibles.length === 0 && (
         <div className="notice notice-error">
-          ✕ No se puede bajar nada: a los grupos elegidos les falta alguna tabla imprescindible.
-          Revisa «Origen de los datos» — quizá haya que decirle a mano qué tabla usar.
+          ✕ No se puede bajar nada: falta alguna tabla imprescindible. Vuelve al paso{' '}
+          <b>① Mapeo de entidades</b> — quizá haya que decirle a mano qué tabla de este tenant usar.
         </div>
       )}
 

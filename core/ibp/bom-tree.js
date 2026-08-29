@@ -455,3 +455,87 @@ export function buscarNodo(nodos, id) {
   }
   return null
 }
+
+// ── El árbol al revés ────────────────────────────────────────────────────────────────────────────
+//
+// Portado de `bomInvertTree` e `invertNode` de `bom.js` de v7.
+//
+// QUÉ CONTESTA, que es lo que hace que valga la pena: el árbol normal contesta «¿qué lleva este
+// producto?»; el invertido contesta «¿DÓNDE SE USA este insumo?». Es la pregunta que se hace cuando
+// un proveedor sube un precio o cuando una materia prima se descataloga, y sin esto hay que abrir
+// producto por producto y buscar a ojo.
+//
+// Cómo se arma: para cada raíz se recogen todos los caminos hoja→raíz de su subárbol. Cada hoja
+// DISTINTA pasa a colgar de la raíz, y debajo de ella la cadena de quienes la consumen, subiendo. Un
+// insumo que aparece en cuatro ramas sale UNA vez, con sus cuatro consumidores debajo.
+//
+// Exige el árbol ya construido entero —`abrirTodo`—: los hijos se arman al abrir, y sin ellos no hay
+// caminos que recorrer. Es lo mismo que hacía v7 antes de invertir.
+
+/** Con qué se identifica un nodo al invertir: el mismo material en la misma receta y planta. */
+const claveDeNodo = (nodo) => `${nodo.prdid}|${nodo.planta}|${nodo.receta || nodo.id}`
+
+/** Copia un nodo para el árbol invertido, sin hijos y en el nivel que le toca. */
+function copiaInvertida(nodo, nivel, sufijo) {
+  return {
+    ...nodo,
+    id: `inv_${nodo.id}_${sufijo}`,
+    nivel,
+    hijos: [],
+    sePuedeAbrir: false,
+  }
+}
+
+/** Todos los caminos desde los hijos de `nodo` hasta cada hoja de su subárbol. */
+function caminosHastaLasHojas(nodo) {
+  const caminos = []
+  const recorrer = (uno, camino) => {
+    const hasta = [...camino, uno]
+    if (!uno.hijos || uno.hijos.length === 0) caminos.push(hasta)
+    else for (const hijo of uno.hijos) recorrer(hijo, hasta)
+  }
+  for (const hijo of nodo.hijos ?? []) recorrer(hijo, [])
+  return caminos
+}
+
+/** Invierte un nodo: sus hojas pasan a colgar de él, y sus consumidores debajo de cada hoja. */
+function invertirNodo(nodo, nivel) {
+  const invertido = copiaInvertida(nodo, nivel, `L${nivel}`)
+  if (!nodo.hijos || nodo.hijos.length === 0) return invertido
+
+  const porHoja = new Map()
+
+  for (const camino of caminosHastaLasHojas(nodo)) {
+    const hoja = camino[camino.length - 1]
+    const clave = claveDeNodo(hoja)
+    if (!porHoja.has(clave)) porHoja.set(clave, copiaInvertida(hoja, nivel + 1, `L${nivel + 1}`))
+
+    // De la hoja hacia arriba: cada uno cuelga del anterior. Un tramo que ya está no se repite.
+    let padre = porHoja.get(clave)
+    for (let i = camino.length - 2; i >= 0; i -= 1) {
+      const suyo = camino[i]
+      const clavePadre = claveDeNodo(suyo)
+      let existente = padre.hijos.find((uno) => claveDeNodo(uno) === clavePadre)
+      if (!existente) {
+        existente = copiaInvertida(suyo, padre.nivel + 1, `L${padre.nivel + 1}`)
+        padre.hijos.push(existente)
+        padre.sePuedeAbrir = true
+      }
+      padre = existente
+    }
+  }
+
+  invertido.hijos = [...porHoja.values()]
+  invertido.sePuedeAbrir = invertido.hijos.length > 0
+  return invertido
+}
+
+/**
+ * El bosque al revés: las hojas arriba y quien las consume debajo.
+ *
+ * No toca el original: devuelve copias. El árbol normal y el invertido conviven en la misma pestaña
+ * y se alterna entre los dos, así que invertir no puede destruir el de partida.
+ */
+export function invertirArbol(raices) {
+  return (raices ?? []).map((raiz) => invertirNodo(raiz, 1))
+}

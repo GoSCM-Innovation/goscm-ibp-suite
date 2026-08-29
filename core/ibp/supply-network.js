@@ -313,3 +313,228 @@ export function nodosSueltos(nodos, arcos) {
   for (const arco of arcos ?? []) { tocados.add(arco.desde); tocados.add(arco.hasta) }
   return (nodos ?? []).filter((uno) => !tocados.has(uno.id))
 }
+
+// ── Dónde va cada nodo en el lienzo ──────────────────────────────────────────────────────────────
+//
+// Portado de `vizAssignPositions` de `visualizer.js` de v7, con sus mismas medidas.
+//
+// v7 dibujaba con una librería de red pero con la física APAGADA: las posiciones se calculan aquí y
+// el lienzo solo las pinta. Es una decisión suya y es la correcta — una red con física se recoloca
+// sola cada vez que se abre, así que dos personas mirando el mismo producto ven dibujos distintos y
+// ninguna puede señalar «el nodo de arriba a la izquierda».
+//
+// Dentro de cada columna las filas se ordenan por BARICENTRO: cada nodo se pone a la altura media de
+// los nodos con los que ya está conectado en la columna anterior. Es lo que evita que la red se
+// convierta en una maraña de líneas cruzadas. Se hace en cadena —plantas primero, después los
+// proveedores que les llegan, después las ubicaciones, después los clientes— porque cada paso necesita
+// que el anterior ya esté colocado.
+
+/** El ancho de una columna, en píxeles del lienzo. */
+export const ANCHO_DE_COLUMNA = 260
+
+/** El alto de una fila. */
+export const ALTO_DE_FILA = 80
+
+/** Cuántas filas caben en una columna antes de partirla en dos. */
+export const FILAS_POR_COLUMNA = 8
+
+/** Reparte una lista en columnas de `FILAS_POR_COLUMNA`, centradas verticalmente. */
+function colocar(lista, xInicial, cuantasColumnas) {
+  if (lista.length === 0) return
+  const porColumna = Math.ceil(lista.length / cuantasColumnas)
+  lista.forEach((nodo, indice) => {
+    const columna = Math.floor(indice / porColumna)
+    const fila = indice % porColumna
+    const enEsta = Math.min(porColumna, lista.length - columna * porColumna)
+    nodo.x = xInicial + columna * ANCHO_DE_COLUMNA
+    nodo.y = (fila - (enEsta - 1) / 2) * ALTO_DE_FILA
+  })
+}
+
+/**
+ * La altura media de los vecinos ya colocados de un nodo.
+ *
+ * Cero cuando no tiene ninguno: un nodo sin conexión con la columna de referencia no tiene baricentro
+ * y se queda en el medio, que es donde menos estorba.
+ */
+function baricentro(id, arcos, alturas) {
+  let suma = 0
+  let cuantos = 0
+  for (const arco of arcos ?? []) {
+    const otro = arco.desde === id ? arco.hasta : (arco.hasta === id ? arco.desde : null)
+    if (otro === null) continue
+    const altura = alturas.get(otro)
+    if (altura === undefined) continue
+    suma += altura
+    cuantos += 1
+  }
+  return cuantos === 0 ? 0 : suma / cuantos
+}
+
+/** Las alturas de una lista ya colocada, para que la siguiente columna se ordene contra ellas. */
+const alturasDe = (nodos) => new Map(nodos.map((uno) => [uno.id, uno.y]))
+
+/**
+ * Devuelve los nodos con `x` e `y`, listos para el lienzo.
+ *
+ * No muta lo que recibe: se trabaja sobre copias porque los nodos vienen de `armarRed`, que los
+ * comparte con la lista de arcos de la pantalla.
+ */
+export function posicionesEnLienzo(nodos, arcos) {
+  const copias = (nodos ?? []).map((uno) => ({ ...uno }))
+  const de = (clase) => copias.filter((uno) => uno.clase === clase)
+
+  const plantas = de(CLASES.planta).sort((a, b) => a.id.localeCompare(b.id))
+  const proveedores = de(CLASES.proveedor)
+  const ubicaciones = de(CLASES.ubicacion)
+  const productos = de(CLASES.producto)
+  const clientes = de(CLASES.cliente)
+
+  const columnasProveedor = Math.max(1, Math.ceil(proveedores.length / FILAS_POR_COLUMNA))
+  const columnasUbicacion = Math.max(1, Math.ceil(ubicaciones.length / FILAS_POR_COLUMNA))
+
+  // Las plantas son la columna ancla, en x = 0. Todo lo demás se ordena respecto de ellas.
+  colocar(plantas, 0, 1)
+
+  const alturasDePlanta = alturasDe(plantas)
+  proveedores.sort((a, b) => baricentro(a.id, arcos, alturasDePlanta) - baricentro(b.id, arcos, alturasDePlanta))
+  colocar(proveedores, -(columnasProveedor * ANCHO_DE_COLUMNA), columnasProveedor)
+
+  ubicaciones.sort((a, b) => baricentro(a.id, arcos, alturasDePlanta) - baricentro(b.id, arcos, alturasDePlanta))
+  colocar(ubicaciones, ANCHO_DE_COLUMNA, columnasUbicacion)
+
+  const xProducto = ANCHO_DE_COLUMNA * (1 + columnasUbicacion)
+  colocar(productos, xProducto, 1)
+
+  const alturasDeUbicacion = alturasDe([...ubicaciones, ...plantas])
+  clientes.sort((a, b) => baricentro(a.id, arcos, alturasDeUbicacion) - baricentro(b.id, arcos, alturasDeUbicacion))
+  colocar(clientes, xProducto + ANCHO_DE_COLUMNA, 1)
+
+  return copias
+}
+
+// ── Las rutas de la red ──────────────────────────────────────────────────────────────────────────
+//
+// Portado de `vizFindAllRoutes` y `_vizOrphanPlants` de `visualizer.js` de v7.
+//
+// QUÉ CONTESTA: el dibujo enseña la red; esto enseña si la red LLEVA A ALGUNA PARTE. Se recorre desde
+// cada planta siguiendo los arcos de traslado hasta que la ruta termina, y cada final se clasifica:
+//
+//   - con cliente     — la ruta acaba entregando a alguien. Es la única que vale.
+//   - sin salida      — el último nodo no manda a nadie. El material llega ahí y se queda.
+//   - ciclo           — todas las salidas que quedaban ya se habían visitado: la ruta se muerde la cola.
+//
+// Y de ahí sale lo que de verdad se busca: la PLANTA HUÉRFANA, aquella cuyo cien por cien de rutas
+// termina sin cliente. Se fabrica y no llega a nadie, y en el dibujo no se ve —una planta huérfana
+// tiene sus flechas como cualquier otra—.
+
+/** El tope de rutas que se recorren. Una red con ciclos puede tener un número absurdo. */
+export const TOPE_DE_RUTAS = 50_000
+
+/** Cómo termina una ruta que no llega a ningún cliente. */
+export const FINALES = Object.freeze({
+  sinSalida: 'SIN_SALIDA',
+  ciclo: 'CICLO',
+})
+
+/**
+ * Todas las rutas desde cada planta, clasificadas por cómo terminan.
+ *
+ * Devuelve `{ rutas, truncado, plantasHuerfanas }`. `truncado` avisa de que se llegó al tope: una
+ * lista recortada presentada como completa diría que no hay más rutas cuando sí las hay.
+ */
+export function rutasDeLaRed(nodos, arcos, { tope = TOPE_DE_RUTAS } = {}) {
+  const plantas = (nodos ?? []).filter((uno) => uno.clase === CLASES.planta).map((uno) => uno.id)
+
+  // Los dos tipos de salida de un nodo: seguir moviéndose, o entregar.
+  const traslados = {}
+  const entregas = {}
+  for (const arco of arcos ?? []) {
+    if (arco.clase === ARCOS.transporte) {
+      (traslados[arco.desde] ??= []).push(arco.hasta)
+    } else if (arco.clase === ARCOS.entrega) {
+      (entregas[arco.desde] ??= []).push(arco.hasta)
+    }
+  }
+
+  const rutas = []
+  let truncado = false
+
+  const recorrer = (nodo, camino, visitados) => {
+    if (rutas.length >= tope) { truncado = true; return }
+
+    const aClientes = entregas[nodo] ?? []
+    const todasLasSalidas = traslados[nodo] ?? []
+    const salidas = todasLasSalidas.filter((otro) => !visitados.has(otro))
+
+    if (aClientes.length === 0 && salidas.length === 0) {
+      rutas.push({
+        planta: camino[0],
+        nodos: [...camino],
+        cliente: null,
+        llegaACliente: false,
+        // Que quedaran salidas y todas estuvieran visitadas es un ciclo, no un final.
+        final: todasLasSalidas.length > 0 ? FINALES.ciclo : FINALES.sinSalida,
+        ultimo: nodo,
+      })
+      return
+    }
+
+    for (const cliente of aClientes) {
+      if (rutas.length >= tope) { truncado = true; return }
+      rutas.push({
+        planta: camino[0],
+        nodos: [...camino],
+        cliente,
+        llegaACliente: true,
+        final: null,
+        ultimo: nodo,
+      })
+    }
+
+    for (const otro of salidas) {
+      if (rutas.length >= tope) { truncado = true; return }
+      visitados.add(otro)
+      camino.push(otro)
+      recorrer(otro, camino, visitados)
+      camino.pop()
+      visitados.delete(otro)
+    }
+  }
+
+  for (const planta of plantas) {
+    if (rutas.length >= tope) { truncado = true; break }
+    recorrer(planta, [planta], new Set([planta]))
+  }
+
+  return { rutas, truncado, plantasHuerfanas: plantasHuerfanas(rutas) }
+}
+
+/**
+ * Las plantas cuyo CIEN POR CIEN de rutas termina sin cliente.
+ *
+ * Una planta con nueve rutas muertas y una buena no es huérfana: lo que fabrica sale. La que no tiene
+ * ninguna buena, sí.
+ */
+export function plantasHuerfanas(rutas) {
+  const porPlanta = new Map()
+  for (const ruta of rutas ?? []) {
+    const suya = porPlanta.get(ruta.planta) ?? { total: 0, sinCliente: 0 }
+    suya.total += 1
+    if (!ruta.llegaACliente) suya.sinCliente += 1
+    porPlanta.set(ruta.planta, suya)
+  }
+
+  return [...porPlanta.entries()]
+    .filter(([, suya]) => suya.total > 0 && suya.total === suya.sinCliente)
+    .map(([planta]) => planta)
+    .sort()
+}
+
+/** Cuántas rutas hay de cada clase. Es el resumen de una línea del panel. */
+export function resumirRutas(rutas) {
+  const conCliente = (rutas ?? []).filter((una) => una.llegaACliente).length
+  const sinSalida = (rutas ?? []).filter((una) => !una.llegaACliente && una.final === FINALES.sinSalida).length
+  const ciclos = (rutas ?? []).filter((una) => !una.llegaACliente && una.final === FINALES.ciclo).length
+  return { total: (rutas ?? []).length, conCliente, sinCliente: sinSalida + ciclos, sinSalida, ciclos }
+}

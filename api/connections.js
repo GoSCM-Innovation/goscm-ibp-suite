@@ -41,7 +41,13 @@ export default async function handler(req, res) {
 
     const connections = await listConnections(session.clientId, { kind })
     return res.status(200).json({
-      connections: connections.map(({ id, name, isProduction }) => ({ id, name, isProduction })),
+      // La dirección va incluida: no es un secreto —es el nombre de host del tenant, que el consultor
+      // reconoce— y sin ella la pantalla no puede decir contra QUÉ sistema está corriendo.
+      // `etiquetaDeConexion` ya la esperaba y se quedaba muda sin ella. Las credenciales siguen sin
+      // salir de aquí: viven cifradas y solo el servidor las descifra.
+      connections: connections.map(({ id, name, baseUrl, isProduction }) => (
+        { id, name, baseUrl, isProduction }
+      )),
     })
   } catch (error) {
     console.error(`[connections] ${error.stack || error.message}`)

@@ -79,7 +79,7 @@ export default function IbpTools() {
   if (conexiones.length === 0) {
     return (
       <div className="notice notice-info">
-        No hay ninguna conexión a SAP IBP configurada para tu empresa. Pedile a quien administra la
+        No hay ninguna conexión a SAP IBP configurada para tu empresa. Pídele a quien administra la
         cuenta que la dé de alta en Administración → Conexiones.
       </div>
     )

@@ -8,7 +8,8 @@ import { useCallback, useEffect, useState } from 'react'
 import { api } from './lib/api.js'
 import { puedeSalir } from './lib/guarda-de-salida.js'
 import { applyTheme, readStoredTheme } from './lib/theme.js'
-import { MODULES, moduleById } from './lib/modules.js'
+import { desconectar } from './lib/conexion-activa.js'
+import { MODULES, moduleById, partirRuta } from './lib/modules.js'
 import Login from './components/Login.jsx'
 import Shell from './components/Shell.jsx'
 import ModuleLocked from './components/ModuleLocked.jsx'
@@ -20,9 +21,17 @@ import AdminPanel from './components/admin/AdminPanel.jsx'
 
 const RUTAS_VALIDAS = new Set([...MODULES.map((m) => m.id), 'admin'])
 
+/**
+ * La sección abierta, leída de la dirección.
+ *
+ * Una dirección puede llevar aplicación (`explorer/bom`), porque Data Tools tiene seis. Se valida
+ * solo la primera mitad: la segunda la resuelve `partirRuta`, que cae en la primera aplicación del
+ * módulo cuando el identificador no existe.
+ */
 function rutaActual() {
   const hash = window.location.hash.replace(/^#\/?/, '')
-  return RUTAS_VALIDAS.has(hash) ? hash : null
+  const [moduleId] = hash.split('/')
+  return RUTAS_VALIDAS.has(moduleId) ? hash : null
 }
 
 export default function App() {
@@ -72,6 +81,9 @@ export default function App() {
   async function salir() {
     if (!puedeSalir()) return
     await api.post('/api/auth/logout').catch(() => {})
+    // La conexión vive fuera de React para sobrevivir a los cambios de módulo, así que cerrarla no
+    // ocurre solo: sin esto, quien entre después con otra cuenta hereda el tenant del anterior.
+    desconectar()
     setSession(null)
     window.location.hash = ''
   }
@@ -98,17 +110,19 @@ export default function App() {
     ?? (esAdmin ? 'admin' : MODULES[0].id)
   const activa = route ?? rutaPorDefecto
 
+  const { moduleId, appId } = partirRuta(activa)
+
   function contenido() {
     if (activa === 'admin') {
       if (!esAdmin) return <div className="notice notice-error">No tienes acceso a la administración.</div>
       return <AdminPanel user={user} />
     }
-    const module = moduleById(activa) ?? MODULES[0]
+    const module = moduleById(moduleId) ?? MODULES[0]
     if (!modules.includes(module.id)) return <ModuleLocked module={module} />
     // Los módulos que ya están escritos se montan; el resto sigue con su presentación.
     if (module.id === 'cids') return <CidsTools />
     if (module.id === 'jobs') return <IbpTools />
-    if (module.id === 'explorer') return <DataTools />
+    if (module.id === 'explorer') return <DataTools appId={appId} />
     return <ModulePlaceholder module={module} />
   }
 

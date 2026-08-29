@@ -3,59 +3,58 @@
 Este archivo es el punto de entrada cuando la instrucción es **«continuemos»**. Se lee primero, se
 actualiza al terminar cada sesión, y su orden es el de prioridad acordada.
 
-Última actualización: **2026-08-25**.
+Última actualización: **2026-08-28**.
 
 ## Dónde estamos
 
 - **En línea**: https://goscm-ibp-suite.vercel.app — cada subida a `main` se publica sola.
-- **2.458 pruebas**, lint y build limpios, y el build **sin ningún aviso**.
-- Los tres proyectos previos están portados: sin huecos de funcionalidad en v7, v8 ni v9.
-- Las cuatro áreas —Data Tools, IBP Tools, CI-DS Tools y Administración— están **recorridas pantalla
-  por pantalla contra los tenants reales**. De ahí salieron once fallos, todos arreglados.
-- **La revisión de alcance y filtros está terminada** en v7, v8 y v9: cada pantalla pide el mismo
-  conjunto de datos que su original. Salieron cinco diferencias y las cinco están corregidas — están
-  contadas en los tres documentos de paridad, en la sección «Lo que pide cada pantalla».
-- Y salieron **tres huecos de funcionalidad** que el inventario de archivos no podía ver, porque vivían
-  dentro de archivos ya dados por portados: el aviso del navegador al terminar una orquestación, la
-  guarda al salir con una copia en marcha, y la pantalla completa en las seis pantallas de datos. Los
-  tres portados. Ver «Tres huecos que el inventario de archivos no podía ver» en los tres documentos de
-  paridad — incluye **cómo se encontraron**, que es lo reutilizable.
+- **2.564 pruebas**, lint y build limpios, y el build **sin ningún aviso**.
+- Los tres proyectos previos están portados en funcionalidad.
+- **La interfaz de v7 está restaurada tal cual era**: asistente de conexión de tres pasos, sus seis
+  aplicaciones en el menú con sus nombres, el acordeón numerado ① a ⑤ dentro de los analizadores, y el
+  grafo interactivo de la red con la misma librería. Ver
+  [«La interfaz de v7, restaurada»](PARIDAD-V7.md#la-interfaz-de-v7-restaurada).
+- De esa revisión salieron **cinco huecos de funcionalidad** que el inventario de archivos no podía
+  ver, los cinco portados: exportar una lista de materiales a un Excel, exportar el árbol que se mira,
+  el paso ④ de campos adicionales, el **árbol invertido** (dónde se usa un insumo) y el **panel de
+  rutas** (si lo que sale de cada planta llega a alguien).
 
 ## Lo siguiente, en orden
 
-### 1. Estrenar las escrituras contra SAP, con el usuario delante
+### 1. La misma restauración de interfaz para v8 y v9
+
+Es lo acordado con el usuario y es lo que sigue. **La interfaz de los proyectos de origen se respeta
+tal cual**: llevan años de uso delante de clientes y está trabajada.
+
+El método que funcionó en v7, y que conviene repetir literalmente:
+
+1. Traer `public/index.html` (o el equivalente) de `origin/master` y **recorrer sus botones uno a uno**,
+   comprobando cuál existe aquí. No comparar archivos: comparar CONTROLES.
+2. Anotar la forma —qué es un asistente, qué es un acordeón, qué se despliega y cuándo— antes de tocar
+   nada, y presentarla al usuario.
+3. Portar el CSS del original **copiado, no reinterpretado**, con sus variables de espaciado si hace
+   falta. Traducir a mano es donde se cuelan las diferencias de dos píxeles.
+4. Los nombres de las aplicaciones se quedan como estaban, aunque sean en inglés.
+
+Lo que hay que mirar primero en cada uno: **cuántas aplicaciones tenía su menú y qué recorrido pedía
+cada una.** En v7 eran seis aplicaciones y un asistente de tres pasos; aquí se habían convertido en
+siete pestañas y tres desplegables.
+
+### 2. Estrenar las escrituras contra SAP, con el usuario delante
 
 Está todo construido y probado en lectura, y **nada se ha ejecutado**: lanzar un trabajo, cargar una
 migración, modificar y borrar dato maestro, copiar cifras clave, lanzar una orquestación y lanzar una
 tarea de CI-DS. No se hace en una corrida desatendida. Cada documento de paridad lo lista en su sección
 «Sin estrenar».
 
-### 2. Las tareas programadas
+### 3. Las tareas programadas
 
 La guarda ya está escrita —`handlers/cids/cron-tick.js` valida `CRON_SECRET` y rechaza si es corto—
 pero **`vercel.json` no declara ningún `crons`**, así que nada se dispara. Falta una decisión del
 usuario: **cada cuánto debe avanzar una orquestación en marcha**. Con eso se escriben las
 declaraciones. Necesita además Vercel Pro.
 
-### 3. Mirar la pantalla completa, diez segundos por pantalla
-
-Lo único de esta sesión que no se pudo comprobar con los ojos: no se pudo entrar a la aplicación —el
-ingreso pide el código que llega al correo—. El botón, el estado y la salida están probados, y el CSS
-pone fondo y altura, pero **cómo queda** no lo vio nadie. Son seis: árbol de materiales, red de
-suministro, visor de dato maestro, visor de cifras, lienzo de orquestaciones y explorador de
-integraciones.
-
-### 4. Una revisión de aspecto, con la pantalla señalada
-
-El usuario pidió que la interfaz sea «bonita e intuitiva». No se hizo, a propósito: es un criterio suyo
-y tocar espaciados y colores a ciegas rompe cosas sin poder verificarlo. **Pedirle dos o tres pantallas
-concretas** que le resulten feas o confusas, y trabajar sobre esas.
-
-Lo que sí se observó recorriéndolas: son consistentes y explican lo que hacen —cada una tiene su bloque
-de «cómo se lee esto», los avisos dicen qué hacer, y la procedencia del dato está siempre visible—. Los
-once fallos encontrados fueron de **veracidad**, no de aspecto.
-
-### 5. El idioma (es/en)
+### 4. El idioma (es/en)
 
 Fase propia y deliberadamente la última. Toca cada pantalla. No bloquea nada.
 
@@ -68,17 +67,27 @@ Fase propia y deliberadamente la última. Toca cada pantalla. No bloquea nada.
 | Si el árbol de un semiterminado debe ofrecer la planta donde se fabrica **y** se consume | Hoy no la ofrece, y antes tampoco de verdad. Está anotado en la prueba que lo cubre |
 | Vercel Pro | Cuesta dinero y hace falta para las tareas programadas |
 
-## Lo que ahora hay que estrenar con más ganas
+## Lo que hay que estrenar con más ganas
 
-Tres de las cinco correcciones de alcance solo se pueden comprobar de verdad contra un tenant:
-
+- **El grafo de la red.** Vuelve a ser el lienzo interactivo de v7 y no se ha visto contra un tenant.
+  Lo que hay que mirar: que las columnas se lean de izquierda a derecha —proveedores, plantas,
+  ubicaciones, producto, clientes— y que los arcos no se crucen más de la cuenta. El orden dentro de
+  cada columna lo decide `posicionesEnLienzo`, con sus pruebas.
+- **El panel de rutas.** Es nuevo aquí y su hallazgo principal —la **planta huérfana**— no se puede
+  fabricar en una prueba: hace falta una red real para saber si aparece y si tiene sentido.
+- **La exportación por lotes del árbol.** Pegar treinta materiales y ver cuánto tarda.
 - **La descarga del Explorer** compara ahora lo bajado con lo que SAP dice que hay, y avisa si falta.
-  Las tablas grandes —1,4 millones de filas— **nunca se bajaron de verdad**: solo se contaron. Es la
-  primera vez que ese aviso puede dispararse.
+  Las tablas grandes —1,4 millones de filas— **nunca se bajaron de verdad**: solo se contaron.
 - **La copia de cifras clave** acota la lectura a las filas con valor. Si SAP rechaza el predicado, la
   pantalla lo dice y lee el nivel entero; hay que ver cuál de los dos caminos toma en el tenant.
-- **Bajar solo «Red de suministro»** ahora trae también los dos maestros. Se ve en un momento: la red
-  tiene que distinguir proveedores de plantas.
+
+## Lo que no se pudo comprobar con los ojos
+
+**No se puede entrar a la aplicación en desarrollo**: el ingreso pide el código que llega al correo.
+Para mirar la interfaz de v7 se montó un andamio temporal —un `preview.html` con una sesión falsa— que
+se borró al terminar; si hace falta otra vez, se vuelve a montar y se vuelve a borrar. Con él se vio el
+menú, el asistente, la cinta, la pantalla de módulo restringido y el acordeón. Lo que sigue sin verse
+es todo lo que necesita datos de un tenant: el árbol, el lienzo, las rutas y los informes.
 
 ## El patrón que unía los once fallos
 

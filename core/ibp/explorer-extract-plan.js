@@ -300,8 +300,17 @@ export const GRUPOS_DE_EXTRACCION = Object.freeze([
  * bajar— el motivo. Lo que se salta se dice ANTES de empezar: enterarse a los seis minutos de que
  * falta la tabla principal, después de bajar tres tablas que no sirven sin ella, es la diferencia
  * entre una herramienta y un castigo.
+ *
+ * `extras` son los CAMPOS ADICIONALES del paso ④ de los analizadores de v7 (`extraFields.js`): campos
+ * del maestro que no hacen falta para analizar pero que quien lee el informe quiere ver —la unidad de
+ * medida alternativa, el grupo de compras, lo que sea de ese cliente—. Van indexados por tabla del
+ * plan (`{ bom_prd: ['CAMPOX'] }`) y se añaden al `$select`. Se piden por su nombre REAL en este
+ * tenant, sin pasar por el mapa de campos canónicos: son campos que la aplicación no conoce, así que
+ * no tienen nombre canónico que traducir.
  */
-export function planificarExtraccion({ efectivo, mapa = {}, grupos = ['arbol', 'red'] } = {}) {
+export function planificarExtraccion({
+  efectivo, mapa = {}, grupos = ['arbol', 'red'], extras = {},
+} = {}) {
   const pasos = (EXTRACCIONES.filter((una) => gruposQueLoNecesitan(una)
     .some((grupo) => grupos.includes(grupo)))).map((una) => {
     const entidad = efectivo?.[una.grupo]?.[una.papel]?.entidad ?? null
@@ -312,12 +321,18 @@ export function planificarExtraccion({ efectivo, mapa = {}, grupos = ['arbol', '
         entidad: null,
         select: [],
         omitidos: [],
+        extras: [],
         sePuede: false,
         motivo: `No hay ninguna tabla de este tenant que cumpla el papel «${una.etiqueta}».`,
       }
     }
 
-    const select = armarSelect(mapa, entidad, una.campos)
+    const base = armarSelect(mapa, entidad, una.campos)
+    // Sin repetir lo que ya está: un campo pedido dos veces en el `$select` hace que SAP rechace la
+    // consulta entera, y el error no dice cuál.
+    const suyos = [...new Set(extras?.[una.tabla] ?? [])].filter((campo) => !base.includes(campo))
+    const select = [...base, ...suyos]
+
     // Los campos que este tenant no tiene. No impiden bajar: se avisa de qué se pierde con ellos.
     const omitidos = una.campos.filter((campo) => campoReal(mapa, entidad, campo) === null)
 
@@ -326,6 +341,7 @@ export function planificarExtraccion({ efectivo, mapa = {}, grupos = ['arbol', '
       entidad,
       select,
       omitidos,
+      extras: suyos,
       // La marca de invalidez solo se aplica si el campo existe de verdad; si no, no hay nada que
       // descartar y quedarse con todo es lo correcto.
       descartarSi: una.descartarSi && !omitidos.includes(una.descartarSi)

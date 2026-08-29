@@ -175,6 +175,16 @@ export default defineConfig({
   // con `React.createElement` y muere con «React is not defined», que no dice nada del problema real.
   // En el build no cambia nada: allí el plugin transforma el JSX antes de que esbuild lo vea.
   esbuild: { jsx: 'automatic', jsxImportSource: 'react' },
+  build: {
+    // El Network Visualizer arrastra `vis-network`, la librería de grafos con que v7 dibujaba la red.
+    // Son ~500 kB y no hay forma de que sean menos: es el precio de un lienzo interactivo de verdad,
+    // y el usuario pidió expresamente el grafo de v7 y no una tabla dibujada.
+    //
+    // No está en el camino crítico: viaja en su propio trozo y solo se descarga al abrir esa
+    // aplicación. El tope por defecto de 500 kB es razonable para el resto de la suite —de ahí que se
+    // suba solo hasta 700 y no se apague— y sigue avisando si algo se dispara.
+    chunkSizeWarningLimit: 700,
+  },
   test: {
     // Montar un componente de verdad exige que el entorno se declare como entorno de `act`. Es una
     // bandera global de React, no una opción de Vitest, y va antes de que se cargue cualquier prueba.

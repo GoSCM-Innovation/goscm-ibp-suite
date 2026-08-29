@@ -3,9 +3,12 @@
 Inventario recorrido contra `origin/master` de v7, en `GoSCM-Innovation/ibp-bom-v7` —**no** el clon
 local, que está anidado un nivel más abajo (`ibp-bom-v7/ibp-bom-v7`) y puede estar atrasado—.
 
-Última revisión: 2026-08-18, contra `6d027d2` de v7 —el mismo commit que la vez anterior: v7 no ha
-cambiado—. Son **20 archivos** en `public/js/` que suman **20.643 líneas** de JavaScript sin build, más
-`server.js` y las plantillas de `public/`.
+Última revisión: 2026-08-28, contra `6d027d2` de v7 —el mismo commit desde hace tres revisiones: v7 no
+ha cambiado—. Son **20 archivos** en `public/js/` que suman **20.643 líneas** de JavaScript sin build,
+más `server.js` y las plantillas de `public/`.
+
+La revisión del 2026-08-28 fue de **INTERFAZ**, no de funcionalidad, y de ahí salió lo más grande que
+quedaba: ver [La interfaz de v7, restaurada](#la-interfaz-de-v7-restaurada).
 
 v7 es la migración más grande de las tres: casi tanto código como v8 y v9 juntos, y sin una sola
 prueba. Por eso se porta módulo a módulo, y cada uno con sus pruebas antes de darlo por hecho.
@@ -443,9 +446,78 @@ controles siguen a mano.
 probados, y el CSS pone fondo y altura, pero no se pudo entrar a la aplicación para verlo con los ojos.
 Es una mirada de diez segundos en las seis pantallas.
 
+## La interfaz de v7, restaurada
+
+Encontrado el 2026-08-28, por el usuario, mirando la aplicación: **la funcionalidad de v7 estaba
+portada y su forma de usarla no.** Las seis aplicaciones se habían metido dentro de un solo módulo
+como siete pestañas horizontales, con otros nombres, y el destino se elegía con tres desplegables
+sueltos que había que volver a mirar en cada pantalla.
+
+La decisión del usuario, que vale también para v8 y v9: **la interfaz de los proyectos de origen se
+respeta tal cual**. Llevan años de uso delante de clientes y está trabajada; portar la funcionalidad y
+rehacer la forma convierte una migración en un producto nuevo que nadie pidió.
+
+### Lo que era v7 y ahora vuelve a ser
+
+| Pieza de v7 | Aquí |
+|---|---|
+| Asistente de conexión de 3 pasos, con su indicador de progreso | `data/ConnectDialog.jsx` |
+| Panel de «conexión activa» al terminar | el paso 0 del mismo asistente |
+| El destino elegido UNA vez, global mientras dure la sesión | `src/lib/conexion-activa.js` |
+| Las seis aplicaciones en el menú, con sus nombres e iconos | `src/lib/modules.js` → `APPS_EXPLORER` |
+| Candado 🔒 y pantalla de «Módulo restringido» por aplicación | `Shell.jsx` y `DataTools.jsx` |
+| Cinta de presentación de cada aplicación | `DataTools.jsx` |
+| Acordeón numerado ① a ⑤ dentro de los analizadores | `AnalizadorV7.jsx` + `PasoPlegable.jsx` |
+| Panel «MAPEO DE ENTIDADES» como paso ① de cada aplicación | `PanelMapeo.jsx` |
+| Pestañas de producto del árbol, con ✕ y + | `ProductionVisualizer.jsx` |
+| Grafo interactivo de la red, con `vis-network` | `LienzoDeRed.jsx` |
+| Diálogo de «Requisitos técnicos», con sus cuatro pestañas | `TechReqDialog.jsx` |
+
+**Los nombres se quedan en inglés** —Production Visualizer, Network Analyzer…— aunque el resto de la
+suite esté en español: son los que el cliente lleva años viendo. Renombrar «Production Analyzer» a
+«Calidad de datos» no traduce nada, cambia el nombre de un producto que ya está en uso.
+
+**El grafo es el de v7, con su misma librería.** `vis-network`, los mismos colores, formas, tamaños,
+grosor de flecha y curvatura de arco, y la física APAGADA con las posiciones calculadas por
+baricentro —`posicionesEnLienzo` en `core/ibp/supply-network.js`—. Antes había columnas estáticas, con
+una nota en el código diciendo que era «una decisión»: era una decisión que no tocaba tomar. Cuesta
+~500 kB en su propio trozo del build, que solo se descarga al abrir esa aplicación.
+
+### La única diferencia deliberada
+
+El paso ① del asistente. En v7 se escribían la dirección, el usuario y la contraseña del tenant; aquí
+se elige entre las conexiones que el administrador dio de alta. No es una simplificación: las
+credenciales de SAP viven cifradas en Postgres y no pueden llegar al navegador. Es la regla que esta
+plataforma existe para no romper.
+
+### Lo que salió de comparar las interfaces, y no los archivos
+
+**Cinco huecos de funcionalidad**, todos dentro de archivos que el inventario daba por portados. El
+inventario compara ARCHIVOS; estos son funciones dentro de `bom.js` y `visualizer.js`, que figuraban
+como portados porque el árbol y la red sí lo estaban.
+
+| Qué faltaba | En v7 | Aquí |
+|---|---|---|
+| Exportar la jerarquía de UNA lista de materiales a un solo Excel | `bomBatchRun` | `src/lib/bom-export.js` + el diálogo de `ProductionVisualizer.jsx` |
+| Exportar a Excel el árbol que se está mirando | `bomExportExcel` | `src/lib/bom-export.js` + el botón de `BomTree.jsx` |
+| Paso ④, campos adicionales de datos maestros | `extraFields.js` | `AnalizadorV7.jsx` + `extras` en `planificarExtraccion` |
+| Árbol invertido: **dónde se usa** cada insumo | `bomToggleInvert` | `invertirArbol` en `core/ibp/bom-tree.js` |
+| Panel de rutas: si lo que sale de cada planta llega a alguien | `vizFindAllRoutes` | `rutasDeLaRed` en `core/ibp/supply-network.js` + `PanelDeRutas.jsx` |
+
+Los dos últimos son los que más pesan, y por el mismo motivo: **contestan preguntas que el dibujo no
+puede contestar.** El árbol normal dice qué lleva un producto; el invertido dice dónde se usa una
+materia prima, que es lo que se pregunta cuando un proveedor sube un precio. Y una **planta huérfana**
+—aquella cuyo cien por cien de rutas muere antes de llegar a un cliente— tiene sus flechas como
+cualquier otra: en el lienzo no se distingue, y solo la tabla de rutas la señala.
+
+**Cómo se encontraron, que es lo reutilizable:** abrir el `index.html` de v7 y recorrer sus botones uno
+a uno, comprobando cuál existe aquí. Es la misma técnica de los tres huecos de la sesión anterior
+—barrer el original por lo que se VE, no por sus archivos— aplicada a los controles en vez de a las
+APIs del navegador. Vale repetirla en v8 y v9.
+
 ## Huecos abiertos
 
-Ninguno, contando los tres de arriba como cerrados. El último —los informes por entidad de los dos analizadores— se cerró el 2026-08-18 con las
+Ninguno, contando los tres de la sección anterior y los cinco de esta como cerrados. El último —los informes por entidad de los dos analizadores— se cerró el 2026-08-18 con las
 pestañas por ubicación y por recurso, y con el motivo escrito de por qué las otras cuatro hojas de v7 no
 se portan.
 
