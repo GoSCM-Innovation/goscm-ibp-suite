@@ -2622,3 +2622,108 @@ a { color: var(--cyan); }
   padding: 4px 8px;
   white-space: nowrap;
 }
+
+/* ── Secciones de configuración plegables ──────────────────────────────────────────────────────
+   Portadas de `CollapsibleSection.jsx` de v8. Plegada enseña un resumen y deja sus botones a la
+   vista, que es lo que permite pulsar «Mostrar datos» sin volver a abrirla. */
+.seccion-plegable {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  margin-bottom: 12px;
+  padding: 10px 16px;
+}
+.seccion-plegable-cabecera { align-items: center; display: flex; gap: 10px; }
+.seccion-plegable-titulo {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  flex: 1;
+  gap: 8px;
+  min-width: 0;
+  user-select: none;
+}
+.seccion-plegable-flecha {
+  color: var(--text3);
+  display: inline-block;
+  font-size: 11px;
+  text-align: center;
+  transition: transform .15s;
+  width: 10px;
+}
+.seccion-plegable-flecha.plegada { transform: rotate(-90deg); }
+.seccion-plegable-nombre {
+  color: var(--text2);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+}
+.seccion-plegable-resumen {
+  color: var(--text3);
+  font-family: var(--mono);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.seccion-plegable-cuerpo { margin-top: 12px; }
+
+/* Una preselección de columnas guardada: el botón que la aplica y el que la borra, pegados. */
+.preseleccion { display: inline-flex; gap: 2px; }
+.preseleccion .btn-danger { padding: 6px 8px; }
+
+/* ── Cabecera de tabla con orden, reordenado y filtro de página ────────────────────────────────
+   Portada de `DataViewer/DataGrid.jsx` de v8: pulsar ordena, arrastrar reordena, y el campo de
+   abajo filtra las filas que ya están a la vista. */
+.table-dense th .th-nombre {
+  align-items: center;
+  cursor: grab;
+  display: flex;
+  gap: 4px;
+  min-width: 0;
+}
+.table-dense th .th-nombre:active { cursor: grabbing; }
+.th-clave { color: var(--accent); flex: 0 0 auto; font-size: 10px; }
+.th-texto { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.th-orden { color: var(--accent); flex: 0 0 auto; font-size: 9px; }
+.th-filtro {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 10px;
+  margin-top: 4px;
+  outline: none;
+  padding: 2px 5px;
+  width: 100%;
+}
+.th-filtro:focus { border-color: var(--accent); }
+.th-filtro::placeholder { color: var(--text3); }
+/* Dónde va a caer la columna que se arrastra. */
+.table-dense th.col-destino { box-shadow: inset 2px 0 0 0 var(--accent); }
+
+/* ── La tira de pestañas de los visores de datos ───────────────────────────────────────────────
+   Portada de `ViewerTabs.jsx` de v8. Reutiliza los botones de pestaña del árbol de v7 —son el mismo
+   control— y deja la pantalla completa a la derecha, fuera del desplazamiento. */
+.visor-pestanas {
+  align-items: center;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex-shrink: 0;
+  gap: 8px;
+  padding: 6px 0 0;
+}
+.visor-pestanas-tira {
+  align-items: center;
+  display: flex;
+  flex: 1;
+  gap: 2px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.visor-pestanas-tira::-webkit-scrollbar { display: none; }
+.visor-pestana-caja { align-items: center; display: flex; flex-shrink: 0; }

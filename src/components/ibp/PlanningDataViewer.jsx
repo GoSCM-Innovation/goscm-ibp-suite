@@ -9,8 +9,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-import { usePantallaCompleta } from '../../lib/usePantallaCompleta.js'
-import BotonPantallaCompleta from '../ui/BotonPantallaCompleta.jsx'
 
 import { cifraLegible, periodoLegible } from '../../../core/ibp/planning-data-model.js'
 import { OPERADORES } from '../../../core/ibp/master-data-model.js'
@@ -75,11 +73,19 @@ function Buscable({ etiqueta, opciones, elegidas, etiquetas, onAlternar, unaSola
   )
 }
 
-export default function PlanningDataViewer({ conexionId }) {
+export default function PlanningDataViewer({
+  conexionId,
+  /** Dónde arranca esta pestaña. Lo pone `VisorConPestanas`; aquí la pestaña la nombra la cifra. */
+  inicial = null,
+  /** Si esta pestaña es la que se está mirando. Las de atrás no dibujan su tabla. */
+  activa = true,
+  /** Avisa de qué cifra se está mirando, para que la pestaña se ponga nombre. */
+  onDefinicion = null,
+}) {
   const [catalogo, setCatalogo] = useState(null)
   const [error, setError] = useState('')
 
-  const [cifra, setCifra] = useState('')
+  const [cifra, setCifra] = useState(inicial?.tabla ?? '')
   const [dimensiones, setDimensiones] = useState([])
   const [condiciones, setCondiciones] = useState([])
   const [conversiones, setConversiones] = useState({})
@@ -95,8 +101,13 @@ export default function PlanningDataViewer({ conexionId }) {
 
   const [volcado, setVolcado] = useState(null)
   const cortarVolcado = useRef(null)
-  const lienzo = useRef(null)
-  const pantalla = usePantallaCompleta(lienzo)
+
+  // La pestaña se pone nombre con la cifra que se está mirando.
+  useEffect(() => {
+    onDefinicion?.({ area: catalogo?.area ?? '', version: '', tabla: cifra })
+    // `onDefinicion` se recrea en cada repintado del envoltorio y no debe volver a disparar esto.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [catalogo, cifra])
 
   useEffect(() => {
     let abandonado = false
@@ -230,9 +241,8 @@ export default function PlanningDataViewer({ conexionId }) {
   const paginas = contadas ? Math.ceil(contadas / consulta.top) : 0
 
   return (
-    <div className="module-body a-pantalla-completa" ref={lienzo}>
+    <>
       <div className="monitor-bar">
-        <BotonPantallaCompleta {...pantalla} que="la tabla" />
         <span className="tag tag-accent">{catalogo.area}</span>
         <span className="page-hint">
           {numero(catalogo.dims.length)} atributos · {numero(catalogo.cifras.length)} cifras clave
@@ -436,6 +446,9 @@ export default function PlanningDataViewer({ conexionId }) {
             )}
           </div>
 
+          {/* Solo la pestaña que se está mirando dibuja su tabla: una de quinientas filas escondida
+              con CSS cuesta lo mismo que visible. Es la decisión de `ViewerTabs` de v8. */}
+          {activa && (
           <div className="table-scroll table-alta">
             <table className="table-dense">
               <thead>
@@ -456,8 +469,9 @@ export default function PlanningDataViewer({ conexionId }) {
             {!cargando && filas.length === 0 && <SinDatos />}
             {cargando && <div className="sin-datos">Consultando…</div>}
           </div>
+          )}
         </>
       )}
-    </div>
+    </>
   )
 }

@@ -36,6 +36,7 @@ const Metering = lazy(() => import('./Metering.jsx'))
 const MasterDataViewer = lazy(() => import('./MasterDataViewer.jsx'))
 const PlanningDataViewer = lazy(() => import('./PlanningDataViewer.jsx'))
 const MigrationTabs = lazy(() => import('./MigrationTabs.jsx'))
+const VisorConPestanas = lazy(() => import('./VisorConPestanas.jsx'))
 
 // La pantalla de orquestaciones es la MISMA que la de CI-DS: encadenar tareas y encadenar trabajos
 // son la misma cosa por dentro, y lo único que cambia es de dónde salen los pasos. Por eso se le
@@ -245,19 +246,26 @@ export default function IbpTools() {
       )}
       {activa === 'datos' && conexion && (
         <Suspense fallback={<div className="page-hint">Cargando el visor…</div>}>
-          {/* El nombre y la marca de productivo bajan a la pantalla porque desde ahí se escribe: la
-              confirmación tiene que decir en qué tenant se va a escribir, no solo qué tabla. */}
-          <MasterDataViewer
-            key={conexion.id}
-            conexionId={conexion.id}
-            tenant={conexion.name}
-            productivo={Boolean(conexion.isProduction)}
-          />
+          {/* Varias tablas abiertas a la vez, como en v8. El nombre y la marca de productivo bajan a
+              la pantalla porque desde ahí se escribe: la confirmación tiene que decir en qué tenant
+              se va a escribir, no solo qué tabla. */}
+          <VisorConPestanas key={conexion.id} clase="master" conexionId={conexion.id}>
+            {(suyas) => (
+              <MasterDataViewer
+                {...suyas}
+                tenant={conexion.name}
+                productivo={Boolean(conexion.isProduction)}
+              />
+            )}
+          </VisorConPestanas>
         </Suspense>
       )}
       {activa === 'cifras' && conexion && (
         <Suspense fallback={<div className="page-hint">Cargando el visor…</div>}>
-          <PlanningDataViewer key={conexion.id} conexionId={conexion.id} />
+          {/* También con pestañas: en v8 los dos visores las tenían. */}
+          <VisorConPestanas key={conexion.id} clase="trans" conexionId={conexion.id}>
+            {(suyas) => <PlanningDataViewer {...suyas} />}
+          </VisorConPestanas>
         </Suspense>
       )}
     </div>

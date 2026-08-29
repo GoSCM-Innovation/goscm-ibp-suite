@@ -18,6 +18,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { usePantallaCompleta } from '../../lib/usePantallaCompleta.js'
 import BotonPantallaCompleta from '../ui/BotonPantallaCompleta.jsx'
+import SeccionPlegable from '../ui/SeccionPlegable.jsx'
+import SelectorDeColumnas from './SelectorDeColumnas.jsx'
 
 import {
   CAMPOS_DE_SOLO_LECTURA, columnasPorOmision, etiquetaDeCondicion, OPERADORES, valorLegible,
@@ -91,19 +93,56 @@ function Condicion({ condicion, columnas, valores, onCambiar, onQuitar, onPedirV
   )
 }
 
-export default function MasterDataViewer({ conexionId, tenant = '', productivo = false }) {
+export default function MasterDataViewer({
+  conexionId,
+  tenant = '',
+  productivo = false,
+  /** Dónde arranca esta pestaña: `{ area, version, tabla }`. Lo pone `VisorConPestanas`. */
+  inicial = null,
+  /** Si esta pestaña es la que se está mirando. Las de atrás no dibujan su tabla. */
+  activa = true,
+  /** Avisa de qué está mirando, para que la pestaña se ponga nombre. */
+  onDefinicion = null,
+}) {
   const [catalogo, setCatalogo] = useState(null)
   const [importables, setImportables] = useState([])
   const [error, setError] = useState('')
 
-  const [area, setArea] = useState('')
-  const [versionPedida, setVersionPedida] = useState(VERSION_BASE)
-  const [tabla, setTabla] = useState('')
+  const [area, setArea] = useState(inicial?.area ?? '')
+  const [versionPedida, setVersionPedida] = useState(inicial?.version || VERSION_BASE)
+  const [tabla, setTabla] = useState(inicial?.tabla ?? '')
   const [busqueda, setBusqueda] = useState('')
 
   const [esquema, setEsquema] = useState(null)
   const [cargandoEsquema, setCargandoEsquema] = useState(false)
   const [columnas, setColumnas] = useState([])
+
+  // Las dos secciones de configuración se pliegan para dar aire a la tabla, como en v8. La de
+  // selección se cierra sola al elegir tabla: ya cumplió, y lo que se quiere ver es la tabla.
+  const [seleccionPlegada, setSeleccionPlegada] = useState(false)
+  const [datosPlegada, setDatosPlegada] = useState(false)
+
+  // Por qué columna se ordena. Portado de v8: pulsar una cabecera ordena por ella, y volver a
+  // pulsarla invierte. Lo resuelve SAP, no el navegador — se ordena la tabla entera, no la página.
+  const [orden, setOrden] = useState(null)
+
+  // La pestaña se pone nombre con esto. Se avisa al cambiar de área, versión o tabla y no en cada
+  // repintado: el envoltorio compara y descarta lo que no cambia, pero avisar de más igual encadena
+  // trabajo por nada.
+  useEffect(() => {
+    onDefinicion?.({ area, version: versionPedida === VERSION_BASE ? '' : versionPedida, tabla })
+    // `onDefinicion` se recrea en cada repintado del envoltorio y no debe volver a disparar esto.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [area, versionPedida, tabla])
+
+  // El filtro por columna de v8. Actúa SOLO sobre las filas de esta página y por prefijo: es para
+  // encontrar algo en lo que ya está a la vista, no para consultar. El filtro de verdad es el de
+  // arriba, que lo resuelve SAP.
+  const [filtrosDeColumna, setFiltrosDeColumna] = useState({})
+
+  // La columna que se está arrastrando y sobre cuál está. Reordenar es solo visual.
+  const [arrastrando, setArrastrando] = useState(null)
+  const [encima, setEncima] = useState(null)
   const [condiciones, setCondiciones] = useState([])
   const [valoresDe, setValoresDe] = useState({})
   const [prueba, setPrueba] = useState(null)
@@ -221,6 +260,65 @@ export default function MasterDataViewer({ conexionId, tenant = '', productivo =
     return () => clearTimeout(id)
   }, [consulta, cargarPagina])
 
+  /**
+   * El `$orderby` que se le manda a SAP.
+   *
+   * La columna elegida PRIMERO y las claves detrás. Las claves no son decoración: `$orderby` estable
+   * es obligatorio al paginar o hay solapes y huecos entre páginas. v8 ordenaba solo por la columna
+   * elegida, y con valores repetidos —que es lo normal en una descripción— dos páginas seguidas
+   * pueden traer la misma fila y perder otra.
+   */
+  function ordenParaSap(cual, claves) {
+    if (!cual?.campo) return claves
+    const primero = `${cual.campo}${cual.dir === 'desc' ? ' desc' : ''}`
+    return [primero, ...claves.filter((una) => una !== cual.campo)]
+  }
+
+  /** Pulsar una cabecera: ascendente, descendente, y a la tercera se quita el orden. */
+  function ordenarPor(columna) {
+    if (!consulta) return
+    const siguiente = orden?.campo !== columna
+      ? { campo: columna, dir: 'asc' }
+      : (orden.dir === 'asc' ? { campo: columna, dir: 'desc' } : null)
+
+    setOrden(siguiente)
+    // Cambiar el orden reordena la tabla ENTERA en SAP, así que se vuelve a la primera página: la
+    // página 7 del orden anterior no tiene nada que ver con la página 7 del nuevo.
+    setConsulta((previa) => (previa
+      ? { ...previa, orderby: ordenParaSap(siguiente, esquema?.claves ?? []) }
+      : previa))
+  }
+
+  /** Suelta la columna arrastrada delante de `destino`. Solo cambia cómo se ve. */
+  function reordenarColumnas(destino) {
+    const desde = arrastrando
+    if (!desde || desde === destino) return
+
+    const mover = (lista) => {
+      const sin = lista.filter((una) => una !== desde)
+      const donde = sin.indexOf(destino)
+      if (donde < 0) return lista
+      return [...sin.slice(0, donde), desde, ...sin.slice(donde)]
+    }
+
+    setColumnas(mover)
+    setConsulta((previa) => (previa ? { ...previa, select: mover(previa.select) } : previa))
+  }
+
+  /**
+   * Las filas de ESTA página que pasan los filtros de columna.
+   *
+   * Por prefijo y sobre lo que ya se bajó, como en v8: es para encontrar algo en lo que se está
+   * mirando, no para consultar. El filtro que le habla a SAP es el de arriba.
+   */
+  const filasVisibles = filas.filter((fila) => Object.entries(filtrosDeColumna).every(
+    ([columna, texto]) => {
+      const busca = String(texto ?? '').trim().toUpperCase()
+      if (!busca) return true
+      return valorLegible(fila[columna]).toUpperCase().startsWith(busca)
+    },
+  ))
+
   function mostrarDatos() {
     if (!esquema) return
     setConsulta({
@@ -229,7 +327,7 @@ export default function MasterDataViewer({ conexionId, tenant = '', productivo =
       versionId: version,
       condiciones: condiciones.filter((una) => una.field),
       select: columnas,
-      orderby: esquema.claves,
+      orderby: ordenParaSap(orden, esquema.claves),
       top: Math.min(esquema.filasPorPagina, 500),
     })
   }
@@ -395,9 +493,15 @@ export default function MasterDataViewer({ conexionId, tenant = '', productivo =
     && valorLegible(fila[columna]) === String(fila[columna] ?? '')
 
   return (
-    <div className="module-body a-pantalla-completa" ref={lienzo}>
+    <>
+      <SeccionPlegable
+        titulo="Selección"
+        plegada={seleccionPlegada}
+        onAlternar={() => setSeleccionPlegada((previa) => !previa)}
+        resumen={[area, version, tabla].filter(Boolean).join(' · ')}
+        acciones={<BotonPantallaCompleta {...pantalla} que="la tabla" />}
+      >
       <div className="monitor-bar">
-        <BotonPantallaCompleta {...pantalla} que="la tabla" />
         <select
           className="select input-sm"
           value={area}
@@ -439,6 +543,7 @@ export default function MasterDataViewer({ conexionId, tenant = '', productivo =
           ))}
         </select>
       </div>
+      </SeccionPlegable>
 
       {error && <div className="notice notice-error">✕ {error}</div>}
       {cargandoEsquema && <div className="page-hint">Leyendo la tabla…</div>}
@@ -452,6 +557,23 @@ export default function MasterDataViewer({ conexionId, tenant = '', productivo =
 
       {esquema && !esquema.vacia && (
         <>
+          <SeccionPlegable
+            titulo="Columnas y filtros"
+            plegada={datosPlegada}
+            onAlternar={() => setDatosPlegada((previa) => !previa)}
+            resumen={`${columnas.length}/${esquema.columnas.length} columnas`
+              + (condiciones.length > 0 ? ` · ${condiciones.length} filtros` : '')}
+            acciones={(
+              <button
+                type="button"
+                className="btn btn-sm btn-primary"
+                onClick={mostrarDatos}
+                disabled={columnas.length === 0}
+              >
+                Mostrar datos
+              </button>
+            )}
+          >
           <div className="tablero">
             <div className="card">
               <div className="card-label">
@@ -459,30 +581,14 @@ export default function MasterDataViewer({ conexionId, tenant = '', productivo =
                 {esquema.claves.length > 0 && <span className="exp-sub"> · clave: {esquema.claves.join(', ')}</span>}
               </div>
 
-              <div className="exp-sub">Columnas ({columnas.length} de {esquema.columnas.length})</div>
-              <div className="columnas">
-                {esquema.columnas.map((columna) => {
-                  const esClave = esquema.claves.includes(columna)
-                  return (
-                    <label key={columna} className={`columna${esClave ? ' columna-clave' : ''}`}>
-                      <input
-                        type="checkbox"
-                        checked={columnas.includes(columna)}
-                        onChange={(evento) => setColumnas((previas) => (evento.target.checked
-                          ? esquema.columnas.filter((una) => previas.includes(una) || una === columna)
-                          : previas.filter((una) => una !== columna)))}
-                      />
-                      {columna}
-                    </label>
-                  )
-                })}
-              </div>
-
-              <div className="monitor-bar">
-                <button type="button" className="btn btn-sm" onClick={() => setColumnas(esquema.columnas)}>Todas</button>
-                <button type="button" className="btn btn-sm" onClick={() => setColumnas(columnasPorOmision(esquema.columnas, esquema.claves))}>Las de siempre</button>
-                <button type="button" className="btn btn-sm" onClick={() => setColumnas(esquema.claves)} disabled={esquema.claves.length === 0}>Solo las claves</button>
-              </div>
+              <SelectorDeColumnas
+                tabla={tabla}
+                todas={esquema.columnas}
+                claves={esquema.claves}
+                porOmision={columnasPorOmision(esquema.columnas, esquema.claves)}
+                elegidas={columnas}
+                onCambiar={setColumnas}
+              />
             </div>
 
             <div className="card">
@@ -525,11 +631,9 @@ export default function MasterDataViewer({ conexionId, tenant = '', productivo =
               </div>
             </div>
           </div>
+          </SeccionPlegable>
 
           <div className="monitor-bar">
-            <button type="button" className="btn btn-sm btn-primary" onClick={mostrarDatos} disabled={columnas.length === 0}>
-              Mostrar datos
-            </button>
             {consulta && (
               <>
                 <button type="button" className="btn btn-sm" onClick={() => cargarPagina(pagina - 1)} disabled={pagina === 0 || cargandoFilas}>‹ Anterior</button>
@@ -538,6 +642,11 @@ export default function MasterDataViewer({ conexionId, tenant = '', productivo =
                 </span>
                 <button type="button" className="btn btn-sm" onClick={() => cargarPagina(pagina + 1)} disabled={filas.length < consulta.top || cargandoFilas}>Siguiente ›</button>
               </>
+            )}
+            {consulta && (
+              <span className="page-hint">
+                ⓘ El filtro de cada cabecera actúa solo sobre las filas de esta página (empieza con).
+              </span>
             )}
             {esquema.claves.length === 0 && consulta && (
               <span className="page-hint" style={{ color: 'var(--accent)' }}>
@@ -661,6 +770,7 @@ export default function MasterDataViewer({ conexionId, tenant = '', productivo =
           )}
 
           {consulta && (
+            activa && (
             <div className="table-scroll table-alta">
               <table className="table-dense">
                 <thead>
@@ -675,11 +785,60 @@ export default function MasterDataViewer({ conexionId, tenant = '', productivo =
                         />
                       </th>
                     )}
-                    {consulta.select.map((columna) => <th key={columna}>{columna}</th>)}
+                    {consulta.select.map((columna) => (
+                      <th
+                        key={columna}
+                        className={encima === columna ? 'col-destino' : undefined}
+                        onDragOver={(evento) => {
+                          if (!arrastrando || arrastrando === columna) return
+                          evento.preventDefault()
+                          setEncima(columna)
+                        }}
+                        onDragLeave={() => setEncima((previa) => (previa === columna ? null : previa))}
+                        onDrop={(evento) => {
+                          evento.preventDefault()
+                          reordenarColumnas(columna)
+                          setEncima(null)
+                        }}
+                      >
+                        <div
+                          className="th-nombre"
+                          role="button"
+                          tabIndex={0}
+                          title={`${columna} · clic: ordenar · arrastra la cabecera: reordenar`}
+                          onClick={() => ordenarPor(columna)}
+                          onKeyDown={(evento) => {
+                            if (evento.key === 'Enter' || evento.key === ' ') {
+                              evento.preventDefault()
+                              ordenarPor(columna)
+                            }
+                          }}
+                          draggable
+                          onDragStart={() => setArrastrando(columna)}
+                          onDragEnd={() => { setArrastrando(null); setEncima(null) }}
+                        >
+                          {esquema.claves.includes(columna) && <span className="th-clave">🔑</span>}
+                          <span className="th-texto">{columna}</span>
+                          {orden?.campo === columna && (
+                            <span className="th-orden">{orden.dir === 'asc' ? '▲' : '▼'}</span>
+                          )}
+                        </div>
+                        <input
+                          className="th-filtro"
+                          value={filtrosDeColumna[columna] ?? ''}
+                          onChange={(evento) => setFiltrosDeColumna((previos) => (
+                            { ...previos, [columna]: evento.target.value }
+                          ))}
+                          onClick={(evento) => evento.stopPropagation()}
+                          placeholder="filtrar…"
+                          aria-label={`Filtrar ${columna} en esta página`}
+                        />
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {filas.map((fila, indice) => {
+                  {filasVisibles.map((fila, indice) => {
                     const clave = identidadDe(fila) || String(indice)
                     const cambios = edits[clave]?.cambios ?? {}
                     const porBorrar = Boolean(marcadas[clave])
@@ -718,8 +877,16 @@ export default function MasterDataViewer({ conexionId, tenant = '', productivo =
                 </tbody>
               </table>
               {!cargandoFilas && filas.length === 0 && <div className="sin-datos">Ninguna fila cumple el filtro</div>}
+              {/* Que la página tenga filas y no se vea ninguna es de los sitios donde más fácil se
+                  cree que el dato no está. Se dice cuál de los dos filtros la vació. */}
+              {!cargandoFilas && filas.length > 0 && filasVisibles.length === 0 && (
+                <div className="sin-datos">
+                  Ninguna fila de esta página coincide con el filtro de columna.
+                </div>
+              )}
               {cargandoFilas && <div className="sin-datos">Consultando…</div>}
             </div>
+            )
           )}
         </>
       )}
@@ -741,6 +908,6 @@ export default function MasterDataViewer({ conexionId, tenant = '', productivo =
           onCerrar={cerrarRevision}
         />
       )}
-    </div>
+    </>
   )
 }
