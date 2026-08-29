@@ -8,7 +8,7 @@ actualiza al terminar cada sesión, y su orden es el de prioridad acordada.
 ## Dónde estamos
 
 - **En línea**: https://goscm-ibp-suite.vercel.app — cada subida a `main` se publica sola.
-- **2.603 pruebas**, lint y build limpios, y el build **sin ningún aviso**.
+- **2.615 pruebas**, lint y build limpios, y el build **sin ningún aviso**.
 - Los tres proyectos previos están portados en funcionalidad.
 - **La interfaz de los TRES está restaurada tal cual era.** Es una decisión del usuario y ahora es
   regla del proyecto: ver [«Respetar la interfaz de origen»](../CLAUDE.md#respetar-la-interfaz-de-origen).
@@ -19,9 +19,8 @@ actualiza al terminar cada sesión, y su orden es el de prioridad acordada.
     columnas, ordenar y filtrar por columna—. [Detalle](PARIDAD-V8.md#la-interfaz-de-v8-restaurada).
   - v9: sus nombres, su orden y la tira de pestañas de conexiones abiertas.
     [Detalle](PARIDAD-V9.md#la-interfaz-de-v9-restaurada).
-- Comparar CONTROLES —y no archivos— destapó **dieciséis huecos de funcionalidad**, todos dentro de
-  archivos que el inventario daba por portados. Quince cerrados; queda uno, el ancho de columna a mano
-  del visor de v8.
+- Comparar CONTROLES —y no archivos— destapó **diecisiete huecos de funcionalidad**, todos dentro de
+  archivos que el inventario daba por portados. **Los diecisiete están cerrados.**
 
 ## Lo siguiente, en orden
 
@@ -79,6 +78,10 @@ con orden y filtro, y el menú minimizado.
 
 Lo que sigue sin verse es todo lo que necesita datos de un tenant: el árbol, el lienzo de la red, las
 rutas, los informes y las tablas con filas de verdad.
+
+Y una cosa más, que es de ratón y no de datos: **el ancho de columna a mano**. El cálculo está probado
+—qué se compara, qué holgura se suma, entre qué topes queda— pero arrastrar el borde y hacer doble
+clic en él no se probó con la mano. Son diez segundos en la primera tabla que se abra.
 
 ## El patrón que unía los once fallos
 

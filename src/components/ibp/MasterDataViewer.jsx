@@ -20,6 +20,7 @@ import { usePantallaCompleta } from '../../lib/usePantallaCompleta.js'
 import BotonPantallaCompleta from '../ui/BotonPantallaCompleta.jsx'
 import SeccionPlegable from '../ui/SeccionPlegable.jsx'
 import SelectorDeColumnas from './SelectorDeColumnas.jsx'
+import { anchoAjustado, anchoArrastrado, estiloDeAncho } from '../../lib/ancho-de-columna.js'
 
 import {
   CAMPOS_DE_SOLO_LECTURA, columnasPorOmision, etiquetaDeCondicion, OPERADORES, valorLegible,
@@ -143,6 +144,11 @@ export default function MasterDataViewer({
   // La columna que se está arrastrando y sobre cuál está. Reordenar es solo visual.
   const [arrastrando, setArrastrando] = useState(null)
   const [encima, setEncima] = useState(null)
+
+  // El ancho fijado a mano de cada columna. Sin entrada, la columna se ajusta sola hasta un tope.
+  const [anchos, setAnchos] = useState({})
+  // El lienzo con que se mide texto para autoajustar. Uno solo, reutilizado.
+  const regla = useRef(null)
   const [condiciones, setCondiciones] = useState([])
   const [valoresDe, setValoresDe] = useState({})
   const [prueba, setPrueba] = useState(null)
@@ -287,6 +293,65 @@ export default function MasterDataViewer({
     setConsulta((previa) => (previa
       ? { ...previa, orderby: ordenParaSap(siguiente, esquema?.claves ?? []) }
       : previa))
+  }
+
+  /**
+   * Arrastrar el borde derecho de una cabecera para fijar su ancho.
+   *
+   * Se escucha en la ventana y no en el borde: el ratón se sale del elemento en cuanto se mueve
+   * rápido, y con los eventos en el borde el arrastre se corta a medio camino.
+   */
+  function empezarAEstirar(evento, columna) {
+    evento.preventDefault()
+    evento.stopPropagation()
+
+    const cabecera = evento.target.closest('th')
+    const desde = cabecera ? cabecera.offsetWidth : (anchos[columna] ?? 120)
+    const donde = evento.clientX
+
+    const alMover = (otro) => {
+      setAnchos((previos) => (
+        { ...previos, [columna]: anchoArrastrado(desde, otro.clientX - donde) }
+      ))
+    }
+    const alSoltar = () => {
+      window.removeEventListener('mousemove', alMover)
+      window.removeEventListener('mouseup', alSoltar)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+
+    window.addEventListener('mousemove', alMover)
+    window.addEventListener('mouseup', alSoltar)
+    // Mientras se arrastra, el cursor y la ausencia de selección son de toda la página: si no, al
+    // pasar por encima del texto de una celda se selecciona media tabla.
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+  }
+
+  /** Doble clic en el borde: la columna se ajusta a lo más ancho que haya en ella. */
+  function ajustarAlContenido(evento, columna) {
+    evento.preventDefault()
+    evento.stopPropagation()
+
+    regla.current = regla.current ?? document.createElement('canvas')
+    const pincel = regla.current.getContext('2d')
+    if (!pincel) return
+
+    // Se mide con la MISMA fuente de la tabla; con otra, el ancho calculado no es el que se ve.
+    const celda = document.querySelector('.table-dense td') ?? document.querySelector('.table-dense th')
+    const fuente = celda ? getComputedStyle(celda).font : ''
+    pincel.font = fuente?.trim() ? fuente : '12px monospace'
+
+    setAnchos((previos) => ({
+      ...previos,
+      [columna]: anchoAjustado(
+        columna,
+        filasVisibles.map((fila) => valorLegible(fila[columna])),
+        (texto) => pincel.measureText(texto).width,
+        { esClave: esquema?.claves.includes(columna) },
+      ),
+    }))
   }
 
   /** Suelta la columna arrastrada delante de `destino`. Solo cambia cómo se ve. */
@@ -789,6 +854,7 @@ export default function MasterDataViewer({
                       <th
                         key={columna}
                         className={encima === columna ? 'col-destino' : undefined}
+                        style={estiloDeAncho(anchos[columna])}
                         onDragOver={(evento) => {
                           if (!arrastrando || arrastrando === columna) return
                           evento.preventDefault()
@@ -833,6 +899,14 @@ export default function MasterDataViewer({
                           placeholder="filtrar…"
                           aria-label={`Filtrar ${columna} en esta página`}
                         />
+                        {/* El tirador del borde. Arrastra para el ancho, doble clic para ajustar. */}
+                        <div
+                          className="th-tirador"
+                          onMouseDown={(evento) => empezarAEstirar(evento, columna)}
+                          onDoubleClick={(evento) => ajustarAlContenido(evento, columna)}
+                          onClick={(evento) => evento.stopPropagation()}
+                          title="Arrastra para ajustar el ancho · doble clic para autoajustar al contenido"
+                        />
                       </th>
                     ))}
                   </tr>
@@ -860,6 +934,7 @@ export default function MasterDataViewer({
                             <td
                               key={columna}
                               className={`celda-editable${columna in cambios ? ' celda-tocada' : ''}`}
+                              style={estiloDeAncho(anchos[columna])}
                             >
                               <input
                                 value={cambios[columna] ?? String(fila[columna] ?? '')}
@@ -870,7 +945,11 @@ export default function MasterDataViewer({
                               />
                             </td>
                           )
-                          : <td key={columna}>{valorLegible(fila[columna])}</td>))}
+                          : (
+                            <td key={columna} style={estiloDeAncho(anchos[columna])}>
+                              {valorLegible(fila[columna])}
+                            </td>
+                          )))}
                       </tr>
                     )
                   })}

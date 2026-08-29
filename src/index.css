@@ -2755,3 +2755,19 @@ a { color: var(--cyan); }
 }
 .sidebar-minimizar:hover { background: var(--surface-glass); color: var(--text); }
 .sidebar.minimizado .sidebar-minimizar { align-self: center; }
+
+/* El tirador del borde de una cabecera: arrastrar ajusta el ancho, doble clic lo autoajusta.
+   Portado de `DataGrid.jsx` de v8. Va absoluto sobre el borde derecho, y por eso la cabecera es
+   `relative`. Ancho de seis píxeles: menos no se agarra con el ratón. */
+.table-dense th { position: relative; }
+.th-tirador {
+  bottom: 0;
+  cursor: col-resize;
+  position: absolute;
+  right: -3px;
+  top: 0;
+  user-select: none;
+  width: 6px;
+  z-index: 2;
+}
+.th-tirador:hover { background: var(--accent); opacity: .5; }

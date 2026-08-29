@@ -128,7 +128,7 @@ Es una mirada de diez segundos en las seis pantallas.
 Revisión del 2026-08-29, pedida por el usuario tras la de v7 y con el mismo método: **recorrer los
 controles del original uno a uno** contra `origin/master` (`ed718ed`), no comparar archivos.
 
-Salieron **once diferencias**. Todas corregidas.
+Salieron **doce diferencias**. Todas corregidas.
 
 ### Nombres y orden de las pestañas
 
@@ -165,6 +165,7 @@ una a otra parece gratis y no lo es.
 | Aviso de auto-refresco | `JobMonitor`, `Resumen` | los dos, aquí |
 | Panel de «Requisitos Técnicos» propio | `Header.jsx` + `es.json` | `lib/requisitos-tecnicos.js` |
 | Menú lateral minimizable | `Sidebar.jsx` | `Shell.jsx` |
+| Ancho de columna a mano y autoajuste | `DataGrid.jsx` | `lib/ancho-de-columna.js` + `MasterDataViewer.jsx` |
 
 **Las pestañas de los visores** son lo que más cambia el trabajo diario. Revisar dato maestro es
 cruzar tablas —«este producto está en Product, ¿tiene fila en Location Product?»—, y con un visor solo
@@ -183,18 +184,22 @@ ella, y con valores repetidos —lo normal en una descripción— dos páginas s
 misma fila y perder otra. Es la regla de SAP que ya estaba escrita para la paginación, aplicada
 también al orden que elige quien mira.
 
-### Lo que queda de v8 en el visor
+### El ancho de columna, el último que faltaba
 
-**El ancho de columna a mano** —arrastrar el borde de la cabecera, doble clic para ajustar al
-contenido— sigue sin portarse. Es el único control de `DataGrid.jsx` que falta.
+**Arrastrar el borde de la cabecera** fija el ancho; **doble clic** lo ajusta a lo más ancho que haya
+en la columna. Portado de `startResize`, `autoFit` y `widthStyle` de `DataGrid.jsx`, con el cálculo en
+`src/lib/ancho-de-columna.js` y sus pruebas.
+
+Para qué: una tabla de dato maestro tiene códigos de seis caracteres al lado de descripciones de
+ochenta. Sin poder tocar el ancho, o las descripciones salen cortadas o los códigos ocupan media
+pantalla.
+
+Lo medible se separó de lo del ratón a propósito: qué se compara, qué holgura se suma y entre qué
+topes queda es lo que se puede probar; arrastrar, no.
 
 ## Huecos abiertos
 
-**Uno:** el ancho de columna a mano del visor —arrastrar el borde de la cabecera, doble clic para
-ajustar al contenido—. Es el único control de `DataGrid.jsx` que falta; está anotado arriba, en
-[La interfaz de v8, restaurada](#la-interfaz-de-v8-restaurada).
-
-Los demás están cerrados, contando los tres del inventario y los once de la interfaz. El último que quedaba —el informe de una corrida de cifras clave— se cerró el 2026-08-11,
+Ninguno, contando los tres del inventario y los doce de la interfaz como cerrados. El último que quedaba —el informe de una corrida de cifras clave— se cerró el 2026-08-11,
 **rediseñado en vez de traducido**, porque traducir el de v8 habría dado un informe que miente:
 
 - v8 copiaba **una cifra por transacción**, así que su informe tenía una fila por cifra con su estado,
