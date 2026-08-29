@@ -138,10 +138,10 @@ export default function TaskLauncher({ destino, onTaskLanzada, transportadas }) 
             type="search"
             className="input input-sm"
             style={{ width: 220 }}
-            placeholder="Buscar proyecto o tarea…"
+            placeholder="Buscar proyecto o task…"
             value={busqueda}
             onChange={(evento) => setBusqueda(evento.target.value)}
-            aria-label="Buscar proyecto o tarea"
+            aria-label="Buscar proyecto o task"
           />
           <button
             type="button"
@@ -157,7 +157,7 @@ export default function TaskLauncher({ destino, onTaskLanzada, transportadas }) 
               Limpiar
             </button>
           )}
-          <button type="button" className="btn btn-sm" onClick={refrescar} disabled={cargando}>↺ Actualizar</button>
+          <button type="button" className="btn btn-sm" onClick={refrescar} disabled={cargando}>↺ Refresh</button>
         </div>
       </div>
 

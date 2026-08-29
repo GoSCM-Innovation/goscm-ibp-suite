@@ -102,10 +102,10 @@ export default function Summary({ destino }) {
             onRango={fechas.cambiarRango}
           />
           <button type="button" className="btn btn-sm" onClick={cargar} disabled={cargando || !rangoValido}>
-            ↺ Actualizar
+            ↺ Refresh
           </button>
           <span className="tag tag-muted" title={`Se actualiza solo cada ${REFRESH_MS / 60000} minutos`}>
-            Auto {REFRESH_MS / 60000} min
+            Auto-refresh {REFRESH_MS / 60000} min
           </span>
         </div>
       </div>
@@ -152,7 +152,7 @@ export default function Summary({ destino }) {
 
         <div className="grid-stats">
           <div className="card">
-            <div className="card-label">Tareas más ejecutadas</div>
+            <div className="card-label">Top tasks ejecutadas</div>
             {resumen.masEjecutadas.length === 0 ? <SinDatos /> : resumen.masEjecutadas.map((tarea, i) => (
               <Ranking
                 key={tarea.clave}
@@ -165,7 +165,7 @@ export default function Summary({ destino }) {
           </div>
 
           <div className="card">
-            <div className="card-label">Últimas falladas</div>
+            <div className="card-label">Últimas fallidas</div>
             {resumen.ultimasFalladas.length === 0
               ? <div className="todo-bien">✓ Sin fallos en el período</div>
               : resumen.ultimasFalladas.map((fila) => (
@@ -194,7 +194,7 @@ export default function Summary({ destino }) {
           </div>
 
           <div className="card">
-            <div className="card-label">Correctas con errores</div>
+            <div className="card-label">Warnings</div>
             {resumen.conAvisos.length === 0
               ? <div className="todo-bien">✓ Sin avisos en el período</div>
               : resumen.conAvisos.map((fila) => (

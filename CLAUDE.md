@@ -67,6 +67,12 @@ Las 17 reglas confirmadas (documentadas en `docs/FASE-0-LEVANTAMIENTO.md` §5) v
 
 ## Convenciones
 - Español para texto de interfaz, documentación y comentarios. Código y nombres de símbolos en inglés.
+- **El texto PORTADO manda sobre la preferencia de idioma.** Un nombre de pantalla, un botón o una
+  columna que ya existía en v7, v8 o v9 se copia tal cual, aunque esté en inglés («Job Templates»,
+  «Task Monitor», «↺ Refresh», «Warnings»). No se traduce. La regla de arriba vale para el texto que
+  se escribe NUEVO. Decidido por el usuario el 2026-08-28: los tres proyectos llevan años de uso
+  delante de clientes y renombrar un control que la gente ya conoce no traduce nada, cambia el
+  producto. Ver [Respetar la interfaz de origen](#respetar-la-interfaz-de-origen).
 - **Español neutro latinoamericano, nunca rioplatense.** Formas de tú («elige», «pulsa», «vuelve»),
   no de vos («elegí», «pulsá», «volvé»). Tampoco «acá» por «aquí», «chico» por «pequeño», «de a una»
   por «una por una», ni «recién» con el sentido de «solo entonces». Vale para la interfaz, los
@@ -77,6 +83,20 @@ Las 17 reglas confirmadas (documentadas en `docs/FASE-0-LEVANTAMIENTO.md` §5) v
 - Preservar la arquitectura de IndexedDB de v7 al reescribir Explorer: los datasets grandes **nunca** viven completos en memoria, se leen por cursor. Meterlos en estado de React degrada el rendimiento.
 - Commits sin `Co-Authored-By`.
 - Sesiones cortas y enfocadas por feature.
+
+## Respetar la interfaz de origen
+
+**La interfaz de v7, v8 y v9 se porta tal cual era.** No se rediseña, no se renombran sus pantallas y
+no se traducen sus controles. Llevan años de uso delante de clientes y está trabajada; portar la
+funcionalidad y rehacer la forma convierte una migración en un producto nuevo que nadie pidió.
+
+Cómo se comprueba, que es lo que de verdad importa: **recorrer los controles del original uno a uno**
+—sus botones, sus desplegables, sus pestañas, sus paneles plegables— y ver cuál existe aquí. Comparar
+ARCHIVOS no sirve: los huecos encontrados así vivían todos dentro de archivos ya dados por portados.
+
+Solo se acepta desviarse cuando lo obliga una regla de seguridad de esta plataforma —por ejemplo, el
+paso ① del asistente de v7 pedía credenciales de SAP y aquí elige entre conexiones dadas de alta,
+porque las credenciales viven cifradas—. Cuando pasa, se escribe por qué al lado del código.
 
 ## Comandos
 - Desarrollo: `npm run dev` (frontend + `/api` en un solo puerto).

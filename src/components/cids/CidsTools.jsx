@@ -13,6 +13,8 @@ import { cidsTargets, fetchPromotedTaskNames, listCidsConnections, promotedForTa
 import TaskMonitor from './TaskMonitor.jsx'
 import TaskLauncher from './TaskLauncher.jsx'
 import { lectorDeCids } from '../../lib/run-logs.js'
+import ConnectionTabs from '../ui/ConnectionTabs.jsx'
+import { abrir, abrirLasGuardadas, cerrar, guardarAbiertas } from '../../lib/pestanas-de-conexion.js'
 
 // Los tableros se cargan aparte, solo al abrir su pestaña. Son los únicos que usan la librería de
 // gráficos, y esa librería pesa más que todo el resto de la aplicación junta: dejarla en el paquete
@@ -29,20 +31,25 @@ const Orchestrations = lazy(() => import('./orchestrations/Orchestrations.jsx'))
 const IntegrationExplorer = lazy(() => import('./explorer/IntegrationExplorer.jsx'))
 const MappingDocumenter = lazy(() => import('./documenter/MappingDocumenter.jsx'))
 
-// El orden es el de v9: se entra por el resumen, que es la pantalla que contesta "¿cómo venimos?"
-// antes de que nadie tenga que buscar una ejecución concreta.
+// Los nombres y el orden son los de v9, tal cual: «Projects & Tasks» antes que «Task Monitor», y
+// «Integration Explorer» y «Mapping Dataflow Generator» con su nombre. Se habían traducido y
+// reordenado; son los nombres que el cliente lleva años viendo.
 //
-// El tablero global mira TODOS los destinos, así que el selector no le aplica y se esconde mientras
-// está abierto. Solo aparece cuando hay más de uno, que con CI-DS es siempre —cada conexión rinde
-// pruebas y productivo—, pero la condición queda escrita para que se lea el motivo.
+// Las dos últimas eran entradas del menú lateral en v9 y no pestañas de una conexión, porque no miran
+// ningún repositorio: leen los ZIP del equipo. Aquí el menú lateral es de módulos, así que van como
+// pestañas y se marcan `SIN_DESTINO`.
+//
+// El tablero global mira TODOS los destinos, así que el selector no le aplica. Solo aparece cuando
+// hay más de uno, que con CI-DS es siempre —cada conexión rinde pruebas y productivo—, pero la
+// condición queda escrita para que se lea el motivo.
 const HERRAMIENTAS = [
-  { id: 'global', label: 'Global', soloConVarios: true },
+  { id: 'global', label: 'Resumen Global', soloConVarios: true },
   { id: 'resumen', label: 'Resumen' },
-  { id: 'monitor', label: 'Monitor de tareas' },
-  { id: 'tareas', label: 'Proyectos y tareas' },
+  { id: 'tareas', label: 'Projects & Tasks' },
+  { id: 'monitor', label: 'Task Monitor' },
   { id: 'orquestaciones', label: 'Orquestaciones' },
-  { id: 'explorador', label: 'Explorador de integraciones' },
-  { id: 'documentador', label: 'Documentador de mapeos' },
+  { id: 'explorador', label: 'Integration Explorer' },
+  { id: 'documentador', label: 'Mapping Dataflow Generator' },
 ]
 
 // El explorador y el documentador leen los ZIP del equipo: no consultan ningún repositorio, así que
@@ -53,6 +60,7 @@ const SIN_DESTINO = new Set(['global', 'explorador', 'documentador'])
 export default function CidsTools() {
   const [conexiones, setConexiones] = useState(null)
   const [elegido, setElegido] = useState('')
+  const [abiertas, setAbiertas] = useState([])
   const [error, setError] = useState('')
   const [herramienta, setHerramienta] = useState('resumen')
 
@@ -75,7 +83,10 @@ export default function CidsTools() {
         setConexiones(lista)
         // El primer destino es el repositorio de pruebas de la primera conexión: es donde se trabaja,
         // y entrar por producción sin haberlo pedido sería la peor opción por omisión posible.
-        if (lista.length > 0) setElegido(`${lista[0].id}:sandbox`)
+        const todos = cidsTargets(lista)
+        const iniciales = abrirLasGuardadas('cids', todos)
+        setAbiertas(iniciales)
+        setElegido(iniciales[0] ?? (lista.length > 0 ? `${lista[0].id}:sandbox` : ''))
       })
       .catch((fallo) => { setError(fallo.message); setConexiones([]) })
   }, [])
@@ -117,11 +128,46 @@ export default function CidsTools() {
     setHerramienta('monitor')
   }
 
+  /** Los destinos con la forma que espera la tira: es un repositorio por pestaña, no una conexión. */
+  const comoPestanas = destinos.map((uno) => (
+    { id: uno.id, name: uno.label, isProduction: uno.production }
+  ))
+
+  function elegir(id) {
+    setAbiertas((previas) => {
+      const siguientes = abrir(previas, id)
+      guardarAbiertas('cids', siguientes)
+      return siguientes
+    })
+    setElegido(id)
+  }
+
+  function cerrarPestana(id) {
+    const salida = cerrar(abiertas, elegido, id)
+    guardarAbiertas('cids', salida.abiertas)
+    setAbiertas(salida.abiertas)
+    setElegido(salida.activa)
+  }
+
   return (
     <div className="module-page">
+      {/* La tira de pestañas de v9: varios repositorios abiertos a la vez. No se enseña donde no
+          significa nada —el tablero global los mira todos y el explorador no mira ninguno—. */}
+      {!SIN_DESTINO.has(herramienta) && (
+        <ConnectionTabs
+          conexiones={comoPestanas}
+          abiertas={abiertas}
+          activa={elegido}
+          onElegir={elegir}
+          onCerrar={cerrarPestana}
+        />
+      )}
+
       <div className="module-head">
         <div>
-          <div className="page-title">CI-DS Tools</div>
+          <div className="page-title">
+            {HERRAMIENTAS.find((una) => una.id === herramienta)?.label ?? 'CI-DS Tools'}
+          </div>
           <div className="page-hint">
             {herramienta === 'global' && 'Todos los repositorios de CI-DS a la vez.'}
             {herramienta === 'explorador' && 'Los exports de tus proyectos, leídos en tu navegador.'}
@@ -130,23 +176,6 @@ export default function CidsTools() {
           </div>
         </div>
 
-        {/* Hay pantallas a las que elegir un destino no les dice nada: el tablero global los mira
-            todos y el explorador no mira ninguno. */}
-        {!SIN_DESTINO.has(herramienta) && (
-          <div className="monitor-bar">
-            <select
-              className="select input-sm"
-              value={elegido}
-              onChange={(evento) => setElegido(evento.target.value)}
-              aria-label="Repositorio de CI-DS"
-            >
-              {destinos.map((uno) => (
-                <option key={uno.id} value={uno.id}>{uno.label}</option>
-              ))}
-            </select>
-            {destino?.production && <span className="tag tag-accent">Productivo</span>}
-          </div>
-        )}
       </div>
 
       <div className="tabs">

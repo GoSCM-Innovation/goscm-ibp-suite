@@ -164,7 +164,8 @@ export default function JobMonitor({ conexionId }) {
           value={texto}
           onChange={(evento) => setTexto(evento.target.value)}
         />
-        <button type="button" className="btn btn-sm" onClick={cargar} disabled={!rangoValido}>↺ Actualizar</button>
+        <button type="button" className="btn btn-sm" onClick={cargar} disabled={!rangoValido}>↺ Refresh</button>
+        <span className="auto-refresco">Auto-refresh cada 60s</span>
         <span className="page-hint">
           {cargando ? 'Consultando…' : `${visibles.length} de ${runs.length} ejecuciones`}
         </span>
@@ -210,7 +211,7 @@ export default function JobMonitor({ conexionId }) {
       {seleccionada && (
         <div className="action-bar">
           <div className="action-bar-what">
-            <div className="action-bar-label">Ejecución elegida</div>
+            <div className="action-bar-label">Job seleccionado</div>
             <div className="action-bar-name">
               {nombreDeEjecucion(seleccionada)}
               <span className="mono action-bar-run">{seleccionada.JobRunCount}</span>
@@ -236,7 +237,7 @@ export default function JobMonitor({ conexionId }) {
                 ? 'Volver a lanzarla'
                 : `Una ejecución en estado "${jobStatusMeta(seleccionada.JobStatus).label}" todavía no acabó`}
             >
-              ↻ Reiniciar
+              ↺ Reiniciar job
             </button>
             <button
               type="button"
@@ -247,7 +248,7 @@ export default function JobMonitor({ conexionId }) {
                 ? 'Pedirle a SAP que la detenga'
                 : `Una ejecución en estado "${jobStatusMeta(seleccionada.JobStatus).label}" ya no se puede cancelar`}
             >
-              ✕ Cancelar
+              ✕ Cancelar job
             </button>
             <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setElegida(null); setAviso(null) }}>
               Deseleccionar
@@ -261,13 +262,13 @@ export default function JobMonitor({ conexionId }) {
           <thead>
             <tr>
               <th>Estado</th>
-              <th>Ejecución</th>
-              <th>Plantilla</th>
-              <th>Programada</th>
-              <th>Empezó</th>
-              <th>Terminó</th>
+              <th>Descripción</th>
+              <th>Template</th>
+              <th>Inicio planificado</th>
+              <th>Inicio real</th>
+              <th>Fin</th>
               <th>Pasos</th>
-              <th>Lanzada por</th>
+              <th>Usuario</th>
             </tr>
           </thead>
           <tbody>

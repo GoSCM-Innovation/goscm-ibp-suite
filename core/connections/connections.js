@@ -48,6 +48,10 @@ const toConnection = (row) => row && ({
   isProduction: row.is_production,
   createdAt: row.created_at,
   ...(row.agreement_count === undefined ? {} : { agreementCount: row.agreement_count }),
+  // QUÉ acuerdos tiene, no solo cuántos. Es lo que permite esconder una pestaña que no puede
+  // funcionar: en v8, sin `SAP_COM_0068` no existía «Resource Stats». Una pestaña que al abrirse
+  // falla con un 403 es peor que una pestaña ausente.
+  ...(row.agreements === undefined ? {} : { agreements: row.agreements }),
 })
 
 const toAgreement = (row) => row && ({
@@ -74,7 +78,8 @@ export async function listConnections(clientId, { kind = null } = {}) {
   const rows = await queryScoped(
     clientId,
     `select c.id, c.kind, c.name, c.base_url, c.organization, c.is_production, c.created_at,
-            count(a.id)::int as agreement_count
+            count(a.id)::int as agreement_count,
+            coalesce(array_agg(a.agreement) filter (where a.agreement is not null), '{}') as agreements
      from connections c
      left join connection_agreements a on a.connection_id = c.id and a.client_id = c.client_id
      where c.client_id = $1${kind === null ? '' : ' and c.kind = $2'}

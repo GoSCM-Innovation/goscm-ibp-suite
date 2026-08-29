@@ -265,10 +265,10 @@ export default function TaskMonitor({ destino, busqueda, onBuscar, transportadas
             {copiado === 'ok' ? '✓ Copiado' : copiado === 'error' ? '✕ No se pudo' : '⧉ Copiar'}
           </button>
           <button type="button" className="btn btn-sm" onClick={cargar} disabled={cargando || !rangoValido}>
-            ↺ Actualizar
+            ↺ Refresh
           </button>
           <span className="tag tag-muted" title={`Se actualiza sola cada ${REFRESH_MS / 1000} segundos`}>
-            Auto {REFRESH_MS / 1000}s
+            🔄 Auto {REFRESH_MS / 1000}s
           </span>
         </div>
       </div>
@@ -360,7 +360,7 @@ export default function TaskMonitor({ destino, busqueda, onBuscar, transportadas
       {elegida && (
         <div className="action-bar">
           <div className="action-bar-what">
-            <div className="action-bar-label">Ejecución elegida</div>
+            <div className="action-bar-label">Ejecución seleccionada</div>
             <div className="action-bar-name">
               {elegida.taskName ?? '—'}
               <span className="mono action-bar-run">RunID {elegida.runId}</span>

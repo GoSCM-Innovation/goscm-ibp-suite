@@ -97,7 +97,8 @@ export default function Resumen({ conexionId }) {
     <div className="module-body">
       <div className="monitor-bar">
         <DateRangeBar rango={rango} zona={zona} dias={dias} onZona={cambiarZona} onRango={cambiarRango} />
-        <button type="button" className="btn btn-sm" onClick={cargar} disabled={!rangoValido}>↺ Actualizar</button>
+        <button type="button" className="btn btn-sm" onClick={cargar} disabled={!rangoValido}>↺ Refresh</button>
+        <span className="auto-refresco">Auto-refresh cada 5 min</span>
         <span className="page-hint">
           {cargando ? 'Consultando…' : `${cuentas.total} ejecuciones en el período`}
         </span>
@@ -112,7 +113,7 @@ export default function Resumen({ conexionId }) {
 
       <div className="tablero">
         <div className="grid-kpi">
-        <Kpi etiqueta="Total ejecuciones" valor={cuentas.total} />
+        <Kpi etiqueta="Total jobs" valor={cuentas.total} />
         <Kpi etiqueta="En ejecución" valor={cuentas.corriendo} color={cuentas.corriendo > 0 ? 'var(--cyan)' : undefined} />
         <Kpi etiqueta="En cola" valor={cuentas.enCola} />
         <Kpi etiqueta="Correctas" valor={cuentas.correctas} color="var(--green)" />
@@ -127,14 +128,14 @@ export default function Resumen({ conexionId }) {
           </div>
 
           <div className="card">
-            <div className="card-label">Ejecuciones por día</div>
+            <div className="card-label">Jobs por día</div>
             <PerDayBars porDia={barras} />
           </div>
         </div>
 
         <div className="grid-stats">
           <div className="card">
-            <div className="card-label">Trabajos más ejecutados</div>
+            <div className="card-label">Top jobs ejecutados</div>
             {top.length === 0 ? <SinDatos /> : top.map((uno) => (
               <div className="lista-fila agente" key={uno.nombre}>
                 <span className="lista-nombre" title={uno.nombre}>{uno.nombre}</span>
@@ -147,7 +148,7 @@ export default function Resumen({ conexionId }) {
           </div>
 
           <div className="card">
-            <div className="card-label">Últimas falladas</div>
+            <div className="card-label">Últimos jobs fallidos</div>
             {falladas.length === 0
               ? <p className="todo-bien">✓ Sin fallos en el período</p>
               : falladas.map((run) => {

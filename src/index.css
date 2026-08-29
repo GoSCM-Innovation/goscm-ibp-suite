@@ -2522,3 +2522,103 @@ a { color: var(--cyan); }
 }
 .viz-rutas-cabecera:hover { background: var(--surface-glass-soft); }
 .viz-rutas-cuerpo { border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 10px; padding: 12px 16px; }
+
+/* ── La tira de pestañas de conexiones abiertas ────────────────────────────────────────────────
+   Portada de `ConnectionTabs.jsx` de v9, con sus mismas medidas: 38px de alto, 140 a 220 de ancho
+   por pestaña, y la activa marcada con la línea del acento debajo. */
+.conn-tabs {
+  align-items: stretch;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex-shrink: 0;
+  min-height: 38px;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+.conn-tab {
+  align-items: center;
+  background: transparent;
+  border-bottom: 2px solid transparent;
+  border-right: 1px solid var(--border);
+  color: var(--text2);
+  cursor: pointer;
+  display: flex;
+  flex-shrink: 0;
+  gap: 8px;
+  max-width: 220px;
+  min-width: 140px;
+  padding: 0 10px 0 12px;
+  transition: background .15s, color .15s;
+}
+.conn-tab:hover { background: var(--surface-glass-soft); }
+.conn-tab.active {
+  background: var(--bg);
+  border-bottom-color: var(--accent);
+  color: var(--text);
+}
+.conn-tab-nombre {
+  flex: 1;
+  font-size: 12px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.conn-tab.active .conn-tab-nombre { font-weight: 600; }
+.conn-tab-punto {
+  background: var(--text3);
+  border-radius: 50%;
+  flex-shrink: 0;
+  height: 6px;
+  width: 6px;
+}
+.conn-tab-punto.productivo { background: var(--accent); box-shadow: 0 0 6px rgba(247, 168, 0, .7); }
+.conn-tab-cerrar {
+  background: none;
+  border: none;
+  border-radius: 4px;
+  color: var(--text3);
+  cursor: pointer;
+  flex-shrink: 0;
+  font-size: 14px;
+  line-height: 1;
+  padding: 2px 4px;
+}
+.conn-tab-cerrar:hover { background: var(--surface-glass); color: var(--text); }
+
+/* ── La cabecera de la conexión activa ─────────────────────────────────────────────────────────
+   Portada de la cabecera de `SystemView.jsx` de v8: avatar de 34px, nombre en negrita y el enlace
+   al launchpad debajo, en pequeño y del color del acento. */
+.conn-cabecera {
+  align-items: center;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  display: flex;
+  flex-shrink: 0;
+  gap: 14px;
+  padding: 12px 18px;
+}
+.conn-cabecera-texto { flex: 1; min-width: 0; }
+.conn-cabecera-nombre { color: var(--text); font-size: 14px; font-weight: 700; }
+.conn-cabecera-enlace {
+  color: var(--accent);
+  display: inline-block;
+  font-size: 10px;
+  margin-top: 2px;
+  text-decoration: none;
+}
+.conn-cabecera-enlace:hover { text-decoration: underline; }
+
+/* El aviso de auto-refresco, junto al botón de refrescar. Portado de v8 y v9: sin él la pantalla se
+   refresca sola y no lo dice, y quien mira una tabla no sabe si es de ahora o de hace un rato. */
+.auto-refresco {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text3);
+  font-size: 10px;
+  padding: 4px 8px;
+  white-space: nowrap;
+}

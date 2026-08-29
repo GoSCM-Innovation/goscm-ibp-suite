@@ -163,9 +163,9 @@ export default function GlobalSummary({ destinos }) {
             onRango={fechas.cambiarRango}
           />
           <button type="button" className="btn btn-sm" onClick={cargar} disabled={cargando || !rangoValido}>
-            ↺ Actualizar
+            ↺ Refresh
           </button>
-          <span className="tag tag-muted">Auto {REFRESH_MS / 60000} min</span>
+          <span className="tag tag-muted">Auto-refresh {REFRESH_MS / 60000} min</span>
         </div>
       </div>
 
@@ -310,7 +310,7 @@ export default function GlobalSummary({ destinos }) {
 
             <div className="grid-stats">
               <div className="card">
-                <div className="card-label">Tareas más ejecutadas</div>
+                <div className="card-label">Top tasks ejecutadas</div>
                 {global.masEjecutadas.length === 0 ? <SinDatos /> : global.masEjecutadas.map((tarea, i) => (
                   <div className="ranking" key={tarea.clave}>
                     <div className="ranking-cabeza">
@@ -333,7 +333,7 @@ export default function GlobalSummary({ destinos }) {
               </div>
 
               <div className="card">
-                <div className="card-label">Últimas falladas</div>
+                <div className="card-label">Últimas fallidas</div>
                 {global.ultimasFalladas.length === 0
                   ? <div className="todo-bien">✓ Sin fallos en el período</div>
                   : global.ultimasFalladas.map((fila) => (
