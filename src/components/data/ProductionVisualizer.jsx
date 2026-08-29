@@ -72,10 +72,12 @@ export default function ProductionVisualizer({ destino }) {
         onConfirmar={() => { setDescargaAbierta(true); setMapeoAbierto(false) }}
       />
 
+      {/* La descarga arranca sola si no hay nada bajado, que es lo que hacía el botón de v7. Con datos
+          ya guardados enseña el plan y espera: rebajar tres millones de filas sin pedirlo no. */}
       {descargaAbierta && (
         <div className="panel">
           <div className="panel-title">Descarga del árbol de materiales</div>
-          <ExplorerExtract destino={destino} gruposFijos={['arbol']} />
+          <ExplorerExtract destino={destino} gruposFijos={['arbol']} arrancarSiVacio />
         </div>
       )}
 

@@ -399,8 +399,9 @@ export default function AnalizadorV7({
           </div>
 
           {/* La descarga va aquí, como en v7: el análisis lee lo bajado, así que bajar es parte de
-              ejecutar. Lo que ya esté descargado se reutiliza y no hace falta volver a bajarlo. */}
-          <ExplorerExtract destino={destino} gruposFijos={[grupo]} extras={extras} />
+              ejecutar. Arranca sola si no hay nada —igual que el «Ejecutar análisis» de v7, que bajaba
+              y juzgaba de un tirón—; lo que ya esté descargado se reutiliza y no se vuelve a bajar. */}
+          <ExplorerExtract destino={destino} gruposFijos={[grupo]} extras={extras} arrancarSiVacio />
 
           <div className="btn-row">
             <button

@@ -28,7 +28,7 @@ import { extraer } from '../../lib/explorer-extract.js'
 const numero = (valor) => Number(valor ?? 0).toLocaleString('es')
 
 export default function ExplorerExtract({
-  destino, gruposFijos = null, extras = null, onTerminada = null,
+  destino, gruposFijos = null, extras = null, arrancarSiVacio = false, onTerminada = null,
 }) {
   const [mapa, setMapa] = useState(null)
   const [error, setError] = useState('')
@@ -42,6 +42,9 @@ export default function ExplorerExtract({
   // Una ref y no estado: el bucle de descarga la consulta en cada página, y con estado leería el
   // valor que tenía cuando arrancó.
   const cancelar = useRef(false)
+
+  // Que el arranque automático se haga UNA vez. Sin esto, cada recuento volvería a dispararlo.
+  const yaArranco = useRef(false)
 
   // Diferido para no encadenar renders: pedir y marcar «cargando» en el cuerpo del efecto hace que
   // React vuelva a dibujar antes de terminar el que está haciendo.
@@ -69,7 +72,7 @@ export default function ExplorerExtract({
 
   /** Cuántas filas hay ya guardadas de cada tabla, para saber si vale la pena volver a bajar. */
   const contarLoGuardado = useCallback(async () => {
-    if (!plan) return
+    if (!plan) return null
     const cuentas = {}
     for (const paso of plan.pasos) {
       try {
@@ -79,14 +82,12 @@ export default function ExplorerExtract({
       }
     }
     setGuardadasAntes(cuentas)
+    return cuentas
   }, [plan])
 
-  useEffect(() => {
-    const id = setTimeout(contarLoGuardado, 0)
-    return () => clearTimeout(id)
-  }, [contarLoGuardado])
-
-  async function bajar() {
+  /** Baja lo que dice el plan, contando el avance y avisando al terminar. */
+  const bajar = useCallback(async () => {
+    if (!plan || !mapa) return
     cancelar.current = false
     setBajando(true)
     setSalida(null)
@@ -110,7 +111,24 @@ export default function ExplorerExtract({
       setBajando(false)
       setAvance(null)
     }
-  }
+  }, [plan, mapa, destino, contarLoGuardado, onTerminada])
+
+  // Se cuenta lo guardado y, si quien monta esta descarga lo pidió y NO hay nada bajado, arranca sola.
+  //
+  // Por qué así y no siempre: en v7 el botón «Descargar datos y construir jerarquía» bajaba en el
+  // acto, porque v7 no guardaba nada entre sesiones. Aquí sí, y volver a bajar tres millones de filas
+  // por haber pasado otra vez por el paso ① sería un castigo. Con la base vacía se comporta como v7;
+  // con datos, enseña el plan y deja pulsar «Volver a bajar».
+  useEffect(() => {
+    const id = setTimeout(async () => {
+      const cuentas = await contarLoGuardado()
+      if (!arrancarSiVacio || yaArranco.current || !cuentas) return
+      if (Object.values(cuentas).some((cuantas) => cuantas > 0)) return
+      yaArranco.current = true
+      bajar()
+    }, 0)
+    return () => clearTimeout(id)
+  }, [contarLoGuardado, arrancarSiVacio, bajar])
 
   if (mapa === null) return <div className="page-hint">Leyendo el catálogo del tenant… tarda unos segundos.</div>
   if (mapa === false) return <div className="notice notice-error">✕ {error}</div>
