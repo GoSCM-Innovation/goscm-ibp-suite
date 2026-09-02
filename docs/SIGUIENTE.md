@@ -7,7 +7,19 @@ actualiza al terminar cada sesión, y su orden es el de prioridad acordada.
 
 ## Dónde estamos
 
-- **En línea**: https://goscm-ibp-suite.vercel.app — cada subida a `main` se publica sola.
+- **En línea**: https://goscm-ibp-suite.vercel.app
+- **El despliegue automático NO está funcionando.** Comprobado el 2026-08-29: el último despliegue que
+  disparó un `git push` era de ocho días antes, con varios push por medio. La causa más probable es el
+  traslado del repositorio a `GoSCM-Innovation`, que dejó la conexión de Vercel apuntando al sitio
+  viejo. Hasta arreglarlo, **hay que desplegar a mano** desde la carpeta del proyecto:
+
+  ```bash
+  vercel --prod --yes
+  ```
+
+  Tarda medio minuto y deja el alias puesto en el dominio de siempre. Conviene revisar la conexión de
+  Git del proyecto en Vercel y volver a enlazarla al repositorio nuevo: mientras siga así, cualquiera
+  que mire la web verá una versión vieja sin que nada avise.
 - **2.615 pruebas**, lint y build limpios, y el build **sin ningún aviso**.
 - Los tres proyectos previos están portados en funcionalidad.
 - **La interfaz de los TRES está restaurada tal cual era.** Es una decisión del usuario y ahora es
