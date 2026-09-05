@@ -9,17 +9,25 @@ actualiza al terminar cada sesión, y su orden es el de prioridad acordada.
 
 - **En línea**: https://goscm-ibp-suite.vercel.app
 - **El despliegue automático NO está funcionando.** Comprobado el 2026-08-29: el último despliegue que
-  disparó un `git push` era de ocho días antes, con varios push por medio. La causa más probable es el
-  traslado del repositorio a `GoSCM-Innovation`, que dejó la conexión de Vercel apuntando al sitio
-  viejo. Hasta arreglarlo, **hay que desplegar a mano** desde la carpeta del proyecto:
+  disparó un `git push` era de ocho días antes, con varios push por medio.
+
+  **Media causa encontrada el 2026-09-05.** El remoto de git de esta carpeta seguía apuntando al
+  sitio viejo (`gahumadatoledo-cmyk/goscm-ibp-suite`) y GitHub contestaba a cada push con «This
+  repository moved»: el push llegaba por redirección, pero **una redirección no dispara los webhooks**,
+  así que Vercel no se enteraba de nada. El remoto ya está corregido a
+  `GoSCM-Innovation/goscm-ibp-suite`.
+
+  **Lo que falta comprobar en el próximo push:** si con eso el despliegue automático vuelve solo. Si
+  no vuelve, entonces sí hay que reenlazar la conexión de Git del proyecto en Vercel al repositorio
+  nuevo. Mientras siga así, cualquiera que mire la web verá una versión vieja sin que nada avise.
+
+  Y en cualquier caso, **desplegar a mano** desde la carpeta del proyecto sigue funcionando:
 
   ```bash
   vercel --prod --yes
   ```
 
-  Tarda medio minuto y deja el alias puesto en el dominio de siempre. Conviene revisar la conexión de
-  Git del proyecto en Vercel y volver a enlazarla al repositorio nuevo: mientras siga así, cualquiera
-  que mire la web verá una versión vieja sin que nada avise.
+  Tarda medio minuto y deja el alias puesto en el dominio de siempre.
 - **2.671 pruebas**, lint y build limpios, y el build **sin ningún aviso**.
 - Los tres proyectos previos están portados en funcionalidad.
 - **La interfaz de los TRES está restaurada tal cual era.** Es una decisión del usuario y ahora es
