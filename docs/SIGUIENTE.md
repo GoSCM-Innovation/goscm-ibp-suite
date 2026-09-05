@@ -8,26 +8,28 @@ actualiza al terminar cada sesión, y su orden es el de prioridad acordada.
 ## Dónde estamos
 
 - **En línea**: https://goscm-ibp-suite.vercel.app
-- **El despliegue automático NO está funcionando.** Comprobado el 2026-08-29: el último despliegue que
-  disparó un `git push` era de ocho días antes, con varios push por medio.
+- **El despliegue automático vuelve a funcionar.** Arreglado el 2026-09-05, y la causa era una sola
+  cosa: **el remoto de git de esta carpeta seguía apuntando al sitio viejo**
+  (`gahumadatoledo-cmyk/goscm-ibp-suite`). El repositorio se había movido a `GoSCM-Innovation`, y
+  GitHub contestaba a cada push con «This repository moved». El push LLEGABA —por redirección— y por
+  eso nada parecía roto, pero **una redirección no dispara los webhooks**, así que Vercel no se
+  enteraba. De ahí los huecos de ocho y de once días entre despliegues.
 
-  **Media causa encontrada el 2026-09-05.** El remoto de git de esta carpeta seguía apuntando al
-  sitio viejo (`gahumadatoledo-cmyk/goscm-ibp-suite`) y GitHub contestaba a cada push con «This
-  repository moved»: el push llegaba por redirección, pero **una redirección no dispara los webhooks**,
-  así que Vercel no se enteraba de nada. El remoto ya está corregido a
-  `GoSCM-Innovation/goscm-ibp-suite`.
+  ```bash
+  git remote set-url origin https://github.com/GoSCM-Innovation/goscm-ibp-suite.git
+  ```
 
-  **Lo que falta comprobar en el próximo push:** si con eso el despliegue automático vuelve solo. Si
-  no vuelve, entonces sí hay que reenlazar la conexión de Git del proyecto en Vercel al repositorio
-  nuevo. Mientras siga así, cualquiera que mire la web verá una versión vieja sin que nada avise.
+  Comprobado: el push siguiente disparó un despliegue solo, quedó `Ready` en 15 s, y el bundle que
+  sirve `goscm-ibp-suite.vercel.app` es el mismo que el del build local. **Ya no hace falta desplegar
+  a mano.**
 
-  Y en cualquier caso, **desplegar a mano** desde la carpeta del proyecto sigue funcionando:
+  Lo que hay que mirar si vuelve a pasar: que `git remote -v` apunte a `GoSCM-Innovation`, y que un
+  push no conteste «This repository moved». Si alguien clonó de la URL vieja, tiene el mismo problema
+  sin que nada avise. Desplegar a mano sigue siendo el respaldo:
 
   ```bash
   vercel --prod --yes
   ```
-
-  Tarda medio minuto y deja el alias puesto en el dominio de siempre.
 - **2.671 pruebas**, lint y build limpios, y el build **sin ningún aviso**.
 - Los tres proyectos previos están portados en funcionalidad.
 - **La interfaz de los TRES está restaurada tal cual era.** Es una decisión del usuario y ahora es
