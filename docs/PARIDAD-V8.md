@@ -197,6 +197,25 @@ pantalla.
 Lo medible se separó de lo del ratón a propósito: qué se compara, qué holgura se suma y entre qué
 topes queda es lo que se puede probar; arrastrar, no.
 
+### Cambiar de tenant, que se había quedado sin control
+
+Encontrado el 2026-09-05 por el usuario: **IBP Tools no tenía dónde cambiar la conexión.**
+
+En v8 los tenants colgaban del **menú lateral** y se elegía uno pulsándolo. Aquí el menú lista los tres
+módulos de la suite, y su sustituto es la tira de pestañas de v9 — que dibuja solo las YA abiertas.
+Resultado: con una pestaña abierta no había forma de llegar a otro tenant. La función de abrir existía
+y ningún control la llamaba.
+
+Cerrado con un «+» al final de la tira, que sirve igual a IBP Tools y a CI-DS Tools. El detalle está
+en [PARIDAD-V9.md](PARIDAD-V9.md#el--no-había-forma-de-cambiar-de-conexión), porque la tira es pieza de
+v9.
+
+Una consecuencia que conviene tener escrita, porque se lee como un error y no lo es: el menú lateral
+puede decir un tenant —«GCINDURAMA · IBP CONSENSO QA»— mientras IBP Tools dice otro —«IBP AGROSUPER
+QA»—. **No están desincronizados.** El del menú es la conexión activa de Data Tools, que es el `CFG`
+global de v7 y se elige una vez en el asistente; la de IBP Tools es una pestaña por tenant, que es
+como lo hacían v8 y v9. Son dos cosas distintas de dos proyectos distintos, y así se quedan.
+
 ## Huecos abiertos
 
 Ninguno, contando los tres del inventario y los doce de la interfaz como cerrados. El último que quedaba —el informe de una corrida de cifras clave— se cerró el 2026-08-11,

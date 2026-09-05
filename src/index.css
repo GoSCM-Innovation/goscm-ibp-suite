@@ -2140,6 +2140,19 @@ a { color: var(--cyan); }
   transition: width .3s;
 }
 
+/* La línea de estado de la descarga, con su botón de logs al lado. Son los valores que v7 llevaba
+   en el `style` de `#progStatus` y de `#btnToggleLogs`. */
+.prog-estado {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--text2);
+}
+.prog-estado .prog-logs-btn { padding: 2px 8px; font-size: 11px; }
+
 /* ── Vacío / bloqueado ────────────────────────────────────────────────────────────────────────── */
 .empty-state { text-align: center; padding: 60px 20px; color: var(--text3); }
 .empty-state .icon { font-size: 40px; margin-bottom: 12px; }
@@ -2526,13 +2539,24 @@ a { color: var(--cyan); }
 /* ── La tira de pestañas de conexiones abiertas ────────────────────────────────────────────────
    Portada de `ConnectionTabs.jsx` de v9, con sus mismas medidas: 38px de alto, 140 a 220 de ancho
    por pestaña, y la activa marcada con la línea del acento debajo. */
-.conn-tabs {
+/* La fila lleva el fondo, el borde y el alto; la tira de dentro es la que hace scroll. Están
+   separadas porque el «+» y su desplegable NO pueden vivir dentro de algo con `overflow: auto`:
+   quedarían recortados. Y es también la referencia del desplegable, para que no se salga por la
+   derecha cuando hay muchas pestañas y el botón queda lejos. */
+.conn-tabs-fila {
   align-items: stretch;
   background: var(--bg2);
   border-bottom: 1px solid var(--border);
   display: flex;
   flex-shrink: 0;
   min-height: 38px;
+  position: relative;
+}
+.conn-tabs {
+  align-items: stretch;
+  display: flex;
+  flex: 0 1 auto;
+  min-width: 0;
   overflow-x: auto;
   overflow-y: hidden;
 }
@@ -2586,6 +2610,66 @@ a { color: var(--cyan); }
   padding: 2px 4px;
 }
 .conn-tab-cerrar:hover { background: var(--surface-glass); color: var(--text); }
+
+/* El «+» del final de la tira y su desplegable de conexiones. Sin `position: relative` a propósito:
+   el desplegable se ancla a `.conn-tabs-fila` para salir siempre por su izquierda. */
+.conn-tabs-mas { display: flex; align-items: stretch; flex-shrink: 0; }
+.conn-tabs-mas-btn {
+  background: none;
+  border: none;
+  border-right: 1px solid var(--border);
+  color: var(--text3);
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  padding: 0 14px;
+}
+.conn-tabs-mas-btn:hover { background: var(--surface-glass-soft); color: var(--text); }
+.conn-tabs-menu {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, .35);
+  left: 0;
+  max-height: 320px;
+  min-width: 240px;
+  overflow-y: auto;
+  padding: 6px;
+  position: absolute;
+  top: 100%;
+  z-index: 40;
+}
+.conn-tabs-menu-titulo {
+  color: var(--text3);
+  font-size: 10px;
+  letter-spacing: .06em;
+  padding: 6px 8px;
+  text-transform: uppercase;
+}
+.conn-tabs-opcion {
+  align-items: center;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  color: var(--text);
+  cursor: pointer;
+  display: flex;
+  gap: 8px;
+  padding: 7px 8px;
+  text-align: left;
+  width: 100%;
+}
+.conn-tabs-opcion:hover:not(:disabled) { background: var(--surface-glass); }
+.conn-tabs-opcion:disabled { cursor: default; opacity: .5; }
+.conn-tabs-opcion-nombre {
+  flex: 1;
+  font-size: 12px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.conn-tabs-productivo { color: var(--accent); }
 
 /* ── La cabecera de la conexión activa ─────────────────────────────────────────────────────────
    Portada de la cabecera de `SystemView.jsx` de v8: avatar de 34px, nombre en negrita y el enlace

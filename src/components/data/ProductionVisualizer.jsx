@@ -3,7 +3,8 @@
 // Portado del `tab-bom` de `index.html` de v7 y de `bom.js`. Tiene tres partes, y el orden es el suyo:
 //
 //   ① Mapeo de entidades, que termina con «Descargar datos y construir jerarquía». En v7 la descarga
-//     NO era una pantalla aparte: era el botón con que se cerraba el mapeo. Se baja solo el grupo del
+//     NO era una pantalla aparte: era el botón con que se cerraba el mapeo, y la barra, la línea de
+//     estado y los logs salían DEBAJO de ese botón, dentro del mismo panel. Se baja solo el grupo del
 //     árbol, que es lo que esta aplicación usa.
 //   ② La barra de pestañas de producto: se pueden tener varios árboles abiertos a la vez, cada uno con
 //     su buscador y su estado. Es lo que hace que comparar dos productos no sea ir y volver.
@@ -13,8 +14,14 @@
 // Las pestañas se quedan MONTADAS aunque no se vean, escondidas con CSS. Es a propósito y es lo que
 // hacía v7: cada árbol tiene su índice cargado y sus ramas abiertas, y desmontarla al cambiar de
 // pestaña obligaría a volver a leerlo todo de la base local al volver.
+//
+// Y LA TIRA ENTERA NO EXISTE HASTA QUE HAY DATOS, que también es de v7 (`bomTabsBar` y
+// `bomTabsContent` estaban ocultos y los mostraba `initTableUI()` al terminar la descarga). Aquí eso
+// arreglaba además un fallo de verdad: el árbol se montaba antes de bajar nada, leía la base vacía y
+// se quedaba diciendo «no hay recetas descargadas» para siempre, porque nadie le avisaba de que la
+// descarga había terminado. Bajar 98.956 filas y seguir viendo ese cartel es lo que pasaba.
 
-import { useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 import BomTree from './BomTree.jsx'
 import Modal from '../ui/Modal.jsx'
@@ -25,7 +32,8 @@ import { usePantallaCompleta } from '../../lib/usePantallaCompleta.js'
 import {
   aplanarArbol, armarLibroDeLote, descargarLibro, leerLista,
 } from '../../lib/bom-export.js'
-import { cargarSubarbol } from '../../lib/bom-load.js'
+import { cargarSubarbol, hayRecetas } from '../../lib/bom-load.js'
+import { INDEXANDO, resumenDelArbol } from '../../lib/registro-de-descarga.js'
 import { abrirTodo, raicesPorPlanta } from '../../../core/ibp/bom-tree.js'
 
 /** El tope de pestañas de v7. Con más, la barra deja de ser navegable. */
@@ -33,7 +41,14 @@ const MAX_PESTANAS = 15
 
 export default function ProductionVisualizer({ destino }) {
   const [mapeoAbierto, setMapeoAbierto] = useState(true)
-  const [descargaAbierta, setDescargaAbierta] = useState(false)
+  const [bajando, setBajando] = useState(false)
+
+  // `null` mientras se pregunta, y después si hay algo bajado en este navegador. Es lo que decide si
+  // el árbol existe en pantalla.
+  const [hayDatos, setHayDatos] = useState(null)
+  // Sube cuando termina una descarga, para que los árboles ya montados vuelvan a leer la base.
+  const [recarga, setRecarga] = useState(0)
+  const descarga = useRef(null)
 
   const [pestanas, setPestanas] = useState([{ id: 1 }])
   const [activa, setActiva] = useState(1)
@@ -42,6 +57,36 @@ export default function ProductionVisualizer({ destino }) {
   const [lote, setLote] = useState(false)
   const lienzo = useRef(null)
   const pantalla = usePantallaCompleta(lienzo)
+
+  // Si hay algo bajado. Se vuelve a preguntar después de cada descarga.
+  useEffect(() => {
+    let abandonado = false
+    hayRecetas()
+      .then((si) => { if (!abandonado) setHayDatos(si) })
+      .catch(() => { if (!abandonado) setHayDatos(false) })
+    return () => { abandonado = true }
+  }, [destino, recarga])
+
+  /**
+   * «Descargar datos y construir jerarquía»: lo que hacía `doFetchAll` de v7, en su orden.
+   *
+   * El panel ① se pliega SOLO SI SALIÓ LIMPIO, que es lo que hacía v7 —plegaba dentro del `try`, y
+   * su `catch` no plegaba—. Aquí importa más todavía: al plegarse se van con él la línea de estado y
+   * los logs, así que plegar con una tabla incompleta escondería justo el aviso que hay que leer.
+   */
+  const descargar = useCallback(async () => {
+    setBajando(true)
+    try {
+      const salida = await descarga.current?.bajar()
+      if (!salida) return
+      // El árbol vuelve a leer la base. Sin esto se queda con lo que había antes de bajar.
+      setRecarga((previa) => previa + 1)
+      descarga.current?.decir('info', INDEXANDO)
+      if (salida.ok) setMapeoAbierto(false)
+    } finally {
+      setBajando(false)
+    }
+  }, [])
 
   function agregar() {
     if (pestanas.length >= MAX_PESTANAS) return
@@ -69,20 +114,19 @@ export default function ProductionVisualizer({ destino }) {
         abierto={mapeoAbierto}
         onAlternar={() => setMapeoAbierto((previo) => !previo)}
         textoConfirmar="Descargar datos y construir jerarquía"
-        onConfirmar={() => { setDescargaAbierta(true); setMapeoAbierto(false) }}
-      />
-
-      {/* La descarga arranca sola si no hay nada bajado, que es lo que hacía el botón de v7. Con datos
-          ya guardados enseña el plan y espera: rebajar tres millones de filas sin pedirlo no. */}
-      {descargaAbierta && (
-        <div className="panel">
-          <div className="panel-title">Descarga del árbol de materiales</div>
-          <ExplorerExtract destino={destino} gruposFijos={['arbol']} arrancarSiVacio />
-        </div>
-      )}
+        confirmando={bajando}
+        onConfirmar={descargar}
+      >
+        {/* Debajo de la fila de botones, como en v7: la barra, la línea de estado y los logs. */}
+        <ExplorerExtract ref={descarga} destino={destino} gruposFijos={['arbol']} />
+      </PanelMapeo>
 
       {/* ── ② Las pestañas de producto ───────────────────────────────────────────────────────── */}
+      {/* No existen hasta que hay algo que enseñar, igual que en v7. Y NO SE MONTAN: montarlas
+          escondidas las haría leer una base vacía, que es el fallo que esto viene a cerrar. */}
       <div ref={lienzo} className="a-pantalla-completa">
+        {hayDatos === true && (
+        <>
         <div className="bom-tabs-bar">
           <div className="bom-tabs-scroll">
             {pestanas.map((una, indice) => (
@@ -125,11 +169,21 @@ export default function ProductionVisualizer({ destino }) {
         </div>
 
         {/* Todas montadas, solo una a la vista: cada árbol guarda su índice y sus ramas abiertas. */}
-        {pestanas.map((una) => (
+        {pestanas.map((una, indice) => (
           <div key={una.id} style={{ display: activa === una.id ? 'block' : 'none' }}>
-            <BomTree sinPantallaCompleta />
+            <BomTree
+              sinPantallaCompleta
+              recarga={recarga}
+              // Solo el primero informa: el resumen es de la base, no de la pestaña, y con quince
+              // abiertas se escribiría quince veces la misma línea.
+              onCargados={indice === 0
+                ? (cuantos) => descarga.current?.decir('ok', resumenDelArbol(cuantos))
+                : null}
+            />
           </div>
         ))}
+        </>
+        )}
       </div>
 
       {lote && <DialogoDeLote onClose={() => setLote(false)} />}

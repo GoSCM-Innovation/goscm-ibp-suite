@@ -18,6 +18,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import { ROLES_DEL_ARBOL, ROLES_DE_RED, gruposEfectivos } from '../../../core/ibp/explorer-entities.js'
 import { fetchExplorerMap, resetExplorerMap, saveExplorerMap } from '../../lib/ibp-explorer.js'
+import { verAsistente } from '../../lib/conexion-activa.js'
 
 /** Los papeles de cada grupo, para poder decir qué campos exige cada uno. */
 const ROLES = { arbol: ROLES_DEL_ARBOL, red: ROLES_DE_RED }
@@ -273,6 +274,20 @@ export default function PanelMapeo({
                 >
                   {guardando ? 'Guardando…' : (confirmando ? 'Trabajando…' : textoConfirmar)}
                 </button>
+                {/* El segundo botón de v7 en los CUATRO paneles ① (`onclick="doConnect()"`). Aquí
+                    abre el asistente de conexión, que es su equivalente: reconectar es elegir otra
+                    vez contra qué tenant, área y versión se trabaja. */}
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-small"
+                  onClick={() => verAsistente(true)}
+                  disabled={guardando || confirmando}
+                >
+                  Reconectar
+                </button>
+                {/* Este no es de v7 y es deliberado: allí las correcciones vivían en la sesión y se
+                    iban al recargar, así que no había nada que deshacer. Aquí se guardan para todo
+                    el equipo, y una corrección equivocada sin forma de volver atrás es permanente. */}
                 <button
                   type="button"
                   className="btn btn-secondary btn-small"

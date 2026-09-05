@@ -18,7 +18,7 @@
 // En v7 cada uno pedía la suya, y eso es cómo se llegaba a que los dos informes del mismo tenant
 // dijeran cosas distintas del mismo material.
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import PanelMapeo from './PanelMapeo.jsx'
 import PasoPlegable from './PasoPlegable.jsx'
@@ -87,6 +87,9 @@ export default function AnalizadorV7({
 
   const [error, setError] = useState('')
   const [avance, setAvance] = useState(null)
+  // La descarga del paso ⑤. Su barra, su línea de estado y su registro sirven también al
+  // análisis, igual que en v7.
+  const descarga = useRef(null)
   const [resultados, setResultados] = useState(null)
 
   useEffect(() => {
@@ -128,15 +131,44 @@ export default function AnalizadorV7({
   /** Abre el paso `n` y deja registrado que ya se llegó hasta ahí. */
   const irA = (n) => { setPaso((previo) => Math.max(previo, n)); setAbierto(n) }
 
+  /**
+   * «▶ Ejecutar análisis»: bajar y juzgar de un tirón, que es lo que hacía v7.
+   *
+   * En v7 este botón corría la fase 1 —traerse las tablas— y la fase 2 —juzgarlas— sin preguntar
+   * nada en medio. Lo único distinto aquí es que lo ya descargado se reutiliza en vez de volver a
+   * bajarlo: v7 no guardaba nada entre sesiones y no tenía esa opción.
+   */
   async function ejecutar() {
     setError('')
     setResultados(null)
     setAvance({ paso: 'empezando' })
     try {
-      setResultados(await correr(configuracion, { onAvance: setAvance }))
+      // Si la descarga hacía falta y no pudo ni empezar, no se juzga: un informe salido de una base
+      // vacía se lee igual de creíble que uno bueno. El porqué queda en la línea de estado.
+      if ((await descarga.current?.bajarSiVacio()) === false) return
+
+      descarga.current?.anotar('ok', 'Índices listos. Iniciando análisis...')
+      descarga.current?.decir('info', 'Iniciando análisis...')
+      descarga.current?.avanzar(0)
+
+      setResultados(await correr(configuracion, {
+        onAvance: (paso) => {
+          setAvance(paso)
+          descarga.current?.decir('info', paso.paso === 'analizando'
+            ? `juzgando ${numero(paso.hechos)} de ${numero(paso.total)} de ${queEs}…`
+            : `leyendo ${paso.paso ?? ''}…`)
+          descarga.current?.avanzar(paso.total ? (paso.hechos / paso.total) * 100 : 35)
+        },
+      }))
+
+      descarga.current?.avanzar(100)
+      descarga.current?.decir('ok', 'Análisis completado.')
+      descarga.current?.anotar('ok', 'Análisis completado.')
       setAbierto(0)
     } catch (fallo) {
       setError(fallo.message)
+      descarga.current?.decir('err', `Error: ${fallo.message}`)
+      descarga.current?.anotar('err', `Error: ${fallo.message}`)
     } finally {
       setAvance(null)
     }
@@ -398,11 +430,6 @@ export default function AnalizadorV7({
             {Object.keys(extras).length > 0 && ` · ${resumenDeExtras(extras)}`}
           </div>
 
-          {/* La descarga va aquí, como en v7: el análisis lee lo bajado, así que bajar es parte de
-              ejecutar. Arranca sola si no hay nada —igual que el «Ejecutar análisis» de v7, que bajaba
-              y juzgaba de un tirón—; lo que ya esté descargado se reutiliza y no se vuelve a bajar. */}
-          <ExplorerExtract destino={destino} gruposFijos={[grupo]} extras={extras} arrancarSiVacio />
-
           <div className="btn-row">
             <button
               type="button"
@@ -415,27 +442,13 @@ export default function AnalizadorV7({
             <button type="button" className="btn btn-secondary btn-small" onClick={() => setAbierto(4)}>
               ← Volver
             </button>
-            {avance && (
-              <span className="page-hint">
-                {avance.paso === 'analizando'
-                  ? `juzgando ${numero(avance.hechos)} de ${numero(avance.total)} de ${queEs}…`
-                  : `leyendo ${avance.paso ?? ''}…`}
-              </span>
-            )}
           </div>
 
-          {avance && (
-            <div className="progress-bar">
-              <div
-                className="fill"
-                style={{
-                  width: avance.total
-                    ? `${Math.round((avance.hechos / avance.total) * 100)}%`
-                    : '35%',
-                }}
-              />
-            </div>
-          )}
+          {/* Debajo de la fila de botones, como en v7. Y la barra, la línea de estado y los logs son
+              LOS MISMOS para las dos fases —bajar y juzgar—: en `analyzer.js` eran un solo `progBarSN`,
+              un solo `progStatusTextSN` y un solo `logSN`. Por eso el avance del análisis se escribe
+              aquí en vez de dibujar una segunda barra debajo. */}
+          <ExplorerExtract ref={descarga} destino={destino} gruposFijos={[grupo]} extras={extras} />
         </div>
       )}
 

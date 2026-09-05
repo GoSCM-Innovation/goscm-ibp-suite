@@ -106,7 +106,18 @@ function Fila({ nodo, abierto, onAlternar }) {
   )
 }
 
-export default function BomTree({ sinPantallaCompleta = false }) {
+/**
+ * `recarga` sube cuando termina una descarga y es lo que hace que el árbol vuelva a leer la base.
+ *
+ * Sin ella, la lista de productos se leía UNA vez al montar —cuando todavía no se había bajado nada—
+ * y no se volvía a mirar nunca. En v7 no hacía falta porque bajar y armar la lista eran la misma
+ * función (`doFetchAll` terminaba llamando a `idbBuildProdSuggestions`); al separarlas, el aviso hay
+ * que darlo a mano.
+ *
+ * `onCargados` informa de cuántos productos con receta salieron, para la línea «✓ N productos en
+ * caché local» que v7 escribía al terminar de indexar.
+ */
+export default function BomTree({ sinPantallaCompleta = false, recarga = 0, onCargados = null }) {
   const [productos, setProductos] = useState(null)
   const [exportando, setExportando] = useState(false)
   const [descripciones, setDescripciones] = useState({})
@@ -139,7 +150,20 @@ export default function BomTree({ sinPantallaCompleta = false }) {
     productosConReceta()
       .then(async (lista) => {
         if (abandonado) return
+
+        // Lo que se estaba mirando es de ANTES de la descarga, y las filas de las que salió pueden
+        // haberse borrado —bajar de otro tenant vacía la base—. Se suelta, que es lo que hacía v7 al
+        // terminar de bajar (`TREE = { locids: [], roots: {}, stats: {}, cycles: [] }`). Al montar no
+        // hay nada que soltar y esto no hace nada.
+        setElegido('')
+        setArbol(null)
+        setInvertido(null)
+        setCiclos([])
+        setAbiertos(new Set())
+        indices.current = null
+
         setProductos(lista)
+        onCargados?.(lista.length)
         // Las descripciones de los primeros, que son los que se ven sin buscar.
         setDescripciones(await descripcionesDe(lista.slice(0, VISIBLES).map((uno) => uno.prdid)))
       })
@@ -148,7 +172,10 @@ export default function BomTree({ sinPantallaCompleta = false }) {
       })
 
     return () => { abandonado = true }
-  }, [])
+    // `onCargados` queda fuera a propósito: es una función nueva en cada dibujo del padre y meterla
+    // aquí volvería a leer la base entera cada vez que el padre se redibuja.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recarga])
 
   const visibles = useMemo(() => {
     const texto = busqueda.trim().toUpperCase()

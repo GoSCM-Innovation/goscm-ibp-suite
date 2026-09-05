@@ -174,6 +174,33 @@ abierta contra SAP, porque allí la sesión la abría el navegador. Aquí vive e
 sola, así que ese punto estaría siempre verde. En su lugar va la marca de **productivo**, que es el
 estado que sí cambia lo que uno debe hacer con esa pestaña.
 
+#### El «+»: no había forma de cambiar de conexión
+
+Encontrado el 2026-09-05 por el usuario: **IBP Tools no tenía dónde cambiar de conexión.** Y CI-DS
+Tools tampoco — mismo componente, misma falta.
+
+La tira dibujaba solo las pestañas YA abiertas. Con una sola abierta no había ningún control que
+abriera otra: la función existía (`elegir` en `IbpTools.jsx`, que llama a `abrir`) y era **inalcanzable
+desde la pantalla**.
+
+Por qué pasó la revisión de paridad: en v9 este control **no estaba en la tira**. Su `ConnectionTabs`
+tampoco tenía «+» — una conexión se abría pulsándola **en el menú lateral**, que listaba los tenants
+(`handleSelect` en su `App.jsx`). Aquí el menú lateral lista los tres módulos de la suite, así que al
+portar la tira tal cual nadie se quedó con ese trabajo. Comparar controles uno a uno tampoco lo
+destapa cuando el control que falta **vivía en otra pantalla**.
+
+Ahora la tira termina en un «+» que despliega las conexiones de la empresa, marcando las ya abiertas y
+diciendo de cada una si es productiva o sandbox —a la vista, no en un `title`: se elige antes de
+entrar—. Sirve para los dos módulos.
+
+Y una cosa que se descubrió mirándolo en el navegador y no en el código: **la tira tiene
+`overflow-x: auto`** —lo necesita, con seis tenants abiertos no caben— y eso **recorta** cualquier cosa
+que se salga. El desplegable colgado ahí dentro no se veía. El «+» y su menú viven fuera del área que
+hace scroll (`.conn-tabs-fila`), lo que además los deja a la vista cuando la tira está desplazada, que
+es justo cuando hacen falta. Hay una prueba que lo fija.
+
+Cubierto por `src/components/ui/ConnectionTabs.test.js`.
+
 ### Etiquetas devueltas a su redacción
 
 `↺ Refresh` · `Buscar proyecto o task…` · `Top tasks ejecutadas` · `Últimas fallidas` · `Warnings` ·

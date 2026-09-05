@@ -515,6 +515,69 @@ a uno, comprobando cuál existe aquí. Es la misma técnica de los tres huecos d
 —barrer el original por lo que se VE, no por sus archivos— aplicada a los controles en vez de a las
 APIs del navegador. Vale repetirla en v8 y v9.
 
+### La descarga, que se había reinventado
+
+Encontrado el 2026-09-05, otra vez por el usuario mirando la aplicación: **la descarga no se parecía a
+la de v7.** Y no era un detalle de estilo — era una pantalla distinta.
+
+En v7 la descarga **no era una pantalla**: era lo que pasaba al pulsar el botón con el que se cerraba
+el paso ①, y salía debajo de ese mismo botón. Tenía tres cosas, las mismas en los cuatro paneles
+—el árbol y los tres analizadores—:
+
+| Pieza de v7 | Dónde estaba | Aquí |
+|---|---|---|
+| Fila de botones: el primario de cada aplicación + «Reconectar» | el `btn-row` de cada panel ① | `PanelMapeo.jsx` |
+| Barra de progreso llenándose | `#progBar` / `#progFill` | `ProgresoDeDescarga` en `ExplorerExtract.jsx` |
+| Línea de estado con color: «Descargando Production Source Header...» | `setStatus` en `main.js` | ídem, con los textos de `es.json` de v7 |
+| Botón «Ver logs técnicos» / «Ocultar logs» | `toggleFetchLogs` | ídem |
+| Registro con la hora delante: `13:52:07 · Header: 2437 registros → IDB` | `log()` en `utils.js` | `src/lib/registro-de-descarga.js` |
+| El paso ① plegándose **al terminar** | dentro del `try` de `doFetchAll` | `ProductionVisualizer.jsx` |
+
+Aquí en su lugar había un panel aparte, «DESCARGA DEL ÁRBOL DE MATERIALES», con una tabla de cuatro
+columnas —«Para qué», «Tabla del tenant», «Guardadas», «Estado»— y ninguna de las tres piezas. La
+tabla se quitó.
+
+**Lo que la tabla sí decía y v7 no, y adónde fue.** Contra qué tabla de este tenant resolvió cada
+papel, cuántas filas descartó SAP por inválidas, qué campos le faltan a este tenant, y —el que
+importa— si SAP dice que hay más filas de las que llegaron. Todo eso vive ahora en el registro, con
+el formato de v7, y el aviso de filas que faltan sale en rojo y **abre el registro solo**. Perderlo no
+era opción: es una mejora decidida en su momento y anotada en `SIGUIENTE.md`. Ver
+`src/lib/registro-de-descarga.js`, que existe justamente para poder comprobarlo sin montar la
+pantalla.
+
+**Una sola barra para las dos fases del analizador.** En v7 el paso ⑤ tenía un `#progBarSN`, un
+`#progStatusTextSN` y un `#logSN`, y servían tanto a bajar (fase 1) como a juzgar (fase 2): «▶ Ejecutar
+análisis» hacía las dos de un tirón. Aquí la descarga traía barra propia y el análisis otra, una
+debajo de la otra. Ahora es una, y el avance del análisis se escribe en ella.
+
+**«Reconectar» faltaba.** Estaba en el `btn-row` de los CUATRO paneles ① de v7 (`onclick="doConnect()"`).
+Aquí abre el asistente de conexión, que es su equivalente: reconectar es volver a elegir tenant, área y
+versión. Al lado se queda «Volver a la detección automática», que no es de v7 y es deliberado —allí las
+correcciones vivían en la sesión y se iban al recargar; aquí se guardan para todo el equipo, y una
+corrección equivocada sin forma de deshacerla es permanente—.
+
+### El árbol no veía lo que se acababa de bajar
+
+Mismo día, mismo hallazgo del usuario, y es el más grave de los tres: **la descarga guardaba las
+98.956 filas, las nueve tablas salían «✓ Lista», y el árbol seguía diciendo «no hay recetas
+descargadas».**
+
+La causa: el árbol se montaba al entrar al módulo, leía la base local **antes** de que hubiera nada, y
+nadie le avisaba nunca de que la descarga había terminado. El cable existía —`ExplorerExtract` tenía un
+`onTerminada`— y **ninguna pantalla lo usaba**. Se salía del módulo y al volver aparecía todo, que es
+lo que confirmaba que los datos estaban bien.
+
+En v7 no podía pasar, por dos razones que ahora también son las de aquí:
+
+- `doFetchAll` **terminaba armando la lista de productos él mismo** (`idbBuildProdSuggestions`). Bajar
+  y construir la lista eran la misma función; al separarlas, el aviso hay que darlo a mano.
+- La tira de pestañas y el árbol **estaban ocultos** (`bomTabsBar` y `bomTabsContent` con la clase
+  `hidden`) hasta que `initTableUI()` los mostraba al acabar. Es decir: **en v7 ese cartel no se podía
+  ver, porque no había pantalla que lo dijera.** Aquí el árbol no se monta hasta que hay datos, con la
+  diferencia de que lo bajado sobrevive a la sesión y por eso hay que preguntarlo (`hayRecetas`).
+
+Cubierto por `src/components/data/ProductionVisualizer.test.js`.
+
 ## Huecos abiertos
 
 Ninguno, contando los tres de la sección anterior y los cinco de esta como cerrados. El último —los informes por entidad de los dos analizadores— se cerró el 2026-08-18 con las

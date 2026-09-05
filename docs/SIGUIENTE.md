@@ -3,7 +3,7 @@
 Este archivo es el punto de entrada cuando la instrucción es **«continuemos»**. Se lee primero, se
 actualiza al terminar cada sesión, y su orden es el de prioridad acordada.
 
-Última actualización: **2026-08-29**.
+Última actualización: **2026-09-05**.
 
 ## Dónde estamos
 
@@ -20,7 +20,7 @@ actualiza al terminar cada sesión, y su orden es el de prioridad acordada.
   Tarda medio minuto y deja el alias puesto en el dominio de siempre. Conviene revisar la conexión de
   Git del proyecto en Vercel y volver a enlazarla al repositorio nuevo: mientras siga así, cualquiera
   que mire la web verá una versión vieja sin que nada avise.
-- **2.615 pruebas**, lint y build limpios, y el build **sin ningún aviso**.
+- **2.671 pruebas**, lint y build limpios, y el build **sin ningún aviso**.
 - Los tres proyectos previos están portados en funcionalidad.
 - **La interfaz de los TRES está restaurada tal cual era.** Es una decisión del usuario y ahora es
   regla del proyecto: ver [«Respetar la interfaz de origen»](../CLAUDE.md#respetar-la-interfaz-de-origen).
@@ -33,8 +33,35 @@ actualiza al terminar cada sesión, y su orden es el de prioridad acordada.
     [Detalle](PARIDAD-V9.md#la-interfaz-de-v9-restaurada).
 - Comparar CONTROLES —y no archivos— destapó **diecisiete huecos de funcionalidad**, todos dentro de
   archivos que el inventario daba por portados. **Los diecisiete están cerrados.**
+- **Corrida contra un tenant real, la primera (2026-09-05).** El usuario corrió Production Visualizer
+  contra `GCINDURAMA · IBP CONSENSO QA` y salieron tres cosas que ninguna prueba podía ver. Las tres
+  están cerradas:
+  - **El árbol no veía lo bajado.** La descarga guardó las 98.956 filas y el árbol seguía diciendo «no
+    hay recetas descargadas»: se montaba antes de bajar, leía la base vacía y nadie le avisaba nunca.
+    [Detalle](PARIDAD-V7.md#el-árbol-no-veía-lo-que-se-acababa-de-bajar).
+  - **La descarga no era la de v7.** Había un panel aparte con una tabla de cuatro columnas; v7 tenía
+    barra de progreso, línea de estado con color y «Ver logs técnicos», y todo dentro del paso ①. Lo
+    que la tabla decía —y v7 no— se mudó al registro.
+    [Detalle](PARIDAD-V7.md#la-descarga-que-se-había-reinventado).
+  - **No había dónde cambiar de conexión** en IBP Tools ni en CI-DS Tools. La tira dibujaba solo las
+    pestañas ya abiertas; en v9 se abría una desde el menú lateral, que aquí lista módulos.
+    [Detalle](PARIDAD-V9.md#el--no-había-forma-de-cambiar-de-conexión).
+
+  **La lección, que es lo reutilizable:** las tres estaban a un clic de distancia de cualquiera que
+  abriera la aplicación, y ninguna se veía leyendo el código. Correr una pantalla de punta a punta
+  contra un tenant destapa en diez minutos más que un recorrido de archivos.
 
 ## Lo siguiente, en orden
+
+### 0. Los tres fallos de «Llamadas técnicas» de la corrida del 2026-09-05
+
+En la captura del usuario, la barra de abajo decía **90 llamadas, 3 con fallo**, y la descarga terminó
+bien igual. No se sabe qué eran: la barra global agrupa por ruta y no dice de qué paso salió cada una.
+
+**Ahora se puede averiguar sin adivinar:** el registro de la descarga escribe una línea por tabla, con
+el nombre real de la entidad y lo que devolvió. Volver a correr Production Visualizer contra el mismo
+tenant y abrir «Ver logs técnicos». Si los tres son de tablas accesorias es lo normal —hay papeles que
+ese tenant no cubre—; si son de una esencial, hay algo más.
 
 ### 1. Estrenar las escrituras contra SAP, con el usuario delante
 
@@ -80,13 +107,25 @@ Fase propia y deliberadamente la última. Toca cada pantalla. No bloquea nada.
 ## Lo que no se pudo comprobar con los ojos
 
 **No se puede entrar a la aplicación en desarrollo**: el ingreso pide el código que llega al correo.
-Para mirar la interfaz se montó las dos veces un andamio temporal —un `preview.html` con una sesión
-falsa— que se borró al terminar. **Si hace falta otra vez, se vuelve a montar y se vuelve a borrar**:
-es la única forma de ver una pantalla sin poder entrar.
+Para mirar la interfaz se montó las tres veces un andamio temporal —un `preview.html` con una página
+que dibuja las piezas con datos de muestra— que se borró al terminar. **Si hace falta otra vez, se
+vuelve a montar y se vuelve a borrar**: es la única forma de ver una pantalla sin poder entrar.
 
 Con él se vieron el menú, el asistente de v7, el acordeón, la tira de pestañas de conexiones, la
 cabecera de la conexión, las pestañas de los visores, las secciones plegables, la cabecera de tabla
-con orden y filtro, y el menú minimizado.
+con orden y filtro, el menú minimizado, y —el 2026-09-05— la descarga con la forma de v7 y el «+» de
+la tira con su desplegable.
+
+Dos cosas que valen para la próxima vez:
+
+- **Mirar sirve para lo que las pruebas no pueden ver.** El desplegable del «+» pasaba sus quince
+  pruebas y **no se veía**: la tira tiene `overflow-x: auto` y lo recortaba. Se descubrió preguntándole
+  al navegador con `elementFromPoint` si el menú estaba de verdad ahí donde decía estar. Ese truco
+  —comprobar que un elemento es alcanzable, no solo que existe en el DOM— vale para cualquier panel
+  flotante.
+- **Para que una pieza se pueda dibujar sola hay que poder sacarla.** La parte visual de la descarga
+  se separó en `ProgresoDeDescarga`, exportada desde `ExplorerExtract.jsx`, justamente para poder
+  pintarla con datos falsos sin un tenant delante. Conviene hacer lo mismo con lo que venga.
 
 Lo que sigue sin verse es todo lo que necesita datos de un tenant: el árbol, el lienzo de la red, las
 rutas, los informes y las tablas con filas de verdad.
@@ -105,3 +144,21 @@ preguntando; dos números en la misma tarjeta que no cuadran; un `403` sin decir
 árbol de un producto mostrando las recetas de sus componentes.
 
 En todos, la pantalla afirmaba algo que no le constaba. Y ninguno era detectable por las pruebas.
+
+El del 2026-09-05 es el doceavo y el más puro de todos: **«No hay recetas descargadas»** dicho justo
+debajo de un «✓ Se guardaron 98.956 filas». La pantalla no sabía si había recetas — sabía que no las
+había cuando preguntó, cinco minutos antes, y nadie le dijo que volviera a mirar.
+
+## Y un segundo patrón, de esa misma corrida
+
+**Una función que existe y ningún control llama.** Salió dos veces el mismo día:
+
+- `ExplorerExtract` tenía un `onTerminada` que ninguna pantalla pasaba. Por eso el árbol no se
+  enteraba de nada.
+- `IbpTools` tenía un `elegir(id)` que abre una pestaña, y no había ningún botón que lo llamara con
+  una conexión sin abrir. Por eso no se podía cambiar de tenant.
+
+Las dos veces el código estaba escrito, probado por debajo y **desconectado**, y las dos veces eso se
+lee como una funcionalidad que falta. Ni el lint ni las pruebas lo pueden ver: una función exportada
+que nadie usa es legítima. Lo que sí lo ve es abrir la pantalla e intentar hacer la cosa. Cuando se
+escriba un `onAlgo` o un `elegirAlgo` nuevo, conviene comprobar en el acto quién lo dispara.

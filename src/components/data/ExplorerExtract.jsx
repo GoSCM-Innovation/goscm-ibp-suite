@@ -1,314 +1,295 @@
 // Bajar el dato maestro del tenant a la base local, viendo qué pasa.
 //
-// Portada de las dos descargas de v7 —la del árbol (`doFetchAll` de `main.js`) y la de la red (fase 1
-// de `analyzer.js`)—, que eran la misma cosa duplicada con distintas etiquetas.
+// Portada de las dos descargas de v7 —la del árbol (`doFetchAll` de `main.js`) y la fase 1 de los
+// analizadores (`analyzer.js`, `prodAnalyzer.js`)—, que eran la misma cosa con distintas etiquetas.
 //
-// En v7 la descarga NO era una pantalla: era el botón con que terminaba el paso ① de cada
-// aplicación, y bajaba justo lo que esa aplicación necesita. Por eso acepta `gruposFijos`: cuando
-// viene puesto, no se ofrece elegir grupos —el árbol de materiales no tiene por qué preguntarle a
-// nadie si además quiere la red—. Sin él se comporta como la pantalla suelta, con los dos grupos a
-// elección.
+// TIENE LA FORMA DE v7, que son tres cosas y ninguna más:
 //
-// Lo que la pantalla dice antes de empezar es la mitad del valor: qué tablas se van a bajar, cuáles no
-// se van a poder y por qué. Enterarse a los seis minutos de que falta la tabla principal, después de
-// bajar tres que no sirven sin ella, es la diferencia entre una herramienta y un castigo.
+//   ① una BARRA de progreso que se va llenando,
+//   ② una LÍNEA DE ESTADO con color —«Descargando Production Source Header...»—, y
+//   ③ un botón «Ver logs técnicos» que abre el registro de ESTA descarga.
+//
+// Y va DENTRO del panel que la dispara, debajo de su fila de botones. En v7 la descarga no era una
+// pantalla: era lo que pasaba al pulsar «Descargar datos y construir jerarquía» en el paso ① del
+// árbol, o «▶ Ejecutar análisis» en el paso ⑤ de un analizador. Por eso este componente NO tiene
+// botón propio —lo pone quien lo monta— y se dispara por su `ref`.
+//
+// Aquí hubo un panel aparte con una tabla de «qué se baja», que v7 no tenía. Lo que esa tabla decía
+// —contra qué tabla del tenant resolvió cada papel, cuántas filas descartó SAP, y si faltan filas—
+// no se perdió: vive en el registro, con el formato de v7. Ver `lib/registro-de-descarga.js`.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react'
 
-import {
-  GRUPOS_DE_EXTRACCION,
-  gruposQueLoNecesitan,
-  planificarExtraccion,
-  versionSinDatos,
-} from '../../../core/ibp/explorer-extract-plan.js'
+import { planificarExtraccion } from '../../../core/ibp/explorer-extract-plan.js'
 import { fetchExplorerMap } from '../../lib/ibp-explorer.js'
 import { contar } from '../../lib/explorer-db.js'
 import { extraer } from '../../lib/explorer-extract.js'
+import {
+  PREPARANDO,
+  descargando,
+  estadoAlTerminar,
+  horaDe,
+  linea,
+  lineaDePeticion,
+  lineasDeTabla,
+} from '../../lib/registro-de-descarga.js'
 
-const numero = (valor) => Number(valor ?? 0).toLocaleString('es')
+/** El color de la línea de estado según el tipo. Son los de `setStatus` de v7, literales. */
+const COLOR = {
+  ok: 'var(--accent)',
+  err: 'var(--red)',
+  warn: 'var(--amber)',
+  info: 'var(--text2)',
+}
 
 export default function ExplorerExtract({
-  destino, gruposFijos = null, extras = null, arrancarSiVacio = false, onTerminada = null,
+  destino, gruposFijos = null, extras = null, onTerminada = null, ref = null,
 }) {
-  const [mapa, setMapa] = useState(null)
-  const [error, setError] = useState('')
-  const [grupos, setGrupos] = useState(gruposFijos ?? ['arbol', 'red'])
-
+  const [estado, setEstado] = useState(null)
+  const [registro, setRegistro] = useState([])
+  const [logsAbiertos, setLogsAbiertos] = useState(false)
+  const [porcentaje, setPorcentaje] = useState(0)
   const [bajando, setBajando] = useState(false)
-  const [avance, setAvance] = useState(null)
-  const [salida, setSalida] = useState(null)
-  const [guardadasAntes, setGuardadasAntes] = useState(null)
 
   // Una ref y no estado: el bucle de descarga la consulta en cada página, y con estado leería el
   // valor que tenía cuando arrancó.
   const cancelar = useRef(false)
 
-  // Que el arranque automático se haga UNA vez. Sin esto, cada recuento volvería a dispararlo.
-  const yaArranco = useRef(false)
+  /**
+   * El catálogo del tenant, pedido UNA vez por destino.
+   *
+   * En una ref y no en estado porque quien dispara la descarga puede pulsar antes de que termine de
+   * cargar, y entonces hay que esperar a la misma petición y no lanzar otra.
+   */
+  const pedido = useRef({ destino: null, promesa: null })
 
-  // Diferido para no encadenar renders: pedir y marcar «cargando» en el cuerpo del efecto hace que
-  // React vuelva a dibujar antes de terminar el que está haciendo.
-  useEffect(() => {
-    let abandonado = false
-
-    const id = setTimeout(() => {
-      setMapa(null)
-      fetchExplorerMap(destino)
-        .then((leido) => { if (!abandonado) { setMapa(leido); setError('') } })
-        .catch((fallo) => { if (!abandonado) { setError(fallo.message); setMapa(false) } })
-    }, 0)
-
-    return () => { abandonado = true; clearTimeout(id) }
+  const pedirMapa = useCallback(() => {
+    if (pedido.current.destino !== destino) {
+      pedido.current = { destino, promesa: fetchExplorerMap(destino) }
+    }
+    return pedido.current.promesa
   }, [destino])
 
-  const plan = useMemo(
-    () => (mapa
-      ? planificarExtraccion({
-        efectivo: mapa.efectivo, mapa: mapa.guardado.fields, grupos, extras: extras ?? {},
-      })
-      : null),
-    [mapa, grupos, extras],
+  // Se pide al montar para que esté listo cuando pulsen, no para enseñar nada: mientras carga, la
+  // pantalla no dice nada — igual que v7, donde el paso ① no anunciaba la descarga hasta dispararla.
+  useEffect(() => { pedirMapa().catch(() => {}) }, [pedirMapa])
+
+  const decir = useCallback((tipo, texto) => setEstado({ tipo, texto }), [])
+  const anotar = useCallback(
+    (clase, texto) => setRegistro((previas) => [...previas, linea(clase, texto)]),
+    [],
   )
 
-  /** Cuántas filas hay ya guardadas de cada tabla, para saber si vale la pena volver a bajar. */
-  const contarLoGuardado = useCallback(async () => {
-    if (!plan) return null
-    const cuentas = {}
+  /** Cuántas filas hay ya guardadas del plan. Sirve para no rebajar lo que ya está. */
+  const contarLoGuardado = useCallback(async (plan) => {
+    let total = 0
     for (const paso of plan.pasos) {
       try {
-        cuentas[paso.tabla] = await contar(paso.tabla)
+        total += await contar(paso.tabla)
       } catch {
-        cuentas[paso.tabla] = 0
+        // Una tabla que no se puede contar cuenta como vacía: rebajar de más es recuperable.
       }
     }
-    setGuardadasAntes(cuentas)
-    return cuentas
-  }, [plan])
+    return total
+  }, [])
 
-  /** Baja lo que dice el plan, contando el avance y avisando al terminar. */
+  /**
+   * Baja lo que dice el plan, contando el avance como lo contaba v7.
+   *
+   * Devuelve el resultado de la descarga, o `null` si no se pudo ni empezar. Quien la dispara lo
+   * necesita: el árbol tiene que releer la base y el analizador tiene que juzgar lo bajado.
+   */
   const bajar = useCallback(async () => {
-    if (!plan || !mapa) return
+    if (bajando) return null
+
     cancelar.current = false
     setBajando(true)
-    setSalida(null)
-    setAvance(null)
+    setRegistro([])
+    setPorcentaje(0)
+    decir('info', PREPARANDO)
+
+    let leido
+    try {
+      leido = await pedirMapa()
+    } catch (fallo) {
+      decir('err', `Error: ${fallo.message}`)
+      anotar('err', `Error leyendo el catálogo del tenant: ${fallo.message}`)
+      setBajando(false)
+      return null
+    }
+
+    const plan = planificarExtraccion({
+      efectivo: leido.efectivo,
+      mapa: leido.guardado.fields,
+      grupos: gruposFijos ?? ['arbol', 'red'],
+      extras: extras ?? {},
+    })
+
+    // Lo que no se va a poder, ANTES de bajar nada. Es lo que v7 hacía con su panel de corrección:
+    // enterarse a los seis minutos de que falta la tabla principal, después de bajar tres que no
+    // sirven sin ella, es la diferencia entre una herramienta y un castigo.
+    const previas = plan.avisos.map((aviso) => linea('warn', aviso))
+    if (plan.gruposPosibles.length === 0) {
+      setRegistro([...previas, linea('err', 'No se puede bajar nada: falta alguna tabla imprescindible.')])
+      setLogsAbiertos(true)
+      decir('err', 'Falta alguna tabla imprescindible. Revisa el mapeo de entidades.')
+      setBajando(false)
+      return null
+    }
+    setRegistro(previas)
+
+    const pasosQueVan = plan.pasos.filter((uno) => uno.sePuede)
 
     try {
-      const hecho = await extraer({
+      const salida = await extraer({
         conexionId: destino.connectionId,
         destino,
         plan,
-        mapa: mapa.guardado.fields,
-        onProgreso: setAvance,
+        mapa: leido.guardado.fields,
+        // La barra avanza MIENTRAS se baja, como la de v7, y no de golpe al final: una barra quieta
+        // durante seis minutos y luego llena de un salto no informa de nada.
+        onProgreso: (paso) => {
+          const cual = pasosQueVan.findIndex((uno) => uno.tabla === paso.tabla)
+          if (cual >= 0) setPorcentaje(Math.round((cual / pasosQueVan.length) * 100))
+          decir('info', `${descargando(paso)} ${Number(paso.bajadas ?? 0).toLocaleString('es')} filas`)
+        },
         cancelado: () => cancelar.current,
       })
-      setSalida(hecho)
-      contarLoGuardado()
-      onTerminada?.(hecho)
+
+      // El registro se arma al final y no paso a paso porque `extraer` no avisa de cada tabla
+      // terminada: avisa de cada PÁGINA. Las líneas salen de lo que devolvió, que es lo mismo que
+      // v7 escribía justo después de cada `fetchAndIndex`.
+      const lineas = []
+      for (const paso of plan.pasos) {
+        const suyo = salida.hechos.find((uno) => uno.tabla === paso.tabla)
+        if (paso.sePuede) lineas.push(lineaDePeticion(paso, destino))
+        lineas.push(...lineasDeTabla(paso, suyo))
+      }
+      setRegistro((antes) => [...antes, ...lineas])
+
+      if (salida.seVacio) anotar('warn', 'Se borró lo que había guardado de otro tenant, área o versión.')
+
+      setPorcentaje(100)
+      const final = estadoAlTerminar(salida)
+      decir(final.tipo, final.texto)
+      // Un final que no es limpio se enseña abierto: si hay que mirarlo, que no haya que buscarlo.
+      if (final.tipo !== 'ok') setLogsAbiertos(true)
+
+      onTerminada?.(salida)
+      return salida
     } catch (fallo) {
-      setError(fallo.message)
+      decir('err', `Error: ${fallo.message}`)
+      anotar('err', `Error: ${fallo.message}`)
+      setLogsAbiertos(true)
+      return null
     } finally {
       setBajando(false)
-      setAvance(null)
     }
-  }, [plan, mapa, destino, contarLoGuardado, onTerminada])
+  }, [bajando, pedirMapa, gruposFijos, extras, destino, decir, anotar, onTerminada])
 
-  // Se cuenta lo guardado y, si quien monta esta descarga lo pidió y NO hay nada bajado, arranca sola.
-  //
-  // Por qué así y no siempre: en v7 el botón «Descargar datos y construir jerarquía» bajaba en el
-  // acto, porque v7 no guardaba nada entre sesiones. Aquí sí, y volver a bajar tres millones de filas
-  // por haber pasado otra vez por el paso ① sería un castigo. Con la base vacía se comporta como v7;
-  // con datos, enseña el plan y deja pulsar «Volver a bajar».
-  useEffect(() => {
-    const id = setTimeout(async () => {
-      const cuentas = await contarLoGuardado()
-      if (!arrancarSiVacio || yaArranco.current || !cuentas) return
-      if (Object.values(cuentas).some((cuantas) => cuantas > 0)) return
-      yaArranco.current = true
-      bajar()
-    }, 0)
-    return () => clearTimeout(id)
-  }, [contarLoGuardado, arrancarSiVacio, bajar])
+  /**
+   * Baja solo si no hay nada guardado. Devuelve si se puede seguir con lo que haya.
+   *
+   * v7 bajaba SIEMPRE, porque no guardaba nada entre sesiones. Aquí sí se guarda, y volver a bajar
+   * tres millones de filas por haber vuelto a pulsar sería un castigo. Con la base vacía se comporta
+   * como v7; con datos, sigue de largo.
+   *
+   * Devuelve `false` solo cuando la descarga hacía falta y no pudo ni empezar. Quien la llama —el
+   * analizador— tiene que parar ahí: juzgar sin datos daría un informe creíble y falso.
+   */
+  const bajarSiVacio = useCallback(async () => {
+    let leido
+    try {
+      leido = await pedirMapa()
+    } catch {
+      return Boolean(await bajar())
+    }
+    const plan = planificarExtraccion({
+      efectivo: leido.efectivo,
+      mapa: leido.guardado.fields,
+      grupos: gruposFijos ?? ['arbol', 'red'],
+      extras: extras ?? {},
+    })
+    const guardadas = await contarLoGuardado(plan)
+    if (guardadas > 0) return true
+    return Boolean(await bajar())
+  }, [pedirMapa, gruposFijos, extras, contarLoGuardado, bajar])
 
-  if (mapa === null) return <div className="page-hint">Leyendo el catálogo del tenant… tarda unos segundos.</div>
-  if (mapa === false) return <div className="notice notice-error">✕ {error}</div>
+  // Lo que se puede pedir desde fuera. `decir`, `anotar` y `avanzar` están porque en v7 `setStatus`,
+  // `log` y `setProgress` eran globales y las llamaba quien quisiera: la barra, la línea y el
+  // registro del paso ⑤ de un analizador servían a las DOS fases —bajar y juzgar—, no solo a la
+  // descarga. El árbol las usa para «✓ N productos en caché local».
+  useImperativeHandle(ref, () => ({
+    bajar,
+    bajarSiVacio,
+    decir,
+    anotar,
+    avanzar: (pct) => setPorcentaje(Math.max(0, Math.min(100, Math.round(pct)))),
+    cancelar: () => { cancelar.current = true },
+  }), [bajar, bajarSiVacio, decir, anotar])
 
-  const hayAlgo = Object.values(guardadasAntes ?? {}).some((cuantas) => cuantas > 0)
+  // Hasta que se dispara no hay nada que enseñar. En v7 la barra, el estado y los logs estaban
+  // ocultos hasta que `doFetchAll` los mostraba.
+  if (!estado) return null
 
   return (
-    <div className="module-body">
-      {error && <div className="notice notice-error">✕ {error}</div>}
+    <ProgresoDeDescarga
+      estado={estado}
+      porcentaje={porcentaje}
+      bajando={bajando}
+      registro={registro}
+      logsAbiertos={logsAbiertos}
+      onAlternarLogs={() => setLogsAbiertos((previo) => !previo)}
+      onCancelar={() => { cancelar.current = true }}
+    />
+  )
+}
 
-      <div className="monitor-bar">
-        {!gruposFijos && (
-          <div className="seg">
-            {GRUPOS_DE_EXTRACCION.map(({ id, label }) => (
-              <button
-                key={id}
-                type="button"
-                className={`seg-btn${grupos.includes(id) ? ' active' : ''}`}
-                onClick={() => setGrupos((previos) => (previos.includes(id)
-                  ? previos.filter((otro) => otro !== id)
-                  : [...previos, id]))}
-                aria-pressed={grupos.includes(id)}
-                disabled={bajando}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        )}
+/**
+ * Las tres cosas de v7 y nada más: la barra, la línea de estado y el registro plegado.
+ *
+ * Está aparte de la descarga para poder dibujarla con datos de muestra y verla sin un tenant
+ * delante. Es lo único de todo esto que las pruebas no pueden juzgar: que se vea bien.
+ */
+export function ProgresoDeDescarga({
+  estado, porcentaje, bajando, registro, logsAbiertos, onAlternarLogs, onCancelar,
+}) {
+  return (
+    <>
+      <div className="progress-bar">
+        <div className="fill" style={{ width: `${porcentaje}%` }} />
+      </div>
 
-        <button
-          type="button"
-          className="btn btn-sm btn-primary"
-          onClick={bajar}
-          disabled={bajando || plan.gruposPosibles.length === 0}
-        >
-          {bajando ? 'Bajando…' : hayAlgo ? 'Volver a bajar' : 'Bajar los datos'}
-        </button>
+      <div className="prog-estado">
+        <span style={{ color: COLOR[estado.tipo] ?? COLOR.info }}>{estado.texto}</span>
 
         {bajando && (
-          <button type="button" className="btn btn-sm" onClick={() => { cancelar.current = true }}>
+          <button type="button" className="btn btn-secondary btn-small" onClick={onCancelar}>
             Cancelar
           </button>
         )}
 
-        <span className="page-hint">
-          {avance
-            ? `${avance.etiqueta}: ${numero(avance.bajadas)} filas`
-            : bajando
-              ? 'Preparando…'
-              : `${plan.pasos.filter((uno) => uno.sePuede).length} tablas por bajar`}
-        </span>
+        <button
+          type="button"
+          className="btn btn-secondary btn-small prog-logs-btn"
+          onClick={onAlternarLogs}
+          aria-expanded={logsAbiertos}
+        >
+          {logsAbiertos ? 'Ocultar logs' : 'Ver logs técnicos'}
+        </button>
       </div>
 
-      {/* Lo que NO se va a poder, antes de empezar. */}
-      {plan.avisos.map((aviso) => (
-        <div className="notice notice-info" key={aviso}>{aviso}</div>
-      ))}
-
-      {plan.gruposPosibles.length === 0 && (
-        <div className="notice notice-error">
-          ✕ No se puede bajar nada: falta alguna tabla imprescindible. Vuelve al paso{' '}
-          <b>① Mapeo de entidades</b> — quizá haya que decirle a mano qué tabla de este tenant usar.
+      {logsAbiertos && (
+        <div className="log-area">
+          {registro.length === 0
+            ? <div className="info">Todavía no hay nada anotado.</div>
+            : registro.map((una) => (
+              <div className={una.clase} key={una.id}>
+                {horaDe(una.cuando)} · {una.texto}
+              </div>
+            ))}
         </div>
       )}
-
-      {/* «0 filas» a secas es cierto y no sirve: no dice que el problema es la versión elegida. */}
-      {salida && versionSinDatos(plan.pasos, salida.hechos).vacia && (
-        <div className="notice notice-error">
-          ✕ <b>Esta versión no tiene datos.</b> Ninguna de las tablas imprescindibles trajo una sola
-          fila, así que no hay nada que analizar. Casi siempre es que la versión elegida está vacía en
-          SAP: prueba con la <b>versión base</b>, que es donde vive el dato maestro del área.
-        </div>
-      )}
-
-      {salida && (
-        <div className={`notice notice-${salida.ok ? 'ok' : 'info'}`}>
-          {salida.ok ? '✓ ' : ''}
-          Se guardaron {numero(salida.guardadas)} filas
-          {salida.descartadas > 0 && `, y se descartaron ${numero(salida.descartadas)} que SAP marca como inválidas`}
-          {salida.conError > 0 && ` · ${salida.conError} ${salida.conError === 1 ? 'tabla falló' : 'tablas fallaron'}`}
-          {salida.seVacio && ' · se borró lo que había de otro tenant, área o versión'}.
-        </div>
-      )}
-
-      {/* Una descarga a la que le faltan filas no se puede presentar como terminada: todo lo que se
-          analice después sale de menos datos de los que hay, y ningún informe podría notarlo. */}
-      {salida && salida.incompletas > 0 && (
-        <div className="notice notice-error">
-          ✕ <b>Faltan filas.</b> {salida.incompletas === 1
-            ? 'Una tabla trajo menos filas de las que SAP dice que tiene'
-            : `${numero(salida.incompletas)} tablas trajeron menos filas de las que SAP dice que tienen`}
-          . Abajo se ve cuáles. <b>No conviene analizar con esto</b>: los informes saldrían de datos
-          incompletos sin poder avisarlo. Vuelve a bajar; si se repite, es que SAP está recortando las
-          respuestas y hay que pedir páginas más pequeñas.
-        </div>
-      )}
-
-      <div className="card">
-        <div className="card-label">Qué se baja</div>
-        <div className="table-scroll">
-          <table className="table-dense">
-            <thead>
-              <tr>
-                <th>Para qué</th><th>Tabla del tenant</th><th>Guardadas</th><th>Estado</th>
-              </tr>
-            </thead>
-            <tbody>
-              {plan.pasos.map((paso) => {
-                const suyo = salida?.hechos.find((uno) => uno.tabla === paso.tabla)
-                const antes = guardadasAntes?.[paso.tabla]
-                // Lo que va trayendo AHORA esta tabla, si es la que está en curso.
-                const enCurso = avance?.tabla === paso.tabla ? avance : null
-
-                return (
-                  <tr key={paso.tabla}>
-                    <td>
-                      {paso.etiqueta}
-                      <div className="exp-sub">
-                        {/* Los dos maestros compartidos sirven a los dos grupos, y decir solo uno
-                            haría pensar que bajando el otro no hacen falta. */}
-                        {gruposQueLoNecesitan(paso)
-                          .map((id) => GRUPOS_DE_EXTRACCION.find((uno) => uno.id === id)?.label)
-                          .filter(Boolean)
-                          .join(' y ')}
-                        {!paso.esencial && ' · accesoria'}
-                      </div>
-                    </td>
-                    <td>
-                      {paso.entidad ?? <span className="exp-sub">ninguna</span>}
-                      {paso.omitidos.length > 0 && (
-                        <div className="exp-sub" style={{ color: 'var(--accent)' }}>
-                          sin {paso.omitidos.join(', ')}
-                        </div>
-                      )}
-                    </td>
-                    {/* El número tiene que decir DE CUÁNDO es. Mientras la descarga corre, aquí se
-                        veía el conteo de la corrida ANTERIOR bajo un encabezado que dice «Guardadas»:
-                        una tabla llena de ceros mientras la línea de progreso decía que esa misma
-                        tabla traía 47.919 filas. Un dato viejo sin fecha se lee como el de ahora. */}
-                    <td>
-                      {suyo && numero(suyo.guardadas)}
-                      {!suyo && enCurso && numero(enCurso.guardadas)}
-                      {!suyo && !enCurso && (antes === undefined || antes === 0
-                        ? '—'
-                        : <span className="exp-sub">{numero(antes)} de antes</span>)}
-
-                      {suyo && suyo.bajadas > suyo.guardadas && (
-                        <div className="exp-sub">de {numero(suyo.bajadas)} bajadas</div>
-                      )}
-                    </td>
-                    <td>
-                      {!paso.sePuede && <span style={{ color: 'var(--text3)' }}>No se puede</span>}
-                      {paso.sePuede && suyo?.error && <span style={{ color: 'var(--red)' }}>✕ {suyo.error}</span>}
-                      {paso.sePuede && suyo?.cancelado && <span style={{ color: 'var(--accent)' }}>Cancelada</span>}
-                      {/* Un paso que se salta por depender de una tabla incompleta lo dice aquí: si
-                          solo dijera «—» se leería como que no había nada que bajar. */}
-                      {paso.sePuede && suyo?.omitido && (
-                        <span style={{ color: 'var(--accent)' }}>Saltada · {suyo.motivo}</span>
-                      )}
-                      {/* Faltan filas: SAP dijo un total y llegaron menos. Es la diferencia entre una
-                          tabla completa y una a medias, y sin decirlo las dos se ven igual. */}
-                      {paso.sePuede && suyo?.faltan > 0 && (
-                        <span style={{ color: 'var(--red)' }}>
-                          ✕ Incompleta · SAP dice {numero(suyo.enSap)} filas y llegaron {numero(suyo.bajadas)}
-                        </span>
-                      )}
-                      {paso.sePuede && suyo && !suyo.error && !suyo.cancelado && !suyo.omitido
-                        && !suyo.faltan && (
-                        <span style={{ color: 'var(--green)' }}>✓ Lista</span>
-                      )}
-                      {paso.sePuede && !suyo && avance?.tabla === paso.tabla && <span>Bajando…</span>}
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
+    </>
   )
 }

@@ -251,6 +251,46 @@ export const EXTRACCIONES = Object.freeze([
 ])
 
 /**
+ * Cómo nombraba v7 cada tabla mientras la bajaba.
+ *
+ * Son DOS nombres y no uno porque v7 usaba dos: el largo en la línea de estado —«Descargando
+ * Production Source Header...»— y el corto en el registro —«Header: 2437 registros → IDB»—. Salen
+ * literales de `doFetchAll` en `main.js`, de la fase 1 de `analyzer.js` y de `prodAnalyzer.js`.
+ *
+ * Están en inglés a propósito: es texto PORTADO, y la regla del proyecto es que el texto portado
+ * manda sobre la preferencia de idioma. Quien lleva años leyendo «Header: 2437 registros → IDB» en
+ * el log no gana nada si un día dice «Cabecera».
+ *
+ * Aparte de `etiqueta`, que es el nombre en español con el que la aplicación habla del papel, y que
+ * no cambia.
+ */
+export const NOMBRES_DE_V7 = Object.freeze({
+  // Los de `doFetchAll` de `main.js`.
+  bom_psh: { sap: 'Production Source Header', corto: 'Header' },
+  bom_psi: { sap: 'Production Source Item', corto: 'Item' },
+  bom_psi_validity: { sap: 'Production Source Item Validity', corto: 'Item Validity' },
+  bom_psisub: { sap: 'Production Source Item Sub', corto: 'Item Sub' },
+  bom_psr: { sap: 'Production Source Resource', corto: 'Resource' },
+  bom_prd: { sap: 'Product (maestro)', corto: 'Product' },
+  bom_loc: { sap: 'Location (maestro)', corto: 'Location' },
+  bom_res: { sap: 'Resource (maestro)', corto: 'Resource master' },
+  // v7 no bajaba esta en el árbol: el nombre sale de `prodAnalyzer.js`, que sí la bajaba.
+  bom_resloc: { sap: 'Resource Location', corto: 'Resource Location' },
+  // Los de la fase 1 de `analyzer.js`.
+  sn_loc: { sap: 'Location Source', corto: 'Location Source' },
+  sn_cust: { sap: 'Customer Source', corto: 'Customer Source' },
+  sn_plant: { sap: 'Production Source Header', corto: 'Production Source Header' },
+  sn_psi: { sap: 'Production Source Item', corto: 'Production Source Item' },
+  sn_loc_prod: { sap: 'Location Product', corto: 'Location Product' },
+  sn_cust_prod: { sap: 'Customer Product', corto: 'Customer Product' },
+  sn_cust_master: { sap: 'Customer', corto: 'Customer' },
+})
+
+/** Los dos nombres de una tabla. Si falta —tabla nueva— se cae a la etiqueta, que siempre está. */
+export const nombresDe = (paso) => NOMBRES_DE_V7[paso?.tabla]
+  ?? { sap: paso?.etiqueta ?? '', corto: paso?.etiqueta ?? '' }
+
+/**
  * Si lo que se bajó dice que la VERSIÓN está vacía, y no que falte una tabla suelta.
  *
  * Son dos cosas distintas y se leen igual en pantalla si nadie las separa. Que una tabla accesoria
