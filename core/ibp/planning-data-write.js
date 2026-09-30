@@ -217,6 +217,9 @@ export async function waitForProcessed({
     if (resultado === null) return 'SIN_SOPORTE'
     if (resultado?.Status === 'PROCESSED') return 'PROCESADA'
     if (resultado?.Status === 'ERROR') return 'CON_ERROR'
+    // SAP la aplicó y rechazó ALGUNAS filas. Es un final como el de arriba: los rechazos están en los
+    // mensajes. v8 lo reconocía; sin esto se seguía preguntando hasta agotar la espera.
+    if (resultado?.Status === 'PROCESSED_WITH_ERRORS') return 'PROCESADA_CON_ERRORES'
     if (ahora() >= limite) return 'SIN_RESPUESTA'
 
     await esperar(intervalMs)

@@ -195,6 +195,13 @@ describe('getExportResult y waitForProcessed', () => {
     await expect(waitForProcessed({ ...ctx, transactionId: 'TX', ...sinDormir })).resolves.toBe('CON_ERROR')
   })
 
+  // Sin esto se seguía preguntando hasta agotar la espera, con la transacción ya terminada.
+  it('procesada con filas rechazadas es un final, y distinto', async () => {
+    sapFetch.mockResolvedValueOnce({ json: { d: { results: [{ Name: 'Status', Value: 'PROCESSED_WITH_ERRORS' }] } } })
+    await expect(waitForProcessed({ ...ctx, transactionId: 'TX', ...sinDormir })).resolves.toBe('PROCESADA_CON_ERRORES')
+    expect(sapFetch).toHaveBeenCalledTimes(1)
+  })
+
   it('si tarda demasiado se dice, no se miente', async () => {
     sapFetch.mockResolvedValue({ json: { d: { results: [{ Name: 'Status', Value: 'PROCESSING' }] } } })
     let reloj = 0

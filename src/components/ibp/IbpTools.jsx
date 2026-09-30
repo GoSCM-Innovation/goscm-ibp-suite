@@ -113,7 +113,7 @@ function SystemView({ connection }) {
           </div>
         )}
         <Suspense fallback={cargando('Cargando…')}>
-          {activeApp === 'resumen' && <Resumen connection={connection} conexionId={connection.id} />}
+          {activeApp === 'resumen' && <Resumen connection={connection} />}
           {activeApp === 'jobs' && <JobTemplates connection={connection} conexionId={connection.id} zona={readStoredTzMode()} />}
           {activeApp === 'monitor' && <JobMonitor connection={connection} conexionId={connection.id} />}
           {activeApp === 'orquestador' && (
@@ -146,16 +146,7 @@ function SystemView({ connection }) {
                 connectionId={connection.id}
                 kind="trans"
                 renderTab={(tab, p) => (
-                  <PlanningDataViewer
-                    connection={connection}
-                    connectionId={connection.id}
-                    initial={tab.def}
-                    {...p}
-                    conexionId={connection.id}
-                    inicial={tab.def}
-                    activa={p.active}
-                    onDefinicion={def => p.onMeta(def, { areaId: def?.area, versionId: def?.version, leafLabel: def?.tabla })}
-                  />
+                  <PlanningDataViewer connection={connection} connectionId={connection.id} initial={tab.def} {...p} />
                 )}
               />
             </div>
