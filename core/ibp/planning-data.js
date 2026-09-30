@@ -32,27 +32,60 @@ export const planningRoot = (baseUrl) => serviceRoot(baseUrl, 'PLANNING_DATA_API
  */
 export const FILAS_POR_PAGINA = 5000
 
+/** Cuánto se espera antes de repetir una lectura, multiplicado por el número de intento. */
+export const ESPERA_ENTRE_INTENTOS_MS = 1500
+
 /** Consulta el área y devuelve el cuerpo ya desenvuelto. */
-async function leer({ baseUrl, credentials, area, consulta }) {
+async function leer({ baseUrl, credentials, area, consulta, timeoutMs }) {
   const url = `${planningRoot(baseUrl)}/${area}?$format=json&${consulta}`
-  const { json } = await sapFetch({ url, credentials, kind: 'ibp' })
+  const { json } = await sapFetch({ url, credentials, kind: 'ibp', ...(timeoutMs ? { timeoutMs } : {}) })
   return json?.d ?? {}
 }
 
+/**
+ * Repite una LECTURA que falló por algo pasajero.
+ *
+ * Solo lecturas: leer la misma página dos veces devuelve las mismas filas y no rompe nada. Una
+ * escritura no pasa nunca por aquí —repetir un envío ya preparado duplica valores dentro de la
+ * transacción—. Solo se repite lo que el transporte marca como repetible (corte de red, respuesta
+ * cortada, 429, 5xx): un 400 dice lo mismo la segunda vez.
+ *
+ * Por omisión no se repite nada, para que quien no lo pida siga igual que siempre.
+ */
+async function conReintento(leerUnaVez, { reintentos = 0, esperaMs = ESPERA_ENTRE_INTENTOS_MS } = {}) {
+  for (let intento = 0; ; intento += 1) {
+    try {
+      return await leerUnaVez()
+    } catch (error) {
+      if (!error?.retryable || intento >= reintentos) throw error
+      await new Promise((listo) => { setTimeout(listo, esperaMs * (intento + 1)) })
+    }
+  }
+}
+
+/**
+ * Cómo se lee el catálogo: el documento de servicio y el `$metadata` tardan, y v8 les daba 110 s y
+ * tres reintentos ante un fallo pasajero. Son lecturas idempotentes.
+ */
+export const LECTURA_DEL_CATALOGO = Object.freeze({ reintentos: 3, timeoutMs: 110_000 })
+
 /** Las áreas de planificación que este usuario ve en ESTE servicio. */
-export async function readPlanningAreas({ baseUrl, credentials }) {
-  const { json } = await sapFetch({ url: `${planningRoot(baseUrl)}/?$format=json`, credentials, kind: 'ibp' })
+export async function readPlanningAreas({ baseUrl, credentials, esperaMs }) {
+  const { json } = await conReintento(() => sapFetch({
+    url: `${planningRoot(baseUrl)}/?$format=json`, credentials, kind: 'ibp', timeoutMs: LECTURA_DEL_CATALOGO.timeoutMs,
+  }), { reintentos: LECTURA_DEL_CATALOGO.reintentos, esperaMs })
   return areasDesdeConjuntos(json?.d?.EntitySets ?? [])
 }
 
 /** Las dimensiones, las cifras clave y sus etiquetas. */
-export async function readKfMetadata({ baseUrl, credentials, area }) {
-  const { text } = await sapFetch({
+export async function readKfMetadata({ baseUrl, credentials, area, esperaMs }) {
+  const { text } = await conReintento(() => sapFetch({
     url: `${planningRoot(baseUrl)}/$metadata`,
     credentials,
     kind: 'ibp',
     expect: 'xml',
-  })
+    timeoutMs: LECTURA_DEL_CATALOGO.timeoutMs,
+  }), { reintentos: LECTURA_DEL_CATALOGO.reintentos, esperaMs })
 
   const leido = parseKfMetadata(text, area)
   if (!leido) throw new Error(`El área "${area}" no aparece en los metadatos del servicio.`)
@@ -65,8 +98,11 @@ export async function readKfMetadata({ baseUrl, credentials, area }) {
  * Con `$top` acotado: una lectura sin límite de un área grande puede tumbar el servicio, y las
  * versiones son pocas —siete en el tenant de pruebas—.
  */
-export async function readVersions({ baseUrl, credentials, area }) {
-  const d = await leer({ baseUrl, credentials, area, consulta: '$select=VERSIONID,VERSIONNAME&$top=1000' })
+export async function readVersions({ baseUrl, credentials, area, esperaMs }) {
+  const d = await conReintento(
+    () => leer({ baseUrl, credentials, area, consulta: '$select=VERSIONID,VERSIONNAME&$top=1000', timeoutMs: 90_000 }),
+    { reintentos: LECTURA_DEL_CATALOGO.reintentos, esperaMs },
+  )
 
   const vistas = new Map()
   for (const fila of d.results ?? []) {
@@ -118,16 +154,21 @@ export async function detectConversions({ baseUrl, credentials, area, cifra }) {
 /**
  * Cuántas filas devolvería la consulta.
  *
- * Con `$top` pequeño y nunca cero. Ver `FILAS_PARA_CONTAR`.
+ * Con `$top` pequeño y nunca cero. Ver `FILAS_PARA_CONTAR`. `reintentos` y `timeoutMs` son para
+ * quien necesita el número sí o sí —el visor cuenta antes de enseñar la primera página, con un
+ * reintento y 60 s, como v8—.
  */
-export async function countKf({ baseUrl, credentials, area, select, filtro }) {
-  const d = await leer({
+export async function countKf({
+  baseUrl, credentials, area, select, filtro, reintentos = 0, timeoutMs, esperaMs,
+}) {
+  const d = await conReintento(() => leer({
     baseUrl,
     credentials,
     area,
+    timeoutMs,
     consulta: `$top=${FILAS_PARA_CONTAR}&$inlinecount=allpages&$select=${encodeURIComponent(select.join(','))}`
       + (filtro ? `&$filter=${encodeURIComponent(filtro)}` : ''),
-  })
+  }), { reintentos, esperaMs })
   return Number.parseInt(d.__count ?? '0', 10)
 }
 
@@ -136,9 +177,13 @@ export async function countKf({ baseUrl, credentials, area, select, filtro }) {
  *
  * `$select` es obligatorio —sin él SAP contesta "You must pass at least one attribute or one key
  * figure"— y además DEFINE el nivel de agregación, así que quien llama elige con cuidado.
+ *
+ * Una página es idempotente —mismo `$skip`, `$top` y `$orderby`, mismas filas—, así que se puede
+ * repetir si se pide con `reintentos`.
  */
 export async function readKfPage({
   baseUrl, credentials, area, select, filtro, orderby, skip = 0, top = FILAS_POR_PAGINA,
+  reintentos = 0, timeoutMs, esperaMs,
 }) {
   if (!select?.length) throw new Error('Hay que elegir al menos un atributo o una cifra clave.')
 
@@ -150,7 +195,10 @@ export async function readKfPage({
   if (orderby?.length) partes.push(`$orderby=${encodeURIComponent(orderby.join(','))}`)
   if (filtro) partes.push(`$filter=${encodeURIComponent(filtro)}`)
 
-  const d = await leer({ baseUrl, credentials, area, consulta: partes.join('&') })
+  const d = await conReintento(
+    () => leer({ baseUrl, credentials, area, consulta: partes.join('&'), timeoutMs }),
+    { reintentos, esperaMs },
+  )
   return (d.results ?? []).map((fila) => {
     const { __metadata, ...resto } = fila
     return resto

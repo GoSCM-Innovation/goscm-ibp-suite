@@ -6,15 +6,19 @@ import {
   cifraLegible,
   conversionQueFalta,
   esCero,
+  esNombreDeCampo,
   filtroDeCifra,
   filtroDeCifras,
   filtroDeFechas,
   filtroDePlanificacion,
   nivelDeAgregacion,
+  ordenDelVisor,
   parseKfMetadata,
+  periodoIso,
   sinFilasEnCero,
   periodoLegible,
   selectDePlanificacion,
+  selectDelVisor,
   sinCeros,
 } from './planning-data-model.js'
 
@@ -42,6 +46,7 @@ describe('parseKfMetadata', () => {
       <Property Name="PRDID" Type="Edm.String" sap:label="Product ID" sap:aggregation-role="dimension"/>
       <Property Name="ADJUSTEDPRODUCTION" Type="Edm.Decimal" sap:aggregation-role="measure" sap:label="Producción ajustada"/>
       <Property Name="SINROL" Type="Edm.Decimal"/>
+      <Property Name="DECIMALDIM" Type="Edm.Decimal" sap:aggregation-role="dimension"/>
       <Property Name="TEXTO" Type="Edm.String"/>
     </EntityType>`
 
@@ -56,6 +61,13 @@ describe('parseKfMetadata', () => {
     const leido = parseKfMetadata(xml, 'ASIBPTS')
     expect(leido.cifras).toContain('SINROL')
     expect(leido.dims).toContain('TEXTO')
+  })
+
+  // El criterio de v8 (`fetchKfMetadata`): todo decimal es una cifra, venga marcado como venga.
+  it('un decimal es cifra aunque venga marcado como dimensión', () => {
+    const leido = parseKfMetadata(xml, 'ASIBPTS')
+    expect(leido.cifras).toContain('DECIMALDIM')
+    expect(leido.dims).not.toContain('DECIMALDIM')
   })
 
   it('guarda las etiquetas y cae al nombre si no hay', () => {
@@ -308,5 +320,83 @@ describe('las condiciones de una consulta de cifras', () => {
   it('da lo mismo que el constructor del dato maestro', () => {
     const condiciones = [{ field: 'PRDID', op: 'in', value: 'A,B' }, { field: 'BRAND', op: 'nb' }]
     expect(filtroDePlanificacion({ condiciones })).toBe(filtroDeCondiciones(condiciones))
+  })
+})
+
+// Sin el predicado de versión se lee la base, pero la escritura del visor sí va a la versión elegida:
+// se pisaría una versión con los números de otra.
+describe('filtroDePlanificacion con versión', () => {
+  it('una versión real acota la lectura', () => {
+    expect(filtroDePlanificacion({ version: 'UPSIDE' })).toBe("VERSIONID eq 'UPSIDE'")
+  })
+
+  it('la base no lleva predicado', () => {
+    expect(filtroDePlanificacion({ version: '' })).toBe('')
+  })
+
+  it('se une con el resto, y el filtro de ceros cubre todas las cifras', () => {
+    const salida = filtroDePlanificacion({
+      condiciones: [{ field: 'PRDID', op: 'in', value: 'A' }],
+      campoDeTiempo: 'PERIODID4_TSTAMP',
+      desde: '2026-01-01',
+      conversiones: { UOMTOID: 'KG', CURRTOID: '' },
+      version: "V'1",
+      cifras: ['KFA', 'KFB'],
+      soloConValor: true,
+    })
+    expect(salida).toBe("PERIODID4_TSTAMP ge datetime'2026-01-01T00:00:00' and UOMTOID eq 'KG'"
+      + " and VERSIONID eq 'V''1' and PRDID eq 'A' and (KFA gt 0 or KFA lt 0 or KFB gt 0 or KFB lt 0)")
+    expect(salida).not.toContain('ne 0')
+  })
+})
+
+describe('selectDelVisor', () => {
+  // Es también el orden de las columnas en la tabla: el orden en que se eligieron, no alfabético.
+  it('dimensiones en el orden elegido, el tiempo y las key figures', () => {
+    expect(selectDelVisor({ atributos: ['PRDID', 'LOCID'], tiempo: 'PERIODID4_TSTAMP', cifras: ['KFB', 'KFA'] }))
+      .toEqual(['PRDID', 'LOCID', 'PERIODID4_TSTAMP', 'KFB', 'KFA'])
+  })
+
+  it('sin repetidos ni vacíos', () => {
+    expect(selectDelVisor({ atributos: ['PRDID', '', 'PRDID'], tiempo: '', cifras: ['KF'] })).toEqual(['PRDID', 'KF'])
+  })
+
+  it('sin nada, nada', () => {
+    expect(selectDelVisor()).toEqual([])
+  })
+})
+
+describe('ordenDelVisor', () => {
+  const nivel = ['PRDID', 'LOCID', 'PERIODID4_TSTAMP']
+
+  it('sin orden elegido, el nivel entero', () => {
+    expect(ordenDelVisor(null, nivel)).toEqual(nivel)
+  })
+
+  // v8 ordenaba solo por la columna elegida, que no es un orden estable al paginar.
+  it('con una columna elegida, esa primero y el nivel detrás para desempatar', () => {
+    expect(ordenDelVisor({ field: 'KF', dir: 'desc' }, nivel)).toEqual(['KF desc', ...nivel])
+    expect(ordenDelVisor({ field: 'LOCID', dir: 'asc' }, nivel)).toEqual(['LOCID', 'PRDID', 'PERIODID4_TSTAMP'])
+  })
+})
+
+describe('periodoIso', () => {
+  it('una fecha de OData pasa a ISO sin milisegundos ni zona', () => {
+    expect(periodoIso('/Date(1767225600000)/')).toBe('2026-01-01T00:00:00')
+    expect(periodoIso('/Date(1767225600000+0000)/')).toBe('2026-01-01T00:00:00')
+  })
+
+  it('lo que no es una fecha de OData se devuelve tal cual', () => {
+    expect(periodoIso('2026-01-01T00:00:00')).toBe('2026-01-01T00:00:00')
+    expect(periodoIso(undefined)).toBeUndefined()
+  })
+})
+
+describe('esNombreDeCampo', () => {
+  it('acepta nombres de campo y rechaza lo que podría colarse en la dirección', () => {
+    expect(esNombreDeCampo('PERIODID4_TSTAMP')).toBe(true)
+    expect(esNombreDeCampo("PRDID&$filter=X")).toBe(false)
+    expect(esNombreDeCampo('')).toBe(false)
+    expect(esNombreDeCampo(undefined)).toBe(false)
   })
 })

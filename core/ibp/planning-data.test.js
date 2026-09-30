@@ -106,6 +106,52 @@ describe('readKfPage', () => {
   })
 })
 
+// Leer es idempotente, así que una lectura que falló por algo pasajero se puede repetir. Solo lo que
+// el transporte marca como repetible, y solo si quien llama lo pide.
+describe('reintentos de lectura', () => {
+  const pasajero = () => Object.assign(new Error('SAP devolvió 503'), { status: 503, retryable: true })
+
+  it('countKf repite lo pasajero hasta los reintentos pedidos', async () => {
+    sapFetch
+      .mockRejectedValueOnce(pasajero())
+      .mockResolvedValueOnce({ json: { d: { __count: '12' } } })
+
+    await expect(countKf({ ...ctx, select: ['KF'], reintentos: 1, esperaMs: 0 })).resolves.toBe(12)
+    expect(sapFetch).toHaveBeenCalledTimes(2)
+  })
+
+  it('sin reintentos pedidos, falla a la primera', async () => {
+    sapFetch.mockRejectedValueOnce(pasajero())
+    await expect(countKf({ ...ctx, select: ['KF'] })).rejects.toThrow('503')
+    expect(sapFetch).toHaveBeenCalledTimes(1)
+  })
+
+  // Un 400 dice lo mismo la segunda vez: es donde SAP pide la conversión que falta.
+  it('un error que no es pasajero no se repite', async () => {
+    sapFetch.mockRejectedValueOnce(fallo('Add property UOMTOID to a filter condition'))
+    await expect(readKfPage({ ...ctx, select: ['KF'], reintentos: 3, esperaMs: 0 })).rejects.toThrow()
+    expect(sapFetch).toHaveBeenCalledTimes(1)
+  })
+
+  // El `$metadata` tarda: v8 le daba 110 s y tres reintentos.
+  it('el catálogo se lee con 110 s y se repite ante un fallo pasajero', async () => {
+    sapFetch
+      .mockRejectedValueOnce(pasajero())
+      .mockResolvedValueOnce({ text: '<EntityType Name="ASIBPTS"><Property Name="PRDID" Type="Edm.String"/></EntityType>' })
+
+    await expect(readKfMetadata({ ...ctx, esperaMs: 0 })).resolves.toMatchObject({ dims: ['PRDID'] })
+    expect(sapFetch).toHaveBeenCalledTimes(2)
+    expect(sapFetch.mock.calls[1][0].timeoutMs).toBe(110_000)
+  })
+
+  it('readKfPage se rinde tras los reintentos y pasa la espera al transporte', async () => {
+    sapFetch.mockRejectedValue(pasajero())
+    await expect(readKfPage({ ...ctx, select: ['KF'], reintentos: 2, esperaMs: 0, timeoutMs: 90_000 })).rejects.toThrow('503')
+    expect(sapFetch).toHaveBeenCalledTimes(3)
+    expect(sapFetch.mock.calls[0][0].timeoutMs).toBe(90_000)
+  })
+})
+
 describe('detectConversions', () => {
   it('una cifra que no pide nada no da conversiones', async () => {
     sapFetch.mockResolvedValueOnce({ json: { d: { results: [] } } })

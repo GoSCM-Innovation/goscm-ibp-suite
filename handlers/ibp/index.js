@@ -20,6 +20,7 @@ import metering from './metering.js'
 import migration from './migration.js'
 import migrationRun from './migration-run.js'
 import planningData from './planning-data.js'
+import planningDataEdit from './planning-data-edit.js'
 import resourceStats from './resource-stats.js'
 import sample from './sample.js'
 
@@ -36,6 +37,7 @@ export const RUTAS = Object.freeze({
   migration,
   'migration-run': migrationRun,
   'planning-data': planningData,
+  'planning-data-edit': planningDataEdit,
   'resource-stats': resourceStats,
   sample,
 })

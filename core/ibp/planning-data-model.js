@@ -54,8 +54,9 @@ const atributo = (tag, nombre) => (new RegExp(`${nombre}="([^"]*)"`).exec(tag) ?
 /**
  * Las dimensiones y las cifras clave de un área, sacadas del `$metadata`.
  *
- * SAP las distingue con `sap:aggregation-role`. Cuando falta, se cae al tipo de dato: un decimal es
- * una cifra. En el tenant de pruebas salen 222 dimensiones y 1.137 cifras.
+ * SAP las distingue con `sap:aggregation-role`, y además todo decimal es una cifra aunque venga
+ * marcado de otra forma: es el criterio de v8 (`fetchKfMetadata`), y con él un decimal nunca se
+ * ofrece como dimensión del nivel. En el tenant de pruebas salen 222 dimensiones y 1.137 cifras.
  */
 export function parseKfMetadata(xml, area) {
   const bloques = [...String(xml ?? '').matchAll(/<EntityType\b[^>]*>[\s\S]*?<\/EntityType>/g)]
@@ -75,7 +76,7 @@ export function parseKfMetadata(xml, area) {
     const rol = atributo(tag, 'sap:aggregation-role')
     const tipo = atributo(tag, 'Type') || ''
 
-    if (rol === 'measure' || (!rol && tipo.endsWith('Decimal'))) cifras.push(nombre)
+    if (rol === 'measure' || tipo.endsWith('Decimal')) cifras.push(nombre)
     else dims.push(nombre)
   }
 
@@ -108,9 +109,13 @@ export function filtroDeFechas(campoDeTiempo, desde, hasta) {
  *
  * `conversiones` es lo que la cifra EXIGE —la unidad o la moneda de destino—; sin eso no hay
  * lectura. `soloConValor` aprovecha una regla de SAP a propósito: ver `filtroDeCifras`.
+ *
+ * `version` acota la LECTURA a esa versión. Es crítico cuando después se escribe: sin el predicado se
+ * lee la versión base, pero la escritura sí va a la versión elegida, y se pisaría una versión con los
+ * números de otra. La base no lleva predicado, igual que en v8.
  */
 export function filtroDePlanificacion({
-  conversiones = {}, condiciones = [], cifra, cifras, soloConValor, campoDeTiempo, desde, hasta,
+  conversiones = {}, condiciones = [], cifra, cifras, soloConValor, campoDeTiempo, desde, hasta, version,
 } = {}) {
   const partes = []
 
@@ -121,6 +126,8 @@ export function filtroDePlanificacion({
     const valor = conversiones[campo]
     if (valor) partes.push(`${campo} eq '${escapar(valor)}'`)
   }
+
+  if (version) partes.push(`VERSIONID eq '${escapar(version)}'`)
 
   // El MISMO constructor que el dato maestro, que es como estaba en el original: una sola función
   // para los dos. Tenía dos copias, y la de aquí entrecomillaba siempre — con lo que una condición
@@ -230,4 +237,60 @@ export function conversionQueFalta(mensaje) {
     if (texto.includes(campo)) return campo
   }
   return null
+}
+
+// ── «Ver Dato Transaccional» ─────────────────────────────────────────────────────────────────────
+//
+// El visor de v8 elige un NIVEL —dimensiones más un nivel de tiempo— y las key figures que se ven a
+// ese nivel. Lo de aquí es cómo se le pide eso a SAP; la pantalla y el servidor usan las mismas
+// funciones, para que lo que se cuenta sea exactamente lo que después se lee.
+
+/** Un nombre de campo de OData: letras, dígitos y guion bajo. Lo demás no llega a la dirección. */
+export const esNombreDeCampo = (valor) => typeof valor === 'string' && /^[A-Za-z0-9_]+$/.test(valor)
+
+/**
+ * El `$select` del visor: las dimensiones en el orden en que se eligieron, el tiempo y las key
+ * figures.
+ *
+ * Es también el orden de las columnas en la tabla, como en v8. El `$select` es además el nivel de
+ * agregación —ver `nivelDeAgregacion`—, así que aquí no se quita ni se añade nada por comodidad.
+ */
+export function selectDelVisor({ atributos = [], tiempo, cifras = [] } = {}) {
+  const vistos = new Set()
+  const salida = []
+  for (const campo of [...(atributos ?? []), tiempo, ...(cifras ?? [])]) {
+    if (!campo || vistos.has(campo)) continue
+    vistos.add(campo)
+    salida.push(campo)
+  }
+  return salida
+}
+
+/**
+ * El `$orderby` de una página del visor.
+ *
+ * Sin orden elegido, las columnas del nivel —dimensiones y tiempo—, que identifican cada fila. Con
+ * una columna elegida, esa primero y el nivel detrás. v8 ordenaba SOLO por la elegida, y eso no es
+ * un orden estable: dos filas con el mismo valor pueden salir en cualquier orden, y al paginar una se
+ * repite y otra se pierde.
+ */
+export function ordenDelVisor(orden, claves = []) {
+  const nivel = (claves ?? []).filter(Boolean)
+  if (!orden?.field) return nivel
+  const primera = `${orden.field}${orden.dir === 'desc' ? ' desc' : ''}`
+  return [primera, ...nivel.filter((clave) => clave !== orden.field)]
+}
+
+/**
+ * Un periodo leído a como lo espera la escritura.
+ *
+ * La lectura devuelve `/Date(1767225600000)/`; el cuerpo de la importación espera
+ * `2026-01-01T00:00:00`, sin milisegundos ni zona. Es `odataDateToIso` de v8: lo que no es una fecha
+ * de OData se devuelve tal cual.
+ */
+export function periodoIso(valor) {
+  if (typeof valor !== 'string') return valor
+  const marca = /\/Date\((-?\d+)([+-]\d+)?\)\//.exec(valor)
+  if (!marca) return valor
+  return new Date(Number.parseInt(marca[1], 10)).toISOString().slice(0, 19)
 }
