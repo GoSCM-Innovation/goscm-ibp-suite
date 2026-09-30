@@ -386,30 +386,38 @@ export {
 
 export {
   CONJUNTOS_DE_CONSUMO,
+  LIMITE_DE_RESPUESTA,
   METERING_MAX,
   METERING_PAGE,
+  entidadesDelServicio,
   meteringRoot,
+  ordenEstable,
   readMetering,
+  readMeteringModel,
   readMeteringSet,
   toMeteringTimestamp,
 } from './metering.js'
 
+export { compactRows, dayKey, expandRows } from './metering-rows.js'
+
 export {
-  PREFIJO_COMPLEMENTO_EXCEL,
-  RANGOS_DE_CONSUMO,
-  aSegundos,
-  actividadPorDia,
-  contarPor,
-  diaDe,
-  distintos,
-  escribirDuracion,
-  nombresDeComponente,
-  nombresDeUsuario,
-  resumirConsumo,
+  EXCEL_ADDIN_PREFIX,
+  appsView,
+  buildComponentMap,
+  buildUserMap,
+  excelView,
+  filterByContext,
+  filterInactiveUsers,
+  formatDuration,
+  generalView,
+  listPlanningAreas,
+  paProfileView,
+  presetDates,
+  toSecs,
+  userProfileView,
 } from './metering-summary.js'
 
 export {
-  RANGOS_DE_RECURSOS,
   agrupar,
   intervaloDeAgrupacion,
   parseOdataDate,

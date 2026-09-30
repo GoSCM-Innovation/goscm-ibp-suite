@@ -1,170 +1,233 @@
-// Cuánta CPU y memoria está consumiendo el tenant.
+// Resource Stats: cuánta CPU y memoria está consumiendo el tenant. Portado tal cual de
+// `components/ResourceStats/ResourceStats.jsx` de v8: la misma cabecera, el mismo conmutador de zona,
+// los mismos cinco rangos, las dos tarjetas y el gráfico, con sus textos y sus estilos.
 //
-// Portado de `ResourceStats.jsx` de v8. La diferencia es dónde se hacen las cuentas: allí el
-// componente leía las 4.320 filas de treinta días y las promediaba en el navegador; aquí llega la
-// serie ya agrupada desde `core/ibp/resource-stats.js`, que además es donde se puede probar.
-//
-// SAP muestrea cada diez minutos, así que refrescar más seguido que eso solo repetiría la respuesta.
+// Lo único que cambia es DÓNDE se lee: v8 llamaba a SAP desde el navegador a través de un proxy; aquí
+// lo hace `handlers/ibp/resource-stats.js`, porque las credenciales viven cifradas en el servidor y
+// nunca llegan al navegador. El servidor además promedia los tramos de 7 y 30 días con la misma
+// cuenta que hacía v8 en el componente (`core/ibp/resource-series.js`), así que al navegador llega
+// la serie que v8 dibujaba, no las 4.320 filas.
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import {
+  LineChart, Line, XAxis, YAxis, CartesianGrid,
+  Tooltip, Legend, ResponsiveContainer,
+} from 'recharts'
 
-import { RANGOS_DE_RECURSOS } from '../../../core/ibp/resource-series.js'
-import { clockLabelEpochMs, dayLabelEpochMs, formatEpochMs, readStoredTzMode, storeTzMode, TZ_OPTIONS } from '../../lib/dates.js'
+import { getTzLabel, getTzMode, setTzMode as saveTzMode } from '../../lib/fechas-v8.js'
 import { fetchResourceStats } from '../../lib/ibp-resources.js'
-import { SinDatos, UsageLines } from '../ui/StatusCharts.jsx'
+import { useVisibleInterval } from '../../lib/useVisibleInterval.js'
+import ProgressBar from './ProgressBar.jsx'
 
-/** Cada cuánto se vuelve a preguntar. Diez minutos: es el paso con el que SAP escribe la serie. */
-const REFRESCO_MS = 10 * 60_000
+// Los rangos de v8, con sus textos (`stats.range*` de `es.json`).
+const RANGES = [
+  { label: 'Última hora', hours: 1 },
+  { label: 'Últimas 4h', hours: 4 },
+  { label: 'Últimas 24h', hours: 24 },
+  { label: 'Últimos 7 días', hours: 168 },
+  { label: 'Últimos 30 días', hours: 720 },
+]
 
-/** Verde mientras sobre sitio, ámbar cuando aprieta, rojo cuando ya no queda. */
-function colorDeUso(valor) {
-  if (valor === null) return undefined
-  if (valor >= 90) return 'var(--red)'
-  return valor >= 75 ? 'var(--accent)' : 'var(--green)'
-}
+export default function ResourceStats({ connection }) {
+  const connectionId = connection?.id
 
-function Kpi({ etiqueta, valor, detalle, color }) {
+  const [range, setRange] = useState(() => RANGES[2])
+  const [data, setData] = useState([])
+  const [current, setCurrent] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [lastRefresh, setLastRefresh] = useState(null)
+  const [tzMode, setTzModeState] = useState(() => getTzMode())
+  // Solo cuenta la respuesta de la última petición: al cambiar de rango, la del rango anterior puede
+  // llegar después y pintaría una serie que ya no es la elegida.
+  const lastRequest = useRef(0)
+
+  function handleTzToggle(newMode) {
+    saveTzMode(newMode)
+    setTzModeState(newMode)
+  }
+
+  const load = useCallback(async () => {
+    const request = ++lastRequest.current
+    try {
+      const res = await fetchResourceStats(connectionId, range.hours)
+      if (request !== lastRequest.current) return
+      // En los rangos de menos de 7 días la serie llega sin agrupar, con los valores tal como los
+      // escribe SAP; en 7 y 30 días, promediada a un decimal. Igual que en v8.
+      const processed = res?.serie ?? []
+      setData(processed)
+      if (processed.length > 0) setCurrent(processed[processed.length - 1])
+      setLastRefresh(new Date())
+      setError('')
+    } catch (e) {
+      if (request !== lastRequest.current) return
+      setError(e.message)
+    } finally {
+      if (request === lastRequest.current) setLoading(false)
+    }
+  }, [connectionId, range])
+
+  // Al cambiar de rango se vacía el gráfico y se vuelve a cargar, como en v8.
+  useEffect(() => {
+    const id = setTimeout(() => {
+      setLoading(true)
+      setData([])
+      load()
+    }, 0)
+    return () => clearTimeout(id)
+  }, [load])
+
+  // v8 refrescaba cada minuto. Aquí además se pausa con la pestaña oculta (`useVisibleInterval`).
+  useVisibleInterval(load, 60_000)
+
+  function formatTick(ts) {
+    const d = new Date(ts)
+    const tz = tzMode === 'utc' ? 'UTC' : undefined
+    if (range.hours <= 24) return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', timeZone: tz })
+    return d.toLocaleDateString([], { month: 'short', day: 'numeric', timeZone: tz })
+  }
+
+  function formatTooltipLabel(ts) {
+    const d = new Date(ts)
+    const tz = tzMode === 'utc' ? 'UTC' : undefined
+    const label = d.toLocaleString([], { timeZone: tz })
+    return `${label} ${tzMode === 'utc' ? 'UTC' : getTzLabel()}`
+  }
+
+  function handleRefresh() { setLoading(true); load() }
+
   return (
-    <div className="kpi">
-      <div className="kpi-label">{etiqueta}</div>
-      <div className="kpi-valor" style={color ? { color } : undefined}>
-        {valor === null ? '—' : `${valor}%`}
+    <div style={{ padding: 28, position: 'relative' }}>
+      <ProgressBar loading={loading} />
+
+      {/* Cabecera */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 24, gap: 16, flexWrap: 'wrap' }}>
+        <div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text)' }}>Resource Stats</div>
+          <div style={{ fontSize: 11, color: 'var(--text2)', marginTop: 3 }}>
+            {lastRefresh ? `Actualizado ${lastRefresh.toLocaleTimeString()}` : 'Cargando...'}
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+          <TzToggle mode={tzMode} onToggle={handleTzToggle} />
+          {RANGES.map(r => (
+            <button key={r.hours} type="button" onClick={() => setRange(r)} style={{
+              padding: '5px 11px', fontSize: 11, fontWeight: 600, borderRadius: 6, cursor: 'pointer',
+              background: range.hours === r.hours ? 'var(--accent)' : 'transparent',
+              color:      range.hours === r.hours ? '#000' : 'var(--text2)',
+              border:     `1px solid ${range.hours === r.hours ? 'var(--accent)' : 'var(--border)'}`,
+              transition: 'all .15s',
+            }}>{r.label}</button>
+          ))}
+          <button type="button" onClick={handleRefresh} disabled={loading} style={{
+            padding: '5px 11px', fontSize: 12, fontWeight: 700, borderRadius: 6, cursor: 'pointer',
+            background: 'transparent', border: '1px solid var(--border)', color: 'var(--text2)',
+            marginLeft: 4, transition: 'all .15s',
+          }}>↻</button>
+        </div>
       </div>
-      {detalle && <div className="kpi-detalle">{detalle}</div>}
+
+      {/* KPIs */}
+      <div style={{ display: 'flex', gap: 16, marginBottom: 28, flexWrap: 'wrap' }}>
+        <KpiCard label="CPU actual" value={current?.cpu ?? null} color="#06b6d4" />
+        <KpiCard label="Memoria actual" value={current?.mem ?? null} color="#a78bfa" />
+      </div>
+
+      {/* Error */}
+      {error && (
+        <div style={{ color: 'var(--red)', fontSize: 12, marginBottom: 16 }}>✕ {error}</div>
+      )}
+
+      {/* Gráfico */}
+      {!error && (
+        <div style={{
+          background: 'var(--bg2)', border: '1px solid var(--border)',
+          borderRadius: 10, padding: '20px 8px 12px',
+        }}>
+          {loading ? (
+            <div style={{ height: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text2)', fontSize: 12 }}>
+              Cargando datos...
+            </div>
+          ) : data.length === 0 ? (
+            <div style={{ height: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text2)', fontSize: 12 }}>
+              Sin datos para el rango seleccionado.
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height={300}>
+              <LineChart data={data} margin={{ top: 4, right: 24, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                <XAxis
+                  dataKey="ts"
+                  tickFormatter={formatTick}
+                  tick={{ fontSize: 10, fill: 'var(--text2)' }}
+                  minTickGap={50}
+                />
+                <YAxis
+                  domain={[0, 100]}
+                  tick={{ fontSize: 10, fill: 'var(--text2)' }}
+                  tickFormatter={v => `${v}%`}
+                  width={38}
+                />
+                <Tooltip
+                  contentStyle={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 11 }}
+                  labelFormatter={formatTooltipLabel}
+                  formatter={(v, name) => [`${v}%`, name === 'cpu' ? 'CPU' : 'Memoria']}
+                />
+                <Legend
+                  wrapperStyle={{ fontSize: 11, paddingTop: 8 }}
+                  formatter={v => (v === 'cpu' ? 'CPU' : 'Memoria')}
+                />
+                <Line type="monotone" dataKey="cpu" stroke="var(--cyan)" dot={false} strokeWidth={1.5} isAnimationActive={false} />
+                <Line type="monotone" dataKey="mem" stroke="var(--purple)" dot={false} strokeWidth={1.5} isAnimationActive={false} />
+              </LineChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+      )}
     </div>
   )
 }
 
-export default function ResourceStats({ conexionId }) {
-  const [horas, setHoras] = useState(24)
-  const [zona, setZona] = useState(readStoredTzMode)
-  const [datos, setDatos] = useState(null)
-  const [error, setError] = useState('')
-  const [cargando, setCargando] = useState(true)
-  const [ultima, setUltima] = useState(null)
-
-  const cargar = useCallback(() => {
-    let abandonado = false
-    setCargando(true)
-
-    fetchResourceStats(conexionId, horas)
-      .then((respuesta) => {
-        if (abandonado) return
-        setDatos(respuesta)
-        setUltima(Date.now())
-        setError('')
-        setCargando(false)
-      })
-      .catch((fallo) => {
-        if (abandonado) return
-        setError(fallo.message)
-        setCargando(false)
-      })
-
-    return () => { abandonado = true }
-  }, [conexionId, horas])
-
-  useEffect(() => {
-    const id = setTimeout(cargar, 0)
-    return () => clearTimeout(id)
-  }, [cargar])
-
-  // En pausa mientras la pestaña no se ve: nadie mira un gráfico que está detrás de otra ventana.
-  useEffect(() => {
-    const id = setInterval(() => { if (!document.hidden) cargar() }, REFRESCO_MS)
-    return () => clearInterval(id)
-  }, [cargar])
-
-  function cambiarZona(modo) {
-    storeTzMode(modo)
-    setZona(modo)
-  }
-
-  const resumen = datos?.resumen ?? null
-  const serie = useMemo(() => datos?.serie ?? [], [datos])
-
-  // Por debajo de un día el eje va en horas; por encima, en días. En 30 días "03:00" repetido
-  // treinta veces no dice nada.
-  const etiquetaEje = useCallback(
-    (ts) => (horas <= 24 ? clockLabelEpochMs(ts, zona) : dayLabelEpochMs(ts, zona)),
-    [horas, zona],
-  )
-  const etiquetaPunto = useCallback((ts) => formatEpochMs(ts, zona), [zona])
-
+/** El conmutador «UTC / hora del navegador» de v8. */
+function TzToggle({ mode, onToggle }) {
   return (
-    <div className="module-body">
-      <div className="monitor-bar">
-        <div className="seg">
-          {TZ_OPTIONS.map((opcion) => (
-            <button
-              key={opcion.value}
-              type="button"
-              className={`seg-btn${zona === opcion.value ? ' active' : ''}`}
-              onClick={() => cambiarZona(opcion.value)}
-              aria-pressed={zona === opcion.value}
-            >
-              {opcion.label}
-            </button>
-          ))}
-        </div>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 2, background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 6, padding: 2 }}>
+      <button
+        type="button"
+        onClick={() => onToggle('utc')}
+        title="Mostrar horas en UTC (zona horaria de SAP IBP)"
+        style={{
+          padding: '3px 8px', borderRadius: 4, fontSize: 10, fontWeight: 700, cursor: 'pointer', border: 'none',
+          background: mode === 'utc' ? 'var(--border2)' : 'transparent',
+          color: mode === 'utc' ? '#fff' : 'var(--text3)',
+        }}
+      >UTC</button>
+      <button
+        type="button"
+        onClick={() => onToggle('local')}
+        title={`Convertir a hora local del navegador (${getTzLabel()})`}
+        style={{
+          padding: '3px 8px', borderRadius: 4, fontSize: 10, fontWeight: 700, cursor: 'pointer', border: 'none',
+          background: mode === 'local' ? 'var(--border2)' : 'transparent',
+          color: mode === 'local' ? '#fff' : 'var(--text3)',
+        }}
+      >{getTzLabel()}</button>
+    </div>
+  )
+}
 
-        <div className="seg">
-          {RANGOS_DE_RECURSOS.map((rango) => (
-            <button
-              key={rango.horas}
-              type="button"
-              className={`seg-btn${horas === rango.horas ? ' active' : ''}`}
-              onClick={() => setHoras(rango.horas)}
-              aria-pressed={horas === rango.horas}
-            >
-              {rango.label}
-            </button>
-          ))}
-        </div>
-
-        <button type="button" className="btn btn-sm" onClick={cargar} disabled={cargando}>↺ Actualizar</button>
-
-        <span className="page-hint">
-          {cargando
-            ? 'Consultando…'
-            : ultima
-              ? `${resumen?.muestras ?? 0} muestras · actualizado a las ${new Date(ultima).toLocaleTimeString()}`
-              : ''}
-        </span>
+function KpiCard({ label, value, color }) {
+  return (
+    <div style={{
+      background: 'var(--bg)', border: '1px solid var(--border)',
+      borderRadius: 10, padding: '16px 24px', minWidth: 150,
+    }}>
+      <div style={{ fontSize: 10, color: 'var(--text2)', textTransform: 'uppercase', letterSpacing: '.07em', marginBottom: 8 }}>
+        {label}
       </div>
-
-      {error && <div className="notice notice-error">✕ {error}</div>}
-
-      <div className="tablero">
-        <div className="grid-kpi">
-          <Kpi
-            etiqueta="CPU ahora"
-            valor={resumen?.cpu ?? null}
-            detalle={resumen?.cpuMax === null || resumen === null ? '' : `pico ${resumen.cpuMax}% · media ${resumen.cpuMedia}%`}
-            color={colorDeUso(resumen?.cpu ?? null)}
-          />
-          <Kpi
-            etiqueta="Memoria ahora"
-            valor={resumen?.mem ?? null}
-            detalle={resumen?.memMax === null || resumen === null ? '' : `pico ${resumen.memMax}% · media ${resumen.memMedia}%`}
-            color={colorDeUso(resumen?.mem ?? null)}
-          />
-        </div>
-
-        <div className="card">
-          <div className="card-label">
-            Consumo del tenant
-            {resumen?.desde && (
-              <span className="exp-sub"> · {formatEpochMs(resumen.desde, zona)} → {formatEpochMs(resumen.hasta, zona)}</span>
-            )}
-          </div>
-
-          {cargando && serie.length === 0
-            ? <div className="sin-datos">Consultando…</div>
-            : error
-              ? <SinDatos />
-              : <UsageLines serie={serie} etiquetaEje={etiquetaEje} etiquetaPunto={etiquetaPunto} />}
-        </div>
+      <div style={{ fontSize: 30, fontWeight: 700, color, fontFamily: 'var(--mono)' }}>
+        {value !== null ? `${value}%` : '—'}
       </div>
     </div>
   )
