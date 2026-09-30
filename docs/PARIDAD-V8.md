@@ -7,6 +7,45 @@ atrasada—. Existe porque «¿ya está v8?» se contestó dos veces de memoria 
 Última revisión: 2026-08-11, contra `ed718ed` de v8. Son **61 archivos** en su `src/` (sin contar
 `assets/`, `.json` y `.css`), y este documento da cuenta de todos.
 
+## 2026-09-30: la tabla de abajo decía «portado» y no lo era
+
+El usuario puso lado a lado «Ver Dato Maestro» de v8 y de aquí, contra las mismas conexiones: la de
+aquí no tenía la versión «(base / sin versión)», ni los rótulos sobre los desplegables, ni
+«↺ Actualizar», y las pestañas eran otras. Se recorrieron entonces **todas** las pestañas de v8
+control por control, y el resultado es que casi ninguna pantalla de IBP Tools era un port: eran
+**rediseños** que conservaban la función a grandes rasgos y cambiaban la forma, los textos, los
+valores por omisión y, en varios casos, lo que se le pide a SAP.
+
+Lo que la tabla de abajo llama «portado y verificado» hay que leerlo como «existe una pantalla que
+hace algo parecido». La lista buena es esta:
+
+| Pestaña | Estado |
+|---|---|
+| Marco de IBP Tools (cabecera, barra de pestañas, «📊 Resumen») | **Portado tal cual** el 2026-09-30 |
+| Ver Dato Maestro | **Portado tal cual** el 2026-09-30, mirado con datos de muestra |
+| Ver Dato Transaccional | En curso |
+| Resumen y Resumen global | En curso |
+| Job Templates, lanzar, Job Monitor, pasos | En curso |
+| Resource Stats y Telemetría | En curso |
+| Orquestador | En curso |
+| Migración (dato maestro y dato transaccional) | En curso |
+
+**Fallos reales que salieron de esa revisión**, además de la forma:
+
+- **Guardar dato maestro podía dejar campos en blanco.** SAP toma los atributos de un envío de la
+  PRIMERA fila; si se cambiaba la marca de un producto y la descripción de otro, al primero le
+  llegaba la descripción vacía. v8 mandaba todas las filas con los mismos campos. Corregido.
+- **«Job Templates» pedía el módulo de CI-DS.** Un cliente con solo IBP Tools veía un 403 en su propia
+  pestaña. Corregido: basta con cualquiera de los dos.
+- **El Orquestador de IBP perdía la plantilla al guardar**: todo paso guardado fallaba al ejecutarse.
+- **Telemetría paginaba sin `$orderby`**, que es justo la regla que obliga a un orden estable.
+- **La copia de cifras clave ignoraba la versión de origen** y solo leía el catálogo de la primera
+  área; y la de dato maestro no se podía hacer con la versión base.
+
+**Por qué se escapó dos veces**: las revisiones anteriores comparaban ARCHIVOS y buscaban funciones.
+Un archivo asignado y una función existente no dicen nada de si la pantalla es la misma. Lo que lo
+destapó fue lo de siempre, llevado hasta el final: abrir las dos y recorrer los controles.
+
 ## Portado y verificado contra tenants reales
 
 | v8 | Aquí | Notas |
