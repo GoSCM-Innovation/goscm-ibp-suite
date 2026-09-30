@@ -23,10 +23,10 @@ hace algo parecido». La lista buena es esta:
 |---|---|
 | Marco de IBP Tools (cabecera, barra de pestañas, «📊 Resumen») | **Portado tal cual** el 2026-09-30 |
 | Ver Dato Maestro | **Portado tal cual** el 2026-09-30, mirado con datos de muestra |
-| Ver Dato Transaccional | En curso |
-| Resumen y Resumen global | En curso |
-| Job Templates, lanzar, Job Monitor, pasos | En curso |
-| Resource Stats y Telemetría | En curso |
+| Ver Dato Transaccional | **Portado tal cual** el 2026-09-30, con la edición de key figures (escritura sin estrenar) |
+| Resumen y Resumen global | **Portados tal cual** el 2026-09-30. Una corrección sobre v8: los días del gráfico se ordenan por fecha (v8 ponía el 01/10 antes del 29/09) |
+| Job Templates, lanzar, Job Monitor, pasos | **Portados tal cual** el 2026-09-30. Lanzar, cancelar y reiniciar siguen sin estrenar |
+| Resource Stats y Telemetría | **Portados tal cual** el 2026-09-30. Telemetría conserva los topes mayores (documentado abajo) |
 | Orquestador | En curso |
 | Migración (dato maestro y dato transaccional) | En curso |
 
@@ -41,6 +41,9 @@ hace algo parecido». La lista buena es esta:
 - **Telemetría paginaba sin `$orderby`**, que es justo la regla que obliga a un orden estable.
 - **La copia de cifras clave ignoraba la versión de origen** y solo leía el catálogo de la primera
   área; y la de dato maestro no se podía hacer con la versión base.
+
+Todas las pantallas portadas se miraron con datos de muestra en el andamio temporal, no contra un
+tenant: la forma y el recorrido están comprobados; lo que devuelve SAP de verdad, no.
 
 **Por qué se escapó dos veces**: las revisiones anteriores comparaban ARCHIVOS y buscaban funciones.
 Un archivo asignado y una función existente no dicen nada de si la pantalla es la misma. Lo que lo
