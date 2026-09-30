@@ -2,19 +2,10 @@
 //
 // Portado de `ResourceStats.jsx` de v8, que hacía las tres cosas dentro del componente.
 //
-// Sin dependencias a propósito: lo usan el servidor —para no devolver 8.640 puntos que el navegador
-// va a promediar igual— y la pantalla —para las etiquetas de los rangos—. Importarlo del módulo de
-// al lado arrastraría `sapFetch` y con él `node:dns` al paquete del navegador. Es el mismo reparto
-// que ya se hizo con `job-params.js`.
-
-/** Los rangos que ofrece la pantalla. `horas` es lo que se le pide a SAP. */
-export const RANGOS_DE_RECURSOS = Object.freeze([
-  { horas: 1, label: '1 h' },
-  { horas: 4, label: '4 h' },
-  { horas: 24, label: '24 h' },
-  { horas: 168, label: '7 d' },
-  { horas: 720, label: '30 d' },
-])
+// Sin dependencias a propósito: lo usa el servidor, para no devolver 8.640 puntos que el navegador
+// va a promediar igual, y queda separado de `sapFetch` para poder probarlo sin transporte. Es el
+// mismo reparto que ya se hizo con `job-params.js`. Los rangos y sus textos son los de v8 y viven en
+// la pantalla (`src/components/ibp/ResourceStats.jsx`).
 
 /**
  * Los milisegundos de una fecha de OData v2 (`/Date(1786227900000+0000)/`).

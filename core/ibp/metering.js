@@ -1,7 +1,20 @@
-// Leer del tenant su actividad medida: quién lo usó, con qué aplicaciones y cuánto tiempo.
+// Leer del tenant su actividad medida: quién lo usó, con qué aplicaciones y cuánto tiempo. Es lo que
+// dibuja la pestaña «Telemetría» de v8.
 //
 // Va por el acuerdo `SAP_COM_0924`. Es el único servicio de IBP que la aplicación usa en OData v4,
 // con lo que las respuestas vienen en `value` y no en `d.results`.
+//
+// Se leen los MISMOS diez conjuntos que leía v8, con los campos que su pantalla mira, y las cuentas
+// se hacen en el navegador como allí (`core/ibp/metering-summary.js`). Lo que cambia:
+//
+//   - LOS TOPES. v8 se quedaba con las primeras 2.000, 1.000 o 500 filas de cada conjunto y dibujaba
+//     con eso sin decirlo: de `MtrgGenericUIActionUsage` leía 1.000 de 15.623. Aquí se pagina hasta
+//     20.000 por conjunto, y si se llega al tope la respuesta lo dice.
+//   - EL ORDEN AL PAGINAR. Sin un `$orderby` estable, dos páginas leídas de una tabla que sigue
+//     creciendo se solapan y dejan huecos. Se ordena por la clave de cada conjunto, que se lee del
+//     `$metadata` del servicio en vez de suponerla.
+//   - LOS CAMPOS. Se piden con `$select` solo los que la pantalla usa, cruzados con los que el
+//     servicio declara: pedir uno que no existe hace que SAP rechace la consulta entera.
 //
 // Tres cosas de aquí son conocimiento ganado contra un tenant real:
 //
@@ -14,12 +27,13 @@
 //
 //   2. El servicio NO sabe agregar. `$apply` con `groupby` provoca un vuelco de ABAP
 //      (`RAISE_SHORTDUMP`) y `aggregate($count)` contesta 501. Así que las cuentas se hacen leyendo
-//      las filas —de ahí que se paginen— y se resumen antes de contestar.
+//      las filas —de ahí que se paginen—.
 //
 //   3. El tope real por respuesta son 5.000 filas, aunque se pida más. Con `$top=20000` devuelve
 //      5.000 igual, así que hay que paginar de verdad.
 
 import { sapFetch } from '../transport/sap-fetch.js'
+import { compactRows } from './metering-rows.js'
 
 /** La raíz del servicio de actividad medida. */
 export const meteringRoot = (baseUrl) =>
@@ -39,6 +53,15 @@ export const METERING_PAGE = 5000
 export const METERING_MAX = 20_000
 
 /**
+ * Lo más que puede pesar la respuesta al navegador.
+ *
+ * Vercel corta las respuestas de una función en 4,5 MB. Con las filas compactadas un período normal
+ * pesa unos cientos de kB; esto es para que un período enorme dé un mensaje claro y no un error
+ * genérico de la plataforma.
+ */
+export const LIMITE_DE_RESPUESTA = 4_000_000
+
+/**
  * La marca de tiempo como la acepta este servicio: ISO sin fracción de segundo.
  *
  * Ver el punto 1 de la cabecera. Se recorta siempre, no solo para el conjunto que lo exige: no hay
@@ -51,52 +74,138 @@ export function toMeteringTimestamp(fecha) {
 }
 
 /**
- * Los conjuntos que se leen, con el campo por el que filtra cada uno.
+ * Los diez conjuntos de v8, en su orden y con la clave con la que los nombraba su pantalla.
  *
- * `MtrgActyBusinessUser` y `MtrgComponent` son catálogos —quién es quién y cómo se llama cada
- * componente—, no actividad: no tienen fecha por la que filtrar.
+ * `campo` es la fecha por la que se filtra el período, `campos` lo que la pantalla de v8 lee de cada
+ * fila, y `orden` lo que v8 pedía de orden (solo en las vistas de Excel: `TotalDuration desc`, que es
+ * lo que hace que sus «Errores» sean los más lentos). `MtrgActyBusinessUser` y `MtrgComponent` son
+ * catálogos —quién es quién y cómo se llama cada componente—, no actividad: no se filtran por fecha.
  */
 export const CONJUNTOS_DE_CONSUMO = Object.freeze([
-  { clave: 'sesiones', entidad: 'MtrgActyGroupOverview', campo: 'TimestampStart' },
-  { clave: 'vistas', entidad: 'MtrgActyExcelAddInPlanningView', campo: 'Timestamp' },
-  { clave: 'entradas', entidad: 'MtrgActyExcelAddInLogon', campo: 'Timestamp' },
-  { clave: 'aplicaciones', entidad: 'MtrgGenericUIActionUsage', campo: 'Timestamp' },
-  { clave: 'alertas', entidad: 'MtrgActyAlertMonitor', campo: 'Timestamp' },
-  { clave: 'cifras', entidad: 'MtrgActyExcelAddInChgKeyFig', campo: 'Timestamp' },
-  { clave: 'tableros', entidad: 'MtrgDashboard', campo: 'Timestamp' },
-  { clave: 'historias', entidad: 'MtrgMngAnalyticStory', campo: 'Timestamp' },
-  // Los catálogos siempre completos: quiénes son los usuarios del tenant no depende del período
-  // elegido, y es justamente lo que hace falta para saber a quién NO se vio en él.
-  { clave: 'usuarios', entidad: 'MtrgActyBusinessUser', sinContexto: true },
-  { clave: 'componentes', entidad: 'MtrgComponent', sinContexto: true },
+  {
+    clave: 'overview', entidad: 'MtrgActyGroupOverview', campo: 'TimestampStart',
+    campos: ['UserID', 'PlanningAreaID', 'TimestampStart', 'MeteringComponent', 'NumberOfActions'],
+  },
+  {
+    clave: 'planningViews', entidad: 'MtrgActyExcelAddInPlanningView', campo: 'Timestamp',
+    orden: ['TotalDuration desc'],
+    campos: [
+      'UserID', 'PlanningAreaID', 'Timestamp', 'TimestampStart', 'SuccessfullyCompleted', 'ActivityType',
+      'TotalDuration', 'DurationWithoutUserInteraction', 'DurationUnit', 'PlanningViewCells',
+      'TemplateName', 'FavoriteName', 'WorksheetName',
+    ],
+  },
+  {
+    clave: 'logons', entidad: 'MtrgActyExcelAddInLogon', campo: 'Timestamp',
+    campos: ['UserID', 'PlanningAreaID', 'TotalDuration', 'DurationUnit'],
+  },
+  {
+    clave: 'fiori', entidad: 'MtrgGenericUIActionUsage', campo: 'Timestamp',
+    campos: ['UserID', 'PlanningAreaID', 'FioriProjectID', 'FioriProjectTitle'],
+  },
+  {
+    clave: 'dashboards', entidad: 'MtrgDashboard', campo: 'Timestamp',
+    campos: ['UserID', 'PlanningAreaID'],
+  },
+  {
+    clave: 'stories', entidad: 'MtrgMngAnalyticStory', campo: 'Timestamp',
+    campos: ['UserID', 'PlanningAreaID', 'StoryName', 'StoryID'],
+  },
+  {
+    clave: 'alerts', entidad: 'MtrgActyAlertMonitor', campo: 'Timestamp',
+    campos: ['UserID', 'PlanningAreaID', 'Timestamp'],
+  },
+  {
+    clave: 'users', entidad: 'MtrgActyBusinessUser',
+    campos: ['UserID', 'FullName', 'FirstName', 'LastName'],
+  },
+  {
+    clave: 'components', entidad: 'MtrgComponent',
+    campos: ['MeteringComponent', 'MeteringComponentText'],
+  },
+  {
+    clave: 'chgKeyFig', entidad: 'MtrgActyExcelAddInChgKeyFig', campo: 'Timestamp',
+    campos: ['UserID', 'PlanningAreaID', 'KeyFigureID', 'KeyFigureCount'],
+  },
 ])
 
-/** Escapa un literal de texto de OData: la comilla simple se duplica. */
-const literal = (valor) => String(valor ?? '').replace(/'/g, "''")
+/** Los campos de fecha: de ellos la pantalla solo usa el día (ver `metering-rows.js`). */
+const CAMPOS_DE_FECHA = ['Timestamp', 'TimestampStart']
+
+/**
+ * De un `$metadata`, cada conjunto con sus campos clave y todos sus campos.
+ *
+ * Se lee con expresiones sobre el texto, como el resto de los `$metadata` de la aplicación
+ * (`core/transport/metadata.js`). El conjunto dice de qué tipo es; el tipo, cuál es su clave.
+ */
+export function entidadesDelServicio(xml) {
+  const texto = String(xml ?? '')
+
+  const tipos = {}
+  for (const bloque of texto.matchAll(/<EntityType\b[^>]*>[\s\S]*?<\/EntityType>/g)) {
+    const nombre = bloque[0].match(/\bName="([^"]*)"/)?.[1]
+    if (!nombre) continue
+    const clave = bloque[0].match(/<Key>[\s\S]*?<\/Key>/)?.[0] ?? ''
+    tipos[nombre] = {
+      claves: [...clave.matchAll(/<PropertyRef\b[^>]*?\bName="([^"]*)"/g)].map((m) => m[1]),
+      // El límite de palabra en `<Property\b` es lo que deja fuera `<PropertyRef>` y
+      // `<NavigationProperty>`.
+      campos: [...bloque[0].matchAll(/<Property\b[^>]*?\bName="([^"]*)"/g)].map((m) => m[1]),
+    }
+  }
+
+  const conjuntos = {}
+  for (const etiqueta of texto.matchAll(/<EntitySet\b[^>]*>/g)) {
+    const nombre = etiqueta[0].match(/\bName="([^"]*)"/)?.[1]
+    const tipo = etiqueta[0].match(/\bEntityType="([^"]*)"/)?.[1]?.split('.').pop()
+    if (nombre && tipo && tipos[tipo]) conjuntos[nombre] = tipos[tipo]
+  }
+  return conjuntos
+}
+
+/** Los conjuntos del servicio de telemetría, con su clave y sus campos. */
+export async function readMeteringModel({ baseUrl, credentials }) {
+  const { text } = await sapFetch({
+    url: `${meteringRoot(baseUrl)}/$metadata`,
+    credentials,
+    kind: 'ibp',
+    expect: 'xml',
+  })
+  return entidadesDelServicio(text)
+}
+
+/**
+ * El `$orderby` con el que se pagina un conjunto: el orden que se quiera y, detrás, su clave.
+ *
+ * La clave va SIEMPRE, también cuando hay otro orden delante: `TotalDuration` se repite y no desempata.
+ * Sin clave no hay orden estable, y paginar sin él da páginas que se solapan y huecos; es una de las
+ * reglas de SAP del proyecto, así que aquí se niega en vez de seguir.
+ */
+export function ordenEstable(claves, previo = []) {
+  if (!Array.isArray(claves) || claves.length === 0) {
+    throw new Error('El conjunto no declara clave: sin un orden estable no se puede paginar.')
+  }
+  const yaOrdenados = new Set(previo.map((uno) => uno.split(' ')[0]))
+  return [...previo, ...claves.filter((clave) => !yaOrdenados.has(clave))].join(',')
+}
 
 /**
  * Todas las filas de un conjunto en el rango, paginando hasta el tope.
  *
- * El `$orderby` es obligatorio para paginar: sin un orden estable, dos páginas leídas de una tabla
- * que sigue creciendo se solapan y dejan huecos. Se ordena por la clave del conjunto —`ActivityID` o
- * `UserID`— y no por la fecha, porque la fecha se repite y no desempata.
+ * `claves` son la clave del conjunto, para el orden estable; `campos`, lo que se pide con `$select`
+ * (ya cruzado con lo que el servicio declara).
  */
 export async function readMeteringSet({
-  baseUrl, credentials, entidad, campo, desde, hasta, usuario, area,
-  sinContexto = false, maxFilas = METERING_MAX,
+  baseUrl, credentials, entidad, campo, desde, hasta, campos = [], claves, orden = [],
+  maxFilas = METERING_MAX,
 }) {
-  const condiciones = []
+  const partes = []
   if (campo && desde && hasta) {
-    condiciones.push(`${campo} ge ${toMeteringTimestamp(desde)} and ${campo} le ${toMeteringTimestamp(hasta)}`)
+    const filtro = `${campo} ge ${toMeteringTimestamp(desde)} and ${campo} le ${toMeteringTimestamp(hasta)}`
+    partes.push(`$filter=${encodeURIComponent(filtro)}`)
   }
-  // El servicio filtra por usuario y por área, así que se le pide a él: mirar a una persona baja de
-  // 15.623 filas a 4.397 en el tenant de pruebas. v8 se traía todo y filtraba en el navegador.
-  if (!sinContexto && usuario) condiciones.push(`UserID eq '${literal(usuario)}'`)
-  if (!sinContexto && area) condiciones.push(`PlanningAreaID eq '${literal(area)}'`)
-
-  const partes = condiciones.length > 0
-    ? [`$filter=${encodeURIComponent(condiciones.join(' and '))}`]
-    : []
+  partes.push(`$orderby=${encodeURIComponent(ordenEstable(claves, orden))}`)
+  if (campos.length > 0) partes.push(`$select=${campos.join(',')}`)
 
   const filas = []
   let total = null
@@ -111,7 +220,7 @@ export async function readMeteringSet({
 
     const { json } = await sapFetch({ url: `${meteringRoot(baseUrl)}/${entidad}?${consulta}`, credentials, kind: 'ibp' })
     const lote = json?.value ?? []
-    if (pagina === 0) total = Number(json['@odata.count'] ?? lote.length)
+    if (pagina === 0) total = Number(json?.['@odata.count'] ?? lote.length)
 
     filas.push(...lote)
     if (lote.length === 0 || filas.length >= (total ?? 0)) break
@@ -121,30 +230,42 @@ export async function readMeteringSet({
 }
 
 /**
- * Todos los conjuntos del rango, a la vez, opcionalmente acotados a un usuario o a un área.
+ * Los diez conjuntos del período, compactados para el navegador.
  *
- * En paralelo porque son independientes y el costo de cada petición a IBP es casi todo latencia: en
- * serie, la pantalla tardaría la suma y no el máximo. Un conjunto que falle no tumba la lectura —se
- * devuelve vacío y se anota el aviso—: que el tenant no tenga historias analíticas no es motivo para
- * dejar la pestaña en blanco.
+ * Como en v8, si uno falla falla la lectura entera: la pantalla cruza unos con otros —los activos
+ * contra los licenciados, las vistas de Excel contra las áreas— y con uno vacío daría cifras que
+ * parecen buenas y no lo son. El contexto (un usuario o un área) NO se aplica aquí: v8 lo aplicaba en
+ * el navegador sobre lo ya leído, y cambiarlo era instantáneo.
  */
-export async function readMetering({ baseUrl, credentials, desde, hasta, usuario, area, maxFilas = METERING_MAX }) {
+export async function readMetering({ baseUrl, credentials, desde, hasta, maxFilas = METERING_MAX }) {
+  const modelo = await readMeteringModel({ baseUrl, credentials })
+
   const leidos = await Promise.all(CONJUNTOS_DE_CONSUMO.map(async (uno) => {
+    const declarado = modelo[uno.entidad]
+    if (!declarado) throw new Error(`El servicio de telemetría no declara el conjunto ${uno.entidad}.`)
+
+    const campos = uno.campos.filter((nombre) => declarado.campos.includes(nombre))
     try {
-      const salida = await readMeteringSet({ baseUrl, credentials, ...uno, desde, hasta, usuario, area, maxFilas })
-      return { ...uno, ...salida }
+      const { filas, total, truncado } = await readMeteringSet({
+        baseUrl, credentials, ...uno, campos, claves: declarado.claves, desde, hasta, maxFilas,
+      })
+      return { ...uno, filas: compactRows(filas, campos, { soloElDia: CAMPOS_DE_FECHA }), leidas: filas.length, total, truncado }
     } catch (error) {
-      return { ...uno, filas: [], total: 0, truncado: false, fallo: error.detail || error.message }
+      // Se dice qué conjunto falló: cada uno puede tener su propio problema de permisos.
+      error.message = `${uno.entidad}: ${error.message}`
+      throw error
     }
   }))
 
-  const datos = Object.fromEntries(leidos.map((uno) => [uno.clave, uno.filas]))
-  const avisos = [
-    ...leidos.filter((uno) => uno.truncado)
-      .map((uno) => `De ${uno.entidad} se leyeron ${uno.filas.length} de ${uno.total} filas: el resumen es de esa parte.`),
-    ...leidos.filter((uno) => uno.fallo)
-      .map((uno) => `No se pudo leer ${uno.entidad}: ${uno.fallo}`),
-  ]
+  const salida = {
+    conjuntos: Object.fromEntries(leidos.map((uno) => [uno.clave, uno.filas])),
+    avisos: leidos.filter((uno) => uno.truncado)
+      .map((uno) => `De ${uno.entidad} se leyeron ${uno.leidas.toLocaleString('es')} de ${uno.total.toLocaleString('es')} filas: las cifras son de esa parte.`),
+  }
 
-  return { datos, avisos, totales: Object.fromEntries(leidos.map((uno) => [uno.clave, uno.total])) }
+  const peso = Buffer.byteLength(JSON.stringify(salida))
+  if (peso > LIMITE_DE_RESPUESTA) {
+    throw new Error(`El período elegido trae demasiada actividad para mostrarla de una vez (${(peso / 1e6).toFixed(1)} MB). Elige un período más corto.`)
+  }
+  return salida
 }
