@@ -369,6 +369,20 @@ a { color: var(--cyan); }
 .module-page { display: flex; flex-direction: column; gap: 14px; height: 100%; min-height: 0; }
 .module-head { align-items: flex-end; display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; }
 
+/* La barra de carga de v8 (`ui/ProgressBar.jsx`) y el giro de su «Actualizando…», tal cual. */
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes progress-slide {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(500%); }
+}
+.progress-bar-shimmer {
+  animation: progress-slide 1.3s ease-in-out infinite;
+  background: linear-gradient(90deg, transparent, var(--accent), var(--accent2), var(--accent), transparent);
+  border-radius: 0 2px 2px 0;
+  height: 100%;
+  width: 20%;
+}
+
 /* IBP Tools va de lado a lado, como la vista de sistema de v8: la tira de conexiones, la cabecera
    de la conexión y la barra de pestañas tocan los bordes y no hay aire entre ellas. Por eso deshace
    el relleno de `.content`. Cada pantalla de dentro lleva su propio relleno, como en v8. */

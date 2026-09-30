@@ -8,7 +8,7 @@
 // El acuerdo es `SAP_COM_0326`, que es el de los Application Jobs. Los datos maestros y de
 // planificación van por otro (`SAP_COM_0720`) y con su propio usuario.
 
-import { requireModule } from '../../core/auth/guards.js'
+import { requireAnyModule } from '../../core/auth/guards.js'
 import { getConnectionTarget, getCredentials } from '../../core/connections/index.js'
 import { explicarFallo } from '../../core/ibp/explicar-fallo.js'
 import { readJobTemplates, readJobsWithSteps, readTaskIndex } from '../../core/ibp/index.js'
@@ -20,7 +20,9 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Método no permitido.' })
   }
 
-  const session = await requireModule(req, res, 'cids')
+  // Las plantillas las lista «Job Templates» (IBP Tools) y las usa el explorador de CI-DS: basta
+  // con tener contratado uno de los dos.
+  const session = await requireAnyModule(req, res, ['jobs', 'cids'])
   if (!session) return
 
   const connectionId = req.method === 'GET' ? req.query?.connectionId : req.body?.connectionId

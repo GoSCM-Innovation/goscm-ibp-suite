@@ -6,6 +6,7 @@ import {
   hasModule,
   requireAdmin,
   requireClientAccess,
+  requireAnyModule,
   requireModule,
   requirePlatformAdmin,
   requireSession,
@@ -187,6 +188,22 @@ describe('requireModule', () => {
     await requireModule(conCookie('s-1'), res, 'jobs')
     expect(res.code).toBe(401)
     expect(queryScoped).not.toHaveBeenCalled()
+  })
+})
+
+describe('requireAnyModule', () => {
+  it('deja pasar con cualquiera de los módulos', async () => {
+    queryScoped.mockResolvedValueOnce([]).mockResolvedValueOnce([{ '?column?': 1 }])
+    const res = fakeRes()
+    await expect(requireAnyModule(conCookie('s-1'), res, ['cids', 'jobs'])).resolves.toEqual(SESION)
+    expect(res.code).toBeNull()
+  })
+
+  it('sin ninguno responde 403', async () => {
+    queryScoped.mockResolvedValue([])
+    const res = fakeRes()
+    await expect(requireAnyModule(conCookie('s-1'), res, ['cids', 'jobs'])).resolves.toBeNull()
+    expect(res.code).toBe(403)
   })
 })
 

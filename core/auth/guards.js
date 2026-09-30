@@ -112,6 +112,23 @@ export async function hasModule(clientId, module) {
   return rows.length > 0
 }
 
+/**
+ * Como `requireModule`, pero basta con UNO de los módulos.
+ *
+ * Existe para lo que dos módulos leen igual: las plantillas de trabajo de IBP las lista la pestaña
+ * «Job Templates» de IBP Tools y las usa el explorador de integraciones de CI-DS para enriquecer.
+ * Pedir solo uno de los dos dejaba a quien contrató el otro con un 403 en una pantalla suya.
+ */
+export async function requireAnyModule(req, res, modules) {
+  const session = await requireSession(req, res)
+  if (!session) return null
+  for (const module of modules) {
+    if (await hasModule(session.clientId, module)) return session
+  }
+  res.status(403).json({ error: 'Este módulo no está contratado.', module: modules.join(' | ') })
+  return null
+}
+
 export async function requireModule(req, res, module) {
   const session = await requireSession(req, res)
   if (!session) return null

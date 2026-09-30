@@ -24,6 +24,7 @@ export {
   getSession,
   hasModule,
   requireAdmin,
+  requireAnyModule,
   requireClientAccess,
   requireModule,
   requirePlatformAdmin,
