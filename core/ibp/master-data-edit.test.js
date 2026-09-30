@@ -134,8 +134,24 @@ describe('filasParaModificar', () => {
     expect(filas[0]).toMatchObject({ PRDID: 'P1', BRAND: 'NUEVA', PRDDESCR: 'nuevo' })
   })
 
-  it('no manda lo que no se cambió', () => {
-    expect(filasParaModificar(edits, ['PRDID'])[1]).toEqual({ PRDID: 'P2', BRAND: 'CAMBIADA' })
+  // SAP toma los atributos del envío de la PRIMERA fila: a una fila que no trae uno de ellos se lo
+  // deja vacío. Tocar la marca de P2 y la descripción de P1 borraba la descripción de P2.
+  it('todas las filas llevan los mismos campos, con el valor original donde no se tocó', () => {
+    const lote = {
+      P1: { fila: { PRDID: 'P1', BRAND: 'ACME', PRDDESCR: 'viejo' }, cambios: { PRDDESCR: 'nuevo' } },
+      P2: { fila: { PRDID: 'P2', BRAND: 'OTRA', PRDDESCR: 'se queda' }, cambios: { BRAND: 'CAMBIADA' } },
+    }
+    const filas = filasParaModificar(lote, ['PRDID'])
+    expect(filas).toEqual([
+      { PRDID: 'P1', PRDDESCR: 'nuevo', BRAND: 'ACME' },
+      { PRDID: 'P2', PRDDESCR: 'se queda', BRAND: 'CAMBIADA' },
+    ])
+    expect(Object.keys(filas[0]).sort()).toEqual(Object.keys(filas[1]).sort())
+  })
+
+  it('no manda campos que nadie tocó en el lote', () => {
+    const lote = { P1: { fila: { PRDID: 'P1', BRAND: 'A', PRDDESCR: 'x' }, cambios: { BRAND: 'B' } } }
+    expect(filasParaModificar(lote, ['PRDID'])).toEqual([{ PRDID: 'P1', BRAND: 'B' }])
   })
 
   // SAP rechazaría el envío entero por una celda.

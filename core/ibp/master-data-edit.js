@@ -88,21 +88,34 @@ export function resumirCambios(edits) {
 }
 
 /**
- * Las filas listas para mandar: la clave de negocio más lo cambiado.
+ * Las filas listas para mandar: la clave de negocio y los MISMOS campos en todas.
  *
  * La clave va SIEMPRE, aunque no se haya tocado: es lo que le dice a SAP qué registro actualizar. Sin
  * ella, un cambio de un campo se leería como un registro nuevo con casi todo vacío.
+ *
+ * Y todas las filas llevan los mismos campos —la unión de todo lo cambiado en el lote—, con el valor
+ * original donde esa fila no se tocó. No es cosmético: SAP lee qué atributos trae el envío de la
+ * PRIMERA fila (`RequestedAttributes`), y una fila a la que le falta uno de ellos lo recibe VACÍO.
+ * Cambiar la marca de un producto y la descripción de otro, sin esto, borraba la descripción del
+ * primero. v8 lo hacía así y lo decía: «untouched fields keep their original value, so they upsert
+ * as no-ops rather than getting blanked».
  */
 export function filasParaModificar(edits, claves = []) {
-  return Object.values(edits ?? {}).map(({ fila, cambios }) => {
+  const entradas = Object.values(edits ?? {})
+
+  // Un campo de solo lectura no se manda ni aunque alguien lo haya tocado: SAP rechazaría el envío
+  // entero por una celda.
+  const campos = [...new Set(entradas.flatMap(({ cambios }) => Object.keys(cambios ?? {})))]
+    .filter((campo) => !CAMPOS_DE_SOLO_LECTURA.includes(campo) && !claves.includes(campo))
+
+  return entradas.map(({ fila, cambios }) => {
     const salida = {}
     for (const clave of claves) {
       if (fila?.[clave] !== undefined) salida[clave] = fila[clave]
     }
-    for (const [campo, valor] of Object.entries(cambios ?? {})) {
-      // Un campo de solo lectura no se manda ni aunque alguien lo haya tocado: SAP rechazaría el
-      // envío entero por una celda.
-      if (!CAMPOS_DE_SOLO_LECTURA.includes(campo)) salida[campo] = valor
+    for (const campo of campos) {
+      const valor = campo in (cambios ?? {}) ? cambios[campo] : fila?.[campo]
+      if (valor !== undefined) salida[campo] = valor
     }
     return salida
   })

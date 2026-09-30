@@ -41,3 +41,16 @@ export function etiquetaDeConexion(conexion) {
 
   return `${nombre} — ${host}`
 }
+
+/**
+ * El nombre como lo escribía v8: con el ambiente entre paréntesis al final, «CLARO CO (Producción)».
+ *
+ * v8 pedía el nombre y el ambiente por separado y los juntaba al guardar. Aquí el ambiente es la
+ * marca de productivo de la conexión, así que se junta al mostrar. Si el nombre ya trae su
+ * paréntesis, se respeta: no se adivina qué quiso decir quien lo escribió.
+ */
+export function nombreConAmbiente(conexion) {
+  const nombre = String(conexion?.name ?? '').trim()
+  if (/\([^)]*\)\s*$/.test(nombre)) return nombre
+  return `${nombre} (${conexion?.isProduction ? 'Producción' : 'Calidad'})`
+}

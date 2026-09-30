@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { etiquetaDeConexion, hostDe } from './nombre-de-conexion.js'
+import { etiquetaDeConexion, hostDe, nombreConAmbiente } from './nombre-de-conexion.js'
 
 describe('el host de una dirección', () => {
   it('saca el host y descarta el resto', () => {
@@ -41,5 +41,16 @@ describe('la etiqueta de una conexión', () => {
     expect(etiquetaDeConexion({ name: 'Solo nombre' })).toBe('Solo nombre')
     expect(etiquetaDeConexion({ baseUrl: 'https://x.scmibp.ondemand.com' })).toBe('x.scmibp.ondemand.com')
     expect(etiquetaDeConexion(null)).toBe('')
+  })
+})
+
+describe('nombreConAmbiente', () => {
+  it('junta el ambiente como lo guardaba v8', () => {
+    expect(nombreConAmbiente({ name: 'CLARO CO', isProduction: true })).toBe('CLARO CO (Producción)')
+    expect(nombreConAmbiente({ name: 'Agrosuper', isProduction: false })).toBe('Agrosuper (Calidad)')
+  })
+
+  it('un nombre que ya trae su paréntesis se respeta', () => {
+    expect(nombreConAmbiente({ name: 'Consenso (Calidad)', isProduction: true })).toBe('Consenso (Calidad)')
   })
 })

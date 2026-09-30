@@ -5,7 +5,7 @@ vi.mock('../transport/sap-fetch.js', () => ({ sapFetch: vi.fn() }))
 const { sapFetch } = await import('../transport/sap-fetch.js')
 const {
   countEntity, masterDataRoot, readDistinctValues, readEntityPage,
-  readEntityPageWithTotal, readImportableMdts, readSchema, readVsmt,
+  readEntityPageWithTotal, readImportableMdts, readMasterMetadata, readSchema, readVsmt,
 } = await import('./master-data.js')
 
 const BASE = 'https://tenant-api.scmibp1.ondemand.com'
@@ -164,5 +164,36 @@ describe('readEntityPageWithTotal', () => {
   it('no cambia lo que devolvía readEntityPage', async () => {
     sapFetch.mockResolvedValueOnce({ json: { d: { results: [{ PRDID: '1' }], __count: '9' } } })
     await expect(readEntityPage({ ...contexto, entidad: 'X' })).resolves.toEqual([{ PRDID: '1' }])
+  })
+})
+
+describe('readMasterMetadata', () => {
+  const XML = [
+    '<EntityType Name="AS1PRODUCTType"><Key><PropertyRef Name="PRDID"/><PropertyRef Name="PlanningAreaID"/></Key>',
+    '<Property Name="PRDID" sap:label="Producto"/><Property Name="PlanningAreaID"/></EntityType>',
+    '<EntityType Name="AS1UOMType"><Key><PropertyRef Name="UOMID"/></Key>',
+    '<Property Name="UOMID" sap:label="Unidad de medida"/><Property Name="UOMDESCR" sap:label="Descripci&#243;n"/></EntityType>',
+    '<EntitySet Name="AS1PRODUCT" EntityType="IBP.AS1PRODUCTType"/>',
+    '<EntitySet Name="AS1UOM" EntityType="IBP.AS1UOMType"/>',
+    '<EntitySet Name="AS1UOMTrans" EntityType="IBP.AS1UOMType"/>',
+  ].join('')
+
+  it('lee el $metadata UNA vez y saca etiquetas y tablas simples', async () => {
+    sapFetch.mockResolvedValueOnce({ text: XML })
+    const leido = await readMasterMetadata(contexto)
+
+    expect(sapFetch).toHaveBeenCalledTimes(1)
+    expect(urlDe()).toBe(`${BASE}/sap/opu/odata/IBP/MASTER_DATA_API_SRV/$metadata`)
+    expect(sapFetch.mock.calls[0][0].expect).toBe('xml')
+    expect(leido.etiquetas).toMatchObject({ PRDID: 'Producto', UOMDESCR: 'Descripción' })
+  })
+
+  // Las que llevan PlanningAreaID en la clave ya vienen en el catálogo de SAP; las de escritura
+  // (Trans) no son tablas que se miren.
+  it('solo son simples las que no dependen del área', async () => {
+    sapFetch.mockResolvedValueOnce({ text: XML })
+    const { simples } = await readMasterMetadata(contexto)
+    expect(Object.keys(simples)).toEqual(['AS1UOM'])
+    expect(simples.AS1UOM).toEqual({ keys: ['UOMID'], fields: ['UOMID', 'UOMDESCR'] })
   })
 })

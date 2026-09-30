@@ -66,7 +66,7 @@ export default async function handler(req, res) {
 
     if (aEscribir.length === 0) return res.status(400).json({ error: 'No hay nada que escribir.' })
     if (aEscribir.length > MAX_FILAS) {
-      return res.status(400).json({ error: `De a ${MAX_FILAS} filas como mucho.` })
+      return res.status(400).json({ error: `Como mucho ${MAX_FILAS} filas por vez.` })
     }
 
     const salida = await escribirDatoMaestro({

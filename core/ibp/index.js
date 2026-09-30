@@ -244,6 +244,7 @@ export {
   readEntityPage,
   readEntityPageWithTotal,
   readImportableMdts,
+  readMasterMetadata,
   readSchema,
   readVsmt,
 } from './master-data.js'

@@ -1,6 +1,7 @@
 // El dato maestro de un tenant, de solo lectura.
 //
 // GET ?connectionId=…&accion=catalogo                       — áreas, versiones, tipos e importables.
+// GET ?connectionId=…&accion=metadatos                      — etiquetas de campo y tablas simples.
 // GET ?connectionId=…&accion=esquema&entidad=…              — columnas, claves y cuántas filas hay.
 // GET ?connectionId=…&accion=filas&entidad=…&skip=…&top=…   — una página.
 // GET ?connectionId=…&accion=valores&entidad=…&campo=…      — los valores distintos de un campo.
@@ -21,6 +22,7 @@ import {
   readDistinctValues,
   readEntityPageWithTotal,
   readImportableMdts,
+  readMasterMetadata,
   readSchema,
   readVsmt,
 } from '../../core/ibp/index.js'
@@ -91,6 +93,12 @@ export default async function handler(req, res) {
           readImportableMdts(ctx).catch(() => []),
         ])
         return res.status(200).json({ catalogo: catalogoDesdeVsmt(vsmt), importables })
+      }
+
+      case 'metadatos': {
+        // Las etiquetas («ID — descripción») y las tablas de dato maestro SIMPLE, que SAP no lista
+        // en su catálogo de tipos. Las dos salen del mismo `$metadata`, que se lee una vez.
+        return res.status(200).json(await readMasterMetadata(ctx))
       }
 
       case 'esquema': {

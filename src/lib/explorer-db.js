@@ -123,7 +123,7 @@ export async function guardar(tabla, registros) {
 
   for (let desde = 0; desde < filas.length; desde += POR_LOTE) {
     const lote = filas.slice(desde, desde + POR_LOTE)
-    // De a un lote y esperando: es justamente lo que acota la memoria. Lanzarlos todos a la vez
+    // Un lote por vez y esperando: es justamente lo que acota la memoria. Lanzarlos todos a la vez
     // dejaría de nuevo el conjunto entero pendiente, que es lo que se quería evitar.
     await new Promise((resolver, rechazar) => {
       const tx = base.transaction(tabla, 'readwrite')
@@ -240,7 +240,7 @@ export async function anotarOrigen(origen) {
 
 /** Vacía TODAS las tablas de datos y de vista, y olvida la marca de origen. */
 export async function vaciarTodo() {
-  // De a una: vaciar treinta tablas en una sola transacción la deja tomada un rato largo, y
+  // Una por una: vaciar treinta tablas en una sola transacción la deja tomada un rato largo, y
   // cualquier lectura que llegue mientras tanto espera.
   for (const tabla of todasLasTablas()) {
     await vaciar(tabla.nombre)

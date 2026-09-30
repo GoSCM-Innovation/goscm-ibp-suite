@@ -1,21 +1,25 @@
-// El módulo IBP Tools: las pestañas de v8, con sus nombres, su orden y su condición.
+// El módulo IBP Tools: la vista de un sistema de v8, con sus pestañas, sus nombres, su orden y su
+// condición.
 //
-// Portado de `System/SystemView.jsx` de v8, sin lo que la Fase 1 ya reemplazó: el diálogo para
-// identificarse contra SAP y la pantalla de conexiones.
+// Portado de `System/SystemView.jsx` y de la navegación de `App.jsx` de v8, sin lo que la Fase 1 ya
+// reemplazó: el diálogo para identificarse contra SAP y la pantalla de conexiones.
 //
-// Tres cosas de v8 que estaban perdidas y vuelven:
+// Lo que se conserva de v8, tal cual:
 //
-//   - LOS NOMBRES Y EL ORDEN. «Job Templates», «Job Monitor», «Orquestador», «Resource Stats»,
-//     «Telemetría», «Ver Dato Maestro», «Ver Dato Transaccional» — tal cual, y en su orden. Se habían
-//     traducido y reordenado; son los nombres que el cliente lleva años viendo.
+//   - LA CABECERA de la conexión, de lado a lado, y debajo LA BARRA DE PESTAÑAS. Nada entre las dos.
+//   - LOS NOMBRES Y EL ORDEN de las pestañas: «Resumen», «Job Templates», «Job Monitor»,
+//     «Orquestador», «Resource Stats», «Telemetría», «Migración», «Ver Dato Maestro», «Ver Dato
+//     Transaccional».
 //   - LA CONDICIÓN. Una pestaña solo existe si la conexión tiene su acuerdo de comunicación. Sin
-//     `SAP_COM_0068` no hay «Resource Stats». Una pestaña que al abrirse falla con un 403 es peor que
-//     una pestaña ausente, porque parece un fallo de la herramienta.
-//   - LA MIGRACIÓN ES UNA SOLA PESTAÑA con dos modos, no dos pestañas. Ver `MigrationTabs.jsx`.
+//     ninguno, el aviso de v8 en lugar de pestañas.
+//   - LOS VISORES SE QUEDAN MONTADOS una vez abiertos, así que ir a otra pestaña y volver conserva
+//     sus pestañas, la página cargada y los cambios sin guardar.
+//   - CADA CONEXIÓN EMPIEZA DE CERO. v8 montaba la vista del sistema con la conexión como clave.
 //
-// Y en vez del desplegable de un solo tenant, la TIRA DE PESTAÑAS de conexiones de v9: varios tenants
-// abiertos a la vez. En v8 los tenants colgaban del menú lateral, que aquí lista los tres módulos de
-// la suite; la tira es el sitio equivalente y es de donde v9 la sacaba.
+// Lo que cambia, y por qué: en v8 los tenants colgaban del menú lateral, junto a «Conexiones» y
+// «📊 Resumen». Aquí el menú lista los módulos de la suite, así que los tenants van en la TIRA de
+// conexiones de v9 y el «📊 Resumen» global va como la primera pestaña fija de esa tira: sigue
+// estando al lado de las conexiones y fuera de cualquiera de ellas, como en v8.
 
 import { lazy, Suspense, useEffect, useState } from 'react'
 
@@ -24,6 +28,7 @@ import { puedeSalir } from '../../lib/guarda-de-salida.js'
 import { listIbpConnections } from '../../lib/ibp.js'
 import { lectorDeIbp } from '../../lib/run-logs.js'
 import { abrir, abrirLasGuardadas, cerrar, guardarAbiertas } from '../../lib/pestanas-de-conexion.js'
+import { useIsMobile } from '../../lib/useIsMobile.js'
 import ConnectionTabs from '../ui/ConnectionTabs.jsx'
 import CabeceraDeConexion from '../ui/CabeceraDeConexion.jsx'
 
@@ -39,54 +44,134 @@ const MigrationTabs = lazy(() => import('./MigrationTabs.jsx'))
 const VisorConPestanas = lazy(() => import('./VisorConPestanas.jsx'))
 
 // La pantalla de orquestaciones es la MISMA que la de CI-DS: encadenar tareas y encadenar trabajos
-// son la misma cosa por dentro, y lo único que cambia es de dónde salen los pasos. Por eso se le
-// pasa la paleta y no se escribe otra pantalla.
+// son la misma cosa por dentro, y lo único que cambia es de dónde salen los pasos.
 const Orchestrations = lazy(() => import('../cids/orchestrations/Orchestrations.jsx'))
 const JobPalette = lazy(() => import('./JobPalette.jsx'))
 
-/**
- * Las pestañas de v8, en su orden y con el acuerdo que cada una necesita.
- *
- * `acuerdo` es el `SAP_COM_xxxx` sin el cual la pestaña no puede funcionar; `sinTenant` marca las que
- * no miran un tenant concreto.
- */
-const HERRAMIENTAS = [
-  // El tablero global mira TODOS los tenants. En v8 era una entrada del menú lateral («Resumen
-  // Global»); aquí el menú es de módulos, así que va como primera pestaña. Con un solo tenant
-  // repetiría el resumen de al lado, y por eso solo aparece cuando hay varios.
-  { id: 'global', label: 'Resumen Global', soloConVarios: true, sinTenant: true },
+/** Las pestañas de v8, en su orden y con el acuerdo que cada una necesita. */
+const APPS = [
   { id: 'resumen', label: 'Resumen', acuerdo: 'SAP_COM_0326' },
-  { id: 'plantillas', label: 'Job Templates', acuerdo: 'SAP_COM_0326' },
+  { id: 'jobs', label: 'Job Templates', acuerdo: 'SAP_COM_0326' },
   { id: 'monitor', label: 'Job Monitor', acuerdo: 'SAP_COM_0326' },
-  { id: 'orquestaciones', label: 'Orquestador', acuerdo: 'SAP_COM_0326' },
-  { id: 'recursos', label: 'Resource Stats', acuerdo: 'SAP_COM_0068' },
-  { id: 'consumo', label: 'Telemetría', acuerdo: 'SAP_COM_0924' },
-  // La migración mira DOS tenants a la vez: el de la pestaña y el que se elija como origen.
-  { id: 'migracion', label: 'Migración', acuerdo: 'SAP_COM_0720' },
-  { id: 'datos', label: 'Ver Dato Maestro', acuerdo: 'SAP_COM_0720' },
-  { id: 'cifras', label: 'Ver Dato Transaccional', acuerdo: 'SAP_COM_0720' },
+  { id: 'orquestador', label: 'Orquestador', acuerdo: 'SAP_COM_0326' },
+  { id: 'stats', label: 'Resource Stats', acuerdo: 'SAP_COM_0068' },
+  { id: 'metering', label: 'Telemetría', acuerdo: 'SAP_COM_0924' },
+  { id: 'migration', label: 'Migración', acuerdo: 'SAP_COM_0720' },
+  { id: 'viewMaster', label: 'Ver Dato Maestro', acuerdo: 'SAP_COM_0720' },
+  { id: 'viewTrans', label: 'Ver Dato Transaccional', acuerdo: 'SAP_COM_0720' },
 ]
 
-/** Qué se explica debajo del nombre de cada pestaña. */
-const QUE_HACE = {
-  global: 'Todos los tenants de IBP a la vez.',
-  resumen: 'Cómo viene el tenant: trabajos del período, fallos y tendencia.',
-  plantillas: 'Los Application Jobs configurados en el tenant.',
-  monitor: 'Las ejecuciones de trabajos: seguirlas, cancelarlas y reiniciarlas.',
-  orquestaciones: 'Encadenar trabajos del tenant con sus dependencias.',
-  recursos: 'Cuánta CPU y memoria consume el tenant.',
-  consumo: 'Quién usa el tenant, con qué y cuánto.',
-  migracion: 'Copiar dato maestro o cifras clave de otro tenant a este.',
-  datos: 'El dato maestro del tenant: mirarlo y, si hace falta, corregirlo.',
-  cifras: 'Las cifras clave del tenant, de solo lectura.',
+const cargando = texto => (
+  <div style={{ padding: 48, textAlign: 'center', color: 'var(--text2)', fontSize: 13 }}>{texto}</div>
+)
+
+/** La vista de UNA conexión: su cabecera, sus pestañas y lo que hay en cada una. */
+function SystemView({ connection }) {
+  const isMobile = useIsMobile()
+  const acuerdos = new Set(connection.agreements ?? [])
+  const apps = APPS.filter(app => acuerdos.has(app.acuerdo))
+
+  const [activeApp, setActiveApp] = useState(apps[0]?.id || null)
+  // Los visores de datos se quedan montados una vez visitados: al volver conservan lo suyo.
+  const [visited, setVisited] = useState(() => (activeApp ? { [activeApp]: true } : {}))
+
+  // Salir de la migración corta la copia en marcha: se confirma antes. Ver `guarda-de-salida.js`.
+  function selectApp(id) {
+    if (id === activeApp) return
+    if (!puedeSalir()) return
+    setVisited(v => (v[id] ? v : { ...v, [id]: true }))
+    setActiveApp(id)
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+      <CabeceraDeConexion conexion={connection} />
+
+      {apps.length > 0 && (
+        <div className="tab-bar" style={{
+          display: 'flex', gap: 0, borderBottom: '1px solid var(--border)',
+          background: 'var(--bg2)', padding: isMobile ? '0 12px' : '0 24px', flexShrink: 0,
+        }}>
+          {apps.map(app => (
+            <button key={app.id} type="button" onClick={() => selectApp(app.id)} style={{
+              padding: isMobile ? '10px 14px' : '10px 20px',
+              fontSize: 12, background: 'none', border: 'none',
+              borderBottom: activeApp === app.id ? '2px solid var(--accent)' : '2px solid transparent',
+              color: activeApp === app.id ? 'var(--text)' : 'var(--text2)',
+              fontWeight: activeApp === app.id ? 600 : 400,
+              cursor: 'pointer', transition: 'all .15s', whiteSpace: 'nowrap', flexShrink: 0,
+            }}>{app.label}</button>
+          ))}
+        </div>
+      )}
+
+      <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+        {apps.length === 0 && (
+          <div style={{ padding: 48, textAlign: 'center', color: 'var(--text2)', fontSize: 13 }}>
+            Esta conexión no tiene acuerdos de comunicación configurados.<br />
+            Ve a Administración → Conexiones para agregar SAP_COM_0326 o SAP_COM_0068.
+          </div>
+        )}
+        <Suspense fallback={cargando('Cargando…')}>
+          {activeApp === 'resumen' && <Resumen connection={connection} conexionId={connection.id} />}
+          {activeApp === 'jobs' && <JobTemplates connection={connection} conexionId={connection.id} zona={readStoredTzMode()} />}
+          {activeApp === 'monitor' && <JobMonitor connection={connection} conexionId={connection.id} />}
+          {activeApp === 'orquestador' && (
+            // Un tenant de IBP no tiene dos repositorios como CI-DS: `production` va fijo en falso.
+            <Orchestrations
+              destino={{ connectionId: connection.id, production: false }}
+              Paleta={JobPalette}
+              leerRegistro={lectorDeIbp(connection.id)}
+            />
+          )}
+          {activeApp === 'stats' && <ResourceStats connection={connection} conexionId={connection.id} />}
+          {activeApp === 'metering' && <Metering connection={connection} conexionId={connection.id} />}
+          {activeApp === 'migration' && <MigrationTabs connection={connection} />}
+          {/* Los visores: cada uno lleva su propia tira de pestañas y se quedan montados una vez
+              visitados, así que sus pestañas y los datos cargados sobreviven a cambiar de pestaña. */}
+          {visited.viewMaster && (
+            <div style={{ display: activeApp === 'viewMaster' ? 'flex' : 'none', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+              <VisorConPestanas
+                connectionId={connection.id}
+                kind="master"
+                renderTab={(tab, p) => (
+                  <MasterDataViewer connectionId={connection.id} initial={tab.def} {...p} />
+                )}
+              />
+            </div>
+          )}
+          {visited.viewTrans && (
+            <div style={{ display: activeApp === 'viewTrans' ? 'flex' : 'none', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+              <VisorConPestanas
+                connectionId={connection.id}
+                kind="trans"
+                renderTab={(tab, p) => (
+                  <PlanningDataViewer
+                    connection={connection}
+                    connectionId={connection.id}
+                    initial={tab.def}
+                    {...p}
+                    conexionId={connection.id}
+                    inicial={tab.def}
+                    activa={p.active}
+                    onDefinicion={def => p.onMeta(def, { areaId: def?.area, versionId: def?.version, leafLabel: def?.tabla })}
+                  />
+                )}
+              />
+            </div>
+          )}
+        </Suspense>
+      </div>
+    </div>
+  )
 }
 
 export default function IbpTools() {
   const [conexiones, setConexiones] = useState(null)
   const [abiertas, setAbiertas] = useState([])
   const [elegida, setElegida] = useState('')
+  const [global, setGlobal] = useState(false)
   const [error, setError] = useState('')
-  const [herramienta, setHerramienta] = useState('resumen')
 
   useEffect(() => {
     let abandonado = false
@@ -114,6 +199,7 @@ export default function IbpTools() {
       return siguientes
     })
     setElegida(id)
+    setGlobal(false)
   }
 
   function cerrarPestana(id) {
@@ -122,6 +208,11 @@ export default function IbpTools() {
     guardarAbiertas('ibp', salida.abiertas)
     setAbiertas(salida.abiertas)
     setElegida(salida.activa)
+  }
+
+  function verResumenGlobal() {
+    if (global || !puedeSalir()) return
+    setGlobal(true)
   }
 
   if (conexiones === null) return <div className="page-hint">Cargando conexiones…</div>
@@ -137,137 +228,26 @@ export default function IbpTools() {
   }
 
   const conexion = conexiones.find((una) => una.id === elegida) ?? null
-  const acuerdos = new Set(conexion?.agreements ?? [])
-
-  // La condición de v8: una pestaña existe si su acuerdo está configurado. Cuando la conexión no
-  // declara ninguno —una alta a medias— se enseñan todas, que es mejor que dejar el módulo vacío.
-  const sinAcuerdosDeclarados = acuerdos.size === 0
-  const visibles = HERRAMIENTAS
-    .filter((una) => !una.soloConVarios || conexiones.length > 1)
-    .filter((una) => !una.acuerdo || sinAcuerdosDeclarados || acuerdos.has(una.acuerdo))
-
-  // La pestaña abierta puede haber dejado de existir al cambiar de tenant.
-  const activa = visibles.some((una) => una.id === herramienta) ? herramienta : visibles[0]?.id
-  const suya = HERRAMIENTAS.find((una) => una.id === activa)
 
   return (
-    <div className="module-page">
-      {/* ── La tira de pestañas de conexiones, como en v9 ─────────────────────────────────────── */}
+    <div className="module-page ibp-tools">
       <ConnectionTabs
         conexiones={conexiones}
         abiertas={abiertas}
         activa={elegida}
         onElegir={elegir}
         onCerrar={cerrarPestana}
+        inicio={{ icono: '📊', nombre: 'Resumen', activa: global, onElegir: verResumenGlobal }}
       />
 
-      {/* ── La cabecera de la conexión, como en v8 ───────────────────────────────────────────── */}
-      {conexion && !suya?.sinTenant && <CabeceraDeConexion conexion={conexion} />}
-
-      <div className="module-head">
-        <div>
-          <div className="page-title">{suya?.label ?? 'IBP Tools'}</div>
-          <div className="page-hint">{QUE_HACE[activa] ?? ''}</div>
-        </div>
-      </div>
-
-      {/* Cambiar de pestaña corta una copia en marcha, porque la cadena de segmentos la lleva esta
-          pantalla y no el servidor. Ver `guarda-de-salida.js`. */}
-      <div className="tabs">
-        {visibles.map((una) => (
-          <button
-            key={una.id}
-            type="button"
-            className={`tab${activa === una.id ? ' active' : ''}`}
-            onClick={() => { if (puedeSalir()) setHerramienta(una.id) }}
-            aria-pressed={activa === una.id}
-          >
-            {una.label}
-          </button>
-        ))}
-      </div>
-
-      {visibles.length === 0 && (
-        <div className="notice notice-info">
-          Esta conexión no tiene acuerdos de comunicación configurados. Pídele a quien administra la
-          cuenta que agregue al menos <b>SAP_COM_0326</b> o <b>SAP_COM_0720</b> en
-          Administración → Conexiones.
+      {global && (
+        <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+          <Suspense fallback={cargando('Cargando…')}>
+            <GlobalSummary connections={conexiones} />
+          </Suspense>
         </div>
       )}
-
-      {/* La clave fuerza a empezar de cero al cambiar de tenant: el rango, los filtros y la fila
-          elegida son del tenant que se estaba mirando. */}
-      {activa === 'global' && (
-        <Suspense fallback={<div className="page-hint">Cargando el tablero…</div>}>
-          <GlobalSummary />
-        </Suspense>
-      )}
-      {activa === 'resumen' && conexion && (
-        <Suspense fallback={<div className="page-hint">Cargando el tablero…</div>}>
-          <Resumen key={conexion.id} conexionId={conexion.id} />
-        </Suspense>
-      )}
-      {activa === 'plantillas' && conexion && (
-        <Suspense fallback={<div className="page-hint">Cargando las plantillas…</div>}>
-          <JobTemplates key={conexion.id} conexionId={conexion.id} zona={readStoredTzMode()} />
-        </Suspense>
-      )}
-      {activa === 'monitor' && conexion && (
-        <Suspense fallback={<div className="page-hint">Cargando el monitor…</div>}>
-          <JobMonitor key={conexion.id} conexionId={conexion.id} />
-        </Suspense>
-      )}
-      {activa === 'orquestaciones' && conexion && (
-        <Suspense fallback={<div className="page-hint">Cargando las orquestaciones…</div>}>
-          {/* Un tenant de IBP no tiene dos repositorios como CI-DS, así que `production` va fijo en
-              falso: es una sola cosa y no hay nada que elegir. */}
-          <Orchestrations
-            key={conexion.id}
-            destino={{ connectionId: conexion.id, production: false }}
-            Paleta={JobPalette}
-            leerRegistro={lectorDeIbp(conexion.id)}
-          />
-        </Suspense>
-      )}
-      {activa === 'recursos' && conexion && (
-        <Suspense fallback={<div className="page-hint">Cargando el consumo…</div>}>
-          <ResourceStats key={conexion.id} conexionId={conexion.id} />
-        </Suspense>
-      )}
-      {activa === 'consumo' && conexion && (
-        <Suspense fallback={<div className="page-hint">Cargando el consumo…</div>}>
-          <Metering key={conexion.id} conexionId={conexion.id} />
-        </Suspense>
-      )}
-      {activa === 'migracion' && (
-        <Suspense fallback={<div className="page-hint">Cargando la migración…</div>}>
-          <MigrationTabs />
-        </Suspense>
-      )}
-      {activa === 'datos' && conexion && (
-        <Suspense fallback={<div className="page-hint">Cargando el visor…</div>}>
-          {/* Varias tablas abiertas a la vez, como en v8. El nombre y la marca de productivo bajan a
-              la pantalla porque desde ahí se escribe: la confirmación tiene que decir en qué tenant
-              se va a escribir, no solo qué tabla. */}
-          <VisorConPestanas key={conexion.id} clase="master" conexionId={conexion.id}>
-            {(suyas) => (
-              <MasterDataViewer
-                {...suyas}
-                tenant={conexion.name}
-                productivo={Boolean(conexion.isProduction)}
-              />
-            )}
-          </VisorConPestanas>
-        </Suspense>
-      )}
-      {activa === 'cifras' && conexion && (
-        <Suspense fallback={<div className="page-hint">Cargando el visor…</div>}>
-          {/* También con pestañas: en v8 los dos visores las tenían. */}
-          <VisorConPestanas key={conexion.id} clase="trans" conexionId={conexion.id}>
-            {(suyas) => <PlanningDataViewer {...suyas} />}
-          </VisorConPestanas>
-        </Suspense>
-      )}
+      {!global && conexion && <SystemView key={conexion.id} connection={conexion} />}
     </div>
   )
 }

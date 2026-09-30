@@ -3,92 +3,88 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import {
-  claveDePestanas,
-  guardarPestanas,
-  leerPestanas,
-  nombreDePestana,
-  nuevaPestana,
-  TOPE_DE_PESTANAS,
+  areaColor, loadTabs, saveTabs, sortTabs, tabLabel, tabLabelParts, tabsStorageKey, TAB_LIMIT,
 } from './pestanas-de-visor.js'
 
 beforeEach(() => { localStorage.clear() })
 
-describe('nombreDePestana', () => {
-  it('junta área, versión y tabla', () => {
-    expect(nombreDePestana({ area: 'SAP4', version: 'ESC1', tabla: 'GIDPRODUCT' }))
-      .toBe('SAP4 · ESC1 · GIDPRODUCT')
+describe('tabLabelParts', () => {
+  it('arriba la tabla y abajo la versión', () => {
+    expect(tabLabelParts({ areaId: 'SAP4', versionId: 'ESC1', leafLabel: 'GIDPRODUCT' }))
+      .toEqual({ primary: 'GIDPRODUCT', secondary: 'ESC1' })
   })
 
-  it('sin versión —la base— no deja el separador suelto', () => {
-    expect(nombreDePestana({ area: 'SAP4', version: '', tabla: 'GIDPRODUCT' }))
-      .toBe('SAP4 · GIDPRODUCT')
+  it('la versión base se nombra «base», como en v8', () => {
+    expect(tabLabelParts({ areaId: 'SAP4', versionId: '', leafLabel: 'GIDPRODUCT' }).secondary).toBe('base')
   })
 
-  it('una pestaña sin tabla todavía no tiene nombre', () => {
-    // Quien la pinta pone «Pestaña n»: una pestaña vacía con el nombre del área engañaría.
-    expect(nombreDePestana({ area: 'SAP4', version: 'ESC1' })).toBe('')
-    expect(nombreDePestana(null)).toBe('')
-  })
-})
-
-describe('nuevaPestana', () => {
-  it('nace vacía y con identificador propio', () => {
-    const una = nuevaPestana()
-    expect(una.def).toBeNull()
-    expect(una.id).toBeTruthy()
-    expect(nuevaPestana().id).not.toBe(una.id)
+  it('sin tabla elegida enseña el área', () => {
+    expect(tabLabelParts({ areaId: 'SAP4', versionId: '' }).primary).toBe('SAP4')
   })
 
-  it('duplicar COPIA la definición, no la comparte', () => {
-    // Compartida, cambiar de tabla en una cambiaría el nombre de la otra.
-    const def = { area: 'SAP4', version: '', tabla: 'T' }
-    const copia = nuevaPestana(def)
-    def.tabla = 'OTRA'
-    expect(copia.def.tabla).toBe('T')
+  it('una pestaña vacía es «Nueva pestaña», sin segunda línea', () => {
+    expect(tabLabelParts(null)).toEqual({ primary: 'Nueva pestaña', secondary: '' })
   })
 })
 
-describe('leerPestanas y guardarPestanas', () => {
-  it('devuelve lo guardado', () => {
-    guardarPestanas('master', 'c1', [{ id: 'a', def: { area: 'S', version: '', tabla: 'T' } }])
-    expect(leerPestanas('master', 'c1')).toEqual([{ id: 'a', def: { area: 'S', version: '', tabla: 'T' } }])
+describe('tabLabel', () => {
+  it('el texto completo lleva también el área', () => {
+    expect(tabLabel({ areaId: 'SAP4', versionId: '', leafLabel: 'T' })).toBe('SAP4 · base · T')
+  })
+})
+
+describe('sortTabs', () => {
+  it('ordena por área, versión y tabla', () => {
+    const tabs = [
+      { id: 'c', meta: { areaId: 'B', versionId: '', leafLabel: 'X' } },
+      { id: 'a', meta: { areaId: 'A', versionId: 'V2', leafLabel: 'X' } },
+      { id: 'b', meta: { areaId: 'A', versionId: '', leafLabel: 'Z' } },
+    ]
+    expect(sortTabs(tabs).map((t) => t.id)).toEqual(['b', 'a', 'c'])
   })
 
-  it('sin nada guardado devuelve UNA pestaña vacía: un visor sin pestañas no enseña nada', () => {
-    const leidas = leerPestanas('master', 'c1')
-    expect(leidas).toHaveLength(1)
-    expect(leidas[0].def).toBeNull()
+  // Si saltaran de sitio mientras se configuran, se pierde de vista la que se está tocando.
+  it('las que no tienen área van al final y en el orden en que se abrieron', () => {
+    const tabs = [
+      { id: 'n1', meta: null },
+      { id: 'a', meta: { areaId: 'A' } },
+      { id: 'n2', meta: null },
+    ]
+    expect(sortTabs(tabs).map((t) => t.id)).toEqual(['a', 'n1', 'n2'])
+  })
+})
+
+describe('areaColor', () => {
+  it('es estable para la misma área', () => {
+    expect(areaColor('CTYTTS')).toBe(areaColor('CTYTTS'))
   })
 
-  it('con basura guardada tampoco deja el visor sin pestañas', () => {
-    localStorage.setItem(claveDePestanas('master', 'c1'), '{roto')
-    expect(leerPestanas('master', 'c1')).toHaveLength(1)
+  it('dos áreas casi iguales no comparten color', () => {
+    expect(areaColor('AREA1')).not.toBe(areaColor('AREA2'))
   })
 
-  it('descarta las entradas sin identificador', () => {
-    localStorage.setItem(claveDePestanas('master', 'c1'), JSON.stringify([{ def: null }, { id: 'b' }]))
-    expect(leerPestanas('master', 'c1').map((una) => una.id)).toEqual(['b'])
+  it('sin área, el borde neutro', () => {
+    expect(areaColor('')).toBe('var(--border2)')
+  })
+})
+
+describe('loadTabs y saveTabs', () => {
+  it('devuelve lo guardado, por visor y por conexión', () => {
+    const estado = { activeId: 'a', tabs: [{ id: 'a', def: { pa: 'S' }, meta: { areaId: 'S' } }] }
+    saveTabs('master', 'c1', estado)
+    expect(loadTabs('master', 'c1')).toEqual(estado)
+    expect(loadTabs('master', 'c2')).toBeNull()
+    expect(loadTabs('trans', 'c1')).toBeNull()
   })
 
-  it('recorta al tope aunque se hubieran guardado más', () => {
-    const muchas = Array.from({ length: 20 }, (_, i) => ({ id: `p${i}`, def: null }))
-    localStorage.setItem(claveDePestanas('master', 'c1'), JSON.stringify(muchas))
-    expect(leerPestanas('master', 'c1')).toHaveLength(TOPE_DE_PESTANAS)
+  it('lo ilegible o vacío es como no tener nada', () => {
+    localStorage.setItem(tabsStorageKey('master', 'c1'), '{roto')
+    expect(loadTabs('master', 'c1')).toBeNull()
+    saveTabs('master', 'c1', { activeId: null, tabs: [] })
+    expect(loadTabs('master', 'c1')).toBeNull()
   })
 
-  it('cada visor y cada conexión tienen las suyas', () => {
-    guardarPestanas('master', 'c1', [{ id: 'm', def: null }])
-    guardarPestanas('trans', 'c1', [{ id: 't', def: null }])
-    guardarPestanas('master', 'c2', [{ id: 'o', def: null }])
-    expect(leerPestanas('master', 'c1')[0].id).toBe('m')
-    expect(leerPestanas('trans', 'c1')[0].id).toBe('t')
-    expect(leerPestanas('master', 'c2')[0].id).toBe('o')
-  })
-
-  it('guarda SOLO la definición, nunca las filas', () => {
-    // Es lo que hace que volver con ocho pestañas no dispare ocho consultas a SAP.
-    guardarPestanas('master', 'c1', [{ id: 'a', def: { area: 'S', tabla: 'T' }, filas: [1, 2, 3] }])
-    const crudo = localStorage.getItem(claveDePestanas('master', 'c1'))
-    expect(crudo).not.toContain('filas')
+  it('el tope es el de v8', () => {
+    expect(TAB_LIMIT).toBe(8)
   })
 })

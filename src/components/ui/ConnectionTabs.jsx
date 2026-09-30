@@ -25,7 +25,12 @@ import ConnectionAvatar from './ConnectionAvatar.jsx'
 /** Cómo se lee una conexión en el desplegable. Es el mismo texto que el `title` de la pestaña. */
 const queEs = (conexion) => (conexion.isProduction ? 'Productivo' : 'Sandbox')
 
-export default function ConnectionTabs({ conexiones, abiertas, activa, onElegir, onCerrar }) {
+/**
+ * `inicio`, si viene, es una pestaña fija delante de las conexiones: `{ icono, nombre, activa,
+ * onElegir }`. La usa IBP Tools para el «📊 Resumen» global, que en v8 estaba en el menú lateral
+ * junto a la lista de conexiones y no dentro de ninguna.
+ */
+export default function ConnectionTabs({ conexiones, abiertas, activa, onElegir, onCerrar, inicio = null }) {
   const [menuAbierto, setMenuAbierto] = useState(false)
   const caja = useRef(null)
 
@@ -60,10 +65,25 @@ export default function ConnectionTabs({ conexiones, abiertas, activa, onElegir,
     // está desplazada, que es justo cuando hace falta.
     <div className="conn-tabs-fila">
       <div className="conn-tabs">
+        {inicio && (
+          <div
+            role="button"
+            tabIndex={0}
+            className={`conn-tab${inicio.activa ? ' active' : ''}`}
+            onClick={inicio.onElegir}
+            onKeyDown={(evento) => {
+              if (evento.key === 'Enter' || evento.key === ' ') { evento.preventDefault(); inicio.onElegir() }
+            }}
+            title={inicio.nombre}
+          >
+            <span aria-hidden="true">{inicio.icono}</span>
+            <span className="conn-tab-nombre">{inicio.nombre}</span>
+          </div>
+        )}
         {(abiertas ?? []).map((id) => {
           const conexion = conexiones.find((una) => una.id === id)
           if (!conexion) return null
-          const esActiva = activa === id
+          const esActiva = activa === id && !inicio?.activa
 
           return (
             <div

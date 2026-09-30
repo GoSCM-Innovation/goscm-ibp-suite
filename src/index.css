@@ -369,6 +369,13 @@ a { color: var(--cyan); }
 .module-page { display: flex; flex-direction: column; gap: 14px; height: 100%; min-height: 0; }
 .module-head { align-items: flex-end; display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; }
 
+/* IBP Tools va de lado a lado, como la vista de sistema de v8: la tira de conexiones, la cabecera
+   de la conexión y la barra de pestañas tocan los bordes y no hay aire entre ellas. Por eso deshace
+   el relleno de `.content`. Cada pantalla de dentro lleva su propio relleno, como en v8. */
+.ibp-tools { gap: 0; height: calc(100% + 44px); margin: -22px; }
+.tab-bar { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+.tab-bar::-webkit-scrollbar { display: none; }
+
 /* ─── Monitor de tareas ───────────────────────────────────── */
 
 .monitor { display: flex; flex-direction: column; gap: 12px; height: 100%; min-height: 0; }
@@ -1146,6 +1153,7 @@ a { color: var(--cyan); }
   .nav-item { flex-direction: column; font-size: 10px; gap: 3px; min-width: 76px; padding: 6px 4px; }
   .nav-label { flex: none; }
   .content { padding: 16px 14px; }
+  .ibp-tools { height: calc(100% + 32px); margin: -16px -14px; }
 }
 
 /* ─── Barra de ejecución de una orquestación ──────────────── */
@@ -2753,10 +2761,6 @@ a { color: var(--cyan); }
 }
 .seccion-plegable-cuerpo { margin-top: 12px; }
 
-/* Una preselección de columnas guardada: el botón que la aplica y el que la borra, pegados. */
-.preseleccion { display: inline-flex; gap: 2px; }
-.preseleccion .btn-danger { padding: 6px 8px; }
-
 /* ── Cabecera de tabla con orden, reordenado y filtro de página ────────────────────────────────
    Portada de `DataViewer/DataGrid.jsx` de v8: pulsar ordena, arrastrar reordena, y el campo de
    abajo filtra las filas que ya están a la vista. */
@@ -2787,30 +2791,6 @@ a { color: var(--cyan); }
 .th-filtro::placeholder { color: var(--text3); }
 /* Dónde va a caer la columna que se arrastra. */
 .table-dense th.col-destino { box-shadow: inset 2px 0 0 0 var(--accent); }
-
-/* ── La tira de pestañas de los visores de datos ───────────────────────────────────────────────
-   Portada de `ViewerTabs.jsx` de v8. Reutiliza los botones de pestaña del árbol de v7 —son el mismo
-   control— y deja la pantalla completa a la derecha, fuera del desplazamiento. */
-.visor-pestanas {
-  align-items: center;
-  background: var(--bg2);
-  border-bottom: 1px solid var(--border);
-  display: flex;
-  flex-shrink: 0;
-  gap: 8px;
-  padding: 6px 0 0;
-}
-.visor-pestanas-tira {
-  align-items: center;
-  display: flex;
-  flex: 1;
-  gap: 2px;
-  min-width: 0;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-.visor-pestanas-tira::-webkit-scrollbar { display: none; }
-.visor-pestana-caja { align-items: center; display: flex; flex-shrink: 0; }
 
 /* ── El menú lateral, minimizable ──────────────────────────────────────────────────────────────
    Portado de v8 y v9 («Minimizar» / «Expandir»). Minimizado deja solo los iconos: en un portátil,

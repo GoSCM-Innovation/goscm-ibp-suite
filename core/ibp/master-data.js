@@ -11,6 +11,7 @@
 //      que los valores distintos de un campo salen en una sola consulta barata. El servicio de
 //      planificación rechaza esas lecturas con "This service cannot be used to extract master data".
 
+import { extractFieldLabels, extractSimpleTypeCatalog } from '../transport/metadata.js'
 import { sapFetch } from '../transport/sap-fetch.js'
 import { serviceRoot } from './catalog.js'
 import { clavesDesdeUri, filtroDeDatos, sinMetadatos } from './master-data-model.js'
@@ -39,6 +40,31 @@ export async function readVsmt({ baseUrl, credentials, top = 5000 }) {
     consulta: `$select=${encodeURIComponent('PlanningAreaID,VersionID,MasterDataTypeID,PlanningAreaDescr,VersionName')}&$top=${top}`,
   })
   return d.results ?? []
+}
+
+/** El `$metadata` de dato maestro pesa unos 4,8 MB y tarda: v8 le daba 110 segundos. */
+const ESPERA_DEL_CATALOGO_MS = 110_000
+
+/**
+ * Lo que el visor necesita del `$metadata` de dato maestro, en UNA lectura.
+ *
+ *   - `etiquetas`: `{ CAMPO: 'descripción' }`, para enseñar «ID — descripción» en los selectores.
+ *   - `simples`: `{ TABLA: { keys, fields } }`, las tablas de dato maestro SIMPLE —las que no dependen
+ *     de un área—. SAP no las lista en ninguna parte (su catálogo de tipos solo trae las que dependen
+ *     del área), así que sin esto no se podrían ni ver. Salen del `$metadata`, y por eso se descubren
+ *     aunque estén vacías.
+ *
+ * v8 hacía dos lecturas del mismo documento, una para cada cosa. Aquí es una: son 4,8 MB.
+ */
+export async function readMasterMetadata({ baseUrl, credentials }) {
+  const { text } = await sapFetch({
+    url: `${masterDataRoot(baseUrl)}/$metadata`,
+    credentials,
+    kind: 'ibp',
+    expect: 'xml',
+    timeoutMs: ESPERA_DEL_CATALOGO_MS,
+  })
+  return { etiquetas: extractFieldLabels(text), simples: extractSimpleTypeCatalog(text) }
 }
 
 /**
