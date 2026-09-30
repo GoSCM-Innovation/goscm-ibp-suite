@@ -81,15 +81,15 @@ describe('resumenDeConexion — las reglas de v8', () => {
     expect(r.barData).toEqual([{ day: '30/09', finished: 2, failed: 2, others: 1 }])
   })
 
-  // Como v8: se ordena por el texto «DD/MM», así que al cruzar de mes el 01/10 va antes del 29/09.
-  // Si se decide corregirlo, esta prueba es la que tiene que cambiar.
-  it('las barras se ordenan por la etiqueta DD/MM, como en v8', () => {
+  // v8 ordenaba por el texto «DD/MM» y al cruzar de mes el 01/10 quedaba antes del 29/09. Aquí se
+  // ordena por la fecha.
+  it('las barras se ordenan por la fecha, también al cruzar de mes', () => {
     const r = resumenDeConexion([
       fila('F', { JobPlannedStartDateTime: '20260930080000.0000000' }),
       fila('F', { JobPlannedStartDateTime: '20260929080000.0000000' }),
       fila('F', { JobPlannedStartDateTime: '20261001080000.0000000' }),
     ], { tzMode: 'utc' })
-    expect(r.barData.map(d => d.day)).toEqual(['01/10', '29/09', '30/09'])
+    expect(r.barData.map(d => d.day)).toEqual(['29/09', '30/09', '01/10'])
   })
 
   it('las barras son solo los últimos 14 días', () => {

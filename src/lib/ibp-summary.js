@@ -13,6 +13,17 @@
 // nada: solo aritmética sobre las filas de `JobHeaderSet` que ya se trajeron.
 
 import { dayLabel, parseSapTs } from './fechas-v8.js'
+
+/** «AAAAMMDD» del día de una hora de SAP en la zona elegida: sirve para ordenar días. */
+function claveDeDia(ts, tzMode) {
+  const d = parseSapTs(ts)
+  if (!d) return ''
+  const local = tzMode === 'local'
+  const y = local ? d.getFullYear() : d.getUTCFullYear()
+  const m = (local ? d.getMonth() : d.getUTCMonth()) + 1
+  const day = local ? d.getDate() : d.getUTCDate()
+  return `${y}${String(m).padStart(2, '0')}${String(day).padStart(2, '0')}`
+}
 import { nombreConAmbiente } from './nombre-de-conexion.js'
 
 /** Los colores de estado de los resúmenes de v8. Son otros que los del monitor, como en v8. */
@@ -105,19 +116,21 @@ export function resumenDeConexion(filtered, { tzMode = 'utc', statusLabel = code
     .map(([code, count]) => ({ name: statusLabel(code), value: count, code }))
     .sort((a, b) => b.value - a.value)
 
-  // Los días se agrupan y se ordenan por su etiqueta «DD/MM» como texto, igual que v8. Ojo: al
-  // cruzar de mes eso pone el 01/10 antes que el 29/09, y los «últimos 14» se toman de ese orden.
-  // Se conserva a propósito para que la comparación lado a lado con v8 dé lo mismo; cambiarlo es una
-  // decisión pendiente, no un descuido.
+  // Los días se agrupan por su etiqueta «DD/MM», como en v8, pero se ORDENAN por la fecha. v8 los
+  // ordenaba por el texto de la etiqueta, y al cruzar de mes eso ponía el 01/10 antes que el 29/09:
+  // el gráfico enseñaba los días desordenados y los «últimos 14» no eran los últimos.
   const dayMap = {}
   rows.forEach(r => {
     const d = dayLabel(r.JobPlannedStartDateTime, tzMode)
-    if (!dayMap[d]) dayMap[d] = { day: d, finished: 0, failed: 0, others: 0 }
+    if (!dayMap[d]) dayMap[d] = { day: d, orden: claveDeDia(r.JobPlannedStartDateTime, tzMode), finished: 0, failed: 0, others: 0 }
     if (r.JobStatus === 'F' || r.JobStatus === 'W') dayMap[d].finished++
     else if (r.JobStatus === 'A' || r.JobStatus === 'U') dayMap[d].failed++
     else dayMap[d].others++
   })
-  const barData = Object.values(dayMap).sort((a, b) => a.day.localeCompare(b.day)).slice(-14)
+  const barData = Object.values(dayMap)
+    .sort((a, b) => a.orden.localeCompare(b.orden))
+    .slice(-14)
+    .map(({ orden: _orden, ...dia }) => dia)
 
   const topTemplates = ranking(rows, r => r.JobText || '—')
   const topUsers = ranking(rows, r => r.JobCreatedByFormattedName || r.JobCreatedBy || '—')

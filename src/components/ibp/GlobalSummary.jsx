@@ -257,7 +257,7 @@ export default function GlobalSummary({ connections }) {
                     {cs.noAgreement ? (
                       // En v8 era un botón que abría la pantalla de conexiones; aquí esa pantalla está
                       // en Administración, fuera de IBP Tools, así que queda la marca con su ayuda.
-                      <span title="Esta conexión no tiene configurado el acuerdo de comunicación SAP_COM_0326 (Application Jobs). Haz clic para configurarlo." style={{
+                      <span title="Esta conexión no tiene configurado el acuerdo de comunicación SAP_COM_0326 (Application Jobs). Se agrega en Administración → Conexiones." style={{
                         ...statusBadge,
                         background: 'color-mix(in srgb, var(--accent) 15%, transparent)', color: 'var(--accent)',
                         border: '1px solid color-mix(in srgb, var(--accent) 35%, transparent)',

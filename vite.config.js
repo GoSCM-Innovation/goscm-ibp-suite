@@ -189,5 +189,8 @@ export default defineConfig({
     // Montar un componente de verdad exige que el entorno se declare como entorno de `act`. Es una
     // bandera global de React, no una opción de Vitest, y va antes de que se cargue cualquier prueba.
     setupFiles: ['./src/test-setup.js'],
+    // Las copias de trabajo aisladas (`git worktree`) viven en `.claude/worktrees` y son el proyecto
+    // entero otra vez: sin esto, `npm test` corre también sus pruebas a medio hacer.
+    exclude: ['**/node_modules/**', '**/dist/**', '.claude/**'],
   },
 })
