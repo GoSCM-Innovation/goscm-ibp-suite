@@ -23,7 +23,6 @@
 
 import { lazy, Suspense, useEffect, useState } from 'react'
 
-import { readStoredTzMode } from '../../lib/dates.js'
 import { puedeSalir } from '../../lib/guarda-de-salida.js'
 import { listIbpConnections } from '../../lib/ibp.js'
 import { lectorDeIbp } from '../../lib/run-logs.js'
@@ -114,8 +113,8 @@ function SystemView({ connection }) {
         )}
         <Suspense fallback={cargando('Cargando…')}>
           {activeApp === 'resumen' && <Resumen connection={connection} />}
-          {activeApp === 'jobs' && <JobTemplates connection={connection} conexionId={connection.id} zona={readStoredTzMode()} />}
-          {activeApp === 'monitor' && <JobMonitor connection={connection} conexionId={connection.id} />}
+          {activeApp === 'jobs' && <JobTemplates connection={connection} />}
+          {activeApp === 'monitor' && <JobMonitor connection={connection} />}
           {activeApp === 'orquestador' && (
             // Un tenant de IBP no tiene dos repositorios como CI-DS: `production` va fijo en falso.
             <Orchestrations
@@ -124,8 +123,8 @@ function SystemView({ connection }) {
               leerRegistro={lectorDeIbp(connection.id)}
             />
           )}
-          {activeApp === 'stats' && <ResourceStats connection={connection} conexionId={connection.id} />}
-          {activeApp === 'metering' && <Metering connection={connection} conexionId={connection.id} />}
+          {activeApp === 'stats' && <ResourceStats connection={connection} />}
+          {activeApp === 'metering' && <Metering connection={connection} />}
           {activeApp === 'migration' && <MigrationTabs connection={connection} />}
           {/* Los visores: cada uno lleva su propia tira de pestañas y se quedan montados una vez
               visitados, así que sus pestañas y los datos cargados sobreviven a cambiar de pestaña. */}
