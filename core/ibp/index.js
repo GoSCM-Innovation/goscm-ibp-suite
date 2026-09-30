@@ -38,26 +38,36 @@ export {
   JOB_HEADER_TOP,
   buildJobHeaderQuery,
   cancelJobRun,
+  readCatalogMeta,
   readJobRun,
   readJobRuns,
   readJobStatuses,
   readLogMessages,
+  readRunParams,
   readRunSteps,
   readStepLogInfo,
+  readTemplateSequences,
   restartJobRun,
   toSapTimestamp,
 } from './job-runs.js'
 
 export {
   ETIQUETA_DE_PARAMETRO,
+  ETIQUETA_DE_PARAMETRO_DE_PASO,
+  OPERADOR_DE_SELECCION,
+  ORDEN_DE_SECCIONES,
+  SECCION_DE_PARAMETRO,
   etiquetaDeParametro,
+  etiquetaDeParametroDePaso,
+  metaDeCatalogo,
+  metaSinDatos,
   nombreBase,
   numeroDeRanura,
   pasoDesdeSecuencia,
   tieneValor,
 } from './job-params.js'
 
-export { readTemplateDetail, scheduleJob } from './job-schedule.js'
+export { readJobTemplateSet, readTemplateDetail, scheduleJob } from './job-schedule.js'
 
 export {
   ESTADOS_QUE_IMPIDEN,

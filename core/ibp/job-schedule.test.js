@@ -10,7 +10,7 @@ const {
   pasoDesdeSecuencia,
   tieneValor,
 } = await import('./job-params.js')
-const { readTemplateDetail, scheduleJob } = await import('./job-schedule.js')
+const { readJobTemplateSet, readTemplateDetail, scheduleJob } = await import('./job-schedule.js')
 
 const BASE = 'https://tenant-api.scmibp1.ondemand.com'
 const cred = { user: 'u', password: 'p' }
@@ -47,8 +47,22 @@ describe('etiquetaDeParametro', () => {
     expect(etiquetaDeParametro('P_VERS', { P_VERS: 'Mi versión' })).toBe('Mi versión')
   })
 
-  it('sin etiqueta propia usa la conocida', () => {
-    expect(etiquetaDeParametro('P_FLTID')).toBe('Filtro de planificación')
+  // Las de v8, en inglés: son los nombres que SAP IBP da a esos campos en su propia pantalla.
+  it('sin etiqueta propia usa la conocida, la de v8', () => {
+    expect(etiquetaDeParametro('P_FLTID')).toBe('Planning Filter')
+    expect(etiquetaDeParametro('P_VERS')).toBe('Version')
+  })
+
+  // Faltaban en la primera versión del puerto y son las de los trabajos de integración con CI-DS.
+  it('conoce las etiquetas de integración de v8', () => {
+    expect(etiquetaDeParametro('P_ISPRD')).toBe('Production')
+    expect(etiquetaDeParametro('P_TSKID')).toBe('Task Name')
+    expect(etiquetaDeParametro('P_URCTX')).toBe('URL Context')
+    expect(etiquetaDeParametro('P_CMD')).toBe('Batch Command')
+  })
+
+  it('busca por el nombre base, sin el sufijo de instancia', () => {
+    expect(etiquetaDeParametro('P_TSKID 0001')).toBe('Task Name')
   })
 
   // Sin esto la pantalla enseñaría el nombre técnico y nadie sabría qué es.
@@ -139,26 +153,57 @@ describe('readTemplateDetail', () => {
   })
 
   // Hay plantillas donde `JobTemplateRead` no está permitido; sin el respaldo la pantalla quedaría
-  // en blanco justo en las que más se lanzan.
-  it('si no puede leer la plantilla, cae a los valores sueltos', async () => {
+  // en blanco justo en las que más se lanzan. Como en v8: un paso por cada secuencia declarada,
+  // todos con los mismos valores sueltos.
+  it('si no puede leer la plantilla, arma un paso por secuencia con los valores sueltos', async () => {
     responder({
       plantilla: null,
+      secuencias: [
+        { JobSequencePosition: 2, JobSequenceText: 'Segundo', BasicJobCatalogEntryName: '/IBP/HCI_DI', JceText: 'Data Integration' },
+        { JobSequencePosition: 1, BasicJobCatalogEntryName: '/IBP/HCI_DI' },
+      ],
       sueltos: [
         { JobTemplateParameterName: 'P_VERS', Low: 'V1' },
         { JobTemplateParameterName: 'P_VERS', Low: 'V2' },
+        { JobTemplateParameterName: 'P_ISPRD', Low: 'X' },
       ],
     })
 
     const detalle = await readTemplateDetail({ baseUrl: BASE, credentials: cred, templateName: 'T' })
     expect(detalle.completo).toBe(false)
+    expect(detalle.pasos.map((uno) => uno.posicion)).toEqual([1, 2])
+    expect(detalle.pasos[1]).toMatchObject({ nombre: 'Segundo', titulo: 'Data Integration', catalogo: '/IBP/HCI_DI' })
+    // Sin texto del tipo de paso, su nombre técnico; sin nombre propio, `null`.
+    expect(detalle.pasos[0]).toMatchObject({ nombre: null, titulo: '/IBP/HCI_DI' })
     expect(detalle.pasos[0].valores.P_VERS).toEqual(['V1', 'V2'])
     // Un parámetro que aparece dos veces se lista una.
-    expect(detalle.pasos[0].params).toHaveLength(1)
+    expect(detalle.pasos[0].params.map((uno) => uno.name)).toEqual(['P_VERS', 'P_ISPRD'])
+    // «Production» es la casilla que v8 reconocía sin la plantilla.
+    expect(detalle.pasos[0].params[1]).toMatchObject({ label: 'Production', isCheckbox: true, group: null })
+  })
+
+  it('sin secuencias declaradas no hay pasos, aunque haya valores sueltos', async () => {
+    responder({ plantilla: null, sueltos: [{ JobTemplateParameterName: 'P_VERS', Low: 'V1' }] })
+    expect((await readTemplateDetail({ baseUrl: BASE, credentials: cred, templateName: 'T' })).pasos).toEqual([])
   })
 
   it('una plantilla sin nada devuelve cero pasos, no un error', async () => {
     responder({ plantilla: null, sueltos: [] })
     expect((await readTemplateDetail({ baseUrl: BASE, credentials: cred, templateName: 'T' })).pasos).toEqual([])
+  })
+})
+
+describe('readJobTemplateSet', () => {
+  // Es la consulta de «Job Templates» de v8: la entidad directamente, sin leer antes el $metadata.
+  it('lee JobTemplateSet directamente, todas las plantillas', async () => {
+    sapFetch.mockResolvedValueOnce({ json: { d: { results: [{ JobTemplateName: '/IBP/X' }, { JobTemplateName: 'YY1_Y' }] } } })
+
+    const filas = await readJobTemplateSet({ baseUrl: BASE, credentials: cred })
+
+    expect(sapFetch).toHaveBeenCalledTimes(1)
+    expect(sapFetch.mock.calls[0][0].url).toContain('/JobTemplateSet?$format=json')
+    expect(sapFetch.mock.calls[0][0].url).not.toContain('$metadata')
+    expect(filas.map((una) => una.JobTemplateName)).toEqual(['/IBP/X', 'YY1_Y'])
   })
 })
 

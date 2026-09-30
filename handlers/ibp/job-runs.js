@@ -3,6 +3,9 @@
 // GET  ?connectionId=…&desde=…&hasta=…       — las ejecuciones del rango.
 // GET  ?connectionId=…&estados=true          — el catálogo de estados del tenant.
 // GET  ?connectionId=…&jobName=…&runCount=…  — los pasos de una ejecución.
+// GET  ?connectionId=…&jobName=…&runCount=…&parametros=true — con qué parámetros corrió cada paso.
+// GET  ?connectionId=…&secuencias=…          — los nombres de paso de una plantilla.
+// GET  ?connectionId=…&catalogo=…            — qué parámetros muestra un tipo de paso, y cómo.
 // POST { accion: 'logs' | 'cancelar' | 'reiniciar', … }
 //
 // Todo en un archivo porque es una sola pantalla y comparten el preámbulo. Vercel cuenta funciones.
@@ -15,11 +18,14 @@ import { getConnectionTarget, getCredentials } from '../../core/connections/inde
 import { explicarFallo } from '../../core/ibp/explicar-fallo.js'
 import {
   cancelJobRun,
+  readCatalogMeta,
   readJobRuns,
   readJobStatuses,
   readLogMessages,
+  readRunParams,
   readRunSteps,
   readStepLogInfo,
+  readTemplateSequences,
   restartJobRun,
 } from '../../core/ibp/index.js'
 
@@ -54,8 +60,23 @@ async function conGet(req, res, ctx) {
     return res.status(200).json({ estados: await readJobStatuses(ctx) })
   }
 
+  // Lo que el panel «Pasos del job» lee además de los pasos, igual que v8.
+  if (req.query?.catalogo) {
+    return res.status(200).json({ meta: await readCatalogMeta({ ...ctx, catalog: req.query.catalogo }) })
+  }
+  if (req.query?.secuencias) {
+    return res.status(200).json({
+      secuencias: await readTemplateSequences({ ...ctx, templateName: req.query.secuencias }),
+    })
+  }
+
   const { jobName, runCount } = req.query ?? {}
   if (jobName && runCount) {
+    if (req.query.parametros === 'true') {
+      return res.status(200).json({
+        parametros: await readRunParams({ ...ctx, jobName, jobRunCount: runCount }),
+      })
+    }
     return res.status(200).json({
       pasos: await readRunSteps({ ...ctx, jobName, jobRunCount: runCount }),
     })

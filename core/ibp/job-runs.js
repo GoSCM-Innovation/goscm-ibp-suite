@@ -21,6 +21,7 @@
 
 import { sapFetch } from '../transport/sap-fetch.js'
 import { appJobRoot, readAllPages } from './app-jobs.js'
+import { metaDeCatalogo } from './job-params.js'
 
 /**
  * Las columnas que las pantallas usan de verdad.
@@ -185,6 +186,80 @@ export async function readLogMessages({ baseUrl, credentials, jobName, jobRunCou
 
   const { json } = await sapFetch({ url: `${appJobRoot(baseUrl)}/${ruta}?$format=json`, credentials, kind: 'ibp' })
   return json?.d?.results ?? json?.value ?? []
+}
+
+/** Un literal entrecomillado para el parámetro de una función de OData: `'valor'`, codificado. */
+const comillado = (valor) => `'${encodeURIComponent(literal(valor))}'`
+
+/**
+ * Los parámetros con los que corrió cada paso de una ejecución (`JobParamValuesStructGet`).
+ *
+ * Una fila por valor: `StepNr`, `JobParameterName`, `Option`, `Low`, `High`. Leer los de un trabajo
+ * lanzado por OTRO usuario pide el rol `SAP_BCG_APPLICATION_JOB_DISP`; sin él SAP contesta que no, y
+ * el panel lo explica con esas palabras. Se deja subir el fallo tal cual para que pueda.
+ */
+export async function readRunParams({ baseUrl, credentials, jobName, jobRunCount }) {
+  const url = `${appJobRoot(baseUrl)}/JobParamValuesStructGet`
+    + `?JobName=${comillado(jobName)}&JobCount=${comillado(jobRunCount)}&$format=json`
+
+  const { json } = await sapFetch({ url, credentials, kind: 'ibp' })
+  return json?.d?.results ?? json?.value ?? []
+}
+
+/**
+ * Las secuencias de las plantillas cuyo nombre CONTIENE el pedido, como las pedía el panel de v8.
+ *
+ * De ahí salen los nombres que el usuario le puso a cada paso en IBP (`JobSequenceText`), que son
+ * los que se leen en el panel en lugar del tipo de paso. v8 filtraba con `substringof` y no con
+ * igualdad; se conserva la consulta.
+ */
+export async function readTemplateSequences({ baseUrl, credentials, templateName }) {
+  if (!templateName) return []
+  return readAllPages({
+    baseUrl,
+    credentials,
+    entity: 'JobTemplateSequenceSet',
+    query: `$filter=${encodeURIComponent(`substringof('${literal(templateName)}',JobTemplateName)`)}`,
+  })
+}
+
+/** Una lectura de adorno que puede no estar permitida; se traga el fallo. */
+const opcional = async (promesa, porOmision) => {
+  try { return await promesa } catch { return porOmision }
+}
+
+/**
+ * Qué parámetros de un tipo de paso se muestran, en qué orden, con qué etiqueta y en qué sección.
+ *
+ * Las tres lecturas que hacía el panel de v8 por cada catálogo de paso: `JobTemplateRead`,
+ * `JobTemplateParameterSet` y `JobTemplateParamGroupSet`. Ninguna es imprescindible —sin ellas los
+ * parámetros se muestran igual, sin filtrar y con secciones de respaldo—, así que un fallo de
+ * cualquiera no rompe el panel. Ver `metaDeCatalogo`.
+ */
+export async function readCatalogMeta({ baseUrl, credentials, catalog }) {
+  const raiz = appJobRoot(baseUrl)
+
+  const [plantilla, parametros, grupos] = await Promise.all([
+    opcional(
+      sapFetch({ url: `${raiz}/JobTemplateRead?JobTemplateName=${comillado(catalog)}&$format=json`, credentials, kind: 'ibp' })
+        .then((respuesta) => respuesta.json),
+      null,
+    ),
+    opcional(readAllPages({
+      baseUrl,
+      credentials,
+      entity: 'JobTemplateParameterSet',
+      query: `$filter=${encodeURIComponent(`BasicJobCatalogEntryName eq '${literal(catalog)}'`)}`,
+    }), []),
+    opcional(readAllPages({
+      baseUrl,
+      credentials,
+      entity: 'JobTemplateParamGroupSet',
+      query: `$filter=${encodeURIComponent(`JobTemplateName eq '${literal(catalog)}'`)}`,
+    }), []),
+  ])
+
+  return metaDeCatalogo({ plantilla, parametros, grupos })
 }
 
 /**

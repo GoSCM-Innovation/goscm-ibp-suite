@@ -1,125 +1,235 @@
-// Las plantillas de Application Job del tenant: qué se puede lanzar.
+// «Job Templates»: las plantillas de Application Job del tenant, para lanzarlas.
 //
-// Portado de `Jobs.jsx` de v8. Lanzar una plantilla es lo único de IBP Tools que CREA algo en el
-// tenant, así que va detrás de una confirmación que dice qué va a pasar.
+// Portado TAL CUAL de `Jobs/Jobs.jsx` de v8: la misma cabecera con su recuento y su buscador, las
+// mismas columnas —Nombre, Descripción, Acción—, ordenables y con ancho ajustable, el mismo botón
+// «▶ Ejecutar» y la marca «✓ Enviado» cuando SAP aceptó el lanzamiento. Se listan TODAS las
+// plantillas, las estándar de SAP incluidas, como en v8.
 //
-// Reutiliza el endpoint que ya existía para el documentador de mapeos, así que esta pantalla no
-// añadió nada al servidor.
-//
-// No se muestra el número de pasos: SAP lo devuelve a cero en TODAS las plantillas de este listado
-// —comprobado contra un tenant real, 331 de 331— y una columna de ceros diría "sin pasos", que es
-// falso. El recuento de verdad está en cada ejecución, en el monitor.
+// Lo que cambia es solo por dónde pasa la llamada: v8 le pedía `/JobTemplateSet` a SAP desde el
+// navegador a través de su proxy, con las credenciales en el cliente; aquí la hace el servidor
+// (`/api/ibp/job-schedule`), porque las credenciales no salen de él. Tampoco está el «Ver logs
+// técnicos» de la pantalla: las llamadas se ven en el panel global «Llamadas técnicas».
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
-import { formatODataDate } from '../../lib/dates.js'
-import { fetchJobTemplates, nombreDeJob } from '../../lib/ibp.js'
+import { fetchJobTemplateSet } from '../../lib/ibp-jobs.js'
+import { nombreConAmbiente } from '../../lib/nombre-de-conexion.js'
+import { useIsMobile } from '../../lib/useIsMobile.js'
+import ProgressBar from './ProgressBar.jsx'
 import ScheduleModal from './ScheduleModal.jsx'
+import TruncText from './TruncText.jsx'
 
-/**
- * Las plantillas estándar de SAP empiezan por `/IBP/`; las del cliente, no.
- *
- * La distinción importa: en el tenant de prueba hay 331 plantillas y solo 203 son del cliente. Quien
- * entra a buscar "su" trabajo no quiere leer las 128 de SAP.
- */
-const esDeSap = (plantilla) => String(plantilla.JobTemplateName ?? '').startsWith('/IBP/')
+const VISIBLE_COLS = ['JobTemplateName', 'JobTemplateText']
+const MOBILE_COLS = ['JobTemplateName']
+const DEFAULT_COL_WIDTHS = { JobTemplateName: 240, JobTemplateText: 480 }
+const COL_LABELS = { JobTemplateName: 'Nombre', JobTemplateText: 'Descripción' }
 
-export default function JobTemplates({ conexionId, zona }) {
-  const [plantillas, setPlantillas] = useState(null)
+const TD = { padding: '6px 12px', borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap' }
+
+export default function JobTemplates({ connection }) {
+  const isMobile = useIsMobile()
+  const [rows, setRows] = useState([])
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [texto, setTexto] = useState('')
-  const [incluirDeSap, setIncluirDeSap] = useState(false)
-  const [lanzando, setLanzando] = useState(null)
+  const [sortCol, setSortCol] = useState(null)
+  const [sortAsc, setSortAsc] = useState(true)
+  const [colWidths, setColWidths] = useState({})
+  const [search, setSearch] = useState('')
+  const resizing = useRef(null)
+  const [scheduleRow, setScheduleRow] = useState(null)
+  const [scheduledRows, setScheduledRows] = useState({})
 
+  const connectionId = connection.id
+
+  // Cada conexión monta su propia vista (IBP Tools la monta con la conexión como clave), así que
+  // el estado inicial ya es el de «cargando» y aquí solo se pide.
   useEffect(() => {
     let abandonado = false
-    fetchJobTemplates(conexionId)
-      .then((lista) => { if (!abandonado) setPlantillas(lista) })
-      .catch((fallo) => { if (!abandonado) { setError(fallo.message); setPlantillas([]) } })
+    fetchJobTemplateSet(connectionId)
+      .then((lista) => { if (!abandonado) setRows(lista ?? []) })
+      .catch((e) => { if (!abandonado) setError(e.message) })
+      .finally(() => { if (!abandonado) setLoading(false) })
     return () => { abandonado = true }
-  }, [conexionId])
+  }, [connectionId])
 
-  const visibles = useMemo(() => {
-    const buscado = texto.trim().toLowerCase()
-    return (plantillas ?? [])
-      .filter((una) => incluirDeSap || !esDeSap(una))
-      .filter((una) => !buscado || `${nombreDeJob(una)} ${una.JobTemplateName}`.toLowerCase().includes(buscado))
-      .sort((a, b) => nombreDeJob(a).localeCompare(nombreDeJob(b)))
-  }, [plantillas, texto, incluirDeSap])
+  const filtered = search.trim()
+    ? rows.filter(row => Object.values(row).some(v => String(v ?? '').toLowerCase().includes(search.toLowerCase())))
+    : rows
 
-  const delCliente = (plantillas ?? []).filter((una) => !esDeSap(una)).length
+  const sorted = [...filtered].sort((a, b) => {
+    if (!sortCol) return 0
+    const av = String(a[sortCol] ?? ''), bv = String(b[sortCol] ?? '')
+    return sortAsc ? av.localeCompare(bv) : bv.localeCompare(av)
+  })
 
-  if (plantillas === null) return <div className="page-hint">Cargando las plantillas…</div>
+  const activeCols = isMobile ? MOBILE_COLS : VISIBLE_COLS
+
+  function handleSort(col) {
+    if (sortCol === col) setSortAsc(a => !a)
+    else { setSortCol(col); setSortAsc(true) }
+  }
+
+  function onResizeStart(col, e) {
+    e.preventDefault(); e.stopPropagation()
+    const startX = e.clientX, startW = colWidths[col] || DEFAULT_COL_WIDTHS[col] || 240
+    resizing.current = { col, startX, startW }
+    function onMove(ev) {
+      if (!resizing.current) return
+      const { col: c, startX: x0, startW: w0 } = resizing.current
+      setColWidths(w => ({ ...w, [c]: Math.max(80, w0 + ev.clientX - x0) }))
+    }
+    function onUp() {
+      resizing.current = null
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+  }
+
+  if (loading) return (
+    <div style={{ padding: isMobile ? 14 : 28, color: 'var(--text2)', fontSize: 13, position: 'relative' }}>
+      <ProgressBar loading />
+      Cargando job templates de {nombreConAmbiente(connection)}…
+    </div>
+  )
+
+  if (error) return (
+    <div style={{ padding: isMobile ? 14 : 28 }}>
+      <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text)', marginBottom: 12 }}>Job Templates</div>
+      <div style={{
+        background: 'color-mix(in srgb, var(--red) 12%, transparent)', border: '1px solid color-mix(in srgb, var(--red) 35%, transparent)',
+        borderRadius: 8, padding: '12px 16px', color: 'var(--red)', fontSize: 12,
+      }}>✕ {error}</div>
+    </div>
+  )
 
   return (
-    <div className="module-body">
-      <div className="monitor-bar">
+    <div style={{ padding: isMobile ? 14 : 28, display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden', boxSizing: 'border-box' }}>
+      {/* Cabecera */}
+      <div style={{
+        display: 'flex',
+        flexDirection: isMobile ? 'column' : 'row',
+        alignItems: isMobile ? 'stretch' : 'center',
+        justifyContent: 'space-between',
+        marginBottom: 16, flexShrink: 0, gap: isMobile ? 8 : 0,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
+          <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text)' }}>Job Templates</div>
+          <div style={{ fontSize: 11, color: 'var(--text2)' }}>
+            {search
+              ? `${sorted.length} de ${rows.length} registros`
+              : `${sorted.length} registros`}
+          </div>
+        </div>
         <input
-          className="input input-sm exp-search"
-          placeholder="🔍 Buscar por nombre…"
-          value={texto}
-          onChange={(evento) => setTexto(evento.target.value)}
+          type="text"
+          placeholder="Buscar en todas las columnas…"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          style={{
+            background: 'var(--bg2)', border: '1px solid var(--border)',
+            borderRadius: 6, color: 'var(--text)', fontSize: 12,
+            padding: '6px 12px', width: isMobile ? '100%' : 240, outline: 'none',
+          }}
         />
-        <label className="exp-check">
-          <input
-            type="checkbox"
-            checked={incluirDeSap}
-            onChange={(evento) => setIncluirDeSap(evento.target.checked)}
-          />
-          Incluir las plantillas estándar de SAP
-        </label>
-        <span className="page-hint">
-          {visibles.length} de {incluirDeSap ? plantillas.length : delCliente}
-        </span>
       </div>
 
-      {error && <div className="notice notice-error">✕ {error}</div>}
-
-      <div className="table-scroll">
-        <table className="table-dense">
-          <thead>
-            <tr>
-              <th>Trabajo</th>
-              <th>Nombre técnico</th>
-              <th>Versión</th>
-              <th>Creada</th>
-              <th>Última modificación</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {visibles.map((una) => (
-              <tr key={`${una.JobTemplateName}|${una.JobTemplateVersion}`}>
-                <td>
-                  {nombreDeJob(una)}
-                  {esDeSap(una) && <span className="tag tag-muted">estándar</span>}
-                </td>
-                <td className="mono exp-sub">{una.JobTemplateName}</td>
-                <td>{una.JobTemplateVersion ?? '—'}</td>
-                <td className="exp-sub">{formatODataDate(una.CreationDateTime, zona)}</td>
-                <td className="exp-sub">
-                  {formatODataDate(una.LastChangeDateTime, zona)}
-                  {una.LastChangeFormattedName && <div>{una.LastChangeFormattedName}</div>}
-                </td>
-                <td>
-                  <button type="button" className="btn btn-sm" onClick={() => setLanzando(una)}>
-                    ▶ Lanzar
-                  </button>
-                </td>
+      {rows.length === 0 ? (
+        <div style={{ fontSize: 13, color: 'var(--text2)' }}>Sin resultados</div>
+      ) : (
+        <div style={{ overflowX: 'auto', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 8, flex: 1 }}>
+          <table style={{
+            borderCollapse: 'collapse', tableLayout: 'fixed', fontSize: 12,
+            width: activeCols.reduce((s, c) => s + (colWidths[c] || DEFAULT_COL_WIDTHS[c] || 240), 110),
+            minWidth: '100%',
+          }}>
+            <thead>
+              <tr style={{ background: 'var(--bg2)', position: 'sticky', top: 0, zIndex: 1 }}>
+                {activeCols.map(col => {
+                  const w = colWidths[col] || DEFAULT_COL_WIDTHS[col] || 240
+                  return (
+                    <th
+                      key={col}
+                      style={{
+                        width: w, minWidth: w, padding: '9px 12px', textAlign: 'left',
+                        color: sortCol === col ? 'var(--accent)' : 'var(--text2)',
+                        fontWeight: 600, whiteSpace: 'nowrap', position: 'relative',
+                        borderBottom: '1px solid var(--border)', cursor: 'pointer',
+                        userSelect: 'none', overflow: 'hidden', textOverflow: 'ellipsis',
+                      }}
+                      title={COL_LABELS[col] ?? col}
+                      onClick={() => handleSort(col)}
+                    >
+                      {COL_LABELS[col] ?? col}
+                      {sortCol === col && <span style={{ marginLeft: 4, fontSize: 10 }}>{sortAsc ? '↑' : '↓'}</span>}
+                      <span
+                        style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 5, cursor: 'col-resize', background: 'transparent' }}
+                        onClick={e => e.stopPropagation()}
+                        onMouseDown={e => onResizeStart(col, e)}
+                      />
+                    </th>
+                  )
+                })}
+                <th style={{
+                  width: 110, minWidth: 110, padding: '9px 12px', textAlign: 'left',
+                  color: 'var(--text2)', fontWeight: 600,
+                  borderBottom: '1px solid var(--border)', userSelect: 'none',
+                }}>Acción</th>
               </tr>
-            ))}
-            {visibles.length === 0 && (
-              <tr><td colSpan={6} className="table-empty">No hay ninguna plantilla que coincida.</td></tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {sorted.length === 0 ? (
+                <tr>
+                  <td colSpan={activeCols.length + 1} style={{ padding: '24px 12px', textAlign: 'center', color: 'var(--text2)', fontSize: 12 }}>
+                    Sin resultados para &quot;{search}&quot;
+                  </td>
+                </tr>
+              ) : sorted.map((row, i) => (
+                <tr
+                  key={i}
+                  style={{ background: i % 2 === 0 ? 'var(--bg)' : 'var(--bg2)' }}
+                >
+                  {activeCols.map(col => (
+                    <td
+                      key={col}
+                      style={{
+                        padding: '7px 12px', color: 'var(--text)',
+                        borderBottom: '1px solid var(--border)',
+                        maxWidth: colWidths[col] || DEFAULT_COL_WIDTHS[col] || 240,
+                      }}
+                    >
+                      <TruncText text={String(row[col] ?? '')} />
+                    </td>
+                  ))}
+                  <td style={TD} onClick={e => e.stopPropagation()}>
+                    {scheduledRows[row.JobTemplateName] === 'ok' ? (
+                      <span style={{ fontSize: 11, color: 'var(--green)', fontWeight: 600 }}>✓ Enviado</span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setScheduleRow(row)}
+                        style={{
+                          padding: '4px 12px', borderRadius: 5, border: '1px solid color-mix(in srgb, var(--green) 40%, transparent)',
+                          background: 'color-mix(in srgb, var(--green) 12%, transparent)', color: 'var(--green)',
+                          fontSize: 11, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
+                        }}
+                      >▶ Ejecutar</button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
-      {lanzando && (
+      {scheduleRow && (
         <ScheduleModal
-          conexionId={conexionId}
-          plantilla={lanzando}
-          onClose={() => setLanzando(null)}
+          row={scheduleRow}
+          connection={connection}
+          onClose={() => setScheduleRow(null)}
+          onSuccess={() => setScheduledRows(prev => ({ ...prev, [scheduleRow.JobTemplateName]: 'ok' }))}
         />
       )}
     </div>
