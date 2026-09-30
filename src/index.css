@@ -2849,3 +2849,27 @@ a { color: var(--cyan); }
   z-index: 2;
 }
 .th-tirador:hover { background: var(--accent); opacity: .5; }
+
+/* ─── Resumen de IBP Tools (v8) ──────────────────────────────
+   Las rejillas de los dos resúmenes de v8 (`.grid-kpi`, `.grid-charts`, `.grid-stats` de su
+   `index.css`), con sus cortes tal cual: seis cifras que pasan a 3, 2 y 1 columnas a 900, 640 y
+   400 px; los gráficos en 1fr 2fr; las tarjetas de abajo de dos en dos. Llevan el prefijo `v8-`
+   porque la suite ya tiene clases con esos nombres, con otra forma, y las usa CI-DS. */
+.v8-grid-kpi    { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; margin-bottom: 24px; }
+.v8-grid-charts { display: grid; grid-template-columns: 1fr 2fr;        gap: 16px; margin-bottom: 24px; }
+.v8-grid-stats  { display: grid; grid-template-columns: 1fr 1fr;        gap: 16px; }
+
+@media (max-width: 900px) {
+  .v8-grid-kpi    { grid-template-columns: repeat(3, 1fr); }
+  .v8-grid-charts { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 640px) {
+  .v8-grid-kpi   { grid-template-columns: repeat(2, 1fr); }
+  .v8-grid-stats { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 400px) {
+  .v8-grid-kpi { grid-template-columns: 1fr; }
+}
+/* ─── Fin del resumen de IBP Tools (v8) ───────────────────── */
