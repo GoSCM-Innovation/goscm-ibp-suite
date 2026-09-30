@@ -97,17 +97,27 @@ export {
   cifraLegible,
   conversionQueFalta,
   esCero,
+  esNombreDeCampo,
   filtroDeCifra,
   filtroDeCifras,
   filtroDeFechas,
   filtroDePlanificacion,
   nivelDeAgregacion,
+  ordenDelVisor,
   parseKfMetadata,
+  periodoIso,
   periodoLegible,
   selectDePlanificacion,
+  selectDelVisor,
   sinCeros,
   sinFilasEnCero,
 } from './planning-data-model.js'
+
+export { cifrasCambiadas, filasDeEdicionDeCifras, resultadoDeEdicion } from './planning-data-edit.js'
+
+export { ESPERA_DE_EDICION_MS, escribirCifrasEditadas } from './planning-data-edit-run.js'
+
+export { PRUEBAS_EN_PARALELO, readAttrDistinctValues, tablaDelAtributo } from './attr-values.js'
 
 export {
   ATRIBUTOS_DE_SOLO_LECTURA,
@@ -161,6 +171,7 @@ export {
 } from './planning-data-write.js'
 
 export {
+  ESPERA_ENTRE_INTENTOS_MS,
   FILAS_POR_PAGINA,
   countKf,
   detectConversions,
