@@ -1,3 +1,6 @@
+// La pantalla «Job Templates»: qué plantillas hay, qué hace una y lanzarla.
+//
+// GET  ?connectionId=…                 — las plantillas del tenant (`JobTemplateSet`, como v8).
 // GET  ?connectionId=…&templateName=…  — qué hace una plantilla y con qué valores.
 // POST { connectionId, templateName, jobText } — la lanza.
 //
@@ -10,7 +13,7 @@
 import { requireModule } from '../../core/auth/guards.js'
 import { getConnectionTarget, getCredentials } from '../../core/connections/index.js'
 import { explicarFallo } from '../../core/ibp/explicar-fallo.js'
-import { readTemplateDetail, scheduleJob } from '../../core/ibp/index.js'
+import { readJobTemplateSet, readTemplateDetail, scheduleJob } from '../../core/ibp/index.js'
 
 const ACUERDO = 'SAP_COM_0326'
 
@@ -25,7 +28,7 @@ export default async function handler(req, res) {
   const cuerpo = req.method === 'GET' ? req.query : req.body
   const { connectionId, templateName } = cuerpo ?? {}
   if (!connectionId) return res.status(400).json({ error: 'Falta la conexión.' })
-  if (!templateName) return res.status(400).json({ error: 'Falta la plantilla.' })
+  if (req.method === 'POST' && !templateName) return res.status(400).json({ error: 'Falta la plantilla.' })
 
   try {
     const conexion = await getConnectionTarget(session.clientId, connectionId)
@@ -35,6 +38,9 @@ export default async function handler(req, res) {
     const comun = { baseUrl: conexion.baseUrl, credentials, templateName }
 
     if (req.method === 'GET') {
+      if (!templateName) {
+        return res.status(200).json({ plantillas: await readJobTemplateSet(comun) })
+      }
       return res.status(200).json(await readTemplateDetail(comun))
     }
 

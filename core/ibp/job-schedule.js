@@ -37,12 +37,26 @@ function secuenciasDe(json) {
 }
 
 /**
+ * Las plantillas que lista la pantalla «Job Templates»: `JobTemplateSet` entero, TODAS.
+ *
+ * Es la consulta de `Jobs.jsx` de v8, una lectura directa de la entidad. No pasa por
+ * `readJobTemplates` de `app-jobs.js`, que primero lee el `$metadata` para buscar cómo se llama la
+ * entidad: ese camino viene del documentador de v9 y lo siguen usando el explorador de CI-DS y el
+ * orquestador. Aquí se pide lo mismo que pedía v8, sin la vuelta previa.
+ *
+ * Si SAP parte la respuesta en páginas, se siguen: la primera petición es la de v8.
+ */
+export async function readJobTemplateSet({ baseUrl, credentials }) {
+  return readAllPages({ baseUrl, credentials, entity: 'JobTemplateSet' })
+}
+
+/**
  * Qué va a hacer una plantilla cuando se lance: sus pasos y los valores que trae configurados.
  *
  * Hay plantillas —las de integración con CI-DS, entre otras— donde `JobTemplateRead` no está
- * permitido. Para esas se cae a `JobTemplateParameterValueDataSet`, que sí lo está y trae los mismos
- * valores aunque sin agruparlos por paso. Es lo que hacía v8 y evita que la pantalla quede en blanco
- * justo en las plantillas que más se lanzan.
+ * permitido. Para esas se cae a `JobTemplateParameterValueDataSet`, que sí lo está y trae los
+ * valores aunque sin agruparlos por paso. Es lo que hacía v8: un paso por cada secuencia de
+ * `JobTemplateSequenceSet`, todos con los mismos parámetros. Sin secuencias, cero pasos.
  */
 export async function readTemplateDetail({ baseUrl, credentials, templateName }) {
   const raiz = appJobRoot(baseUrl)
@@ -91,7 +105,9 @@ export async function readTemplateDetail({ baseUrl, credentials, templateName })
     }
   }
 
-  // Respaldo: los valores sin agrupar por paso.
+  // Respaldo, solo si SAP declara secuencias: los valores sin agrupar por paso.
+  if (secuenciasDeclaradas.length === 0) return { pasos: [], completo: false }
+
   const sueltos = await opcional(readAllPages({
     baseUrl,
     credentials,
@@ -118,16 +134,23 @@ export async function readTemplateDetail({ baseUrl, credentials, templateName })
     .map((uno) => ({
       name: uno.JobTemplateParameterName,
       label: etiquetaDeParametro(uno.JobTemplateParameterName),
-      group: etiquetasDeGrupo[nombreBase(uno.JobTemplateParameterName)] ?? null,
-      isCheckbox: false,
+      group: null,
+      // Sin `JobTemplateRead` no se sabe qué es casilla; v8 conocía una: «Production».
+      isCheckbox: nombreBase(uno.JobTemplateParameterName) === 'P_ISPRD',
     }))
 
-  return {
-    pasos: params.length > 0
-      ? [{ posicion: 1, catalogo: '', titulo: 'Parámetros configurados', nombre: null, params, valores }]
-      : [],
-    completo: false,
-  }
+  const pasos = [...secuenciasDeclaradas]
+    .sort((a, b) => (a.JobSequencePosition || 0) - (b.JobSequencePosition || 0))
+    .map((una) => ({
+      posicion: una.JobSequencePosition || 1,
+      catalogo: una.BasicJobCatalogEntryName ?? '',
+      titulo: una.JceText || una.BasicJobCatalogEntryName || '',
+      nombre: una.JobSequenceText || null,
+      params,
+      valores,
+    }))
+
+  return { pasos, completo: false }
 }
 
 /**

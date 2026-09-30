@@ -9,9 +9,12 @@ const {
   JOB_HEADER_TOP,
   buildJobHeaderQuery,
   cancelJobRun,
+  readCatalogMeta,
   readJobRuns,
   readLogMessages,
+  readRunParams,
   readRunSteps,
+  readTemplateSequences,
   resetFilterMemory,
   restartJobRun,
   toSapTimestamp,
@@ -169,6 +172,73 @@ describe('readLogMessages', () => {
 
     const ruta = decodeURIComponent(sapFetch.mock.calls[0][0].url)
     expect(ruta).toContain("JobStepLogInfoSet(JobName='J',JobRunCount='1',StepNumber=3,LogHandle='LH1')/JobLogMessageSet")
+  })
+})
+
+describe('readRunParams', () => {
+  it('pide los parámetros de la ejecución con el nombre y la repetición entrecomillados', async () => {
+    sapFetch.mockResolvedValueOnce({ json: { d: { results: [{ StepNr: '1', JobParameterName: 'P_VERS', Low: 'V1' }] } } })
+    const filas = await readRunParams({ baseUrl: BASE, credentials: cred, jobName: 'MI_JOB', jobRunCount: '07' })
+
+    const url = decodeURIComponent(sapFetch.mock.calls[0][0].url)
+    // `JobCount`, no `JobRunCount`: así se llama el parámetro de esta función en SAP.
+    expect(url).toContain("JobParamValuesStructGet?JobName='MI_JOB'&JobCount='07'")
+    expect(sapFetch.mock.calls[0][0].method).toBeUndefined()
+    expect(filas).toEqual([{ StepNr: '1', JobParameterName: 'P_VERS', Low: 'V1' }])
+  })
+
+  // El panel reconoce la falta del rol por el texto de SAP; si esto se tragara el fallo, no podría.
+  it('un rechazo de SAP se propaga', async () => {
+    sapFetch.mockRejectedValueOnce(new SapError('SAP devolvió 403', { status: 403, detail: '[APJ_RT/028] not authorized' }))
+    await expect(readRunParams({ baseUrl: BASE, credentials: cred, jobName: 'J', jobRunCount: '1' }))
+      .rejects.toMatchObject({ detail: expect.stringContaining('APJ_RT/028') })
+  })
+})
+
+describe('readTemplateSequences', () => {
+  // Es la consulta del panel de v8: por contención, no por igualdad.
+  it('filtra con substringof sobre el nombre de la plantilla', async () => {
+    sapFetch.mockResolvedValueOnce({ json: { d: { results: [{ JobSequencePosition: 1, JobSequenceText: 'Cargar' }] } } })
+    const filas = await readTemplateSequences({ baseUrl: BASE, credentials: cred, templateName: 'YY1_ABC' })
+
+    const url = decodeURIComponent(sapFetch.mock.calls[0][0].url)
+    expect(url).toContain("JobTemplateSequenceSet?$filter=substringof('YY1_ABC',JobTemplateName)")
+    expect(filas).toHaveLength(1)
+  })
+
+  it('sin plantilla no pregunta', async () => {
+    expect(await readTemplateSequences({ baseUrl: BASE, credentials: cred, templateName: '' })).toEqual([])
+    expect(sapFetch).not.toHaveBeenCalled()
+  })
+})
+
+describe('readCatalogMeta', () => {
+  it('hace las tres lecturas de v8 por el catálogo del paso', async () => {
+    sapFetch.mockImplementation(({ url }) => {
+      if (url.includes('JobTemplateRead')) {
+        return Promise.resolve({ json: { d: { TemplateData: JSON.stringify({ templates: [{ sequences: [{ seq_param_val: [{ name: 'P_VERS', label: 'Version' }] }] }] }) } } })
+      }
+      if (url.includes('JobTemplateParameterSet')) {
+        return Promise.resolve({ json: { d: { results: [{ JobTemplateParameterName: 'P_VERS', JobTemplateParamGroupName: 'G1' }] } } })
+      }
+      return Promise.resolve({ json: { d: { results: [{ JobTemplateParamGroupName: 'G1', JobTemplateParamGroupText: 'General' }] } } })
+    })
+
+    const meta = await readCatalogMeta({ baseUrl: BASE, credentials: cred, catalog: '/IBP/OP_COPYVS' })
+
+    const urls = sapFetch.mock.calls.map(([llamada]) => decodeURIComponent(llamada.url))
+    expect(urls.some((u) => u.includes("JobTemplateRead?JobTemplateName='/IBP/OP_COPYVS'"))).toBe(true)
+    expect(urls.some((u) => u.includes("JobTemplateParameterSet?$filter=BasicJobCatalogEntryName eq '/IBP/OP_COPYVS'"))).toBe(true)
+    expect(urls.some((u) => u.includes("JobTemplateParamGroupSet?$filter=JobTemplateName eq '/IBP/OP_COPYVS'"))).toBe(true)
+    expect(meta).toMatchObject({ hasData: true, paramOrder: ['P_VERS'], groupMap: { P_VERS: 'General' }, labelMap: { P_VERS: 'Version' } })
+  })
+
+  // Ninguna de las tres es imprescindible: sin ellas los parámetros se muestran igual.
+  it('si SAP no deja leer nada, devuelve el respaldo en vez de fallar', async () => {
+    sapFetch.mockRejectedValue(new SapError('SAP devolvió 403', { status: 403 }))
+    const meta = await readCatalogMeta({ baseUrl: BASE, credentials: cred, catalog: 'Z_PROPIO' })
+    expect(meta).toMatchObject({ hasData: false, visibleParams: null, paramOrder: [] })
+    expect(meta.groupMap.P_VERS).toBe('General')
   })
 })
 
