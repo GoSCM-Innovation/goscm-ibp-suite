@@ -63,20 +63,29 @@ async function conReintento(leerUnaVez, { reintentos = 0, esperaMs = ESPERA_ENTR
   }
 }
 
+/**
+ * Cómo se lee el catálogo: el documento de servicio y el `$metadata` tardan, y v8 les daba 110 s y
+ * tres reintentos ante un fallo pasajero. Son lecturas idempotentes.
+ */
+export const LECTURA_DEL_CATALOGO = Object.freeze({ reintentos: 3, timeoutMs: 110_000 })
+
 /** Las áreas de planificación que este usuario ve en ESTE servicio. */
-export async function readPlanningAreas({ baseUrl, credentials }) {
-  const { json } = await sapFetch({ url: `${planningRoot(baseUrl)}/?$format=json`, credentials, kind: 'ibp' })
+export async function readPlanningAreas({ baseUrl, credentials, esperaMs }) {
+  const { json } = await conReintento(() => sapFetch({
+    url: `${planningRoot(baseUrl)}/?$format=json`, credentials, kind: 'ibp', timeoutMs: LECTURA_DEL_CATALOGO.timeoutMs,
+  }), { reintentos: LECTURA_DEL_CATALOGO.reintentos, esperaMs })
   return areasDesdeConjuntos(json?.d?.EntitySets ?? [])
 }
 
 /** Las dimensiones, las cifras clave y sus etiquetas. */
-export async function readKfMetadata({ baseUrl, credentials, area }) {
-  const { text } = await sapFetch({
+export async function readKfMetadata({ baseUrl, credentials, area, esperaMs }) {
+  const { text } = await conReintento(() => sapFetch({
     url: `${planningRoot(baseUrl)}/$metadata`,
     credentials,
     kind: 'ibp',
     expect: 'xml',
-  })
+    timeoutMs: LECTURA_DEL_CATALOGO.timeoutMs,
+  }), { reintentos: LECTURA_DEL_CATALOGO.reintentos, esperaMs })
 
   const leido = parseKfMetadata(text, area)
   if (!leido) throw new Error(`El área "${area}" no aparece en los metadatos del servicio.`)
@@ -89,8 +98,11 @@ export async function readKfMetadata({ baseUrl, credentials, area }) {
  * Con `$top` acotado: una lectura sin límite de un área grande puede tumbar el servicio, y las
  * versiones son pocas —siete en el tenant de pruebas—.
  */
-export async function readVersions({ baseUrl, credentials, area }) {
-  const d = await leer({ baseUrl, credentials, area, consulta: '$select=VERSIONID,VERSIONNAME&$top=1000' })
+export async function readVersions({ baseUrl, credentials, area, esperaMs }) {
+  const d = await conReintento(
+    () => leer({ baseUrl, credentials, area, consulta: '$select=VERSIONID,VERSIONNAME&$top=1000', timeoutMs: 90_000 }),
+    { reintentos: LECTURA_DEL_CATALOGO.reintentos, esperaMs },
+  )
 
   const vistas = new Map()
   for (const fila of d.results ?? []) {

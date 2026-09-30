@@ -133,6 +133,17 @@ describe('reintentos de lectura', () => {
     expect(sapFetch).toHaveBeenCalledTimes(1)
   })
 
+  // El `$metadata` tarda: v8 le daba 110 s y tres reintentos.
+  it('el catálogo se lee con 110 s y se repite ante un fallo pasajero', async () => {
+    sapFetch
+      .mockRejectedValueOnce(pasajero())
+      .mockResolvedValueOnce({ text: '<EntityType Name="ASIBPTS"><Property Name="PRDID" Type="Edm.String"/></EntityType>' })
+
+    await expect(readKfMetadata({ ...ctx, esperaMs: 0 })).resolves.toMatchObject({ dims: ['PRDID'] })
+    expect(sapFetch).toHaveBeenCalledTimes(2)
+    expect(sapFetch.mock.calls[1][0].timeoutMs).toBe(110_000)
+  })
+
   it('readKfPage se rinde tras los reintentos y pasa la espera al transporte', async () => {
     sapFetch.mockRejectedValue(pasajero())
     await expect(readKfPage({ ...ctx, select: ['KF'], reintentos: 2, esperaMs: 0, timeoutMs: 90_000 })).rejects.toThrow('503')
