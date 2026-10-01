@@ -17,6 +17,7 @@ import {
   origenGuardado,
   porCursor,
   prepararPara,
+  reiniciarSiOtroOrigen,
   vaciar,
   vaciarTodo,
 } from './explorer-db.js'
@@ -210,5 +211,41 @@ describe('prepararPara', () => {
     await guardar('bom_psi', [fuente('S1')])
     await expect(prepararPara({ ...ORIGEN, planningArea: 'OTRA', versionId: 'V9' }))
       .resolves.toMatchObject({ seVacio: true })
+  })
+})
+
+describe('reiniciarSiOtroOrigen (al conectar)', () => {
+  it('con la base vacía solo anota el origen', async () => {
+    await expect(reiniciarSiOtroOrigen(ORIGEN)).resolves.toEqual({ seVacio: true })
+    await expect(origenGuardado()).resolves.toBe('c-1|PA|V1')
+  })
+
+  it('con datos del mismo origen los conserva', async () => {
+    await reiniciarSiOtroOrigen(ORIGEN)
+    await guardar('bom_psh', [{ SOURCEID: 'S1' }])
+    await expect(reiniciarSiOtroOrigen(ORIGEN)).resolves.toEqual({ seVacio: false })
+    await expect(contar('bom_psh')).resolves.toBe(1)
+  })
+
+  // El fallo que se vio: el árbol aparecía con datos de otro tenant antes de confirmar el mapeo.
+  it('con datos de otro tenant los borra, para que no se vean al conectar', async () => {
+    await reiniciarSiOtroOrigen(ORIGEN)
+    await guardar('bom_psh', [{ SOURCEID: 'S1' }])
+    await reiniciarSiOtroOrigen({ ...ORIGEN, connectionId: 'c-2' })
+    await expect(contar('bom_psh')).resolves.toBe(0)
+    await expect(origenGuardado()).resolves.toBe('c-2|PA|V1')
+  })
+
+  it('con datos SIN marca de origen tampoco se fía: los borra', async () => {
+    await guardar('bom_psh', [{ SOURCEID: 'S1' }])
+    await reiniciarSiOtroOrigen(ORIGEN)
+    await expect(contar('bom_psh')).resolves.toBe(0)
+  })
+
+  it('cambiar de versión del mismo tenant también borra', async () => {
+    await reiniciarSiOtroOrigen(ORIGEN)
+    await guardar('bom_psh', [{ SOURCEID: 'S1' }])
+    await reiniciarSiOtroOrigen({ ...ORIGEN, versionId: 'V2' })
+    await expect(contar('bom_psh')).resolves.toBe(0)
   })
 })

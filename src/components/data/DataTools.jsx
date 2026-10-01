@@ -10,7 +10,7 @@
 // Lo que queda es el despacho: la cinta que presenta cada aplicación, el candado de las que no pueden
 // hacer nada sin conexión, y montar la que toque. El menú lateral es de `Shell.jsx`.
 
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, useMemo } from 'react'
 
 import { APPS_EXPLORER } from '../../lib/modules.js'
 import { destinoDe, estaConectado, useConexionActiva, verAsistente } from '../../lib/conexion-activa.js'
@@ -26,7 +26,16 @@ const PlanningAreaDoc = lazy(() => import('./PlanningAreaDoc.jsx'))
 export default function DataTools({ appId }) {
   const conexion = useConexionActiva()
   const conectado = estaConectado(conexion)
-  const destino = destinoDe(conexion)
+  // El destino es un objeto nuevo cada vez que se calcula, y las pantallas de abajo lo usan como
+  // dependencia de sus lecturas. Si cambiara de identidad en cada dibujo, cada relectura de la sesión
+  // —que ocurre al volver a esta pestaña del navegador o al cambiar de sección— haría creer que el
+  // destino cambió: el mapeo se vaciaba y volvía a pedir las tablas a SAP, y se veía como un parpadeo
+  // «cada cierto tiempo». Solo cambia cuando cambian de verdad el tenant, el área o la versión.
+  const { connectionId, planningArea, version } = conexion
+  const destino = useMemo(
+    () => destinoDe({ connectionId, planningArea, version }),
+    [connectionId, planningArea, version],
+  )
 
   const app = APPS_EXPLORER.find((una) => una.id === appId) ?? APPS_EXPLORER[0]
 

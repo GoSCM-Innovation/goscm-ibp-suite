@@ -7,6 +7,16 @@ actualiza al terminar cada sesión, y su orden es el de prioridad acordada.
 
 ## Dónde estamos
 
+- **Tres correcciones más del 2026-10-01 al conectar un tenant** (pendientes de verlas en el sitio):
+  1. El asistente **se cierra** al terminar el paso ③, como `closeConnectDialog` de v7. Ya no hay cuadro
+     «Conexión activa» con «Cerrar» (ese panel solo sale al abrir el diálogo estando ya conectado).
+  2. **Al conectar se borra lo guardado en el navegador de OTRO tenant/área/versión**
+     (`reiniciarSiOtroOrigen`, el `resetAllModules()` de v7). Antes el árbol («Árbol 1») aparecía de
+     inmediato con productos de otro sistema, porque la comprobación de origen solo corría al descargar.
+     Si es el mismo destino, lo guardado se conserva.
+  3. **El mapeo ya no parpadea.** El destino se recalculaba como objeto nuevo en cada dibujo y la
+     relectura de sesión (al volver a la pestaña) hacía que el mapeo se vaciara y pidiera todo a SAP otra
+     vez. Ahora `DataTools` lo memoriza por tenant/área/versión.
 - **Dos correcciones del 2026-10-01, pendientes de verlas en el sitio desplegado.**
   1. **El Glosario Analyzers ahora es el de v7**, no una versión derivada del código que se había
      inventado y no se parecía al original. Dos pestañas, índice lateral, leyenda y secciones por hoja,

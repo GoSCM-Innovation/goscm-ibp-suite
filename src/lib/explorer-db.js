@@ -263,3 +263,23 @@ export async function prepararPara(origen) {
 
   return { seVacio: !sirve && guardada !== null, habiaOtro: guardada }
 }
+
+/**
+ * Al CONECTAR: lo guardado en este navegador que no sea de este tenant, área y versión se borra.
+ *
+ * Es el `resetAllModules()` que v7 llamaba al conectar. Sin esto, los datos de una sesión anterior
+ * —de otro tenant— seguían a la vista: el árbol aparecía antes de confirmar el mapeo, con productos
+ * que no eran de este sistema. `prepararPara` solo corría al DESCARGAR, y a esas alturas ya se había
+ * enseñado lo ajeno.
+ *
+ * Difiere de `prepararPara` en un caso: si hay datos y NO hay marca de origen (guardados antes de que
+ * existiera la marca), no se sabe de dónde son, y se borran igual. Con los mismos origen se conservan:
+ * son válidos para este destino.
+ */
+export async function reiniciarSiOtroOrigen(origen) {
+  const guardada = await origenGuardado()
+  if (mismoOrigen(guardada, origen)) return { seVacio: false }
+  await vaciarTodo()
+  await anotarOrigen(origen)
+  return { seVacio: true }
+}

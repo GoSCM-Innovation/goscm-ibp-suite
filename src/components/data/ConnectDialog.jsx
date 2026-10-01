@@ -22,7 +22,8 @@ import { conectar, estaConectado, useConexionActiva } from '../../lib/conexion-a
 import { listIbpConnections } from '../../lib/ibp.js'
 import { etiquetaDeConexion } from '../../lib/nombre-de-conexion.js'
 import { fetchMasterCatalog } from '../../lib/ibp-master-data.js'
-import { VERSION_BASE, versionEfectiva } from '../../lib/version-elegida.js'
+import { reiniciarSiOtroOrigen } from '../../lib/explorer-db.js'
+import { VERSION_BASE, versionEfectiva, versionParaSap } from '../../lib/version-elegida.js'
 
 /** Los tres pasos, con el nombre que llevan en el indicador de progreso. */
 const PASOS = [
@@ -116,8 +117,27 @@ export default function ConnectDialog({ onClose }) {
       .finally(() => setLeyendo(false))
   }, [conexionId])
 
-  /** Paso ③: queda fijado el destino y el diálogo pasa a enseñar lo que hay. */
-  function doPaso3() {
+  /**
+   * Paso ③: queda fijado el destino y el diálogo SE CIERRA.
+   *
+   * En v7 conectar llamaba a `closeConnectDialog` y dejaba al consultor en el mapeo de entidades. Aquí
+   * se enseñaba antes un cuadro resumen con «Cerrar»: un paso de más, que repetía lo que la barra de
+   * tenant ya dice. Y, como `resetAllModules()` de v7, lo guardado de otro tenant se borra para que la
+   * aplicación arranque desde el primer paso y no con el árbol de una sesión ajena.
+   */
+  async function doPaso3() {
+    setError('')
+    try {
+      await reiniciarSiOtroOrigen({
+        connectionId: conexionId,
+        planningArea: area,
+        versionId: versionParaSap(version),
+      })
+    } catch (fallo) {
+      // Sin poder limpiar no se conecta: se seguiría viendo lo de la sesión anterior.
+      setError(`No se pudo preparar la base local de este navegador: ${fallo.message}`)
+      return
+    }
     conectar({
       connectionId: conexionId,
       nombre: conexion?.name ?? '',
@@ -127,7 +147,7 @@ export default function ConnectDialog({ onClose }) {
       esProduccion: Boolean(conexion?.isProduction),
     })
     setEstado('')
-    setPaso(0)
+    onClose()
   }
 
   return (
