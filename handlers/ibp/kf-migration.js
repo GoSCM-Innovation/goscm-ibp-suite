@@ -1,26 +1,34 @@
-// La migración de cifras clave entre dos tenants.
+// La migración de dato transaccional (key figures), como en v8: una key figure a la vez.
 //
-// POST { accion: 'revisar', … }   — qué se copiaría y qué lo impide. Solo lee.
-// POST { accion: 'valores', … }   — las unidades o las monedas del origen. Solo lee.
-// POST { accion: 'contar', … }    — cuántas filas hay al nivel elegido. Solo lee.
-// POST { accion: 'copiar', … }    — copia UN segmento. **ESTO ESCRIBE EN SAP.**
+// POST { accion: 'contar', origen, definicion, reintentos }      — cuántas filas hay. Solo lee.
+// POST { accion: 'periodos', origen, definicion }                — los periodos con dato. Solo lee.
+// POST { accion: 'copiar', origen, destino, definicion, periodo, desde, cuantas, nombre, confirmacion }
+//                                                                — UN segmento. **ESTO ESCRIBE EN SAP.**
+// POST { accion: 'confirmar', destino, transactionId }           — su estado y sus rechazos. Solo lee.
 //
-// Un segmento por llamada, por lo mismo que en dato maestro: una cifra puede ser un millón de filas y
-// no cabe en el tiempo de una función, y el segmento ya es la unidad de la transacción.
+// `origen` y `destino` son `{ connectionId, area, versionId }`. La `definicion` es la de UNA key figure
+// —el nivel con el atributo de origen de cada atributo del destino, el nivel de tiempo, la key figure de
+// cada lado, las conversiones, los filtros y si se lee solo lo que no es cero—; el `$select`, el
+// `$filter` y el `$orderby` se arman AQUÍ con `core/`, que es donde viven las reglas de SAP.
+//
+// En v8 la pantalla hacía todo esto detrás de un proxy. Aquí la pantalla ORQUESTA y cada llamada es
+// una pieza que cabe en una función; las credenciales no salen del servidor.
 //
 // La confirmación explícita no es decorativa: sin ella, un reintento automático de cualquier capa
-// intermedia escribiría cifras en un tenant que puede ser productivo.
+// intermedia escribiría en un tenant que puede ser productivo.
 
 import { requireModule } from '../../core/auth/guards.js'
 import { getAnyCredentials, getConnectionTarget } from '../../core/connections/index.js'
 import { explicarFallo } from '../../core/ibp/explicar-fallo.js'
 import {
-  contarLoQueSeCopia,
-  readConversionValues,
-  filtroDePlanificacion,
-  migrarSegmentoDeCifras,
-  readKfMetadata,
-  revisarMigracionDeCifras,
+  FILAS_POR_SEGMENTO_KF,
+  confirmarTransaccionDeCifra,
+  contarCifra,
+  copiarSegmentoDeCifra,
+  definicionDeLaCifra,
+  esNombreDeCampo,
+  esPeriodoIso,
+  periodosDeLaCifra,
 } from '../../core/ibp/index.js'
 
 const ACUERDOS = ['SAP_COM_0720', 'SAP_COM_0326']
@@ -28,21 +36,20 @@ const ACUERDOS = ['SAP_COM_0720', 'SAP_COM_0326']
 /** Lo que hay que mandar para que la copia se ejecute. */
 const CONFIRMACION = 'copiar'
 
-/** Tope de filas por llamada, para no pasarse del tiempo de la función. */
-const MAX_POR_SEGMENTO = 20_000
-
 /** El contexto de un tenant, comprobando que la conexión sea de este cliente y de IBP. */
-async function tenantDe(clientId, connectionId, cual) {
-  if (!connectionId) throw new Error(`Falta la conexión de ${cual}.`)
+async function tenantDe(clientId, lado, cual) {
+  if (!lado?.connectionId) throw new Error(`Falta la conexión de ${cual}.`)
+  if (!esNombreDeCampo(lado.area)) throw new Error(`Falta el área de planificación de ${cual}.`)
 
-  const conexion = await getConnectionTarget(clientId, connectionId)
+  const conexion = await getConnectionTarget(clientId, lado.connectionId)
   if (conexion.kind !== 'ibp') throw new Error(`La conexión de ${cual} no es de IBP.`)
 
   return {
     baseUrl: conexion.baseUrl,
-    credentials: await getAnyCredentials(clientId, connectionId, ACUERDOS),
+    credentials: await getAnyCredentials(clientId, lado.connectionId, ACUERDOS),
+    versionId: lado.versionId ? String(lado.versionId) : '',
+    area: lado.area,
     name: conexion.name,
-    isProduction: conexion.isProduction,
   }
 }
 
@@ -53,109 +60,64 @@ export default async function handler(req, res) {
   if (!session) return
 
   const {
-    accion, origen = {}, destino = {}, cifras = [], dimensiones = [], condiciones = [],
-    destinoDe = {}, desdeFecha = '', hastaFecha = '', atributo = '', soloConValor,
-    desde = 0, cuantas = 5000, confirmacion, nombre,
+    accion, origen, destino, definicion: entrada, reintentos, periodo, desde, cuantas,
+    nombre, confirmacion, transactionId,
   } = req.body ?? {}
 
   try {
-    const deOrigen = await tenantDe(session.clientId, origen.connectionId, 'origen')
-
-    // Los valores que acepta un atributo de conversión salen del ORIGEN, que es de donde se lee. Se
-    // contesta antes de resolver el destino a propósito: exigir un destino para poder listar las
-    // unidades del origen obligaría a elegir a dónde se copia antes de saber si hay algo que copiar.
-    if (accion === 'valores') {
-      return res.status(200).json({
-        valores: await readConversionValues({ ...deOrigen, area: origen.area, atributo }),
-      })
+    if (accion === 'confirmar') {
+      if (!transactionId || !/^[A-Za-z0-9_-]+$/.test(String(transactionId))) {
+        return res.status(400).json({ error: 'Falta la transacción.' })
+      }
+      const deDestino = await tenantDe(session.clientId, destino, 'destino')
+      return res.status(200).json(await confirmarTransaccionDeCifra({
+        destino: deDestino, area: deDestino.area, transactionId: String(transactionId),
+      }))
     }
 
-    const deDestino = await tenantDe(session.clientId, destino.connectionId, 'destino')
+    const { definicion, error } = definicionDeLaCifra(entrada)
+    if (error) return res.status(400).json({ error })
 
-    if (accion === 'revisar') {
-      // Los catálogos de los dos lados: es lo que permite decir "el destino no tiene esa cifra" antes
-      // de empezar, en vez de que SAP lo rechace a los diez minutos.
-      const [delOrigen, delDestino] = await Promise.all([
-        readKfMetadata({ ...deOrigen, area: origen.area }),
-        readKfMetadata({ ...deDestino, area: destino.area }),
-      ])
-
-      return res.status(200).json({
-        revision: revisarMigracionDeCifras({
-          origen, destino, cifras, dimensiones, destinoDe,
-          desde: desdeFecha,
-          hasta: hastaFecha,
-          cifrasDelDestino: delDestino.cifras,
-          dimensionesDelDestino: delDestino.dims,
-        }),
-        origen: { cifras: delOrigen.cifras, dims: delOrigen.dims, etiquetas: delOrigen.etiquetas },
-        // El catálogo del DESTINO también, para poder ofrecer con qué nombre se escribe cada cosa
-        // cuando los dos tenants no las llaman igual.
-        destino: { cifras: delDestino.cifras, dims: delDestino.dims, etiquetas: delDestino.etiquetas },
-        destinoEsProductivo: Boolean(deDestino.isProduction),
-        nombreDelDestino: deDestino.name,
-      })
-    }
-
-    const revision = revisarMigracionDeCifras({
-      origen, destino, cifras, dimensiones, destinoDe, desde: desdeFecha, hasta: hastaFecha,
-    })
-    if (!revision.sePuede) {
-      return res.status(400).json({ error: revision.impedimentos.join(' ') })
-    }
-
-    // El rango de fechas va sobre el campo de periodo del nivel elegido: sin nivel de tiempo no hay
-    // sobre qué acotar, y pedirlo igual daría un filtro contra un campo que no se está leyendo.
-    const comun = {
-      conversiones: origen.conversiones ?? {},
-      condiciones,
-      campoDeTiempo: revision.nivelDeTiempo?.campo ?? '',
-      desde: desdeFecha,
-      hasta: hastaFecha,
-    }
-    // Dos filtros: el que acota a las filas con valor —el que se usa— y el de todo, que es el
-    // respaldo para las cifras a las que SAP no le acepta ese predicado.
-    const filtroConValor = filtroDePlanificacion({ ...comun, cifras, soloConValor: true })
-    const filtroBase = filtroDePlanificacion(comun)
+    const deOrigen = await tenantDe(session.clientId, origen, 'origen')
 
     if (accion === 'contar') {
       return res.status(200).json({
-        plan: await contarLoQueSeCopia({
-          origen: { ...deOrigen, versionId: origen.versionId },
-          area: origen.area,
-          nivel: revision.nivel,
-          cifras,
-          filtro: filtroConValor,
-          filtroBase,
+        total: await contarCifra({
+          origen: deOrigen, area: deOrigen.area, definicion, reintentos: Number(reintentos) > 0 ? 1 : 0,
         }),
       })
+    }
+
+    if (accion === 'periodos') {
+      return res.status(200).json({ periodos: await periodosDeLaCifra({ origen: deOrigen, area: deOrigen.area, definicion }) })
     }
 
     if (accion === 'copiar') {
       if (confirmacion !== CONFIRMACION) {
         return res.status(400).json({ error: 'Falta la confirmación de que se quiere escribir en el tenant de destino.' })
       }
+      if (periodo && !esPeriodoIso(periodo)) return res.status(400).json({ error: 'El periodo no es válido.' })
 
-      const segmento = await migrarSegmentoDeCifras({
-        origen: { ...deOrigen, versionId: origen.versionId },
-        destino: { ...deDestino, versionId: destino.versionId },
-        area: origen.area,
-        areaDestino: destino.area,
-        nivel: revision.nivel,
-        cifras,
-        // El MISMO filtro con el que se contó. Contar acotando y leer sin acotar daría un total que
-        // no describe lo que se está copiando, y el avance mentiría de principio a fin.
-        filtro: soloConValor === false ? filtroBase : filtroConValor,
-        destinoDe,
-        desde: Number(desde) || 0,
-        cuantas: Math.min(Number(cuantas) || 5000, MAX_POR_SEGMENTO),
-        nombre: nombre || 'goscm-suite',
+      const deDestino = await tenantDe(session.clientId, destino, 'destino')
+      const inicio = Math.max(Number(desde) || 0, 0)
+      const segmento = await copiarSegmentoDeCifra({
+        origen: deOrigen,
+        destino: deDestino,
+        areaOrigen: deOrigen.area,
+        areaDestino: deDestino.area,
+        definicion,
+        periodo: periodo || null,
+        desde: inicio,
+        // Nunca más de un segmento por llamada: es lo que cabe en el tiempo de una función.
+        cuantas: Math.min(Math.max(Number(cuantas) || FILAS_POR_SEGMENTO_KF, 1), FILAS_POR_SEGMENTO_KF),
+        nombre: String(nombre || 'IBP-ControlTower-KF').slice(0, 40),
       })
 
       // Queda registrado quién escribió cifras en qué tenant.
-      console.log(`[ibp/kf-migration] ${session.userId ?? session.clientId} · ${cifras.join(',')}`
-        + ` · ${origen.area} → ${destino.area} · ${segmento.filas} filas desde ${segmento.desde}`
-        + ` · ${segmento.ok ? 'ok' : `fallo: ${segmento.error}`}`)
+      console.log(`[ibp/kf-migration] ${session.userId ?? session.clientId}`
+        + ` · ${definicion.cifra.origen} → ${definicion.cifra.destino}`
+        + ` · ${deOrigen.area} → ${deDestino.area}${periodo ? ` · ${periodo}` : ''}`
+        + ` · ${segmento.leidas} leídas desde ${inicio} · ${segmento.ok ? `${segmento.escritas} escritas` : `fallo: ${segmento.error}`}`)
 
       return res.status(200).json(segmento)
     }
@@ -163,6 +125,11 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: `Acción desconocida: "${accion}".` })
   } catch (error) {
     console.error(`[ibp/kf-migration] ${error.stack || error.message}`)
-    return res.status(400).json({ error: explicarFallo(error, ACUERDOS), detalle: error.detail ?? '' })
+    const mensaje = explicarFallo(error, ACUERDOS)
+    const detalle = String(error?.detail ?? '')
+    return res.status(400).json({
+      error: detalle && !mensaje.includes(detalle) ? `${mensaje}: ${detalle}` : mensaje,
+      detalle,
+    })
   }
 }

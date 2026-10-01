@@ -1,16 +1,17 @@
-// Copiar cifras clave de un tenant a otro.
+// La migración de dato transaccional (key figures) de v8, del lado que habla con SAP.
 //
-// Portado de `runMigration` de `KeyFigureMigration.jsx` de v8. La forma, y por qué:
+// Portado de `runMigration` de `KeyFigureMigration.jsx` y de `services/planningDataApi.js` de v8. En v8
+// todo esto corría en el navegador detrás de un proxy; aquí corre en el servidor, porque las
+// credenciales viven cifradas allí. La pantalla ORQUESTA —cuenta, reparte segmentos entre seis
+// trabajadores, reintenta, confirma— y cada pieza de aquí es una llamada que cabe en una función:
 //
-//   - Se copia por SEGMENTOS, cada uno en su propia transacción confirmada. Un fallo a mitad rehace
-//     SOLO el segmento en curso y lo ya confirmado se queda. Es la misma decisión que en dato
-//     maestro, y aquí pesa más: una cifra clave puede ser un millón de filas.
+//   contarCifra             — cuántas filas no cero hay al nivel elegido (o todas, si SAP no acepta ese filtro).
+//   periodosDeLaCifra       — los periodos que tienen dato, para partir los volúmenes grandes por tiempo.
+//   copiarSegmentoDeCifra   — UN segmento: leer, escribir y confirmar en una transacción propia.
+//   confirmarTransaccionDeCifra — esperar a que SAP la procese y, si no quedó limpia, sus rechazos.
 //
-//   - El reintento es de la TRANSACCIÓN, nunca del envío. Repetir un envío ya mandado duplica valores
-//     dentro de la misma transacción.
-//
-//   - El `$select` de la lectura y `AggregationLevelFieldsString` de la escritura salen de la MISMA
-//     lista. Si se separan, se lee a un nivel y se escribe a otro, y el resultado es creíble.
+// El reintento es del SEGMENTO entero en una transacción nueva y lo decide quien llama. Un envío ya
+// preparado nunca se repite: duplicaría valores dentro de la misma transacción.
 
 import {
   abrirSesionDeEscritura,
@@ -23,218 +24,193 @@ import {
   waitForProcessed,
 } from './planning-data-write.js'
 import { countKf, readKfPage } from './planning-data.js'
-import { sinFilasEnCero } from './planning-data-model.js'
+import { filtroDePlanificacion, periodoIso } from './planning-data-model.js'
 import {
-  FILAS_POR_SEGMENTO, filaParaEscribir, nombreEnDestino, planificarSegmentos, selectDeLaMigracion,
+  ENVIOS_EN_PARALELO, ESPERA_DE_CONFIRMACION_MS, FILAS_POR_LECTURA, FILAS_POR_SEGMENTO, LECTURAS_EN_PARALELO,
+  camposDeEscritura, esFalloTransitorio, esMensajeDeRechazo, filasParaEscribir, filtroDePeriodo,
+  lecturaDeLaCifra, mensajeBreve,
 } from './kf-migration-plan.js'
 
-/** Cuántas veces se rehace un segmento antes de darlo por perdido. */
-export const INTENTOS_POR_SEGMENTO = 3
-
-const avisar = (onProgreso, evento) => { if (onProgreso) onProgreso(evento) }
-
-/** Cuántas filas devuelve una lectura de una vez. Pocas páginas grandes: el costo es casi todo fijo. */
-export const FILAS_POR_LECTURA = 5000
-
-/** Lee un tramo del origen, paginando dentro del segmento. */
-async function leerSegmento({ origen, area, select, filtro, orderby, desde, cuantas }) {
-  const filas = []
-
-  while (filas.length < cuantas) {
-    const pedidas = Math.min(FILAS_POR_LECTURA, cuantas - filas.length)
-    const pagina = await readKfPage({
-      ...origen,
-      area,
-      select,
-      filtro,
-      orderby,
-      skip: desde + filas.length,
-      top: pedidas,
-    })
-
-    filas.push(...pagina)
-    // Menos filas de las pedidas quiere decir que se acabó, no que haya que insistir.
-    if (pagina.length < pedidas) break
-  }
-
-  return filas
-}
+/** Una lectura de página: dos reintentos y 90 s, como el visor. */
+const PAGINA = Object.freeze({ reintentos: 2, timeoutMs: 90_000 })
 
 /**
- * Escribe un segmento en el destino, en UNA transacción, y la confirma.
+ * El `$filter` de la lectura de una key figure.
  *
- * Si algo falla, la transacción se queda sin confirmar —SAP la descarta— y quien llama vuelve a
- * intentar el segmento entero en otra nueva.
+ * La versión del ORIGEN acota la lectura: sin el predicado se leería la versión base y se escribiría
+ * en la versión elegida del destino con números de otra. Los filtros de atributo y las fechas viajan
+ * en cada lectura —conteo, periodos y páginas—, y con `soloConValor` solo las filas donde la key
+ * figure es distinta de cero, con `gt 0 or lt 0`: `ne 0` SAP lo ignora en silencio.
  */
-async function escribirSegmento({
-  destino, area, nivel, cifras, filas, nombre, csrf, onProgreso, destinoDe,
-}) {
-  const transactionId = await getTransactionId({ ...destino, csrf })
-  avisar(onProgreso, { fase: 'transaccion', transactionId })
-
-  await initiateParallelProcess({
-    ...destino, transactionId, area, versionId: destino.versionId, nombre, csrf,
+export function filtroDeLaCifra(definicion, version) {
+  return filtroDePlanificacion({
+    version,
+    condiciones: definicion.condiciones,
+    campoDeTiempo: definicion.campoDeTiempo,
+    desde: definicion.desde,
+    hasta: definicion.hasta,
+    conversiones: definicion.conversiones,
+    cifras: [definicion.cifra.origen],
+    soloConValor: definicion.soloConValor,
   })
-
-  const paraEscribir = filas.map((una) => filaParaEscribir(una, nivel, cifras, destinoDe))
-  const envios = partirEnEnvios(paraEscribir, cifras.length)
-
-  for (const [indice, envio] of envios.entries()) {
-    await postKfChunk({
-      ...destino,
-      area,
-      transactionId,
-      filas: envio,
-      // La MISMA lista que el `$select` de la lectura, con los nombres del destino: si se separan,
-      // se escribe a otro nivel del que se leyó.
-      campos: nivel.map((uno) => nombreEnDestino(uno, destinoDe)),
-      versionId: destino.versionId,
-      csrf,
-    })
-    avisar(onProgreso, { fase: 'enviando', enviados: indice + 1, envios: envios.length, filas: envio.length })
-  }
-
-  avisar(onProgreso, { fase: 'confirmando', transactionId })
-  await commitTransaction({ ...destino, transactionId, csrf })
-
-  const estado = await waitForProcessed({ ...destino, transactionId })
-  avisar(onProgreso, { fase: 'procesada', transactionId, estado })
-
-  return { transactionId, estado }
 }
 
 /**
- * Cuántas filas hay que copiar, al nivel elegido.
+ * Cuántas filas hay al nivel elegido, con `$top` pequeño y `$inlinecount` (nunca `$top=0`).
  *
- * Se cuenta antes de empezar porque de eso depende todo lo demás: cuántos segmentos, si conviene
- * partir por periodo, y si vale la pena avisar de que esto va a tardar.
+ * `reintentos` y `timeoutMs` los pone quien llama: el conteo de la corrida va con uno y 60 s, como
+ * v8; el de «Contar registros», sin reintento.
  */
-export async function contarLoQueSeCopia({ origen, area, nivel, cifras, filtro, filtroBase }) {
-  const select = selectDeLaMigracion(nivel, cifras)
-  const contar = (cual) => countKf({ ...origen, area, select, filtro: cual })
-
-  // Primero acotando a las filas que tienen valor: un nivel de planificación es casi todo ceros y
-  // leerlo entero para copiar las pocas celdas con dato es la diferencia entre minutos y una tarde.
-  try {
-    return { ...planificarSegmentos(await contar(filtro)), soloConValor: true }
-  } catch (error) {
-    // Si SAP no acepta ese filtro —hay cifras que no lo admiten— se cuenta sin él y se sigue. El
-    // original hacía exactamente esto, y la alternativa sería no poder copiar.
-    if (filtroBase === undefined || filtroBase === filtro) throw error
-    return {
-      ...planificarSegmentos(await contar(filtroBase)),
-      soloConValor: false,
-      porQueTodo: error.detail || error.message,
-    }
-  }
+export async function contarCifra({ origen, area, definicion, reintentos = 0, timeoutMs = 60_000 }) {
+  const { select } = lecturaDeLaCifra(definicion)
+  return countKf({
+    ...origen, area, select, filtro: filtroDeLaCifra(definicion, origen.versionId), reintentos, timeoutMs,
+  })
 }
 
 /**
- * Copia UN segmento. Es la unidad que cabe en una función serverless y la del reintento.
+ * Los periodos que tienen dato (`fetchTimeBuckets` de v8).
  *
- * NO lanza cuando falla: devuelve el fallo dentro del resultado. Una migración de varias cifras no
- * debe pararse entera por una.
+ * Pedir solo el periodo y la key figure hace que SAP agregue a nivel de tiempo y devuelva una fila
+ * por periodo: es la forma barata de saber cómo partir una lectura enorme.
  */
-export async function migrarSegmentoDeCifras({
-  origen, destino, area, areaDestino, nivel, cifras, filtro, destinoDe,
-  desde = 0, cuantas = FILAS_POR_SEGMENTO, nombre, csrf, onProgreso,
-}) {
-  const sesion = csrf ?? await abrirSesionDeEscritura(destino)
-  const select = selectDeLaMigracion(nivel, cifras)
-
-  avisar(onProgreso, { fase: 'leyendo', desde, cuantas })
-
-  let filas
-  try {
-    filas = await leerSegmento({ origen, area, select, filtro, orderby: nivel, desde, cuantas })
-  } catch (error) {
-    return { desde, filas: 0, ok: false, agotado: false, fase: 'lectura', error: error.detail || error.message }
+export async function periodosDeLaCifra({ origen, area, definicion }) {
+  const filas = await readKfPage({
+    ...origen,
+    area,
+    select: [definicion.campoDeTiempo, definicion.cifra.origen],
+    filtro: filtroDeLaCifra(definicion, origen.versionId),
+    top: 5000,
+    timeoutMs: PAGINA.timeoutMs,
+  })
+  const vistos = new Set()
+  for (const fila of filas) {
+    const crudo = fila[definicion.campoDeTiempo]
+    if (crudo != null) vistos.add(periodoIso(crudo))
   }
+  return [...vistos].sort()
+}
 
-  const agotado = filas.length < cuantas
-  if (filas.length === 0) return { desde, filas: 0, escritas: 0, ok: true, agotado: true, mensajes: [] }
+/** Lee la ventana `[desde, desde + cuantas)` del tramo, de a `LECTURAS_EN_PARALELO` páginas. */
+async function leerSegmento({ origen, area, select, orderby, filtro, desde, cuantas }) {
+  const fin = desde + cuantas
+  const filas = []
+  let agotado = false
 
-  // Las filas donde TODAS las cifras valen cero no se escriben: no aportan nada y pisarían con un
-  // cero un valor que el destino ya tenía. `filas.length` sigue siendo lo LEÍDO, porque de eso
-  // depende el `$skip` del segmento siguiente; lo escrito se cuenta aparte.
-  const escribibles = sinFilasEnCero(filas, cifras)
-  if (escribibles.length === 0) {
-    return { desde, filas: filas.length, escritas: 0, ok: true, agotado, mensajes: [] }
-  }
-
-  let ultimoFallo = null
-  let hecho = null
-  let cifraCalculada = null
-
-  for (let intento = 1; intento <= INTENTOS_POR_SEGMENTO && !hecho; intento += 1) {
-    try {
-      hecho = await escribirSegmento({
-        destino, area: areaDestino ?? area, nivel, cifras, filas: escribibles, nombre,
-        csrf: sesion, onProgreso, destinoDe,
+  for (let inicio = desde; inicio < fin; inicio += FILAS_POR_LECTURA * LECTURAS_EN_PARALELO) {
+    const paginas = Math.min(LECTURAS_EN_PARALELO, Math.ceil((fin - inicio) / FILAS_POR_LECTURA))
+    const lote = await Promise.all(Array.from({ length: paginas }, (_, j) => {
+      const skip = inicio + j * FILAS_POR_LECTURA
+      return readKfPage({
+        ...origen, area, select, orderby, filtro, skip, top: Math.min(FILAS_POR_LECTURA, fin - skip), ...PAGINA,
       })
-    } catch (error) {
-      ultimoFallo = error.detail || error.message
-      // Una cifra CALCULADA no se arregla reintentando: no se puede escribir nunca. Se corta aquí en
-      // vez de gastar tres intentos y dar un mensaje que no explica nada.
-      if (error.cifraCalculada) {
-        cifraCalculada = error.cifraCalculada
-        ultimoFallo = error.message
-        break
-      }
-      avisar(onProgreso, { fase: 'reintento', desde, intento, error: ultimoFallo })
-    }
+    }))
+    const leidas = lote.flat()
+    for (const fila of leidas) filas.push(fila)
+    // Una lectura que vuelve corta quiere decir que el tramo se acabó dentro de este segmento.
+    const pedidas = Math.min(FILAS_POR_LECTURA * LECTURAS_EN_PARALELO, fin - inicio)
+    if (leidas.length < pedidas) { agotado = true; break }
   }
 
-  if (!hecho) {
+  return { filas, agotado }
+}
+
+/**
+ * Copia UN segmento de una key figure: lo lee del origen, lo escribe en el destino en una transacción
+ * propia y la confirma.
+ *
+ * NO lanza: devuelve el fallo dentro del resultado, con `transitorio` para que quien llama decida si
+ * lo vuelve a intentar entero en una transacción nueva. Una key figure CALCULADA no se arregla
+ * reintentando y se marca aparte.
+ *
+ * `tiempos` son los milisegundos de cada fase, que la pantalla suma por key figure como v8.
+ */
+export async function copiarSegmentoDeCifra({
+  origen, destino, areaOrigen, areaDestino, definicion, periodo = null, desde = 0,
+  cuantas = FILAS_POR_SEGMENTO, nombre = 'IBP-ControlTower-KF', ahora = () => Date.now(),
+}) {
+  const tiempos = { reading: 0, writing: 0, committing: 0 }
+  const { select, orderby } = lecturaDeLaCifra(definicion)
+  const filtro = filtroDePeriodo(filtroDeLaCifra(definicion, origen.versionId), definicion.campoDeTiempo, periodo)
+  let leidas = 0
+  let fase = 'reading'
+
+  try {
+    let marca = ahora()
+    const { filas, agotado } = await leerSegmento({
+      origen, area: areaOrigen, select, orderby, filtro, desde, cuantas,
+    })
+    leidas = filas.length
+    tiempos.reading = ahora() - marca
+
+    const escribibles = filasParaEscribir(filas, definicion, periodoIso)
+    // Nada con valor: no se abre transacción. v8 la abría y la abandonaba; da lo mismo para SAP.
+    if (escribibles.length === 0) {
+      return { ok: true, leidas, escritas: 0, agotado, transactionId: null, tiempos }
+    }
+
+    fase = 'writing'
+    marca = ahora()
+    const csrf = await abrirSesionDeEscritura(destino)
+    const transactionId = await getTransactionId({ ...destino, csrf })
+    try {
+      await initiateParallelProcess({
+        ...destino, transactionId, area: areaDestino, versionId: destino.versionId, nombre, csrf,
+      })
+    } catch { /* de mejor esfuerzo, como en v8 */ }
+
+    const campos = camposDeEscritura(definicion)
+    const envios = partirEnEnvios(escribibles, 1)
+    for (let i = 0; i < envios.length; i += ENVIOS_EN_PARALELO) {
+      await Promise.all(envios.slice(i, i + ENVIOS_EN_PARALELO).map((filasDelEnvio) => postKfChunk({
+        ...destino, area: areaDestino, transactionId, filas: filasDelEnvio, campos, versionId: destino.versionId, csrf,
+      })))
+    }
+    tiempos.writing = ahora() - marca
+
+    fase = 'committing'
+    marca = ahora()
+    await commitTransaction({ ...destino, transactionId, csrf })
+    tiempos.committing = ahora() - marca
+
+    return { ok: true, leidas, escritas: escribibles.length, agotado, transactionId, tiempos }
+  } catch (error) {
     return {
-      desde, filas: filas.length, escritas: 0, ok: false, agotado,
-      fase: 'escritura', error: ultimoFallo, cifraCalculada,
+      ok: false,
+      fase,
+      leidas,
+      tiempos,
+      error: error.detail ? `[${error.status ?? ''}] ${error.detail}` : (error.message || String(error)),
+      cifraCalculada: error.cifraCalculada ?? null,
+      // La transacción sin confirmar SAP la descarta: repetir el segmento entero es seguro.
+      // El transporte marca `retryable` (corte de red, respuesta cortada, 429, 5xx) y deja el estado en
+      // 0; un 0 sin esa marca es un rechazo propio —una dirección no permitida— y no mejora repitiendo.
+      transitorio: !error.cifraCalculada
+        && (Boolean(error.retryable) || (error.status !== 0 && esFalloTransitorio(error.status))),
     }
   }
+}
+
+/**
+ * Espera a que SAP procese una transacción confirmada y, si no quedó limpia, lee sus rechazos.
+ *
+ * Como v8: los mensajes solo se piden cuando el estado no es PROCESSED —una limpia no tiene errores y
+ * la petición sobraría—, y solo cuentan los de error o cancelación (E/A).
+ */
+export async function confirmarTransaccionDeCifra({
+  destino, area, transactionId, timeoutMs = ESPERA_DE_CONFIRMACION_MS, esperar, ahora,
+}) {
+  const estado = await waitForProcessed({
+    ...destino, transactionId, timeoutMs, ...(esperar ? { esperar } : {}), ...(ahora ? { ahora } : {}),
+  })
+  if (estado === 'PROCESADA') return { estado, mensajes: [] }
 
   let mensajes = []
   try {
-    mensajes = await readMessages({ ...destino, area: areaDestino ?? area, transactionId: hecho.transactionId })
+    mensajes = await readMessages({ ...destino, area, transactionId })
   } catch {
     // Que no se puedan leer los mensajes no cambia lo que se escribió.
     mensajes = []
   }
-
-  return { desde, filas: filas.length, escritas: escribibles.length, ok: true, agotado, mensajes, ...hecho }
-}
-
-/**
- * Copia una cifra clave entera, segmento a segmento.
- *
- * Para los tests y para quien pueda encadenarlos de un tirón. La pantalla encadena
- * `migrarSegmentoDeCifras` ella misma para ir contando.
- */
-export async function migrarCifras({ total, onProgreso, ...resto }) {
-  const csrf = await abrirSesionDeEscritura(resto.destino)
-  const segmentos = []
-  let copiadas = 0
-
-  for (let desde = 0; desde < total; desde += FILAS_POR_SEGMENTO) {
-    const segmento = await migrarSegmentoDeCifras({
-      ...resto,
-      csrf,
-      desde,
-      cuantas: Math.min(FILAS_POR_SEGMENTO, total - desde),
-      onProgreso,
-    })
-
-    segmentos.push(segmento)
-    if (segmento.ok) copiadas += segmento.filas
-    // Una cifra calculada no mejora en el segmento siguiente: se para.
-    if (segmento.cifraCalculada || segmento.agotado) break
-  }
-
-  return {
-    total,
-    copiadas,
-    segmentos,
-    mensajes: [...segmentos].reverse().find((uno) => uno.mensajes?.length)?.mensajes ?? [],
-    cifraCalculada: segmentos.find((uno) => uno.cifraCalculada)?.cifraCalculada ?? null,
-    ok: segmentos.every((uno) => uno.ok),
-  }
+  return { estado, mensajes: mensajes.filter(esMensajeDeRechazo).map(mensajeBreve) }
 }

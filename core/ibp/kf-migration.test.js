@@ -17,31 +17,35 @@ const {
   abrirSesionDeEscritura, commitTransaction, getTransactionId,
   initiateParallelProcess, postKfChunk, readMessages, waitForProcessed,
 } = await import('./planning-data-write.js')
-const { FILAS_POR_SEGMENTO } = await import('./kf-migration-plan.js')
+const { FILAS_POR_LECTURA } = await import('./kf-migration-plan.js')
 const {
-  INTENTOS_POR_SEGMENTO, contarLoQueSeCopia, migrarCifras, migrarSegmentoDeCifras,
+  confirmarTransaccionDeCifra, contarCifra, copiarSegmentoDeCifra, filtroDeLaCifra, periodosDeLaCifra,
 } = await import('./kf-migration.js')
 
 const origen = { baseUrl: 'https://a', credentials: { user: 'a' }, versionId: 'V1' }
 const destino = { baseUrl: 'https://b', credentials: { user: 'b' }, versionId: 'V2' }
 
-const comun = {
-  origen,
-  destino,
-  area: 'ASIBPTS',
-  nivel: ['PRDID', 'PERIODID4_TSTAMP'],
-  cifras: ['ADJUSTEDPRODUCTION'],
+const definicion = {
+  nivel: [{ destino: 'PRDID', origen: 'PRDID' }, { destino: 'CUSTID', origen: 'ATRIBUTOZ' }],
+  cifra: { origen: 'ZSRC', destino: 'ZDST' },
+  campoDeTiempo: 'PERIODID4_TSTAMP',
+  conversiones: {},
+  condiciones: [],
+  desde: '',
+  hasta: '',
+  soloConValor: true,
 }
 
-/** Sirve `n` filas repartidas en páginas. */
-function conFilas(n) {
+const comun = { origen, destino, areaOrigen: 'AREA1', areaDestino: 'AREA2', definicion }
+
+/** Sirve `n` filas repartidas en páginas; la fila `cero` vale 0. */
+function conFilas(n, { cero = -1 } = {}) {
   readKfPage.mockImplementation(({ skip, top }) => Promise.resolve(
     Array.from({ length: Math.max(0, Math.min(top, n - skip)) }, (_, i) => ({
       PRDID: `P${skip + i}`,
-      PERIODID4_TSTAMP: '/Date(1)/',
-      ADJUSTEDPRODUCTION: '10',
-      VERSIONID: 'V1',
-      SOBRA: 'z',
+      ATRIBUTOZ: 'C',
+      PERIODID4_TSTAMP: '/Date(1767225600000)/',
+      ZSRC: skip + i === cero ? '0' : '10',
     })),
   ))
 }
@@ -57,237 +61,161 @@ beforeEach(() => {
   readMessages.mockResolvedValue([])
 })
 
-describe('contarLoQueSeCopia', () => {
-  it('cuenta al NIVEL elegido y planifica los segmentos', async () => {
-    countKf.mockResolvedValue(FILAS_POR_SEGMENTO * 2)
+describe('filtroDeLaCifra', () => {
+  it('acota a la versión del ORIGEN y a las filas no cero, sin `ne 0`', () => {
+    const filtro = filtroDeLaCifra(definicion, 'V1')
+    expect(filtro).toContain("VERSIONID eq 'V1'")
+    expect(filtro).toContain('(ZSRC gt 0 or ZSRC lt 0)')
+    expect(filtro).not.toContain('ne 0')
+  })
 
-    await expect(contarLoQueSeCopia(comun)).resolves.toMatchObject({ total: FILAS_POR_SEGMENTO * 2, segmentos: 2 })
-    // El select lleva el nivel y después las cifras.
-    expect(countKf.mock.calls[0][0].select).toEqual(['PRDID', 'PERIODID4_TSTAMP', 'ADJUSTEDPRODUCTION'])
+  it('la versión base no lleva predicado', () => {
+    expect(filtroDeLaCifra(definicion, '')).not.toContain('VERSIONID')
+  })
+
+  it('lleva las condiciones, las fechas sobre el tiempo y las conversiones', () => {
+    const filtro = filtroDeLaCifra({
+      ...definicion,
+      soloConValor: false,
+      condiciones: [{ field: 'BRAND', op: 'in', value: 'X' }],
+      desde: '2026-01-01',
+      conversiones: { UOMTOID: 'EA' },
+    }, '')
+    expect(filtro).toContain("BRAND eq 'X'")
+    expect(filtro).toContain("PERIODID4_TSTAMP ge datetime'2026-01-01T00:00:00'")
+    expect(filtro).toContain("UOMTOID eq 'EA'")
+    expect(filtro).not.toContain('gt 0')
   })
 })
 
-describe('migrarSegmentoDeCifras', () => {
-  it('lee del origen y escribe en el destino', async () => {
-    conFilas(10)
-    const salida = await migrarSegmentoDeCifras({ ...comun, cuantas: 10 })
+describe('contarCifra', () => {
+  it('cuenta con el select de la lectura y el filtro de la key figure', async () => {
+    countKf.mockResolvedValue(42)
+    await expect(contarCifra({ origen, area: 'AREA1', definicion, reintentos: 1 })).resolves.toBe(42)
+    const llamada = countKf.mock.calls[0][0]
+    expect(llamada.select).toEqual(['PRDID', 'ATRIBUTOZ', 'ZSRC', 'PERIODID4_TSTAMP'])
+    expect(llamada.filtro).toContain("VERSIONID eq 'V1'")
+    expect(llamada).toMatchObject({ area: 'AREA1', reintentos: 1, timeoutMs: 60_000 })
+  })
+})
 
-    expect(salida).toMatchObject({ filas: 10, ok: true })
-    expect(postKfChunk).toHaveBeenCalled()
+describe('periodosDeLaCifra', () => {
+  it('devuelve los periodos distintos en ISO, ordenados', async () => {
+    readKfPage.mockResolvedValue([
+      { PERIODID4_TSTAMP: '/Date(1767830400000)/', ZSRC: '1' },
+      { PERIODID4_TSTAMP: '/Date(1767225600000)/', ZSRC: '2' },
+      { PERIODID4_TSTAMP: '/Date(1767225600000)/', ZSRC: '3' },
+    ])
+    await expect(periodosDeLaCifra({ origen, area: 'AREA1', definicion }))
+      .resolves.toEqual(['2026-01-01T00:00:00', '2026-01-08T00:00:00'])
+    expect(readKfPage.mock.calls[0][0].select).toEqual(['PERIODID4_TSTAMP', 'ZSRC'])
+  })
+})
+
+describe('copiarSegmentoDeCifra', () => {
+  it('lee del origen, escribe en el destino y confirma una transacción', async () => {
+    conFilas(10, { cero: 3 })
+    const salida = await copiarSegmentoDeCifra({ ...comun, cuantas: 100 })
+
+    expect(salida).toMatchObject({ ok: true, leidas: 10, escritas: 9, agotado: true, transactionId: 'TX1' })
+    expect(commitTransaction).toHaveBeenCalledTimes(1)
+
+    const envio = postKfChunk.mock.calls[0][0]
+    expect(envio).toMatchObject({ area: 'AREA2', versionId: 'V2', transactionId: 'TX1' })
+    expect(envio.campos).toEqual(['PRDID', 'CUSTID', 'ZDST', 'PERIODID4_TSTAMP'])
+    // El periodo va en ISO: la importación no acepta `/Date(…)/`.
+    expect(envio.filas[0]).toEqual({ PRDID: 'P0', CUSTID: 'C', PERIODID4_TSTAMP: '2026-01-01T00:00:00', ZDST: '10' })
   })
 
-  // Si el select y la lista del nivel no coinciden, se lee a un nivel y se escribe a otro.
-  it('el nivel de la escritura es el MISMO que el de la lectura', async () => {
-    conFilas(5)
-    await migrarSegmentoDeCifras({ ...comun, cuantas: 5 })
-
-    expect(readKfPage.mock.calls[0][0].select).toEqual(['PRDID', 'PERIODID4_TSTAMP', 'ADJUSTEDPRODUCTION'])
-    expect(postKfChunk.mock.calls[0][0].campos).toEqual(['PRDID', 'PERIODID4_TSTAMP'])
+  it('lee con orden estable, en el área y con la versión del ORIGEN', async () => {
+    conFilas(3)
+    await copiarSegmentoDeCifra({ ...comun, cuantas: 100 })
+    const lectura = readKfPage.mock.calls[0][0]
+    expect(lectura).toMatchObject({ area: 'AREA1', baseUrl: 'https://a' })
+    expect(lectura.orderby).toEqual(['PRDID', 'ATRIBUTOZ', 'PERIODID4_TSTAMP'])
+    expect(lectura.filtro).toContain("VERSIONID eq 'V1'")
   })
 
-  // Sin orden estable, dos ventanas se solapan y dejan huecos.
-  it('ordena por el nivel al paginar', async () => {
-    conFilas(5)
-    await migrarSegmentoDeCifras({ ...comun, cuantas: 5 })
-    expect(readKfPage.mock.calls[0][0].orderby).toEqual(['PRDID', 'PERIODID4_TSTAMP'])
+  it('lee la ventana pedida, de a dos páginas, y no dice agotado si la ventana se llenó', async () => {
+    conFilas(FILAS_POR_LECTURA * 10)
+    const salida = await copiarSegmentoDeCifra({ ...comun, desde: FILAS_POR_LECTURA, cuantas: FILAS_POR_LECTURA * 3 })
+    expect(salida).toMatchObject({ ok: true, leidas: FILAS_POR_LECTURA * 3, agotado: false })
+    expect(readKfPage.mock.calls.map((c) => c[0].skip))
+      .toEqual([FILAS_POR_LECTURA, FILAS_POR_LECTURA * 2, FILAS_POR_LECTURA * 3])
   })
 
-  // SAP rechaza el envío si llegan atributos que no se pueden escribir.
-  it('las filas se limpian: solo el nivel y las cifras', async () => {
+  it('con periodo, el filtro lo acota', async () => {
     conFilas(1)
-    await migrarSegmentoDeCifras({ ...comun, cuantas: 1 })
-
-    const enviada = postKfChunk.mock.calls[0][0].filas[0]
-    expect(enviada).toEqual({ PRDID: 'P0', PERIODID4_TSTAMP: '/Date(1)/', ADJUSTEDPRODUCTION: '10' })
-    expect(enviada).not.toHaveProperty('VERSIONID')
-    expect(enviada).not.toHaveProperty('SOBRA')
+    await copiarSegmentoDeCifra({ ...comun, periodo: '2026-01-01T00:00:00' })
+    expect(readKfPage.mock.calls[0][0].filtro).toContain("PERIODID4_TSTAMP eq datetime'2026-01-01T00:00:00'")
   })
 
-  it('dice si la tabla se acabó, para que quien encadena pare', async () => {
-    conFilas(30)
-    await expect(migrarSegmentoDeCifras({ ...comun, cuantas: 500 }))
-      .resolves.toMatchObject({ filas: 30, agotado: true })
-  })
-
-  // Reenviar dentro de la transacción vieja duplicaría valores; en una nueva es seguro.
-  it('un fallo al escribir rehace el segmento en una transacción NUEVA', async () => {
-    conFilas(10)
-    postKfChunk.mockRejectedValueOnce(new Error('tiempo agotado'))
-
-    await expect(migrarSegmentoDeCifras({ ...comun, cuantas: 10 })).resolves.toMatchObject({ ok: true })
-    expect(getTransactionId).toHaveBeenCalledTimes(2)
-  })
-
-  it('tras agotar los intentos el segmento queda fallado', async () => {
-    conFilas(10)
-    postKfChunk.mockRejectedValue(new Error('no hay caso'))
-
-    const salida = await migrarSegmentoDeCifras({ ...comun, cuantas: 10 })
-    expect(salida).toMatchObject({ ok: false, fase: 'escritura' })
-    expect(getTransactionId).toHaveBeenCalledTimes(INTENTOS_POR_SEGMENTO)
-  })
-
-  // Una cifra calculada no mejora reintentando: gastar tres intentos solo retrasa el mensaje.
-  it('una cifra CALCULADA corta al primer intento', async () => {
-    conFilas(10)
-    postKfChunk.mockRejectedValue(Object.assign(new Error('La cifra «KF» es calculada y no se puede escribir.'), { cifraCalculada: 'KF' }))
-
-    const salida = await migrarSegmentoDeCifras({ ...comun, cuantas: 10 })
-    expect(salida).toMatchObject({ ok: false, cifraCalculada: 'KF' })
-    expect(getTransactionId).toHaveBeenCalledTimes(1)
-  })
-
-  it('un fallo de lectura no lanza: sale en el resultado', async () => {
-    readKfPage.mockRejectedValue(Object.assign(new Error('SAP'), { detail: 'se cayó' }))
-
-    await expect(migrarSegmentoDeCifras({ ...comun, cuantas: 10 }))
-      .resolves.toMatchObject({ ok: false, fase: 'lectura', error: 'se cayó' })
-    expect(postKfChunk).not.toHaveBeenCalled()
-  })
-
-  it('reutiliza la sesión de escritura si se la pasan', async () => {
-    conFilas(5)
-    await migrarSegmentoDeCifras({ ...comun, cuantas: 5, csrf: { token: 't', cookies: 'c' } })
-    expect(abrirSesionDeEscritura).not.toHaveBeenCalled()
-  })
-
-  it('escribe en el área del destino cuando se llama distinto', async () => {
-    conFilas(5)
-    await migrarSegmentoDeCifras({ ...comun, areaDestino: 'GCINDURAMA', cuantas: 5 })
-    expect(postKfChunk.mock.calls[0][0].area).toBe('GCINDURAMA')
-  })
-
-  it('un segmento sin filas no manda nada a SAP', async () => {
-    conFilas(0)
-    await expect(migrarSegmentoDeCifras({ ...comun, cuantas: 10 })).resolves.toMatchObject({ ok: true, filas: 0 })
-    expect(postKfChunk).not.toHaveBeenCalled()
-  })
-
-  it('cuenta lo que pasa para que la pantalla pueda seguirlo', async () => {
-    conFilas(5)
-    const fases = []
-    await migrarSegmentoDeCifras({ ...comun, cuantas: 5, onProgreso: (uno) => fases.push(uno.fase) })
-
-    expect(fases).toContain('leyendo')
-    expect(fases).toContain('enviando')
-    expect(fases).toContain('confirmando')
-    expect(fases).toContain('procesada')
-  })
-})
-
-describe('migrarCifras', () => {
-  it('parte en segmentos y confirma cada uno', async () => {
-    conFilas(FILAS_POR_SEGMENTO + 100)
-    const salida = await migrarCifras({ ...comun, total: FILAS_POR_SEGMENTO + 100 })
-
-    expect(salida.segmentos).toHaveLength(2)
-    expect(commitTransaction).toHaveBeenCalledTimes(2)
-    expect(salida).toMatchObject({ copiadas: FILAS_POR_SEGMENTO + 100, ok: true })
-  })
-
-  it('abre la sesión de escritura una sola vez', async () => {
-    conFilas(10)
-    await migrarCifras({ ...comun, total: 10 })
-    expect(abrirSesionDeEscritura).toHaveBeenCalledTimes(1)
-  })
-
-  // No mejora en el segmento siguiente.
-  it('una cifra calculada para la copia entera', async () => {
-    conFilas(FILAS_POR_SEGMENTO * 3)
-    postKfChunk.mockRejectedValue(Object.assign(new Error('calculada'), { cifraCalculada: 'KF' }))
-
-    const salida = await migrarCifras({ ...comun, total: FILAS_POR_SEGMENTO * 3 })
-    expect(salida).toMatchObject({ cifraCalculada: 'KF', ok: false })
-    expect(salida.segmentos).toHaveLength(1)
-  })
-
-  it('trae los mensajes de las filas que SAP rechazó', async () => {
-    conFilas(10)
-    readMessages.mockResolvedValue([{ Message: 'fuera de horizonte' }])
-
-    await expect(migrarCifras({ ...comun, total: 10 })).resolves.toMatchObject({
-      mensajes: [{ Message: 'fuera de horizonte' }],
-    })
-  })
-})
-
-// Lo que hacía el original y aquí no se hacía: acotar la lectura del origen a las filas que TIENEN
-// valor. Un nivel de planificación es casi todo ceros; leerlo entero para copiar las pocas celdas con
-// dato es la diferencia entre minutos y una tarde. Y escribir esos ceros no es inocuo: pisan con un
-// cero lo que el destino ya tenía.
-describe('la copia no arrastra las filas en cero', () => {
-  it('el conteo acota primero a las filas con valor, y lo dice', async () => {
-    countKf.mockResolvedValue(235)
-
-    const plan = await contarLoQueSeCopia({
-      ...comun, filtro: '(KF gt 0 or KF lt 0)', filtroBase: '',
-    })
-
-    expect(plan).toMatchObject({ total: 235, soloConValor: true })
-    expect(countKf.mock.calls[0][0].filtro).toBe('(KF gt 0 or KF lt 0)')
-    expect(countKf).toHaveBeenCalledTimes(1)
-  })
-
-  // Hay cifras a las que SAP no acepta ese predicado. El original volvía al filtro de todo antes que
-  // dejar de poder copiar.
-  it('si SAP rechaza ese filtro, cuenta sin él y avisa de por qué', async () => {
-    countKf.mockRejectedValueOnce(Object.assign(new Error('no soportado'), { detail: 'Not supported' }))
-    countKf.mockResolvedValueOnce(1594)
-
-    const plan = await contarLoQueSeCopia({
-      ...comun, filtro: '(KF gt 0 or KF lt 0)', filtroBase: "PRDID eq 'X'",
-    })
-
-    expect(plan).toMatchObject({ total: 1594, soloConValor: false, porQueTodo: 'Not supported' })
-    expect(countKf.mock.calls[1][0].filtro).toBe("PRDID eq 'X'")
-  })
-
-  it('sin filtro de respaldo, el fallo del conteo se propaga', async () => {
-    countKf.mockRejectedValue(new Error('SAP se cayó'))
-    await expect(contarLoQueSeCopia({ ...comun, filtro: 'X' }))
-      .rejects.toThrow('SAP se cayó')
-  })
-
-  it('una fila con todas las cifras en cero no se escribe', async () => {
-    readKfPage.mockResolvedValueOnce([
-      { PRDID: 'P1', PERIODID4_TSTAMP: '/Date(1)/', ADJUSTEDPRODUCTION: '10' },
-      { PRDID: 'P2', PERIODID4_TSTAMP: '/Date(1)/', ADJUSTEDPRODUCTION: '0.000000' },
-      { PRDID: 'P3', PERIODID4_TSTAMP: '/Date(1)/', ADJUSTEDPRODUCTION: '-4' },
-    ])
-
-    const salida = await migrarSegmentoDeCifras({ ...comun, cuantas: 10 })
-
-    // Se leyeron tres y se escribieron dos. Las dos cuentas se dicen: `filas` es lo leído, de lo que
-    // depende el `$skip` del segmento siguiente.
-    expect(salida).toMatchObject({ ok: true, filas: 3, escritas: 2 })
-    const enviadas = postKfChunk.mock.calls[0][0].filas
-    expect(enviadas).toHaveLength(2)
-    expect(enviadas.map((una) => una.PRDID)).toEqual(['P1', 'P3'])
-  })
-
-  // El caso que obliga a mirar «alguna» y no «todas»: el cero de esa fila es parte del dato.
-  it('una fila con una cifra en cero y otra con valor sí se escribe', async () => {
-    readKfPage.mockResolvedValueOnce([
-      { PRDID: 'P1', PERIODID4_TSTAMP: '/Date(1)/', KFA: '0', KFB: '7' },
-    ])
-
-    const salida = await migrarSegmentoDeCifras({
-      ...comun, cifras: ['KFA', 'KFB'], cuantas: 10,
-    })
-
-    expect(salida).toMatchObject({ ok: true, filas: 1, escritas: 1 })
-  })
-
-  // Si el segmento entero venía en ceros no hay nada que escribir, y NO es un fallo: hay que seguir
-  // paginando desde donde se quedó, no darlo por agotado.
-  it('un segmento entero en cero no escribe, no falla y no corta la paginación', async () => {
-    readKfPage.mockResolvedValueOnce(Array.from({ length: 10 }, (_, i) => ({
-      PRDID: `P${i}`, PERIODID4_TSTAMP: '/Date(1)/', ADJUSTEDPRODUCTION: '0',
-    })))
-
-    const salida = await migrarSegmentoDeCifras({ ...comun, cuantas: 10 })
-
-    expect(salida).toMatchObject({ ok: true, filas: 10, escritas: 0, agotado: false })
+  it('sin nada con valor no abre transacción', async () => {
+    conFilas(2, { cero: 0 })
+    readKfPage.mockResolvedValueOnce([{ PRDID: 'P', ATRIBUTOZ: 'C', PERIODID4_TSTAMP: '/Date(1)/', ZSRC: '0' }])
+    const salida = await copiarSegmentoDeCifra({ ...comun, cuantas: 100 })
+    expect(salida).toMatchObject({ ok: true, escritas: 0, transactionId: null })
     expect(getTransactionId).not.toHaveBeenCalled()
+  })
+
+  it('parte los envíos en 2.500 valores, de tres en tres', async () => {
+    conFilas(7600)
+    const salida = await copiarSegmentoDeCifra({ ...comun, cuantas: 10_000 })
+    expect(salida.escritas).toBe(7600)
+    expect(postKfChunk.mock.calls.map((c) => c[0].filas.length)).toEqual([2500, 2500, 2500, 100])
+  })
+
+  it('un fallo de escritura NO se reintenta aquí y se marca transitorio si lo es', async () => {
+    conFilas(5)
+    postKfChunk.mockRejectedValue(Object.assign(new Error('caído'), { status: 503, retryable: true }))
+    const salida = await copiarSegmentoDeCifra({ ...comun })
+    expect(salida).toMatchObject({ ok: false, transitorio: true, fase: 'writing', leidas: 5 })
+    expect(postKfChunk).toHaveBeenCalledTimes(1)
+    expect(commitTransaction).not.toHaveBeenCalled()
+  })
+
+  it('una key figure calculada no es transitoria', async () => {
+    conFilas(5)
+    postKfChunk.mockRejectedValue(Object.assign(new Error('calculada'), { status: 500, cifraCalculada: 'ZDST' }))
+    const salida = await copiarSegmentoDeCifra({ ...comun })
+    expect(salida).toMatchObject({ ok: false, transitorio: false, cifraCalculada: 'ZDST' })
+  })
+
+  it('un 400 no es transitorio', async () => {
+    readKfPage.mockRejectedValue(Object.assign(new Error('mal'), { status: 400, detail: 'Invalid filter' }))
+    const salida = await copiarSegmentoDeCifra({ ...comun })
+    expect(salida).toMatchObject({ ok: false, transitorio: false, fase: 'reading', error: '[400] Invalid filter' })
+  })
+
+  it('el procesamiento en paralelo es de mejor esfuerzo', async () => {
+    conFilas(2)
+    initiateParallelProcess.mockRejectedValue(new Error('no'))
+    await expect(copiarSegmentoDeCifra({ ...comun })).resolves.toMatchObject({ ok: true })
+  })
+})
+
+describe('confirmarTransaccionDeCifra', () => {
+  it('una transacción limpia no pide mensajes', async () => {
+    await expect(confirmarTransaccionDeCifra({ destino, area: 'AREA2', transactionId: 'T' }))
+      .resolves.toEqual({ estado: 'PROCESADA', mensajes: [] })
+    expect(readMessages).not.toHaveBeenCalled()
+    expect(waitForProcessed.mock.calls[0][0].timeoutMs).toBe(120_000)
+  })
+
+  it('si no quedó limpia, devuelve solo los rechazos E/A', async () => {
+    waitForProcessed.mockResolvedValue('PROCESADA_CON_ERRORES')
+    readMessages.mockResolvedValue([
+      { ExceptionId: 'E1', MsgText: 'mal', Severity: 'E', Transactionid: 'T' },
+      { ExceptionId: 'I1', MsgText: 'info', Severity: 'I' },
+    ])
+    await expect(confirmarTransaccionDeCifra({ destino, area: 'AREA2', transactionId: 'T' }))
+      .resolves.toEqual({ estado: 'PROCESADA_CON_ERRORES', mensajes: [{ ExceptionId: 'E1', MsgText: 'mal', Severity: 'E' }] })
+  })
+
+  it('si los mensajes no se pueden leer, se sigue', async () => {
+    waitForProcessed.mockResolvedValue('SIN_RESPUESTA')
+    readMessages.mockRejectedValue(new Error('x'))
+    await expect(confirmarTransaccionDeCifra({ destino, area: 'AREA2', transactionId: 'T' }))
+      .resolves.toEqual({ estado: 'SIN_RESPUESTA', mensajes: [] })
   })
 })

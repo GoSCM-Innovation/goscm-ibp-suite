@@ -1,244 +1,366 @@
-// Qué cifras clave se copian de un tenant a otro, a qué nivel, y qué puede salir mal.
+// La migración de dato transaccional (key figures) de v8: qué se lee, qué se escribe y cómo se juzga.
 //
-// Portado de la parte de decisión de `KeyFigureMigration.jsx` de v8, que la tenía dentro de un
-// componente de 1.549 líneas mezclada con el progreso y los estilos.
+// Portado de `components/Migration/KeyFigureMigration.jsx` y `services/planningDataApi.js` de v8. Aquí
+// va solo lo PURO —sin red—, porque lo usan el servidor, la pantalla y las pruebas.
 //
-// Migrar una cifra clave NO es como migrar dato maestro, y la diferencia que importa es el NIVEL:
-// una cifra no tiene "filas" propias. Existe a la vez a nivel de producto, de producto y ubicación, de
-// producto por semana… y el `$select` decide cuál se lee. Elegir mal el nivel no da un error: da un
-// número creíble y equivocado, normalmente más pequeño, porque SAP suma sin avisar.
+// El modelo es el de v8: se migra UNA key figure a la vez, cada una con su propio filtro de «no cero»,
+// su propia lectura y su propio resultado. No se agrupan: agrupar solo convenía cuando las key figures
+// compartían filas, y escribir varias juntas obliga a escribir un cero en la que no tenía valor en esa
+// fila, que pisa lo que el destino ya tenía.
 //
-// Por eso aquí el nivel es una decisión explícita y con nombre, no un detalle del `$select`.
-//
-// Sin dependencias: lo usan el servidor, la pantalla y las pruebas.
+// El nivel se define en el DESTINO —atributos más un nivel de tiempo— y cada atributo se lee del origen
+// con su mismo nombre o con el que se elija (CUSTID ← ATRIBUTOZ). El `$select` es el nivel de
+// agregación: SAP suma al nivel que se le pide, así que la lista que se lee y la que se escribe son la
+// misma, en el mismo orden, con los nombres de cada lado.
 
 /**
- * Los niveles de tiempo de IBP, del más fino al más grueso.
+ * Los niveles de tiempo estándar de SAP IBP, en el orden de v8. Semana es el de omisión.
  *
- * Los nombres son los de SAP y no significan nada por sí solos: `PERIODID4_TSTAMP` es la semana. Que
- * el número no siga el orden del calendario —4 es semana, 3 mes, 0 día— es de SAP, no un error de
- * transcripción.
+ * Que el número no siga el calendario —4 es semana, 3 mes, 0 día— es de SAP.
  */
 export const NIVELES_DE_TIEMPO = Object.freeze([
-  { campo: 'PERIODID0_TSTAMP', clave: 'dia', etiqueta: 'Día' },
-  { campo: 'PERIODID4_TSTAMP', clave: 'semana', etiqueta: 'Semana' },
-  { campo: 'PERIODID5_TSTAMP', clave: 'semanaTecnica', etiqueta: 'Semana técnica' },
-  { campo: 'PERIODID3_TSTAMP', clave: 'mes', etiqueta: 'Mes' },
-  { campo: 'PERIODID2_TSTAMP', clave: 'trimestre', etiqueta: 'Trimestre' },
-  { campo: 'PERIODID1_TSTAMP', clave: 'anio', etiqueta: 'Año' },
+  { campo: 'PERIODID4_TSTAMP', clave: 'week' },
+  { campo: 'PERIODID3_TSTAMP', clave: 'month' },
+  { campo: 'PERIODID2_TSTAMP', clave: 'quarter' },
+  { campo: 'PERIODID1_TSTAMP', clave: 'year' },
+  { campo: 'PERIODID0_TSTAMP', clave: 'day' },
+  { campo: 'PERIODID5_TSTAMP', clave: 'techweek' },
 ])
 
-/** Los campos de tiempo, para reconocerlos dentro de un nivel. */
 export const CAMPOS_DE_TIEMPO = Object.freeze(NIVELES_DE_TIEMPO.map((uno) => uno.campo))
 
-export const esCampoDeTiempo = (campo) => CAMPOS_DE_TIEMPO.includes(campo)
-
-/**
- * Atributos que NO se pueden escribir.
- *
- * La versión y el escenario viajan en el contexto de la transacción, no como columnas. `AGGREGATE` y
- * las fechas de auditoría las pone SAP. Mandarlos hace que rechace el envío.
- */
+/** Lo que SAP devuelve pero no es un atributo del nivel: el contexto de versión y escenario, y la auditoría. */
 export const ATRIBUTOS_DE_SOLO_LECTURA = Object.freeze([
   'VERSIONID', 'VERSIONNAME', 'SCENARIOID', 'SCENARIONAME',
   'MASTER_DATA_TYPE', 'AGGREGATE', 'LASTMODIFIEDDATE', 'CREATEDDATE',
 ])
 
-/**
- * A partir de cuántas filas conviene partir la lectura por periodo.
- *
- * Con volúmenes grandes, un `$skip` muy profundo se vuelve caro y frágil. Partir por periodo acota
- * cada consulta a un tramo de tiempo, que además es la forma natural del dato.
- */
+/** Los atributos de conversión que una key figure puede exigir, en el orden en que v8 los añadía. */
+export const CAMPOS_DE_CONVERSION = Object.freeze(['UOMTOID', 'CURRTOID'])
+
+// ── Los números del motor ────────────────────────────────────────────────────────────────────────
+//
+// En v8 el motor corría en el navegador, detrás de un proxy: 6 trabajadores, cada uno con un segmento
+// de 40.000 filas leídas en páginas medidas en bytes —para no pasar los ~4,5 MB que el proxy de Vercel
+// dejaba en un cuerpo— y escritas con 3 envíos a la vez de 2.500 valores. Aquí cada segmento lo hace el
+// SERVIDOR en una sola llamada —lectura, escritura y confirmación—, porque las credenciales no salen de
+// allí. Lo que cambia, y por qué:
+//
+//   - El segmento baja a 10.000 filas. Tiene que caber en el tiempo de UNA función: con una key figure
+//     son 4 envíos de 2.500 valores, unos 53 s cada uno según lo medido en v8 (~20 ms por valor), 3 a la
+//     vez → dos rondas, ~110 s, más 2 páginas de lectura en paralelo (~6 s) y la transacción.
+//   - La concurrencia se queda como en v8: 6 segmentos a la vez × 3 envíos = 18 envíos en vuelo.
+//   - Ya no se mide el tamaño de la fila. Esa medición existía por el límite de cuerpo del proxy, y
+//     ahora SAP le contesta directamente al servidor: la página es de 5.000 filas (el presupuesto de
+//     2,5 MB de v8 daba eso con filas normales) y el envío lo acota el tope de valores.
+
+/** Filas leídas por segmento. Cada segmento es una transacción propia, confirmada, y una llamada. */
+export const FILAS_POR_SEGMENTO = 10_000
+
+/** Segmentos en vuelo a la vez (CONCURRENT_SEGMENTS de v8). */
+export const SEGMENTOS_EN_PARALELO = 6
+
+/** Páginas leídas a la vez dentro de un segmento (PARALLEL_R de v8). */
+export const LECTURAS_EN_PARALELO = 2
+
+/** Envíos a la vez dentro de un segmento (PARALLEL_W de v8). */
+export const ENVIOS_EN_PARALELO = 3
+
+/** Filas por página de lectura. Pocas páginas grandes: el costo de SAP es casi fijo por petición. */
+export const FILAS_POR_LECTURA = 5000
+
+/** Intentos por segmento (MAX_SEGMENT_ATTEMPTS de v8). Cada intento es una transacción nueva. */
+export const INTENTOS_POR_SEGMENTO = 5
+
+/** Por encima de estas filas, la lectura se parte por periodo (TIME_PARTITION_THRESHOLD de v8). */
 export const UMBRAL_PARA_PARTIR_POR_TIEMPO = 100_000
 
-/** Filas leídas por segmento. Cada segmento es una transacción propia que se confirma sola. */
-export const FILAS_POR_SEGMENTO = 20_000
+/**
+ * Cuánto se espera a que SAP procese una transacción ya confirmada.
+ *
+ * v8 esperaba `max(120 s, filas del segmento × 3 ms)`, que con sus segmentos daba 120 s. Con segmentos
+ * más pequeños la fórmula da menos; se deja el piso de v8.
+ */
+export const ESPERA_DE_CONFIRMACION_MS = 120_000
+
+// ── Lo que se le pide a SAP ──────────────────────────────────────────────────────────────────────
+
+/** Una lista sin repetidos, conservando el orden. */
+const sinRepetir = (lista) => [...new Set((lista ?? []).filter(Boolean))]
+
+/** Los atributos de conversión que lleva la lectura, en el orden de `CAMPOS_DE_CONVERSION`. */
+export const conversionesDe = (conversiones) =>
+  CAMPOS_DE_CONVERSION.filter((campo) => conversiones?.[campo])
 
 /**
- * Las cifras de una lista pegada, clasificadas.
+ * El `$select` y el `$orderby` de la lectura de una key figure, como en v8:
  *
- * Portado de la ventana de pegar de `KeyFigureMigration.jsx` de v8. Una migración de verdad son
- * treinta o cincuenta cifras que vienen de una hoja de cálculo o de un correo; marcarlas una por una en
- * un catálogo de mil ciento treinta y siete es donde se cometen los errores.
+ *   select  = atributos del origen + conversiones + key figure del origen + tiempo
+ *   orderby = atributos del origen + conversiones + tiempo
  *
- * Se parte por cualquier separador razonable —salto de línea, coma, punto y coma, tabulación— porque
- * de dónde viene el texto pegado no se controla: de Excel viene con tabulaciones, de un correo con
- * comas, de una consulta con saltos de línea.
- *
- * Y devuelve las tres listas por separado en vez de agregar lo que encaja y callar el resto: si de
- * cincuenta nombres cuatro no existen en el origen, eso hay que verlo. Callarlo dejaría una migración
- * que parece completa y le faltan cuatro.
+ * El tiempo va SIEMPRE: sin él, SAP suma todo el horizonte en un valor por combinación. Y el orden es
+ * estable —el nivel entero identifica la fila—, que es lo que deja leer ventanas de `$skip` a la vez
+ * sin solapes ni huecos.
  */
-export function cifrasPegadas(texto, delCatalogo = [], yaElegidas = []) {
-  const catalogo = new Set(delCatalogo)
-  const elegidas = new Set(yaElegidas)
-
-  const nombres = String(texto ?? '')
-    .split(/[\r\n,;\t]+/)
-    .map((uno) => uno.trim().toUpperCase())
-    .filter(Boolean)
-
-  const nuevas = []
-  const faltantes = []
-  const repetidas = []
-  const vistas = new Set()
-
-  for (const nombre of nombres) {
-    // Repetido DENTRO del texto pegado: se cuenta una vez y no se avisa dos.
-    if (vistas.has(nombre)) continue
-    vistas.add(nombre)
-
-    if (!catalogo.has(nombre)) faltantes.push(nombre)
-    else if (elegidas.has(nombre)) repetidas.push(nombre)
-    else nuevas.push(nombre)
-  }
-
-  return { nuevas, faltantes, repetidas }
-}
-
-/**
- * Cómo se llama en el destino algo que en el origen se llama de otra forma.
- *
- * Dos tenants que se montaron por separado no usan los mismos nombres: la misma cifra puede ser
- * `CONSENSUSDEMANDQTY` en uno y `ZCONSENSOQTY` en el otro. Sin esto, migrar entre ellos exige
- * renombrar a mano en SAP, que es justo lo que no se puede hacer.
- *
- * Vale igual para las cifras y para los atributos del nivel: son nombres, y no se pisan entre sí.
- */
-export const nombreEnDestino = (nombre, destinoDe) => (destinoDe ?? {})[nombre] || nombre
-
-/** Qué se renombra de verdad: lo que tiene un nombre distinto en el destino. */
-export const renombrados = (nombres, destinoDe) => (nombres ?? [])
-  .map((uno) => ({ origen: uno, destino: nombreEnDestino(uno, destinoDe) }))
-  .filter((par) => par.origen !== par.destino)
-
-/** El nivel de tiempo que lleva un nivel, o `null` si el nivel no tiene tiempo. */
-export const nivelDeTiempoDe = (dimensiones) =>
-  NIVELES_DE_TIEMPO.find((uno) => (dimensiones ?? []).includes(uno.campo)) ?? null
-
-/** Las dimensiones que se pueden escribir: sin las de solo lectura. */
-export const dimensionesEscribibles = (dimensiones) =>
-  (dimensiones ?? []).filter((uno) => !ATRIBUTOS_DE_SOLO_LECTURA.includes(uno))
-
-/**
- * Revisa una migración de cifras clave y dice qué la impide y qué conviene mirar.
- *
- * Se contesta ANTES de leer nada, porque de lo contrario los problemas aparecen a mitad de una carga
- * de veinte minutos: una cifra que no existe en el destino, un nivel sin ninguna dimensión, o el caso
- * peligroso —un nivel SIN tiempo, que hace que SAP sume todo el horizonte en un solo valor por
- * producto y escriba eso—.
- */
-export function revisarMigracionDeCifras({
-  origen = {}, destino = {}, cifras = [], dimensiones = [], cifrasDelDestino = [], dimensionesDelDestino = [],
-  destinoDe = {}, desde = '', hasta = '',
-} = {}) {
-  const impedimentos = []
-  const avisos = []
-
-  if (cifras.length === 0) impedimentos.push('No hay ninguna cifra clave elegida.')
-
-  const nivel = dimensionesEscribibles(dimensiones)
-  if (nivel.length === 0) {
-    impedimentos.push('El nivel está vacío: hay que elegir al menos un atributo, o SAP sumaría todo en un solo valor.')
-  }
-
-  // El caso que muerde en silencio. No se impide —hay cifras que de verdad no tienen tiempo— pero se
-  // dice con todas las letras, porque el resultado es creíble y está mal.
-  if (nivel.length > 0 && !nivelDeTiempoDe(nivel)) {
-    avisos.push(
-      'El nivel no incluye ningún periodo. SAP va a sumar TODO el horizonte en un solo valor por '
-      + 'combinación, y eso es lo que se va a escribir en el destino. Si no es lo que quieres, agrega '
-      + 'un nivel de tiempo.',
-    )
-  }
-
-  // Se comprueba el nombre que va a tener EN EL DESTINO, no el del origen: si se renombró, el que
-  // tiene que existir allá es el nuevo.
-  const faltanEnDestino = cifras
-    .map((una) => nombreEnDestino(una, destinoDe))
-    .filter((una) => cifrasDelDestino.length > 0 && !cifrasDelDestino.includes(una))
-  if (faltanEnDestino.length > 0) {
-    impedimentos.push(`El destino no tiene ${faltanEnDestino.length === 1 ? 'la cifra' : 'las cifras'} ${faltanEnDestino.join(', ')}.`)
-  }
-
-  const dimsFaltantes = nivel
-    .map((uno) => nombreEnDestino(uno, destinoDe))
-    .filter((uno) => dimensionesDelDestino.length > 0 && !dimensionesDelDestino.includes(uno))
-  if (dimsFaltantes.length > 0) {
-    impedimentos.push(`El destino no tiene ${dimsFaltantes.length === 1 ? 'el atributo' : 'los atributos'} ${dimsFaltantes.join(', ')}.`)
-  }
-
-  // Un renombrado no es un problema, pero SÍ hay que verlo escrito antes de copiar: es la clase de
-  // cosa que se configura una vez y se olvida, y escribe en una cifra que no era.
-  const cambios = renombrados([...cifras, ...nivel], destinoDe)
-  if (cambios.length > 0) {
-    avisos.push(`Se escribe con otro nombre: ${cambios.map((par) => `${par.origen} → ${par.destino}`).join(', ')}.`)
-  }
-
-  // Un rango al revés no da error en SAP: da cero filas, que se lee como «no hay datos».
-  if (desde && hasta && desde > hasta) {
-    impedimentos.push(`El rango de fechas está al revés: ${desde} es posterior a ${hasta}.`)
-  }
-
-  const descartadas = (dimensiones ?? []).filter((uno) => ATRIBUTOS_DE_SOLO_LECTURA.includes(uno))
-  if (descartadas.length > 0) {
-    avisos.push(`${descartadas.join(', ')} no se ${descartadas.length === 1 ? 'puede' : 'pueden'} escribir y se ${descartadas.length === 1 ? 'quita' : 'quitan'} del nivel: la versión y el escenario viajan en la transacción.`)
-  }
-
-  // Copiar un tenant sobre sí mismo con la misma área y versión es escribir lo leído donde estaba.
-  if (origen.connectionId === destino.connectionId
-    && origen.area === destino.area
-    && (origen.versionId ?? '') === (destino.versionId ?? '')) {
-    impedimentos.push('El origen y el destino son el mismo tenant, área y versión.')
-  }
-
+export function lecturaDeLaCifra({ nivel = [], cifra, campoDeTiempo, conversiones } = {}) {
+  const atributos = [...nivel.map((uno) => uno.origen), ...conversionesDe(conversiones)]
   return {
-    nivel,
-    nivelDeTiempo: nivelDeTiempoDe(nivel),
-    cifras,
-    impedimentos,
-    avisos,
-    sePuede: impedimentos.length === 0,
+    select: sinRepetir([...atributos, cifra?.origen, campoDeTiempo]),
+    orderby: sinRepetir([...atributos, campoDeTiempo]),
   }
 }
 
-/**
- * El `$select` de la lectura: el nivel y después las cifras.
- *
- * El orden importa para `AggregationLevelFieldsString`, que es la lista del nivel tal cual: si las
- * dos no coinciden, SAP escribe a un nivel distinto del que se leyó.
- */
-export const selectDeLaMigracion = (nivel, cifras) => [...(nivel ?? []), ...(cifras ?? [])]
+/** `AggregationLevelFieldsString` de la escritura: atributos del destino + key figure + tiempo. */
+export const camposDeEscritura = ({ nivel = [], cifra, campoDeTiempo } = {}) =>
+  [...nivel.map((uno) => uno.destino), cifra?.destino, campoDeTiempo].filter(Boolean)
 
-/**
- * Cuántos segmentos hacen falta y si conviene partir por periodo.
- *
- * Se decide con la cuenta de filas y no con una corazonada: por debajo del umbral, `$skip` es más
- * simple y funciona; por encima se parte por tiempo, que acota cada consulta a un tramo.
- */
-export function planificarSegmentos(totalFilas, { porSegmento = FILAS_POR_SEGMENTO } = {}) {
-  const total = Math.max(0, Number(totalFilas) || 0)
-  return {
-    total,
-    segmentos: total > 0 ? Math.ceil(total / porSegmento) : 0,
-    porSegmento,
-    partirPorTiempo: total > UMBRAL_PARA_PARTIR_POR_TIEMPO,
-  }
+/** Un periodo como lo da `periodoIso`: `2026-01-05T00:00:00`. */
+export const esPeriodoIso = (valor) => /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(String(valor ?? ''))
+
+/** El filtro de un tramo de tiempo: el de la key figure y, si hay periodo, solo ese periodo. */
+export function filtroDePeriodo(filtro, campoDeTiempo, periodo) {
+  if (!periodo || !campoDeTiempo) return filtro || ''
+  const delPeriodo = `${campoDeTiempo} eq datetime'${periodo}'`
+  return filtro ? `${filtro} and ${delPeriodo}` : delPeriodo
 }
 
+/** Un valor de key figure que no aporta nada: vacío, nulo o cero (`isEmpty` de v8). */
+export const esVacio = (valor) => valor == null || String(valor).trim() === '' || Number(valor) === 0
+
 /**
- * Deja una fila lista para escribir: solo el nivel y las cifras, sin lo que SAP rechaza.
+ * Las filas leídas, listas para escribir (`projectBatch` de v8).
  *
- * Se hace fila por fila y no con un `$select` recortado porque la lectura SÍ necesita traer el nivel
- * completo —es lo que define la agregación— y en cambio la escritura no admite los atributos de solo
- * lectura que ese nivel puede incluir.
+ * Cada atributo del destino toma el valor de su atributo del origen, el periodo pasa de
+ * `/Date(…)/` a ISO —que es lo que acepta la importación—, y la key figure se renombra. Las filas
+ * cuya key figure está vacía o en cero se descartan: no traen información, y escribirlas pisaría con
+ * un cero lo que el destino tenía.
  */
-export function filaParaEscribir(fila, nivel, cifras, destinoDe) {
-  const salida = {}
-  for (const campo of [...(nivel ?? []), ...(cifras ?? [])]) {
-    // La fila viene leída con los nombres del ORIGEN y se escribe con los del destino.
-    if (fila?.[campo] !== undefined) salida[nombreEnDestino(campo, destinoDe)] = fila[campo]
+export function filasParaEscribir(filas, { nivel = [], cifra, campoDeTiempo } = {}, periodoIso = (v) => v) {
+  const salida = []
+  for (const fila of filas ?? []) {
+    const valor = fila?.[cifra.origen]
+    if (esVacio(valor)) continue
+    const una = {}
+    for (const { destino, origen } of nivel) una[destino] = fila[origen] ?? ''
+    una[campoDeTiempo] = periodoIso(fila[campoDeTiempo])
+    una[cifra.destino] = valor ?? '0'
+    salida.push(una)
   }
   return salida
+}
+
+// ── Lo que llega por la red ──────────────────────────────────────────────────────────────────────
+
+/** Un nombre de campo de OData. Lo demás no llega a la dirección de SAP. */
+const esCampo = (valor) => typeof valor === 'string' && /^[A-Za-z0-9_]+$/.test(valor)
+
+/** Una fecha del `<input type="date">`. */
+const esFecha = (valor) => /^\d{4}-\d{2}-\d{2}$/.test(String(valor ?? ''))
+
+/**
+ * La definición de la migración de UNA key figure, tal como la manda la pantalla, comprobada.
+ *
+ * Devuelve `{ definicion }` o `{ error }`. Los nombres van a la dirección de SAP: solo pasan los que
+ * son nombres de campo de verdad. El `$filter` lo arma el servidor con esto, no el navegador.
+ */
+export function definicionDeLaCifra(entrada = {}) {
+  const nivel = Array.isArray(entrada.nivel) ? entrada.nivel : []
+  if (nivel.length === 0) return { error: 'Falta el nivel de planificación.' }
+  if (!nivel.every((uno) => esCampo(uno?.destino) && esCampo(uno?.origen))) {
+    return { error: 'Hay un atributo del nivel sin su atributo de origen.' }
+  }
+  if (nivel.some((uno) => ATRIBUTOS_DE_SOLO_LECTURA.includes(uno.destino) || CAMPOS_DE_TIEMPO.includes(uno.destino))) {
+    return { error: 'El nivel incluye un atributo que no se puede escribir.' }
+  }
+
+  const cifra = entrada.cifra ?? {}
+  if (!esCampo(cifra.origen) || !esCampo(cifra.destino)) return { error: 'Falta la key figure de origen o de destino.' }
+
+  if (!CAMPOS_DE_TIEMPO.includes(entrada.campoDeTiempo)) return { error: 'Falta el nivel de tiempo.' }
+
+  const conversiones = {}
+  for (const campo of CAMPOS_DE_CONVERSION) {
+    const valor = entrada.conversiones?.[campo]
+    if (valor) conversiones[campo] = String(valor)
+  }
+
+  const condiciones = Array.isArray(entrada.condiciones)
+    ? entrada.condiciones.filter((una) => esCampo(una?.field)).map((una) => ({
+      field: una.field, op: una.op, value: String(una.value ?? ''),
+    }))
+    : []
+
+  return {
+    definicion: {
+      nivel: nivel.map(({ destino, origen }) => ({ destino, origen })),
+      cifra: { origen: cifra.origen, destino: cifra.destino },
+      campoDeTiempo: entrada.campoDeTiempo,
+      conversiones,
+      condiciones,
+      desde: esFecha(entrada.desde) ? entrada.desde : '',
+      hasta: esFecha(entrada.hasta) ? entrada.hasta : '',
+      soloConValor: entrada.soloConValor !== false,
+    },
+  }
+}
+
+// ── El resultado ─────────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Si un fallo merece otro intento del segmento, en una transacción nueva (v8: 403, sin estado o 5xx).
+ *
+ * El 403 es el token de escritura vencido: no deja nada preparado, así que repetir es seguro.
+ */
+export const esFalloTransitorio = (status) => status == null || status === 0 || status === 403 || status >= 500
+
+/**
+ * Los mensajes que cuentan como rechazo: errores y cancelaciones (E/A).
+ *
+ * Si el tenant no expone la severidad se cuentan todos, que es lo que hacía v8.
+ */
+export const esMensajeDeRechazo = (mensaje) => mensaje?.Severity == null || ['E', 'A'].includes(mensaje.Severity)
+
+/** Un mensaje reducido a lo que se enseña: su identificador, su texto y su severidad. */
+export function mensajeBreve(mensaje) {
+  const salida = {}
+  for (const campo of ['ExceptionId', 'MessageId', 'MsgText', 'Text', 'Severity']) {
+    if (mensaje?.[campo] != null) salida[campo] = mensaje[campo]
+  }
+  return salida
+}
+
+/**
+ * El estado de una key figure terminada, como v8: cualquier ERROR → error; rechazos o «procesada con
+ * errores» → aviso; alguna transacción sin confirmar → procesando; si no, ok.
+ */
+export function estadoDeCifra({ hayError, hayAviso, sinConfirmar, mensajes = [] } = {}) {
+  if (hayError) return 'error'
+  if (mensajes.length > 0 || hayAviso) return 'warning'
+  if (sinConfirmar) return 'processing'
+  return 'ok'
+}
+
+/** El estado de toda la corrida, para el historial y el informe. */
+export function estadoDeCorrida(resultados = []) {
+  const hay = (estado) => resultados.some((uno) => uno.status === estado)
+  if (hay('cancelled')) return 'cancelled'
+  if (hay('error')) return 'error'
+  if (hay('processing')) return 'processing'
+  if (hay('warning')) return 'warning'
+  return 'ok'
+}
+
+/**
+ * Las filas escritas en la corrida.
+ *
+ * Se cuentan una vez por transacción —o por key figure si no tuvo—, como v8, que agrupaba las filas
+ * de un grupo bajo la misma transacción.
+ */
+export function totalEscrito(resultados = []) {
+  const vistos = new Set()
+  let total = 0
+  for (const uno of resultados) {
+    const clave = uno.txId || uno.kf
+    if (vistos.has(clave)) continue
+    vistos.add(clave)
+    total += uno.total || 0
+  }
+  return total
+}
+
+/** Las fases que se cronometran, en el orden en que pasan. */
+export const FASES_CRONOMETRADAS = Object.freeze(['count', 'reading', 'writing', 'committing', 'processing', 'messages'])
+
+/** Los tiempos sumados por fase y la key figure más lenta. */
+export function tiemposDeLaCorrida(resultados = []) {
+  const vistos = new Set()
+  const totales = {}
+  let masLenta = null
+  for (const uno of resultados) {
+    const clave = uno.txId || uno.kf
+    if (vistos.has(clave)) continue
+    vistos.add(clave)
+    for (const [fase, ms] of Object.entries(uno.phaseTimes || {})) totales[fase] = (totales[fase] || 0) + ms
+    if ((uno.durationMs || 0) > (masLenta?.durationMs || 0)) masLenta = uno
+  }
+  return { totales, masLenta }
+}
+
+/** Una duración compacta, como `fmtDuration` de v8: «1h 02m», «2m 14s», «4,2 s», «850 ms». */
+export function duracionLegible(ms) {
+  if (ms == null || !Number.isFinite(ms)) return '—'
+  if (ms < 1000) return `${Math.round(ms)} ms`
+  const s = ms / 1000
+  if (s < 60) return `${s.toFixed(1).replace('.', ',')} s`
+  const m = Math.floor(s / 60)
+  const resto = Math.round(s % 60)
+  if (m < 60) return `${m}m ${String(resto).padStart(2, '0')}s`
+  const h = Math.floor(m / 60)
+  return `${h}h ${String(m % 60).padStart(2, '0')}m`
+}
+
+/**
+ * El siguiente tramo de trabajo (`nextWork` de v8).
+ *
+ * Cada periodo se reparte POR POSICIÓN: varios trabajadores leen el mismo periodo en ventanas de
+ * `$skip` distintas, así que hay concurrencia completa aunque haya un solo periodo. Un periodo se da
+ * por terminado cuando una lectura vuelve corta; quien ya tomó una ventana más allá lee vacío, que no
+ * hace daño.
+ */
+export function siguienteTramo(periodos, porSegmento = FILAS_POR_SEGMENTO) {
+  for (const uno of periodos) {
+    if (!uno.done) {
+      const desde = uno.skip
+      uno.skip += porSegmento
+      return { periodo: uno, desde }
+    }
+  }
+  return null
+}
+
+/**
+ * «📋 Pegar lista» (`handlePasteApply` de v8).
+ *
+ * Una key figure por línea —una línea puede traer varias separadas por coma o punto y coma— y se
+ * agrega con el origen del mismo nombre. Una línea con TAB (dos columnas copiadas de Excel) es
+ * ORIGEN⇥DESTINO. Se compara sin distinguir mayúsculas contra el catálogo del DESTINO, se respeta el
+ * orden pegado, lo ya elegido se salta y lo que no existe se informa: nunca se descarta en silencio.
+ */
+export function cifrasPegadas(texto, { delDestino = [], delOrigen = [], yaElegidas = [] } = {}) {
+  const destinoPorMayusculas = new Map(delDestino.map((uno) => [uno.toUpperCase(), uno]))
+  const origenPorMayusculas = new Map(delOrigen.map((uno) => [uno.toUpperCase(), uno]))
+  const limpiar = (pieza) => pieza.trim().replace(/^["']+|["']+$/g, '')
+
+  const pares = []
+  for (const cruda of String(texto ?? '').split(/\r?\n/)) {
+    const linea = cruda.trim()
+    if (!linea) continue
+    if (linea.includes('\t')) {
+      const [a, b] = linea.split('\t').map(limpiar).filter(Boolean)
+      if (a) pares.push({ origen: b ? a : '', destino: b || a })
+    } else {
+      for (const pieza of linea.split(/[,;]/).map(limpiar).filter(Boolean)) pares.push({ origen: '', destino: pieza })
+    }
+  }
+
+  const faltantes = []
+  const agregadas = []
+  let repetidas = 0
+  const elegidas = new Set(yaElegidas)
+  for (const par of pares) {
+    const destino = destinoPorMayusculas.get(par.destino.toUpperCase())
+    if (!destino) { faltantes.push(par.destino); continue }
+    if (elegidas.has(destino)) { repetidas += 1; continue }
+    elegidas.add(destino)
+    agregadas.push({ dstKf: destino, srcKf: origenPorMayusculas.get((par.origen || destino).toUpperCase()) || '' })
+  }
+  return { agregadas, faltantes, repetidas }
+}
+
+/** El nombre del archivo del informe, como v8: `migracion-kf_<destino>_<AAAAMMDD-HHMM>.pdf`. */
+export function nombreDelInforme(destino, fecha = new Date()) {
+  const dos = (n) => String(n).padStart(2, '0')
+  const sistema = String(destino || 'sistema').replace(/[^\w-]+/g, '-')
+  return `migracion-kf_${sistema}_${fecha.getFullYear()}${dos(fecha.getMonth() + 1)}${dos(fecha.getDate())}`
+    + `-${dos(fecha.getHours())}${dos(fecha.getMinutes())}.pdf`
 }

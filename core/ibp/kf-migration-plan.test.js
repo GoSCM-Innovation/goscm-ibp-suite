@@ -1,334 +1,207 @@
 import { describe, it, expect } from 'vitest'
 
 import {
-  ATRIBUTOS_DE_SOLO_LECTURA,
-  FILAS_POR_SEGMENTO,
-  NIVELES_DE_TIEMPO,
-  UMBRAL_PARA_PARTIR_POR_TIEMPO,
-  dimensionesEscribibles,
-  esCampoDeTiempo,
-  cifrasPegadas,
-  filaParaEscribir,
-  nivelDeTiempoDe,
-  nombreEnDestino,
-  renombrados,
-  planificarSegmentos,
-  revisarMigracionDeCifras,
-  selectDeLaMigracion,
+  FILAS_POR_SEGMENTO, NIVELES_DE_TIEMPO,
+  camposDeEscritura, cifrasPegadas, definicionDeLaCifra, duracionLegible, esFalloTransitorio,
+  esMensajeDeRechazo, esPeriodoIso, estadoDeCifra, estadoDeCorrida, filasParaEscribir, filtroDePeriodo,
+  lecturaDeLaCifra, mensajeBreve, nombreDelInforme, siguienteTramo, tiemposDeLaCorrida, totalEscrito,
 } from './kf-migration-plan.js'
+import { periodoIso } from './planning-data-model.js'
 
-const ORIGEN = { connectionId: 'c-1', area: 'ASIBPTS', versionId: 'V1' }
-const DESTINO = { connectionId: 'c-2', area: 'GCINDURAMA', versionId: 'V2' }
+const definicion = {
+  nivel: [{ destino: 'PRDID', origen: 'PRDID' }, { destino: 'CUSTID', origen: 'ATRIBUTOZ' }],
+  cifra: { origen: 'ZSRC', destino: 'ZDST' },
+  campoDeTiempo: 'PERIODID4_TSTAMP',
+  conversiones: {},
+}
 
 describe('niveles de tiempo', () => {
-  // Que el número no siga el calendario —4 es semana, 3 mes, 0 día— es de SAP.
-  it('reconoce los campos de periodo de SAP', () => {
-    expect(esCampoDeTiempo('PERIODID4_TSTAMP')).toBe(true)
-    expect(esCampoDeTiempo('PRDID')).toBe(false)
-  })
-
-  it('encuentra el nivel de tiempo dentro de un nivel', () => {
-    expect(nivelDeTiempoDe(['PRDID', 'PERIODID3_TSTAMP'])).toMatchObject({ clave: 'mes' })
-  })
-
-  it('un nivel sin tiempo no tiene ninguno', () => {
-    expect(nivelDeTiempoDe(['PRDID', 'LOCID'])).toBeNull()
-    expect(nivelDeTiempoDe(undefined)).toBeNull()
-  })
-
-  it('todos los niveles declaran campo, clave y etiqueta', () => {
-    for (const uno of NIVELES_DE_TIEMPO) {
-      expect(uno.campo).toMatch(/^PERIODID\d_TSTAMP$/)
-      expect(uno.clave).toBeTruthy()
-      expect(uno.etiqueta).toBeTruthy()
-    }
+  it('semana es el primero, como en v8', () => {
+    expect(NIVELES_DE_TIEMPO[0].campo).toBe('PERIODID4_TSTAMP')
+    expect(NIVELES_DE_TIEMPO.map((uno) => uno.clave)).toEqual(['week', 'month', 'quarter', 'year', 'day', 'techweek'])
   })
 })
 
-describe('dimensionesEscribibles', () => {
-  // La versión y el escenario viajan en la transacción, no como columnas.
-  it('quita los atributos que SAP no acepta al escribir', () => {
-    expect(dimensionesEscribibles(['PRDID', 'VERSIONID', 'AGGREGATE', 'LOCID'])).toEqual(['PRDID', 'LOCID'])
-  })
-
-  it('sin dimensiones no revienta', () => {
-    expect(dimensionesEscribibles(undefined)).toEqual([])
-  })
-
-  it('la lista de solo lectura incluye la versión y el escenario', () => {
-    expect(ATRIBUTOS_DE_SOLO_LECTURA).toContain('VERSIONID')
-    expect(ATRIBUTOS_DE_SOLO_LECTURA).toContain('SCENARIOID')
-  })
-})
-
-describe('revisarMigracionDeCifras', () => {
-  const base = {
-    origen: ORIGEN,
-    destino: DESTINO,
-    cifras: ['ADJUSTEDPRODUCTION'],
-    dimensiones: ['PRDID', 'LOCID', 'PERIODID4_TSTAMP'],
-    cifrasDelDestino: ['ADJUSTEDPRODUCTION', 'OTRA'],
-    dimensionesDelDestino: ['PRDID', 'LOCID', 'PERIODID4_TSTAMP'],
-  }
-
-  it('una migración completa se puede hacer', () => {
-    const revision = revisarMigracionDeCifras(base)
-    expect(revision).toMatchObject({ sePuede: true, impedimentos: [], avisos: [] })
-    expect(revision.nivelDeTiempo).toMatchObject({ clave: 'semana' })
-  })
-
-  it('sin cifras elegidas no se puede', () => {
-    expect(revisarMigracionDeCifras({ ...base, cifras: [] }).sePuede).toBe(false)
-  })
-
-  // Un nivel vacío hace que SAP sume todo en un solo valor.
-  it('un nivel vacío lo impide', () => {
-    const revision = revisarMigracionDeCifras({ ...base, dimensiones: [] })
-    expect(revision.sePuede).toBe(false)
-    expect(revision.impedimentos.join(' ')).toMatch(/nivel está vacío/)
-  })
-
-  // ESTE es el caso que muerde en silencio: el resultado es creíble y está mal.
-  it('un nivel sin periodo se avisa, no se impide', () => {
-    const revision = revisarMigracionDeCifras({ ...base, dimensiones: ['PRDID', 'LOCID'] })
-    expect(revision.sePuede).toBe(true)
-    expect(revision.avisos.join(' ')).toMatch(/no incluye ningún periodo/)
-    expect(revision.avisos.join(' ')).toMatch(/TODO el horizonte/)
-  })
-
-  it('una cifra que el destino no tiene lo impide', () => {
-    const revision = revisarMigracionDeCifras({ ...base, cifras: ['NOEXISTE'] })
-    expect(revision.sePuede).toBe(false)
-    expect(revision.impedimentos.join(' ')).toMatch(/NOEXISTE/)
-  })
-
-  it('un atributo del nivel que el destino no tiene lo impide', () => {
-    const revision = revisarMigracionDeCifras({ ...base, dimensionesDelDestino: ['PRDID'] })
-    expect(revision.sePuede).toBe(false)
-    expect(revision.impedimentos.join(' ')).toMatch(/LOCID/)
-  })
-
-  // Sin catálogo del destino no se puede comprobar; mejor dejar seguir que impedir por no saber.
-  it('sin catálogo del destino no se inventan impedimentos', () => {
-    expect(revisarMigracionDeCifras({
-      ...base, cifrasDelDestino: [], dimensionesDelDestino: [],
-    }).sePuede).toBe(true)
-  })
-
-  it('los atributos de solo lectura se avisan y se quitan del nivel', () => {
-    const revision = revisarMigracionDeCifras({
-      ...base, dimensiones: ['PRDID', 'VERSIONID', 'PERIODID4_TSTAMP'],
+describe('lecturaDeLaCifra', () => {
+  it('lee con los nombres del origen, la key figure y SIEMPRE el tiempo', () => {
+    expect(lecturaDeLaCifra(definicion)).toEqual({
+      select: ['PRDID', 'ATRIBUTOZ', 'ZSRC', 'PERIODID4_TSTAMP'],
+      orderby: ['PRDID', 'ATRIBUTOZ', 'PERIODID4_TSTAMP'],
     })
-    expect(revision.nivel).toEqual(['PRDID', 'PERIODID4_TSTAMP'])
-    expect(revision.avisos.join(' ')).toMatch(/VERSIONID/)
   })
 
-  it('el mismo tenant, área y versión lo impide', () => {
-    expect(revisarMigracionDeCifras({ ...base, destino: { ...ORIGEN } }).sePuede).toBe(false)
+  it('las conversiones van en el select y en el orden, después del nivel', () => {
+    const { select, orderby } = lecturaDeLaCifra({ ...definicion, conversiones: { CURRTOID: 'USD', UOMTOID: 'EA' } })
+    expect(select).toEqual(['PRDID', 'ATRIBUTOZ', 'UOMTOID', 'CURRTOID', 'ZSRC', 'PERIODID4_TSTAMP'])
+    expect(orderby).toEqual(['PRDID', 'ATRIBUTOZ', 'UOMTOID', 'CURRTOID', 'PERIODID4_TSTAMP'])
   })
 
-  // El mismo tenant con OTRA versión es un caso legítimo: copiar de una versión a otra.
-  it('el mismo tenant con otra versión sí se puede', () => {
-    expect(revisarMigracionDeCifras({
-      ...base, destino: { ...ORIGEN, versionId: 'V9' },
-    }).sePuede).toBe(true)
+  it('una conversión sin valor no se pide', () => {
+    expect(lecturaDeLaCifra({ ...definicion, conversiones: { UOMTOID: '' } }).select).not.toContain('UOMTOID')
+  })
+})
+
+describe('camposDeEscritura', () => {
+  it('es el nivel del DESTINO, la key figure y el tiempo, sin conversiones', () => {
+    expect(camposDeEscritura({ ...definicion, conversiones: { UOMTOID: 'EA' } }))
+      .toEqual(['PRDID', 'CUSTID', 'ZDST', 'PERIODID4_TSTAMP'])
+  })
+})
+
+describe('filtroDePeriodo', () => {
+  it('añade el periodo al filtro', () => {
+    expect(filtroDePeriodo("VERSIONID eq 'V1'", 'PERIODID4_TSTAMP', '2026-01-05T00:00:00'))
+      .toBe("VERSIONID eq 'V1' and PERIODID4_TSTAMP eq datetime'2026-01-05T00:00:00'")
+  })
+  it('sin periodo deja el filtro como estaba', () => {
+    expect(filtroDePeriodo('X', 'PERIODID4_TSTAMP', null)).toBe('X')
+    expect(filtroDePeriodo('', 'PERIODID4_TSTAMP', '2026-01-05T00:00:00')).toBe("PERIODID4_TSTAMP eq datetime'2026-01-05T00:00:00'")
+  })
+  it('reconoce un periodo ISO', () => {
+    expect(esPeriodoIso('2026-01-05T00:00:00')).toBe(true)
+    expect(esPeriodoIso("2026-01-05' or 1 eq 1")).toBe(false)
+  })
+})
+
+describe('filasParaEscribir', () => {
+  const filas = [
+    { PRDID: 'P1', ATRIBUTOZ: 'C1', ZSRC: '5.000000', PERIODID4_TSTAMP: '/Date(1767225600000)/', VERSIONID: 'V' },
+    { PRDID: 'P2', ATRIBUTOZ: 'C2', ZSRC: '0.000000', PERIODID4_TSTAMP: '/Date(1767225600000)/' },
+    { PRDID: 'P3', ATRIBUTOZ: null, ZSRC: '-2', PERIODID4_TSTAMP: '/Date(1767225600000)/' },
+    { PRDID: 'P4', ATRIBUTOZ: 'C4', ZSRC: null, PERIODID4_TSTAMP: '/Date(1767225600000)/' },
+  ]
+
+  it('renombra al destino, pasa el periodo a ISO y descarta vacíos y ceros', () => {
+    expect(filasParaEscribir(filas, definicion, periodoIso)).toEqual([
+      { PRDID: 'P1', CUSTID: 'C1', PERIODID4_TSTAMP: '2026-01-01T00:00:00', ZDST: '5.000000' },
+      { PRDID: 'P3', CUSTID: '', PERIODID4_TSTAMP: '2026-01-01T00:00:00', ZDST: '-2' },
+    ])
+  })
+})
+
+describe('definicionDeLaCifra', () => {
+  it('acepta una definición completa', () => {
+    const { definicion: leida, error } = definicionDeLaCifra({
+      ...definicion, conversiones: { UOMTOID: 'EA', OTRO: 'x' }, desde: '2026-01-01', hasta: 'mañana',
+      condiciones: [{ field: 'PRDID', op: 'in', value: 'A,B' }, { field: "X' or", op: 'in', value: '1' }],
+    })
+    expect(error).toBeUndefined()
+    expect(leida.conversiones).toEqual({ UOMTOID: 'EA' })
+    expect(leida.desde).toBe('2026-01-01')
+    expect(leida.hasta).toBe('')
+    expect(leida.condiciones).toEqual([{ field: 'PRDID', op: 'in', value: 'A,B' }])
+    expect(leida.soloConValor).toBe(true)
   })
 
-  it('sin argumentos no revienta', () => {
-    expect(revisarMigracionDeCifras().sePuede).toBe(false)
+  it('rechaza lo que no es un nombre de campo', () => {
+    expect(definicionDeLaCifra({ ...definicion, cifra: { origen: 'A B', destino: 'C' } }).error).toBeTruthy()
+    expect(definicionDeLaCifra({ ...definicion, nivel: [] }).error).toBeTruthy()
+    expect(definicionDeLaCifra({ ...definicion, nivel: [{ destino: 'PRDID', origen: null }] }).error).toBeTruthy()
+    expect(definicionDeLaCifra({ ...definicion, campoDeTiempo: 'PRDID' }).error).toBeTruthy()
+  })
+
+  it('no deja escribir un atributo de solo lectura', () => {
+    expect(definicionDeLaCifra({ ...definicion, nivel: [{ destino: 'VERSIONID', origen: 'VERSIONID' }] }).error).toBeTruthy()
+  })
+
+  it('soloConValor: false se respeta', () => {
+    expect(definicionDeLaCifra({ ...definicion, soloConValor: false }).definicion.soloConValor).toBe(false)
+  })
+})
+
+describe('juzgar el resultado', () => {
+  it('fallos que merecen otro intento, como v8', () => {
+    expect(esFalloTransitorio(undefined)).toBe(true)
+    expect(esFalloTransitorio(403)).toBe(true)
+    expect(esFalloTransitorio(502)).toBe(true)
+    expect(esFalloTransitorio(400)).toBe(false)
+  })
+
+  it('solo los mensajes E/A son rechazos; sin severidad cuentan todos', () => {
+    expect(esMensajeDeRechazo({ Severity: 'E' })).toBe(true)
+    expect(esMensajeDeRechazo({ Severity: 'A' })).toBe(true)
+    expect(esMensajeDeRechazo({ Severity: 'I' })).toBe(false)
+    expect(esMensajeDeRechazo({ MsgText: 'x' })).toBe(true)
+  })
+
+  it('un mensaje se reduce a lo que se enseña', () => {
+    expect(mensajeBreve({ ExceptionId: 'E1', MsgText: 'm', Severity: 'E', __metadata: {}, Transactionid: 'T' }))
+      .toEqual({ ExceptionId: 'E1', MsgText: 'm', Severity: 'E' })
+  })
+
+  it('estado de una key figure', () => {
+    expect(estadoDeCifra({ hayError: true, mensajes: [{}] })).toBe('error')
+    expect(estadoDeCifra({ mensajes: [{}] })).toBe('warning')
+    expect(estadoDeCifra({ hayAviso: true })).toBe('warning')
+    expect(estadoDeCifra({ sinConfirmar: true })).toBe('processing')
+    expect(estadoDeCifra({})).toBe('ok')
+  })
+
+  it('estado de la corrida', () => {
+    expect(estadoDeCorrida([{ status: 'ok' }, { status: 'cancelled' }, { status: 'error' }])).toBe('cancelled')
+    expect(estadoDeCorrida([{ status: 'ok' }, { status: 'error' }])).toBe('error')
+    expect(estadoDeCorrida([{ status: 'warning' }, { status: 'processing' }])).toBe('processing')
+    expect(estadoDeCorrida([{ status: 'ok' }, { status: 'skipped' }])).toBe('ok')
+  })
+
+  it('las filas escritas y los tiempos se cuentan una vez por transacción', () => {
+    const resultados = [
+      { kf: 'A', txId: 'T1', total: 10, durationMs: 5, phaseTimes: { reading: 2 } },
+      { kf: 'B', txId: 'T1', total: 10, durationMs: 5, phaseTimes: { reading: 2 } },
+      { kf: 'C', txId: null, total: 3, durationMs: 9, phaseTimes: { reading: 1, count: 4 } },
+    ]
+    expect(totalEscrito(resultados)).toBe(13)
+    const { totales, masLenta } = tiemposDeLaCorrida(resultados)
+    expect(totales).toEqual({ reading: 3, count: 4 })
+    expect(masLenta.kf).toBe('C')
+  })
+})
+
+describe('duracionLegible', () => {
+  it('como fmtDuration de v8', () => {
+    expect(duracionLegible(null)).toBe('—')
+    expect(duracionLegible(850)).toBe('850 ms')
+    expect(duracionLegible(4200)).toBe('4,2 s')
+    expect(duracionLegible(134_000)).toBe('2m 14s')
+    expect(duracionLegible(3_720_000)).toBe('1h 02m')
+  })
+})
+
+describe('siguienteTramo', () => {
+  it('reparte cada periodo por posición hasta que se marca terminado', () => {
+    const periodos = [{ periodo: 'A', skip: 0, done: false }, { periodo: 'B', skip: 0, done: false }]
+    expect(siguienteTramo(periodos)).toMatchObject({ desde: 0, periodo: { periodo: 'A' } })
+    expect(siguienteTramo(periodos)).toMatchObject({ desde: FILAS_POR_SEGMENTO, periodo: { periodo: 'A' } })
+    periodos[0].done = true
+    expect(siguienteTramo(periodos)).toMatchObject({ desde: 0, periodo: { periodo: 'B' } })
+    periodos[1].done = true
+    expect(siguienteTramo(periodos)).toBeNull()
   })
 })
 
 describe('cifrasPegadas', () => {
-  const catalogo = ['ACTUALSQTY', 'CONSENSUSDEMANDQTY', 'ADJUSTEDPRODUCTION']
+  const catalogos = { delDestino: ['ZDEMAND', 'ZFORECAST', 'ZSALES'], delOrigen: ['ZDEMAND', 'ZOLDSALES'] }
 
-  it('parte por salto de linea', () => {
-    expect(cifrasPegadas('ACTUALSQTY\nADJUSTEDPRODUCTION', catalogo).nuevas)
-      .toEqual(['ACTUALSQTY', 'ADJUSTEDPRODUCTION'])
+  it('una por línea o separadas por coma, contra el DESTINO y sin distinguir mayúsculas', () => {
+    const r = cifrasPegadas('zdemand\nZFORECAST; NOEXISTE', catalogos)
+    expect(r.agregadas).toEqual([{ dstKf: 'ZDEMAND', srcKf: 'ZDEMAND' }, { dstKf: 'ZFORECAST', srcKf: '' }])
+    expect(r.faltantes).toEqual(['NOEXISTE'])
   })
 
-  // De Excel viene con tabulaciones, de un correo con comas: de donde viene no se controla.
-  it('parte por coma, punto y coma y tabulacion', () => {
-    expect(cifrasPegadas('ACTUALSQTY, ADJUSTEDPRODUCTION', catalogo).nuevas).toHaveLength(2)
-    expect(cifrasPegadas('ACTUALSQTY;ADJUSTEDPRODUCTION', catalogo).nuevas).toHaveLength(2)
-    expect(cifrasPegadas('ACTUALSQTY\tADJUSTEDPRODUCTION', catalogo).nuevas).toHaveLength(2)
+  it('ORIGEN⇥DESTINO para los renombrados', () => {
+    expect(cifrasPegadas('ZOLDSALES\tZSALES', catalogos).agregadas).toEqual([{ dstKf: 'ZSALES', srcKf: 'ZOLDSALES' }])
   })
 
-  it('no le molestan los espacios ni las minusculas', () => {
-    expect(cifrasPegadas('  actualsqty  ', catalogo).nuevas).toEqual(['ACTUALSQTY'])
-  })
-
-  // Si de cincuenta nombres cuatro no existen, eso hay que verlo: callarlo dejaria una migracion
-  // que parece completa y le faltan cuatro.
-  it('separa lo que el origen no tiene', () => {
-    const salida = cifrasPegadas('ACTUALSQTY\nZNOEXISTE', catalogo)
-    expect(salida.nuevas).toEqual(['ACTUALSQTY'])
-    expect(salida.faltantes).toEqual(['ZNOEXISTE'])
-  })
-
-  it('separa lo que ya estaba elegido', () => {
-    const salida = cifrasPegadas('ACTUALSQTY\nADJUSTEDPRODUCTION', catalogo, ['ACTUALSQTY'])
-    expect(salida.nuevas).toEqual(['ADJUSTEDPRODUCTION'])
-    expect(salida.repetidas).toEqual(['ACTUALSQTY'])
-  })
-
-  it('un nombre repetido dentro del texto se cuenta una vez', () => {
-    const salida = cifrasPegadas('ACTUALSQTY\nACTUALSQTY', catalogo)
-    expect(salida.nuevas).toEqual(['ACTUALSQTY'])
-    expect(salida.repetidas).toEqual([])
-  })
-
-  it('sin texto no hay nada', () => {
-    expect(cifrasPegadas('', catalogo)).toEqual({ nuevas: [], faltantes: [], repetidas: [] })
-    expect(cifrasPegadas(undefined)).toEqual({ nuevas: [], faltantes: [], repetidas: [] })
-  })
-
-  it('sin catalogo no da nada por bueno', () => {
-    expect(cifrasPegadas('ACTUALSQTY').faltantes).toEqual(['ACTUALSQTY'])
+  it('lo ya elegido se cuenta como repetido', () => {
+    const r = cifrasPegadas('ZDEMAND\nZDEMAND\n"ZSALES"', { ...catalogos, yaElegidas: ['ZSALES'] })
+    expect(r.agregadas).toEqual([{ dstKf: 'ZDEMAND', srcKf: 'ZDEMAND' }])
+    expect(r.repetidas).toBe(2)
   })
 })
 
-describe('renombrar para el destino', () => {
-  it('sin mapa, el nombre es el mismo', () => {
-    expect(nombreEnDestino('ADJUSTEDPRODUCTION')).toBe('ADJUSTEDPRODUCTION')
-    expect(nombreEnDestino('ADJUSTEDPRODUCTION', {})).toBe('ADJUSTEDPRODUCTION')
-  })
-
-  it('con mapa, el del destino', () => {
-    expect(nombreEnDestino('ADJUSTEDPRODUCTION', { ADJUSTEDPRODUCTION: 'ZPROD' })).toBe('ZPROD')
-  })
-
-  // Una entrada vacía es «con el mismo nombre», no «con un nombre vacío».
-  it('un destino vacío no borra el nombre', () => {
-    expect(nombreEnDestino('KF', { KF: '' })).toBe('KF')
-  })
-
-  it('solo lista lo que de verdad cambia de nombre', () => {
-    expect(renombrados(['A', 'B', 'C'], { A: 'ZA', B: 'B' }))
-      .toEqual([{ origen: 'A', destino: 'ZA' }])
-  })
-
-  it('sin nombres no revienta', () => {
-    expect(renombrados(undefined, undefined)).toEqual([])
-  })
-})
-
-describe('revisarMigracionDeCifras con renombrado y tramo', () => {
-  const base = {
-    origen: ORIGEN,
-    destino: DESTINO,
-    cifras: ['ADJUSTEDPRODUCTION'],
-    dimensiones: ['PRDID', 'PERIODID4_TSTAMP'],
-    cifrasDelDestino: ['ZPROD', 'OTRA'],
-    dimensionesDelDestino: ['ZPRODUCTO', 'PERIODID4_TSTAMP'],
-  }
-
-  // Lo que tiene que existir en el destino es el nombre NUEVO, no el del origen.
-  it('con el renombrado puesto, la migración se puede hacer', () => {
-    const revision = revisarMigracionDeCifras({
-      ...base,
-      destinoDe: { ADJUSTEDPRODUCTION: 'ZPROD', PRDID: 'ZPRODUCTO' },
-    })
-    expect(revision.sePuede).toBe(true)
-  })
-
-  it('sin el renombrado, el destino no tiene esos nombres', () => {
-    const revision = revisarMigracionDeCifras(base)
-    expect(revision.sePuede).toBe(false)
-    expect(revision.impedimentos.join(' ')).toContain('ADJUSTEDPRODUCTION')
-  })
-
-  // Se configura una vez y se olvida, y escribe en una cifra que no era.
-  it('avisa por escrito de cada renombrado', () => {
-    const revision = revisarMigracionDeCifras({
-      ...base,
-      destinoDe: { ADJUSTEDPRODUCTION: 'ZPROD', PRDID: 'ZPRODUCTO' },
-    })
-    expect(revision.avisos.join(' ')).toContain('ADJUSTEDPRODUCTION → ZPROD')
-    expect(revision.avisos.join(' ')).toContain('PRDID → ZPRODUCTO')
-  })
-
-  // Un rango al revés no da error en SAP: da cero filas, que se lee como «no hay datos».
-  it('un tramo de fechas al revés no se puede', () => {
-    const revision = revisarMigracionDeCifras({
-      ...base,
-      destinoDe: { ADJUSTEDPRODUCTION: 'ZPROD', PRDID: 'ZPRODUCTO' },
-      desde: '2026-03-01',
-      hasta: '2026-01-01',
-    })
-    expect(revision.sePuede).toBe(false)
-    expect(revision.impedimentos.join(' ')).toContain('al revés')
-  })
-
-  it('un tramo en orden, o con un solo extremo, sí', () => {
-    const conDestino = { ...base, destinoDe: { ADJUSTEDPRODUCTION: 'ZPROD', PRDID: 'ZPRODUCTO' } }
-    expect(revisarMigracionDeCifras({ ...conDestino, desde: '2026-01-01', hasta: '2026-03-01' }).sePuede).toBe(true)
-    expect(revisarMigracionDeCifras({ ...conDestino, desde: '2026-01-01' }).sePuede).toBe(true)
-    expect(revisarMigracionDeCifras({ ...conDestino, hasta: '2026-03-01' }).sePuede).toBe(true)
-  })
-})
-
-describe('selectDeLaMigracion', () => {
-  // Si el select y la lista del nivel no coinciden, SAP escribe a otro nivel del que se leyó.
-  it('pone el nivel primero y las cifras después', () => {
-    expect(selectDeLaMigracion(['PRDID', 'PERIODID4_TSTAMP'], ['KF1', 'KF2']))
-      .toEqual(['PRDID', 'PERIODID4_TSTAMP', 'KF1', 'KF2'])
-  })
-
-  it('sin nada devuelve una lista vacía', () => {
-    expect(selectDeLaMigracion()).toEqual([])
-  })
-})
-
-describe('planificarSegmentos', () => {
-  it('cuenta los segmentos que hacen falta', () => {
-    expect(planificarSegmentos(FILAS_POR_SEGMENTO * 2 + 5))
-      .toMatchObject({ segmentos: 3, porSegmento: FILAS_POR_SEGMENTO })
-  })
-
-  it('sin filas no hay segmentos', () => {
-    expect(planificarSegmentos(0)).toMatchObject({ segmentos: 0 })
-  })
-
-  // Con volúmenes grandes un $skip muy profundo se vuelve caro y frágil.
-  it('por encima del umbral parte por periodo', () => {
-    expect(planificarSegmentos(UMBRAL_PARA_PARTIR_POR_TIEMPO + 1).partirPorTiempo).toBe(true)
-    expect(planificarSegmentos(UMBRAL_PARA_PARTIR_POR_TIEMPO).partirPorTiempo).toBe(false)
-  })
-
-  it('una cuenta ilegible se trata como cero', () => {
-    expect(planificarSegmentos(undefined)).toMatchObject({ total: 0, segmentos: 0 })
-  })
-})
-
-describe('filaParaEscribir', () => {
-  const fila = {
-    PRDID: 'P1', LOCID: 'L1', PERIODID4_TSTAMP: '/Date(1)/',
-    ADJUSTEDPRODUCTION: '10', VERSIONID: 'V1', AGGREGATE: 'X', SOBRA: 'z',
-  }
-
-  it('se queda con el nivel y las cifras, y nada más', () => {
-    expect(filaParaEscribir(fila, ['PRDID', 'PERIODID4_TSTAMP'], ['ADJUSTEDPRODUCTION']))
-      .toEqual({ PRDID: 'P1', PERIODID4_TSTAMP: '/Date(1)/', ADJUSTEDPRODUCTION: '10' })
-  })
-
-  it('un campo que la fila no trae no se inventa', () => {
-    expect(filaParaEscribir(fila, ['PRDID', 'NOESTA'], [])).toEqual({ PRDID: 'P1' })
-  })
-
-  // La fila se LEE con los nombres del origen y se ESCRIBE con los del destino.
-  it('escribe con el nombre del destino', () => {
-    const fila = { PRDID: 'P1', ADJUSTEDPRODUCTION: 5 }
-    expect(filaParaEscribir(fila, ['PRDID'], ['ADJUSTEDPRODUCTION'], {
-      PRDID: 'ZPRODUCTO', ADJUSTEDPRODUCTION: 'ZPROD',
-    })).toEqual({ ZPRODUCTO: 'P1', ZPROD: 5 })
-  })
-
-  it('sin mapa escribe con el mismo nombre', () => {
-    expect(filaParaEscribir({ PRDID: 'P1' }, ['PRDID'], [], {})).toEqual({ PRDID: 'P1' })
-  })
-
-  it('sin fila no revienta', () => {
-    expect(filaParaEscribir(undefined, ['PRDID'], ['KF'])).toEqual({})
+describe('nombreDelInforme', () => {
+  it('como v8', () => {
+    expect(nombreDelInforme('CLARO CO (Producción)', new Date(2026, 9, 1, 8, 5)))
+      .toBe('migracion-kf_CLARO-CO-Producci-n-_20261001-0805.pdf')
   })
 })
