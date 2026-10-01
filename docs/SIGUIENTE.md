@@ -3,7 +3,7 @@
 Este archivo es el punto de entrada cuando la instrucción es **«continuemos»**. Se lee primero, se
 actualiza al terminar cada sesión, y su orden es el de prioridad acordada.
 
-Última actualización: **2026-09-05**.
+Última actualización: **2026-10-01**.
 
 ## Dónde estamos
 
@@ -60,6 +60,25 @@ actualiza al terminar cada sesión, y su orden es el de prioridad acordada.
   **La lección, que es lo reutilizable:** las tres estaban a un clic de distancia de cualquiera que
   abriera la aplicación, y ninguna se veía leyendo el código. Correr una pantalla de punta a punta
   contra un tenant destapa en diez minutos más que un recorrido de archivos.
+
+## IBP Tools, portado otra vez — 2026-09-30 / 10-01
+
+El usuario comparó «Ver Dato Maestro» lado a lado con v8 y la de aquí era peor y hacía otra cosa (no
+tenía la versión base). Al recorrer TODAS las pestañas control por control resultó que casi todo IBP
+Tools eran rediseños. Se portaron otra vez, una por una, desde el código de v8: el marco (cabecera,
+barra de pestañas, «📊 Resumen» junto a las conexiones), Ver Dato Maestro, Ver Dato Transaccional,
+Resumen y Resumen global, Job Templates y Job Monitor, Resource Stats, Telemetría, Orquestador y
+los dos modos de Migración. El detalle y los fallos de datos que salieron están en
+[PARIDAD-V8.md](PARIDAD-V8.md#2026-09-30-la-tabla-de-abajo-decía-portado-y-no-lo-era).
+
+**Mirado con datos de muestra, no contra un tenant.** Lo primero es abrir cada pestaña contra un
+tenant real (mejor el de acuerdos separados) y compararla con v8 en la misma conexión. Lo que más
+puede sorprender, por haberse escrito de nuevo del lado del servidor: Telemetría (ordena por la
+clave que declara cada conjunto en su `$metadata`), el panel de pasos de Job Monitor (lecturas
+nuevas), y los tramos de las dos migraciones (ahora la función de `/api/ibp` tiene 300 s).
+
+Para que la cabecera diga lo mismo que v8, las conexiones se llaman sin el ambiente («CLARO CO»): el
+«(Producción)» o «(Calidad)» lo agrega la aplicación.
 
 ## Lo siguiente, en orden
 

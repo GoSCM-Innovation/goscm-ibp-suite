@@ -27,8 +27,8 @@ hace algo parecido». La lista buena es esta:
 | Resumen y Resumen global | **Portados tal cual** el 2026-09-30. Una corrección sobre v8: los días del gráfico se ordenan por fecha (v8 ponía el 01/10 antes del 29/09) |
 | Job Templates, lanzar, Job Monitor, pasos | **Portados tal cual** el 2026-09-30. Lanzar, cancelar y reiniciar siguen sin estrenar |
 | Resource Stats y Telemetría | **Portados tal cual** el 2026-09-30. Telemetría conserva los topes mayores (documentado abajo) |
-| Orquestador | En curso |
-| Migración (dato maestro y dato transaccional) | En curso |
+| Orquestador | **Portado tal cual** el 2026-10-01: la lista de pasos de v8 y no el lienzo de CI-DS, sobre el mismo motor del servidor con las reglas de v8 (C y D cancelan y siguen; agotar reintentos para la cadena; no se cancela en SAP). Corrige que al guardar se perdía la plantilla. Ejecutar sin estrenar |
+| Migración (dato maestro y dato transaccional) | **Portadas tal cual** el 2026-10-01, con su motor por tramos en el servidor. Corrigen la versión de origen ignorada, el catálogo de la primera área, la versión base imposible y que salir no detuviera la copia. Carga sin estrenar |
 
 **Fallos reales que salieron de esa revisión**, además de la forma:
 
