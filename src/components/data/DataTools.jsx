@@ -5,6 +5,8 @@
 // ella: se elige destino al entrar y después se navega libre entre las seis aplicaciones. Los tres
 // desplegables que había aquí obligaban a reelegir en cada pantalla.
 //
+// Cada aplicación lleva su barra de tenant (`BarraDeTenant`), salvo el glosario, que no usa ninguno.
+//
 // Lo que queda es el despacho: la cinta que presenta cada aplicación, el candado de las que no pueden
 // hacer nada sin conexión, y montar la que toque. El menú lateral es de `Shell.jsx`.
 
@@ -12,6 +14,7 @@ import { lazy, Suspense } from 'react'
 
 import { APPS_EXPLORER } from '../../lib/modules.js'
 import { destinoDe, estaConectado, useConexionActiva, verAsistente } from '../../lib/conexion-activa.js'
+import BarraDeTenant from './BarraDeTenant.jsx'
 
 const ProductionVisualizer = lazy(() => import('./ProductionVisualizer.jsx'))
 const ProductionAnalyzer = lazy(() => import('./ProductionAnalyzer.jsx'))
@@ -69,9 +72,6 @@ export default function DataTools({ appId }) {
         return <NetworkVisualizer key={clave} destino={destino} />
       case 'network':
         return <NetworkAnalyzer key={clave} area={conexion.planningArea} destino={destino} />
-      case 'glosario':
-        // No depende del tenant ni de lo descargado: explica los informes.
-        return <Glosario />
       case 'padoc':
         // No trabaja sobre lo descargado: recibe los CSV de la configuración del área, que SAP no
         // expone por API. Lo único que lee en vivo son los trabajos del tenant.
@@ -88,6 +88,11 @@ export default function DataTools({ appId }) {
     }
   }
 
+  // El glosario va de lado a lado y sin cinta: en v7 era así, y no depende de ningún tenant.
+  if (app.id === 'glosario') {
+    return <Suspense fallback={<div className="page-hint">Cargando…</div>}><Glosario /></Suspense>
+  }
+
   return (
     <div className="module-page">
       {/* La cinta de presentación de cada aplicación, como en v7. */}
@@ -98,6 +103,9 @@ export default function DataTools({ appId }) {
           <div className="tab-info-desc">{app.banner}</div>
         </div>
       </div>
+
+      {/* Contra qué tenant se ejecuta esta aplicación, y el cambio de tenant. */}
+      <BarraDeTenant />
 
       <Suspense fallback={<div className="page-hint">Cargando…</div>}>{contenido()}</Suspense>
     </div>

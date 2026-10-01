@@ -7,6 +7,14 @@ actualiza al terminar cada sesión, y su orden es el de prioridad acordada.
 
 ## Dónde estamos
 
+- **Dos correcciones del 2026-10-01, pendientes de verlas en el sitio desplegado.**
+  1. **El Glosario Analyzers ahora es el de v7**, no una versión derivada del código que se había
+     inventado y no se parecía al original. Dos pestañas, índice lateral, leyenda y secciones por hoja,
+     y «↓ Exportar PDF». Ver `docs/PARIDAD-V7.md`. **Falta comprobar el PDF descargado de verdad** y el
+     seguimiento del índice al desplazarse: en el panel de vista previa no disparan los eventos de scroll.
+  2. **«Desconectado / Conectar SAP IBP» salió del menú lateral.** Cada aplicación de Data Tools (menos
+     el Glosario) lleva una barra de tenant con «Cambiar tenant». Lo último elegido lo heredan las demás.
+     Si se quiere un desplegable directo de tenants en vez del asistente de tres pasos, es el siguiente paso.
 - **En línea**: https://goscm-ibp-suite.vercel.app
 - **El despliegue automático vuelve a funcionar.** Arreglado el 2026-09-05, y la causa era una sola
   cosa: **el remoto de git de esta carpeta seguía apuntando al sitio viejo**

@@ -130,16 +130,17 @@ describe('el candado de las aplicaciones', () => {
   })
 })
 
-describe('el bloque de conexión', () => {
-  it('dice «Desconectado» y ofrece conectar', async () => {
+describe('el estado de la conexión NO está en el menú', () => {
+  // La conexión a SAP IBP es de Data Tools: vive en la barra de cada aplicación
+  // (`BarraDeTenant`), no arriba del menú de toda la suite.
+  it('sin conexión, el menú no dice «Desconectado» ni ofrece conectar', async () => {
     await montar()
-    expect(contenedor.querySelector('.sidebar-conn').textContent).toContain('Desconectado')
-    expect(contenedor.querySelector('.status-dot.off')).not.toBeNull()
+    expect(contenedor.querySelector('.sidebar-conn')).toBeNull()
+    expect(contenedor.querySelector('.sidebar').textContent).not.toContain('Desconectado')
+    expect(contenedor.querySelector('.sidebar').textContent).not.toContain('Conectar SAP IBP')
   })
 
-  it('conectado, dice contra qué área y qué tenant se está trabajando', async () => {
-    // La procedencia va siempre visible: un número sin ella se lee como si fuera del tenant que uno
-    // tenía en la cabeza.
+  it('conectado, tampoco: el menú solo marca los candados de las aplicaciones', async () => {
     conectar({
       connectionId: 'c1',
       nombre: 'Tenant de pruebas',
@@ -147,15 +148,7 @@ describe('el bloque de conexión', () => {
       version: VERSION_BASE,
     })
     await montar()
-
-    const bloque = contenedor.querySelector('.sidebar-conn').textContent
-    expect(bloque).toContain('SAP4')
-    expect(bloque).toContain('Tenant de pruebas')
-    expect(contenedor.querySelector('.status-dot.on')).not.toBeNull()
-  })
-
-  it('no se le ofrece a quien no tiene Data Tools contratado', async () => {
-    await montar({ modules: ['cids'], route: 'cids' })
     expect(contenedor.querySelector('.sidebar-conn')).toBeNull()
+    expect(contenedor.querySelector('.status-dot')).toBeNull()
   })
 })

@@ -2,8 +2,11 @@
 //
 // El menú es el de v7, con un nivel más. En v7 las seis aplicaciones colgaban directamente del menú
 // lateral porque v7 ERA un solo producto; aquí conviven tres, así que las aplicaciones cuelgan de su
-// módulo y se despliegan cuando está abierto. El resto —los iconos, el candado a la derecha, el
-// estado de la conexión arriba y los requisitos técnicos en el pie— es suyo, tal cual.
+// módulo y se despliegan cuando está abierto. El resto —los iconos, el candado a la derecha y los
+// requisitos técnicos en el pie— es suyo, tal cual.
+//
+// El estado de la conexión a SAP IBP NO está aquí: en v7 iba arriba del menú porque todo era Data
+// Tools, pero aquí es cosa de ese módulo y vive en `data/BarraDeTenant.jsx`, dentro de cada aplicación.
 //
 // Los módulos no contratados aparecen con candado en vez de desaparecer, siguiendo lo que
 // hacía v7. Y son clicables a propósito: llevan a una pantalla que explica qué hace ese
@@ -52,10 +55,6 @@ export default function Shell({ user, modules, theme, onToggleTheme, onSignOut, 
     })
   }
 
-  // El bloque de conexión es el de Data Tools. A quien no lo tenga contratado le sobra: ofrecerle
-  // conectar a SAP IBP para algo que no puede abrir es prometer lo que el servidor va a negar.
-  const tieneDataTools = contratados.has('explorer')
-
   return (
     <>
       <header className="header">
@@ -93,31 +92,6 @@ export default function Shell({ user, modules, theme, onToggleTheme, onSignOut, 
           >
             {minimizado ? '»' : '«'}
           </button>
-
-          {/* ── El estado de la conexión, arriba del todo como en v7 ────────────────────────── */}
-          {tieneDataTools && (
-            <div className="sidebar-conn">
-              <div className="conn-status-row">
-                <span className={`status-dot ${conectado ? 'on' : 'off'}`} />
-                <span>
-                  {conectado
-                    ? `${conexion.planningArea} · ${conexion.nombre}`
-                    : 'Desconectado'}
-                </span>
-              </div>
-              <button
-                type="button"
-                className="btn btn-primary btn-sm sidebar-connect-btn"
-                onClick={() => verAsistente(true)}
-              >
-                {/* El icono se queda con el menú minimizado; el texto no cabe. */}
-                <span aria-hidden="true">🔗</span>
-                <span className="nav-label">
-                  {conectado ? ' Conexión activa' : ' Conectar SAP IBP'}
-                </span>
-              </button>
-            </div>
-          )}
 
           <div className="sidebar-nav">
             <span className="sidebar-label">Módulos</span>

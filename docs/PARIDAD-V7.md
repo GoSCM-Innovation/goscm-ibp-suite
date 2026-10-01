@@ -26,7 +26,7 @@ con el motivo escrito en [Los informes por entidad](#los-informes-por-entidad).
 | Production Analyzer | `prodAnalyzer.js` | 2.789 | **Portado** — `core/ibp/production-rules.js` + `production-analysis.js` + `location-analysis.js` + `resource-analysis.js` + `data/ProductionAnalyzer.jsx` |
 | Network Visualizer | `visualizer.js` | 1.448 | **Portado** — `core/ibp/supply-network.js` + `src/lib/network-load.js` + `data/SupplyNetwork.jsx` |
 | Network Analyzer | `analyzer.js` + `snWebView.js` | 3.531 | **Portado** — `core/ibp/network-analysis.js` + `src/lib/network-analyze.js` |
-| Glosario Analyzers | `glosario.js` | 1.409 | **Portado** — `data/Glosario.jsx`, derivado del código |
+| Glosario Analyzers | `glosario.js` | 1.409 | **Portado tal cual** — `data/Glosario.jsx` + `src/lib/glosario-v7.js` (el texto de v7) + `glosario-pdf.js` |
 | Planning Area Documenter | `paDoc.js` | 1.055 | **Portado** — `core/ibp/pa-doc-model.js` + `src/lib/docx.js` + `pa-doc.js` + `data/PlanningAreaDoc.jsx` |
 | Mapping Dataflow Generator | `docs.js` | 2.527 | **Portado** (llegó por v9) — `cids/documenter/*` |
 | Integration Explorer | `explorer.js` | 1.724 | **Portado** (llegó por v9) — `cids/explorer/*` |
@@ -364,23 +364,36 @@ El lector de CSV es el de SAP: separador punto y coma, y un salto de línea dent
 entrecomillado es parte del campo —las definiciones de cálculo los llevan—, así que partir por líneas
 antes de mirar las comillas rompería esas filas.
 
-## El glosario, derivado del código
+## El glosario es el de v7, no una versión «mejorada»
 
-v7 tenía el glosario escrito a mano en HTML, en paralelo a las reglas del analizador: dos textos que
-hablan de lo mismo y que nadie mantiene a la vez. Se cambia una regla, el glosario sigue explicando la
-vieja, y el consultor le explica al cliente algo que la herramienta ya no hace.
+Una primera versión de esta pantalla **derivaba** el glosario de las reglas del código (`production-rules.js`,
+`network-analysis.js`…). Sonaba bien —un solo texto que no se queda viejo— pero nadie lo pidió y el resultado
+no se parecía en nada al original: otros títulos, acordeones en vez de índice lateral, una sola página en
+vez de las dos pestañas, sin PDF. Se descubrió el 2026-10-01 al ponerlo al lado de v7.
 
-Aquí el glosario **se deriva** de `core/ibp/production-rules.js`, `network-analysis.js`,
-`location-analysis.js` y `resource-analysis.js`, que son los mismos módulos que juzgan. La tabla de «qué
-se le exige a cada categoría» es la matriz resuelta, no una copia: comprobado en el navegador, sus 13
-filas son las 13 comprobaciones de `MATRIZ`, y la fila de «sin receta propia» dice
-Error / Error / — / — / Aviso, que es exactamente lo que devuelve `reglasDe()` para cada categoría. Si
-mañana una comprobación cambia de rojo a aviso, esa pantalla lo dice sin que nadie la toque.
+Ahora es el de v7: `public/js/glosario.js` (origin/master, líneas 24-923) copiado como módulo, sin tocar
+su redacción. Lo que lleva igual que el original:
 
-Por lo mismo, las comprobaciones por ubicación se declaran como tabla (`EXIGENCIAS`) y no como una
-cadena de `if`: el glosario las lee de ahí, y hay una prueba que recorre la tabla entrada por entrada y
-comprueba que cada una dispara de verdad su severidad. Sin esa prueba, renombrar un campo dejaría al
-glosario prometiendo una comprobación que ya no existe —que es exactamente lo que le pasaba a v7—.
+- Dos pestañas, **🔬 Production Analyzer** (12 secciones) y **🌐 Network Analyzer** (9), y **↓ Exportar PDF**.
+- Índice lateral con una entrada por sección, que sigue la lectura al desplazarse.
+- Leyenda de estados (Alerta / Advertencia / OK / N/A) y una sección por cada hoja del Excel.
+- Ocupa la pantalla de lado a lado, sin la cinta de presentación de las otras aplicaciones.
+
+Dos diferencias con v7, por razones técnicas y no de diseño: `jspdf-autotable` es la v5 (`autoTable(doc, …)` en
+vez de `doc.autoTable`), y `offsetTop` se mide desde el panel del contenido para que el índice marque la
+sección correcta. El inglés (`glosario.en.json`) queda para la fase de idiomas.
+
+Lo que sí se conserva del trabajo anterior: las comprobaciones por ubicación siguen declaradas como tabla
+(`EXIGENCIAS`) y probadas una a una en `core/`; solo que el glosario ya no las lee.
+
+## La conexión a SAP IBP vive en cada aplicación de Data Tools
+
+En v7 el estado de la conexión («Desconectado» + «Conectar SAP IBP») iba arriba del menú porque todo era
+Data Tools. Aquí conviven tres módulos y solo Data Tools usa esa conexión, así que se movió: cada
+aplicación de Data Tools lleva una **barra de tenant** (`data/BarraDeTenant.jsx`) que dice contra qué
+tenant, área y versión va a ejecutar y tiene «Cambiar tenant» (o «Conectar SAP IBP» si no hay). Abre el
+mismo asistente de v7. Lo último elegido lo heredan las demás aplicaciones al abrirse. El Glosario no la
+lleva: no usa ningún tenant. Decidido por el usuario el 2026-10-01.
 
 ## Un número que no se puede escribir como si fuera un total
 
