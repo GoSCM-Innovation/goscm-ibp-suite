@@ -57,7 +57,8 @@ export function useOrchRun(connection) {
   const nombre = useRef('')
   const anterior = useRef(null)
 
-  // Al entrar: la ejecución que quedó abierta.
+  // Al entrar, y solo entonces: la ejecución que quedó abierta. Después la traen `start` y
+  // `adoptIfRunning` con la respuesta del servidor en la mano.
   useEffect(() => {
     if (!runOrchId) return undefined
     let abandonado = false
@@ -76,7 +77,7 @@ export function useOrchRun(connection) {
         setRunOrchId(null)
       })
     return () => { abandonado = true }
-  }, [runOrchId]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const isRunning = Boolean(run) && !isRunFinished(run)
 
