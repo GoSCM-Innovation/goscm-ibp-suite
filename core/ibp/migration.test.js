@@ -1,159 +1,117 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-vi.mock('./master-data.js', () => ({ countEntity: vi.fn(), readSchema: vi.fn() }))
+vi.mock('../transport/sap-fetch.js', () => ({ sapFetch: vi.fn() }))
 
-const { countEntity, readSchema } = await import('./master-data.js')
-const { planificarMigracion } = await import('./migration.js')
+const { sapFetch } = await import('../transport/sap-fetch.js')
+const { analizarTabla, leerCampos } = await import('./migration.js')
 
-const origen = { baseUrl: 'https://a', credentials: { user: 'a' }, planningArea: 'PA1', versionId: 'V1' }
-const destino = { baseUrl: 'https://b', credentials: { user: 'b' }, planningArea: 'PA2' }
+const origen = { baseUrl: 'https://a.scmibp.ondemand.com', credentials: { user: 'a' }, planningArea: 'PA1', versionId: 'V1' }
+const destino = { baseUrl: 'https://b.scmibp.ondemand.com', credentials: { user: 'b' }, planningArea: 'PA2', versionId: '' }
+const esperar = () => Promise.resolve()
 
-beforeEach(() => {
-  countEntity.mockReset()
-  readSchema.mockReset()
+/** Una fila de muestra con su dirección, de la que salen las claves. */
+const muestra = (entidad, columnas) => ({
+  __metadata: { uri: `https://x/${entidad}(${columnas[0]}='1',PlanningAreaID='PA',VersionID='V')` },
+  ...Object.fromEntries(columnas.map((uno) => [uno, 'x'])),
 })
 
-/** Responde el esquema según la entidad que se pida. */
-const esquemas = (porEntidad) => readSchema.mockImplementation(({ entidad }) => {
-  const columnas = porEntidad[entidad]
-  if (columnas === undefined) return Promise.reject(new Error('no se pudo leer'))
-  if (columnas === null) return Promise.resolve({ vacia: true, columnas: [], claves: [] })
-  return Promise.resolve({ vacia: false, columnas, claves: [columnas[0]] })
-})
+/** Responde según la tabla y según sea cuenta o muestra. `null` = vacía; `undefined` = falla. */
+function tenants({ cuenta = 0, porEntidad = {} } = {}) {
+  sapFetch.mockImplementation(({ url }) => {
+    if (url.includes('$inlinecount')) {
+      if (cuenta === 'falla') return Promise.reject(Object.assign(new Error('500'), { status: 500, retryable: true }))
+      return Promise.resolve({ json: { d: { __count: String(cuenta), results: [] } } })
+    }
+    const entidad = /\/MASTER_DATA_API_SRV\/([A-Z0-9_]+)\?/.exec(url)[1]
+    const columnas = porEntidad[entidad]
+    if (columnas === undefined) return Promise.reject(Object.assign(new Error('400'), { status: 400, retryable: false }))
+    return Promise.resolve({ json: { d: { results: columnas === null ? [] : [muestra(entidad, columnas)] } } })
+  })
+}
 
-describe('planificarMigracion', () => {
-  it('empareja, compara y cuenta', async () => {
-    esquemas({
-      GIDPRODUCT: ['PRDID', 'BRAND', 'SOLOAQUI'],
-      AS1PRODUCT: ['PRDID', 'BRAND', 'SOLOALLA'],
-    })
-    countEntity.mockResolvedValue(8005)
+beforeEach(() => { sapFetch.mockReset() })
 
-    const { entradas, resumen } = await planificarMigracion({
-      origen, destino, tablas: ['GIDPRODUCT'], tablasDelDestino: ['AS1PRODUCT', 'AS1LOCATION'],
+describe('analizarTabla', () => {
+  it('compara las columnas de los dos lados y cuenta el origen', async () => {
+    tenants({
+      cuenta: 8005,
+      porEntidad: { GIDPRODUCT: ['PRDID', 'BRAND', 'SOLOAQUI'], AS1PRODUCT: ['PRDID', 'BRAND', 'SOLOALLA'] },
     })
 
-    expect(entradas[0]).toMatchObject({
-      origen: 'GIDPRODUCT',
-      destino: 'AS1PRODUCT',
-      comunes: ['PRDID', 'BRAND'],
-      soloEnOrigen: ['SOLOAQUI'],
-      soloEnDestino: ['SOLOALLA'],
-      filas: 8005,
+    const salida = await analizarTabla({ origen, destino, entidad: 'GIDPRODUCT', entidadDestino: 'AS1PRODUCT', esperar })
+    expect(salida).toMatchObject({
+      count: 8005,
+      verifiable: true,
+      common: ['PRDID', 'BRAND'],
+      omitted: ['SOLOAQUI'],
+      unfilled: ['SOLOALLA'],
+      srcKeys: ['PRDID'],
+      dstKeys: ['PRDID'],
     })
-    expect(resumen).toMatchObject({ tablas: 1, copiables: 1, filas: 8005 })
   })
 
-  // Sin un orden estable, dos ventanas de lectura se solapan y dejan huecos: un hueco es una fila
-  // que no se copia.
-  it('devuelve las claves del origen, que son con las que se ordena al copiar', async () => {
-    esquemas({ T: ['PRDID', 'BRAND'], T2: ['PRDID'] })
-    countEntity.mockResolvedValue(1)
-
-    const { entradas } = await planificarMigracion({
-      origen, destino, tablas: ['T'], tablasDelDestino: ['T2'], destinoDe: { T: 'T2' },
-    })
-    expect(entradas[0].claves).toEqual(['PRDID'])
+  // Cada petición cuesta unos seis segundos fijos: el análisis de v8 eran tres por tabla.
+  it('hace exactamente tres lecturas por tabla', async () => {
+    tenants({ cuenta: 1, porEntidad: { T: ['A'], T2: ['A'] } })
+    await analizarTabla({ origen, destino, entidad: 'T', entidadDestino: 'T2', esperar })
+    expect(sapFetch).toHaveBeenCalledTimes(3)
   })
 
-  // El área y la versión viajan en el contexto de la transacción, no como columnas.
+  // Las columnas no dependen de la versión, y una lectura filtrada por versión puede tardar minutos.
+  it('las muestras se leen por área y SIN versión; la cuenta, con versión y filtro', async () => {
+    tenants({ cuenta: 1, porEntidad: { T: ['A'], T2: ['A'] } })
+    await analizarTabla({ origen, destino, entidad: 'T', entidadDestino: 'T2', extraFilter: "BRAND eq 'X'", esperar })
+
+    const urls = sapFetch.mock.calls.map(([uno]) => decodeURIComponent(uno.url))
+    const cuenta = urls.find((uno) => uno.includes('$inlinecount'))
+    expect(cuenta).toContain("PlanningAreaID eq 'PA1' and VersionID eq 'V1' and (BRAND eq 'X')")
+    for (const una of urls.filter((uno) => uno.includes('$top=1'))) {
+      expect(una).not.toContain('VersionID')
+      expect(una).not.toContain('BRAND')
+    }
+  })
+
   it('no cuenta los campos de solo lectura como diferencias', async () => {
-    esquemas({ T: ['A', 'PlanningAreaID', 'CREATEDDATE'], T2: ['A'] })
-    countEntity.mockResolvedValue(1)
-
-    const { entradas } = await planificarMigracion({
-      origen, destino, tablas: ['T'], tablasDelDestino: ['T2'], destinoDe: { T: 'T2' },
-    })
-    expect(entradas[0]).toMatchObject({ comunes: ['A'], soloEnOrigen: [] })
+    tenants({ cuenta: 1, porEntidad: { T: ['A', 'PlanningAreaID', 'CREATEDDATE'], T2: ['A', 'VersionID'] } })
+    const salida = await analizarTabla({ origen, destino, entidad: 'T', entidadDestino: 'T2', esperar })
+    expect(salida).toMatchObject({ common: ['A'], omitted: [], unfilled: [], srcFields: ['A'] })
   })
 
-  it('una pareja puesta a mano gana al emparejado automático', async () => {
-    esquemas({ GIDPRODUCT: ['A'], AS1LOCATION: ['A'] })
-    countEntity.mockResolvedValue(3)
-
-    const { entradas } = await planificarMigracion({
-      origen,
-      destino,
-      tablas: ['GIDPRODUCT'],
-      tablasDelDestino: ['AS1PRODUCT', 'AS1LOCATION'],
-      destinoDe: { GIDPRODUCT: 'AS1LOCATION' },
-    })
-    expect(entradas[0]).toMatchObject({ destino: 'AS1LOCATION', emparejadaAMano: true })
+  // Sin fila de muestra en el destino no se puede recortar: se mandan todas las del origen (v8).
+  it('un destino vacío deja el esquema sin verificar, con todas las columnas del origen', async () => {
+    tenants({ cuenta: 5, porEntidad: { T: ['A', 'B', 'VersionID'], T2: null } })
+    const salida = await analizarTabla({ origen, destino, entidad: 'T', entidadDestino: 'T2', esperar })
+    expect(salida).toMatchObject({ verifiable: false, common: null, srcFields: ['A', 'B'], dstKeys: [] })
   })
 
-  // Sin fila de muestra no se puede deducir el esquema, y ahí se mandaría todo.
-  it('una tabla vacía en el destino deja el plan a ciegas', async () => {
-    esquemas({ T: ['A'], T2: null })
-    countEntity.mockResolvedValue(5)
-
-    const { entradas } = await planificarMigracion({
-      origen, destino, tablas: ['T'], tablasDelDestino: ['T2'], destinoDe: { T: 'T2' },
-    })
-    expect(entradas[0]).toMatchObject({ verificable: false, comunes: null })
+  it('una muestra que no se puede leer también deja el esquema sin verificar', async () => {
+    tenants({ cuenta: 5, porEntidad: { T: ['A'] } })
+    const salida = await analizarTabla({ origen, destino, entidad: 'T', entidadDestino: 'NOEXISTE', esperar })
+    expect(salida).toMatchObject({ verifiable: false, srcFields: ['A'] })
   })
 
-  it('sin pareja no se pide el esquema del destino', async () => {
-    esquemas({ GIDRARO: ['A'] })
-    countEntity.mockResolvedValue(2)
+  it('una cuenta que no se pudo hacer sale como null, no como cero', async () => {
+    tenants({ cuenta: 'falla', porEntidad: { T: ['A'], T2: ['A'] } })
+    const salida = await analizarTabla({ origen, destino, entidad: 'T', entidadDestino: 'T2', esperar })
+    expect(salida.count).toBeNull()
+  })
+})
 
-    const { entradas, resumen } = await planificarMigracion({
-      origen, destino, tablas: ['GIDRARO'], tablasDelDestino: ['AS1PRODUCT'],
-    })
-    expect(entradas[0].destino).toBeNull()
-    expect(resumen.copiables).toBe(0)
+describe('leerCampos', () => {
+  it('una tabla vacía devuelve null', async () => {
+    tenants({ porEntidad: { T: null } })
+    await expect(leerCampos({ ...origen, entidad: 'T', esperar })).resolves.toBeNull()
   })
 
-  // Una cuenta que falla no debe tumbar el plan: lo demás sigue valiendo.
-  it('si no se puede contar, la tabla queda sin número', async () => {
-    esquemas({ T: ['A'], T2: ['A'] })
-    countEntity.mockRejectedValue(new Error('tiempo agotado'))
+  it('repite un fallo pasajero y no uno de datos', async () => {
+    sapFetch
+      .mockRejectedValueOnce(Object.assign(new Error('502'), { status: 502, retryable: true }))
+      .mockResolvedValueOnce({ json: { d: { results: [muestra('T', ['A'])] } } })
+    await expect(leerCampos({ ...origen, entidad: 'T', esperar })).resolves.toMatchObject({ columnas: ['A'] })
 
-    const { entradas } = await planificarMigracion({
-      origen, destino, tablas: ['T'], tablasDelDestino: ['T2'], destinoDe: { T: 'T2' },
-    })
-    expect(entradas[0].filas).toBeNull()
-  })
-
-  // El esquema es de la tabla; el filtro es de lo que se va a copiar.
-  it('el filtro va en la cuenta y no en la lectura del esquema', async () => {
-    esquemas({ T: ['A'], T2: ['A'] })
-    countEntity.mockResolvedValue(1)
-
-    const { entradas } = await planificarMigracion({
-      origen, destino, tablas: ['T'], tablasDelDestino: ['T2'], destinoDe: { T: 'T2' },
-      filtroPorTabla: { T: "BRAND eq 'X'" },
-    })
-
-    expect(countEntity).toHaveBeenCalledWith(expect.objectContaining({ extraFilter: "BRAND eq 'X'" }))
-    expect(readSchema).not.toHaveBeenCalledWith(expect.objectContaining({ extraFilter: expect.anything() }))
-    // La pantalla necesita saberlo: "8.005" y "1.246 de 8.005" no se leen igual.
-    expect(entradas[0].filtrada).toBe(true)
-  })
-
-  // Uno global no serviría: filtrar por marca aplicado a la tabla de ubicaciones se llevaría todo.
-  it('el filtro es de cada tabla, no de la migración', async () => {
-    esquemas({ A: ['X'], A2: ['X'], B: ['X'], B2: ['X'] })
-    countEntity.mockResolvedValue(1)
-
-    const { entradas } = await planificarMigracion({
-      origen, destino, tablas: ['A', 'B'], tablasDelDestino: ['A2', 'B2'],
-      destinoDe: { A: 'A2', B: 'B2' },
-      filtroPorTabla: { A: "BRAND eq 'X'" },
-    })
-
-    expect(entradas.find((una) => una.origen === 'A').filtrada).toBe(true)
-    expect(entradas.find((una) => una.origen === 'B').filtrada).toBe(false)
-    expect(countEntity.mock.calls.find((una) => una[0].entidad === 'B')[0].extraFilter).toBe('')
-  })
-
-  it('varias tablas salen todas en el plan', async () => {
-    esquemas({ A: ['X'], A2: ['X'], B: ['X'], B2: ['X'], C: ['X'], C2: ['X'] })
-    countEntity.mockResolvedValue(1)
-
-    const { entradas } = await planificarMigracion({
-      origen, destino, tablas: ['A', 'B', 'C'], tablasDelDestino: ['A2', 'B2', 'C2'],
-      destinoDe: { A: 'A2', B: 'B2', C: 'C2' },
-    })
-    expect(entradas.map((una) => una.origen)).toEqual(['A', 'B', 'C'])
+    sapFetch.mockReset()
+    sapFetch.mockRejectedValue(Object.assign(new Error('400'), { status: 400, retryable: false }))
+    await expect(leerCampos({ ...origen, entidad: 'T', esperar })).rejects.toThrow('400')
+    expect(sapFetch).toHaveBeenCalledTimes(1)
   })
 })
