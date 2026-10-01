@@ -20,13 +20,14 @@ export async function getOrchestration(id) {
   return orchestration
 }
 
-export async function createOrchestration(destino, name) {
+/** Crea una orquestación. Vacía, salvo que se le pase el grafo (al importar un archivo). */
+export async function createOrchestration(destino, name, { nodes = [], edges = [] } = {}) {
   const { orchestration } = await api.post('/api/orchestrations', {
     connectionId: destino.connectionId,
     production: destino.production,
     name,
-    nodes: [],
-    edges: [],
+    nodes,
+    edges,
   })
   return orchestration
 }
