@@ -167,6 +167,16 @@ describe('updateOrchestration', () => {
     })).rejects.toThrow(/no existe/)
   })
 
+  // El paso de IBP tiene que llegar a la base con su plantilla, y con los topes de v8.
+  it('en un tenant de IBP guarda la plantilla y aplica los topes de reintento de v8', async () => {
+    getConnectionTarget.mockResolvedValue({ id: CONEXION, kind: 'ibp', name: 'IBP QA' })
+    await updateOrchestration(CLIENTE, ORQUESTACION, {
+      nodes: [{ id: 'a', type: 'task', data: { templateName: 'ZCARGA', jobText: 'Carga', maxRetries: 10 } }],
+    })
+    const [paso] = JSON.parse(queryOneScoped.mock.calls.at(-1)[2][1])
+    expect(paso.data).toMatchObject({ templateName: 'ZCARGA', jobText: 'Carga', maxRetries: 10 })
+  })
+
   it('toca la marca de tiempo de modificación', async () => {
     await updateOrchestration(CLIENTE, ORQUESTACION, { name: 'X' })
     expect(queryOneScoped.mock.calls.at(-1)[1]).toContain('updated_at = now()')

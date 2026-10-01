@@ -47,6 +47,7 @@ async function assertDestino(clientId, connectionId) {
   if (!TIPOS_ORQUESTABLES.includes(conexion.kind)) {
     throw new Error(`La conexión "${conexion.name}" no se puede orquestar: es de tipo "${conexion.kind}".`)
   }
+  return conexion
 }
 
 /** Las orquestaciones de un destino: un tenant y uno de sus dos repositorios. */
@@ -72,8 +73,9 @@ export async function getOrchestration(clientId, id) {
 
 export async function createOrchestration(clientId, { connectionId, production = false, name, nodes, edges }) {
   const nombre = nombreValido(name)
-  await assertDestino(clientId, connectionId)
-  const grafo = normalizeGraph({ nodes, edges })
+  const conexion = await assertDestino(clientId, connectionId)
+  // El tipo decide los topes de los reintentos: los de IBP son los de v8 y no los de v9.
+  const grafo = normalizeGraph({ nodes, edges }, { kind: conexion.kind })
 
   return toOrchestration(await queryOneScoped(
     clientId,
@@ -98,10 +100,11 @@ export async function updateOrchestration(clientId, id, { name, nodes, edges } =
   const nombre = name === undefined ? actual.name : nombreValido(name)
   // El grafo se valida completo aunque solo venga una de las dos mitades: una arista nueva puede
   // apuntar a un nodo que no está, y validar media cosa no demuestra nada.
+  const { kind } = await getConnectionTarget(clientId, actual.connectionId)
   const grafo = normalizeGraph({
     nodes: nodes === undefined ? actual.nodes : nodes,
     edges: edges === undefined ? actual.edges : edges,
-  })
+  }, { kind })
 
   return toOrchestration(await queryOneScoped(
     clientId,
