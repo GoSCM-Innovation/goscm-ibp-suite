@@ -161,6 +161,15 @@ describe('readEntityPageWithTotal', () => {
       .resolves.toMatchObject({ total: null })
   })
 
+  // La migración lee páginas grandes y les da la espera de v8; el visor sigue con la común.
+  it('pasa la espera que se le pida, y si no, ninguna', async () => {
+    sapFetch.mockResolvedValue({ json: { d: { results: [] } } })
+    await readEntityPageWithTotal({ ...contexto, entidad: 'X', timeoutMs: 90_000 })
+    expect(sapFetch.mock.calls.at(-1)[0].timeoutMs).toBe(90_000)
+    await readEntityPageWithTotal({ ...contexto, entidad: 'X' })
+    expect(sapFetch.mock.calls.at(-1)[0]).not.toHaveProperty('timeoutMs')
+  })
+
   it('no cambia lo que devolvía readEntityPage', async () => {
     sapFetch.mockResolvedValueOnce({ json: { d: { results: [{ PRDID: '1' }], __count: '9' } } })
     await expect(readEntityPage({ ...contexto, entidad: 'X' })).resolves.toEqual([{ PRDID: '1' }])

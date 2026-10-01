@@ -1,209 +1,292 @@
-// Copiar una tabla de dato maestro de un tenant a otro.
+// Copiar dato maestro de un tenant a otro: los pasos de la carga, uno por llamada.
 //
-// Portado de `runMigration` de `Migration.jsx` de v8, que lo tenía dentro del componente.
+// Portado de `runMigration` de `Migration.jsx` de v8, que lo hacía todo en el navegador a través de un
+// proxy, con las credenciales en el `localStorage`. Aquí cada paso que habla con SAP es una función
+// de esta capa, y la pantalla los ENCADENA llamando a nuestro servidor —nunca a SAP—. La forma y los
+// números son los de v8 (ver `migration-plan.js`):
 //
-// La forma de la cosa, y por qué:
+//   preparar   → contar el destino ANTES y medir cuántos bytes pesa una fila del origen;
+//   borrar     → (reemplazo completo) mandar a staging un trozo de claves con `DeleteEntries: true`;
+//   cargar     → leer un segmento del origen y mandarlo a staging, en una transacción NUEVA;
+//   confirmar  → confirmar esa transacción;
+//   estado     → preguntar UNA vez si SAP ya la procesó;
+//   mensajes   → una página de los mensajes de las filas rechazadas.
 //
-//   - Se copia por SEGMENTOS, cada uno en su propia transacción confirmada. Un fallo a mitad
-//     rehace SOLO el segmento en curso, y lo ya confirmado se queda. Sin segmentos, un tropiezo en
-//     la fila 300.000 tira las 299.999 anteriores.
+// Por qué cargar y confirmar van en llamadas SEPARADAS: es lo que mantiene la promesa de «⊘ Cancelar»
+// de v8 —«la transacción actual no se confirmará»—. El servidor no se entera de que el navegador
+// canceló; si la llamada de carga confirmara ella misma, una cancelación a mitad dejaría confirmado el
+// segmento en vuelo. Separadas, el navegador simplemente no pide la confirmación y SAP descarta la
+// transacción sola.
 //
-//   - El reintento es de la TRANSACCIÓN, nunca del envío. Repetir un envío ya mandado duplica
-//     claves y al confirmar SAP rechaza las dos copias: el registro se pierde. Reaplicar un
-//     segmento entero en una transacción nueva sí es seguro, porque es alta-o-modificación.
-//
-//   - Se lee con `$select` de solo las columnas que se van a copiar. Bajar columnas que se van a
-//     descartar es tráfico y tiempo tirados, y además permite páginas más grandes.
+// NADA de aquí reintenta un envío. Si algo falla, la transacción se queda sin confirmar y quien llama
+// repite el segmento ENTERO en una transacción nueva. Repetir un envío dentro de la misma
+// transacción duplica claves, y al confirmar SAP rechaza las dos copias: el registro se pierde.
 
+import { sapFetch } from '../transport/sap-fetch.js'
+import { countEntity, masterDataRoot, readEntityPage } from './master-data.js'
 import {
   abrirSesionDeEscritura,
   commitTransaction,
+  getExportResult,
   getTransactionId,
   initiateParallelProcess,
   partirEnEnvios,
   postTransChunk,
-  readMessages,
-  waitForProcessed,
 } from './master-data-write.js'
-import { filasPorPagina } from './master-data-model.js'
-import { readEntityPage } from './master-data.js'
+import { filasPorPagina, filasPorPaginaSegunCampos, filtroDeDatos, sinMetadatos } from './master-data-model.js'
+import { BASE_VERSION_ID, ENVIOS_A_LA_VEZ, PAGINAS_A_LA_VEZ, esRechazo } from './migration-plan.js'
+
+/** Filas de la muestra con que se mide el peso de una fila (v8: `measureRowBytes`, 200). */
+export const FILAS_DE_MUESTRA = 200
 
 /**
- * Filas por segmento.
- *
- * Cada segmento es una transacción: menos segmentos son menos ciclos de pedir-confirmar-esperar,
- * pero un fallo cuesta más. Cuarenta mil es el punto que usaba v8 tras medirlo.
+ * Cuánto se espera una página de lectura de la carga (v8: `READ_TIMEOUT`, 90 s). Una lectura
+ * filtrada por versión se midió en más de sesenta segundos en algunos tenants.
  */
-export const FILAS_POR_SEGMENTO = 40_000
+export const ESPERA_DE_LECTURA_MS = 90_000
 
-/** Cuántas veces se rehace un segmento antes de darlo por perdido. */
-export const INTENTOS_POR_SEGMENTO = 3
+/** Mensajes por página. Con `$expand` cada mensaje trae su fila, y la respuesta tiene un límite. */
+export const MENSAJES_POR_PAGINA = 1000
 
-/** Un aviso de progreso, para que la pantalla pueda contar qué está pasando. */
-const avisar = (onProgreso, evento) => { if (onProgreso) onProgreso(evento) }
+/** Los nombres de transacción de v8, cuando quien llama no pone uno. */
+export const NOMBRE_DE_CARGA = 'IBP-ControlTower-MD'
+export const NOMBRE_DE_BORRADO = 'IBP-ControlTower-DEL'
+
+/** Un literal de texto de OData dentro de una dirección. */
+const literal = (valor) => `%27${encodeURIComponent(String(valor ?? ''))}%27`
+
+/** Manda `envios` de `ENVIOS_A_LA_VEZ` en `ENVIOS_A_LA_VEZ`, sin repetir ninguno. */
+async function mandarEnTandas(envios, mandar) {
+  for (let i = 0; i < envios.length; i += ENVIOS_A_LA_VEZ) {
+    await Promise.all(envios.slice(i, i + ENVIOS_A_LA_VEZ).map(mandar))
+  }
+}
 
 /**
- * Lee del origen las filas de un segmento.
+ * Abre la transacción: el identificador y, si el tenant lo admite, el proceso en paralelo.
  *
- * El orden estable por las claves es obligatorio: sin él, dos ventanas sobre una tabla que alguien
- * está tocando se solapan y dejan huecos, y aquí un hueco es un registro que no se copia.
+ * `InitiateParallelProcess` es lo ÚNICO que le pone nombre visible a la ejecución en SAP. Es una
+ * mejora y no un requisito: v8 ignoraba cualquier fallo suyo, y aquí también.
  */
-async function leerSegmento({ origen, entidad, columnas, claves, desde, cuantas, condiciones }) {
-  const porPagina = filasPorPagina(0)
+async function abrirTransaccion({ destino, entidad, nombre, csrf }) {
+  const contexto = { ...destino, entidad, planningArea: destino.planningArea, versionId: destino.versionId, csrf }
+  const transactionId = await getTransactionId(contexto)
+  try {
+    await initiateParallelProcess({ ...contexto, transactionId, nombre })
+  } catch {
+    // Sin proceso en paralelo la carga sigue igual, solo sin la etiqueta.
+  }
+  return transactionId
+}
+
+/**
+ * Cuántas filas del origen caben en una página, MIDIENDO una muestra (v8: `measureRowBytes`).
+ *
+ * Se mide con el mismo `$select` y el mismo filtro que la carga, y se mide la respuesta entera —lo
+ * que de verdad viaja—, no el número de columnas: hay tablas de pocas columnas con valores enormes, y
+ * contarlas subestima justo las que revientan. `null` si la tabla está vacía.
+ */
+export async function medirPorPagina({ origen, entidad, columnas, extraFilter, muestra = FILAS_DE_MUESTRA }) {
+  const filtro = filtroDeDatos({ planningArea: origen.planningArea, versionId: origen.versionId, extraFilter })
+  const partes = [`$top=${muestra}`, '$skip=0']
+  if (columnas?.length) partes.push(`$select=${encodeURIComponent(columnas.join(','))}`)
+  if (filtro) partes.push(`$filter=${encodeURIComponent(filtro)}`)
+
+  const { text, json } = await sapFetch({
+    url: `${masterDataRoot(origen.baseUrl)}/${entidad}?$format=json&${partes.join('&')}`,
+    credentials: origen.credentials,
+    kind: 'ibp',
+    timeoutMs: ESPERA_DE_LECTURA_MS,
+  })
+
+  const filas = json?.d?.results ?? []
+  if (filas.length === 0) return null
+  return filasPorPagina(Math.ceil(Buffer.byteLength(text) / filas.length))
+}
+
+/**
+ * Lo que se hace una vez por tabla antes de copiar: contar el destino y medir el origen.
+ *
+ * Las dos cosas a la vez, y ninguna tumba la carga: sin la cuenta del destino el resultado dice «—»,
+ * y sin la medida se usa la estimación por número de columnas, como en v8.
+ */
+export async function prepararTabla({ origen, destino, entidad, entidadDestino, columnas, campos, extraFilter }) {
+  const [dstBefore, medido] = await Promise.all([
+    countEntity({
+      ...destino,
+      entidad: entidadDestino,
+      planningArea: destino.planningArea,
+      versionId: destino.versionId || BASE_VERSION_ID,
+    }).catch(() => null),
+    medirPorPagina({ origen, entidad, columnas, extraFilter }).catch(() => null),
+  ])
+
+  return {
+    dstBefore,
+    porPagina: medido ?? filasPorPaginaSegunCampos(campos || columnas?.length || 60),
+    medido: medido != null,
+  }
+}
+
+/**
+ * Lee un segmento del origen: páginas de `porPagina`, `paralelo` a la vez, con orden estable.
+ *
+ * Una tanda que llega vacía es el fin de la tabla (v8). Sin claves, quien llama pasa `paralelo: 1`:
+ * sin un `$orderby` estable dos ventanas leídas a la vez se solapan o dejan huecos.
+ */
+async function leerSegmento({ origen, entidad, columnas, claves, desde, cuantas, porPagina, paralelo, extraFilter }) {
+  const fin = desde + cuantas
   const filas = []
 
-  while (filas.length < cuantas) {
-    const pedidas = Math.min(porPagina, cuantas - filas.length)
-    const pagina = await readEntityPage({
-      ...origen,
-      entidad,
-      skip: desde + filas.length,
-      top: pedidas,
-      select: columnas,
-      orderby: claves,
-      extraFilter: condiciones,
-    })
+  for (let inicio = desde; inicio < fin; inicio += porPagina * paralelo) {
+    const paginas = Math.min(paralelo, Math.ceil((fin - inicio) / porPagina))
+    const tanda = await Promise.all(Array.from({ length: paginas }, (_, i) => {
+      const skip = inicio + i * porPagina
+      return readEntityPage({
+        ...origen,
+        entidad,
+        skip,
+        top: Math.min(porPagina, fin - skip),
+        planningArea: origen.planningArea,
+        versionId: origen.versionId,
+        // Sin columnas —esquema sin verificar— se leen todas, como en v8.
+        select: columnas?.length ? columnas : undefined,
+        orderby: claves,
+        extraFilter,
+        timeoutMs: ESPERA_DE_LECTURA_MS,
+      })
+    }))
 
-    filas.push(...pagina)
-    // Menos filas de las pedidas significa que la tabla se acabó, no que haya que insistir.
-    if (pagina.length < pedidas) break
+    const leidas = tanda.flat()
+    if (leidas.length === 0) break
+    filas.push(...leidas)
   }
 
   return filas
 }
 
 /**
- * Manda un segmento al destino dentro de UNA transacción, y la confirma.
+ * Carga UN segmento en staging, en una transacción NUEVA, y la deja SIN confirmar.
  *
- * Si algo falla, la transacción se queda sin confirmar —SAP la descarta sola— y quien llama vuelve
- * a intentar el segmento entero en otra nueva.
+ * Devuelve el identificador para que quien llama la confirme con `confirmarTransaccion`. Si algo
+ * falla, lanza: la transacción queda sin confirmar, SAP la descarta, y lo que se repite es la llamada
+ * entera —leer otra vez y mandar a otra transacción—, nunca un envío suelto.
  */
-async function escribirSegmento({ destino, entidad, filas, borrar, nombre, csrf, onProgreso }) {
-  const transactionId = await getTransactionId({
-    ...destino, entidad, planningArea: destino.planningArea, versionId: destino.versionId, csrf,
-  })
-  avisar(onProgreso, { fase: 'transaccion', transactionId })
-
-  await initiateParallelProcess({
-    ...destino, transactionId, entidad, planningArea: destino.planningArea, versionId: destino.versionId, nombre, csrf,
-  })
-
-  const envios = partirEnEnvios(filas)
-  for (const [indice, envio] of envios.entries()) {
-    await postTransChunk({
-      ...destino,
-      entidad,
-      transactionId,
-      filas: envio,
-      borrar,
-      planningArea: destino.planningArea,
-      versionId: destino.versionId,
-      csrf,
-    })
-    avisar(onProgreso, { fase: 'enviando', enviadas: indice + 1, envios: envios.length, filas: envio.length })
-  }
-
-  avisar(onProgreso, { fase: 'confirmando', transactionId })
-  await commitTransaction({ ...destino, transactionId, csrf })
-
-  const estado = await waitForProcessed({ ...destino, transactionId })
-  avisar(onProgreso, { fase: 'procesada', transactionId, estado })
-
-  return { transactionId, estado }
-}
-
-/**
- * Copia UN segmento: lo lee del origen y lo escribe en el destino, en su propia transacción.
- *
- * Es la unidad que se expone al exterior porque es la que cabe en una función serverless: una tabla
- * de trescientas mil filas no entra en una sola llamada, pero cada segmento sí, y quien llama
- * encadena. Además es la unidad natural del reintento, porque cada segmento es una transacción.
- *
- * NO lanza cuando falla: devuelve el fallo dentro del resultado, porque una migración de veinte
- * tablas no debe pararse entera por una.
- */
-export async function migrarSegmento({
-  origen, destino, entidad, entidadDestino, columnas, claves, desde = 0, cuantas = FILAS_POR_SEGMENTO,
-  condiciones, borrar = false, nombre, csrf, onProgreso,
+export async function cargarSegmento({
+  origen, destino, entidad, entidadDestino, columnas, claves, desde = 0, cuantas,
+  porPagina, paralelo = PAGINAS_A_LA_VEZ, extraFilter, nombre = NOMBRE_DE_CARGA,
 }) {
-  const sesion = csrf ?? await abrirSesionDeEscritura(destino)
-  avisar(onProgreso, { fase: 'leyendo', desde, cuantas })
+  const tiempos = {}
+  let marca = Date.now()
 
-  let filas
-  try {
-    filas = await leerSegmento({ origen, entidad, columnas, claves, desde, cuantas, condiciones })
-  } catch (error) {
-    return { desde, filas: 0, ok: false, agotado: false, fase: 'lectura', error: error.detail || error.message }
-  }
+  const filas = await leerSegmento({
+    origen, entidad, columnas, claves, desde, cuantas, porPagina, paralelo: Math.max(1, paralelo), extraFilter,
+  })
+  tiempos.reading = Date.now() - marca
 
-  // Menos filas de las pedidas quiere decir que la tabla se acabó: quien encadena para aquí.
+  // Menos filas de las pedidas quiere decir que la tabla se acabó.
   const agotado = filas.length < cuantas
+  if (filas.length === 0) return { transactionId: null, filas: 0, agotado: true, tiempos }
 
-  if (filas.length === 0) return { desde, filas: 0, ok: true, agotado: true, mensajes: [] }
+  marca = Date.now()
+  const csrf = await abrirSesionDeEscritura(destino)
+  const transactionId = await abrirTransaccion({ destino, entidad: entidadDestino, nombre, csrf })
 
-  let ultimoFallo = null
-  let hecho = null
+  await mandarEnTandas(partirEnEnvios(filas), (envio) => postTransChunk({
+    ...destino,
+    entidad: entidadDestino,
+    transactionId,
+    filas: envio,
+    borrar: false,
+    planningArea: destino.planningArea,
+    versionId: destino.versionId,
+    csrf,
+  }))
+  tiempos.writing = Date.now() - marca
 
-  for (let intento = 1; intento <= INTENTOS_POR_SEGMENTO && !hecho; intento += 1) {
-    try {
-      // Cada intento arranca una transacción NUEVA. La anterior se quedó sin confirmar y SAP la
-      // descarta: reenviar dentro de la vieja duplicaría claves.
-      hecho = await escribirSegmento({
-        destino, entidad: entidadDestino, filas, borrar, nombre, csrf: sesion, onProgreso,
-      })
-    } catch (error) {
-      ultimoFallo = error.detail || error.message
-      avisar(onProgreso, { fase: 'reintento', desde, intento, error: ultimoFallo })
-    }
-  }
-
-  if (!hecho) {
-    return { desde, filas: filas.length, ok: false, agotado, fase: 'escritura', error: ultimoFallo }
-  }
-
-  let mensajes = []
-  try {
-    mensajes = await readMessages({ ...destino, entidad: entidadDestino, transactionId: hecho.transactionId })
-  } catch {
-    // Que no se puedan leer los mensajes no cambia lo que se copió.
-    mensajes = []
-  }
-
-  return { desde, filas: filas.length, ok: true, agotado, mensajes, ...hecho }
+  return { transactionId, filas: filas.length, agotado, tiempos }
 }
 
 /**
- * Copia una tabla entera, segmento a segmento.
+ * Manda a staging un trozo de claves para BORRARLAS, en su propia transacción, sin confirmar.
  *
- * Para quien pueda encadenarlos de un tirón —los tests, y un futuro trabajo de fondo—. La pantalla
- * no lo usa: encadena `migrarSegmento` ella misma para poder ir contando qué pasa.
+ * Es la primera mitad del reemplazo completo. Va en una transacción aparte de la carga porque SAP no
+ * deja mezclar `DeleteEntries: true` y `false` en la misma.
  */
-export async function migrarTabla({ total, onProgreso, ...resto }) {
-  const csrf = await abrirSesionDeEscritura(resto.destino)
-  const segmentos = []
-  let copiadas = 0
+export async function cargarBorrado({ destino, entidadDestino, claves, nombre = NOMBRE_DE_BORRADO }) {
+  if (!claves?.length) return { transactionId: null, filas: 0 }
 
-  for (let desde = 0; desde < total; desde += FILAS_POR_SEGMENTO) {
-    const segmento = await migrarSegmento({
-      ...resto,
-      csrf,
-      desde,
-      cuantas: Math.min(FILAS_POR_SEGMENTO, total - desde),
-      onProgreso,
+  const csrf = await abrirSesionDeEscritura(destino)
+  const transactionId = await abrirTransaccion({ destino, entidad: entidadDestino, nombre, csrf })
+
+  await mandarEnTandas(partirEnEnvios(claves), (envio) => postTransChunk({
+    ...destino,
+    entidad: entidadDestino,
+    transactionId,
+    filas: envio,
+    borrar: true,
+    planningArea: destino.planningArea,
+    versionId: destino.versionId,
+    csrf,
+  }))
+
+  return { transactionId, filas: claves.length }
+}
+
+/** Confirma una transacción. A partir de aquí lo mandado se guarda de verdad. */
+export async function confirmarTransaccion({ destino, transactionId }) {
+  const csrf = await abrirSesionDeEscritura(destino)
+  await commitTransaction({ ...destino, transactionId, csrf })
+  return { transactionId }
+}
+
+/**
+ * Pregunta UNA vez cómo va una transacción confirmada.
+ *
+ * Una sola pregunta por llamada: la espera de v8 era de hasta dos minutos por transacción, y esa
+ * espera la lleva el navegador, que vuelve a preguntar cada dos segundos.
+ */
+export async function estadoDeTransaccion({ destino, transactionId }) {
+  const resultado = await getExportResult({ ...destino, transactionId })
+  if (resultado === null) return 'SIN_SOPORTE'
+  if (resultado?.Status === 'PROCESSED') return 'PROCESADA'
+  if (resultado?.Status === 'ERROR') return 'CON_ERROR'
+  return 'PROCESANDO'
+}
+
+/**
+ * Una página de los mensajes de una transacción, quedándose SOLO con los rechazos (E y A).
+ *
+ * Paginado aquí y no de una vez porque, con `$expand`, cada mensaje trae su fila, y una tabla con
+ * miles de rechazos no cabe en una respuesta. `leidos` son los mensajes que llegaron —de cualquier
+ * gravedad—: menos que `top` quiere decir que no hay más. Hay tenants que rechazan el `$expand`; ahí
+ * se pide sin él, y `conExpand` le dice a quien llama cómo seguir.
+ */
+export async function leerMensajes({
+  destino, entidad, transactionId, skip = 0, top = MENSAJES_POR_PAGINA, conExpand = true,
+}) {
+  const base = `${masterDataRoot(destino.baseUrl)}/${entidad}Message?$format=json`
+    + `&$filter=TransactionID eq ${literal(transactionId)}&$top=${top}&$skip=${skip}`
+
+  const pedir = async (expandir) => {
+    const { json } = await sapFetch({
+      url: `${base}${expandir ? `&$expand=Nav${entidad}` : ''}`,
+      credentials: destino.credentials,
+      kind: 'ibp',
     })
-
-    segmentos.push(segmento)
-    if (segmento.ok) copiadas += segmento.filas
-    if (segmento.agotado) break
+    return json?.d?.results ?? []
   }
 
-  return {
-    entidad: resto.entidad,
-    entidadDestino: resto.entidadDestino,
-    total,
-    copiadas,
-    segmentos,
-    mensajes: [...segmentos].reverse().find((uno) => uno.mensajes?.length)?.mensajes ?? [],
-    ok: segmentos.every((uno) => uno.ok),
+  let usado = conExpand
+  let pagina
+  try {
+    pagina = await pedir(usado)
+  } catch (error) {
+    if (!usado || skip > 0) throw error
+    usado = false
+    pagina = await pedir(false)
   }
+
+  const rechazos = pagina.filter(esRechazo).map(sinMetadatos)
+  return { rechazos, leidos: pagina.length, conExpand: usado }
 }

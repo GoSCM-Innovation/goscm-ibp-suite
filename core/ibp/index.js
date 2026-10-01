@@ -69,18 +69,16 @@ export {
 
 export { readJobTemplateSet, readTemplateDetail, scheduleJob } from './job-schedule.js'
 
+// Solo lo que usa el servidor: la pantalla importa `migration-plan.js` directamente, y su
+// `estadoDeCorrida` chocaría con el del informe de cifras.
 export {
-  ESTADOS_QUE_IMPIDEN,
   compararCampos,
   emparejarTabla,
   emparejarTablas,
   raicesDe,
-  resumirPlan,
-  revisarEntrada,
-  sePuedeCopiar,
 } from './migration-plan.js'
 
-export { planificarMigracion } from './migration.js'
+export { analizarTabla, leerCampos } from './migration.js'
 
 export {
   ESPERA_MAXIMA_MS,
@@ -97,7 +95,15 @@ export {
   waitForProcessed,
 } from './master-data-write.js'
 
-export { FILAS_POR_SEGMENTO, INTENTOS_POR_SEGMENTO, migrarSegmento, migrarTabla } from './migration-run.js'
+export {
+  cargarBorrado,
+  cargarSegmento,
+  confirmarTransaccion,
+  estadoDeTransaccion,
+  leerMensajes,
+  medirPorPagina,
+  prepararTabla,
+} from './migration-run.js'
 
 export {
   ATRIBUTOS_DE_CONVERSION,

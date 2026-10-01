@@ -1,20 +1,17 @@
-// POST /api/ibp/migration — el plan de una migración de dato maestro entre dos tenants.
+// POST /api/ibp/migration — el análisis de campos de UNA tabla antes de migrarla.
 //
-// Solo LEE. Devuelve, tabla por tabla, con qué se emparejó en el destino, qué columnas se copiarían,
-// cuáles se perderían y cuántas filas hay. La carga en sí es otra cosa y va aparte.
+// Solo LEE: cuántas filas tiene el origen con su filtro, y qué columnas se copian, cuáles se omiten
+// y cuáles quedan vacías en el destino. Son las tres lecturas por tabla de `analyzeFields` de v8.
 //
-// Va por POST porque la petición lleva la lista de tablas y las parejas puestas a mano, que no
-// entran razonablemente en una dirección — no porque cambie nada.
+// Una tabla por llamada: la pantalla encadena las que se hayan elegido, y así ninguna llamada
+// acumula el tiempo de veinte tablas. Va por POST porque lleva las condiciones del filtro.
 
 import { requireModule } from '../../core/auth/guards.js'
 import { getAnyCredentials, getConnectionTarget } from '../../core/connections/index.js'
 import { explicarFallo } from '../../core/ibp/explicar-fallo.js'
-import { filtroDeCondiciones, planificarMigracion } from '../../core/ibp/index.js'
+import { analizarTabla, filtroDeCondiciones } from '../../core/ibp/index.js'
 
 const ACUERDOS = ['SAP_COM_0720', 'SAP_COM_0326']
-
-/** Tope de tablas por plan: cada una son tres lecturas a SAP. */
-const MAX_TABLAS = 60
 
 /** El contexto de un tenant, comprobando que la conexión sea de este cliente y de IBP. */
 async function tenantDe(clientId, connectionId, cual) {
@@ -35,25 +32,11 @@ export default async function handler(req, res) {
   const session = await requireModule(req, res, 'jobs')
   if (!session) return
 
-  const {
-    origen = {}, destino = {}, tablas = [], tablasDelDestino = [], destinoDe = {},
-    // Las condiciones son POR TABLA: `{ tabla: [condiciones] }`. Un filtro global no serviria —
-    // filtrar por marca solo tiene sentido en la tabla de productos.
-    condicionesPorTabla = {},
-  } = req.body ?? {}
+  const { origen = {}, destino = {}, entidad, entidadDestino, condiciones = [] } = req.body ?? {}
 
-  if (!Array.isArray(tablas) || tablas.length === 0) {
-    return res.status(400).json({ error: 'Hay que elegir al menos una tabla.' })
-  }
-  if (tablas.length > MAX_TABLAS) {
-    return res.status(400).json({ error: `Como máximo ${MAX_TABLAS} tablas; elige menos y repite el plan.` })
-  }
-  // Copiar un tenant sobre sí mismo con la misma área y versión sobrescribiría el origen con el
-  // origen: no rompe nada, pero no es lo que nadie quiere, y es un error fácil de cometer.
-  if (origen.connectionId === destino.connectionId
-    && origen.planningArea === destino.planningArea
-    && origen.versionId === destino.versionId) {
-    return res.status(400).json({ error: 'El origen y el destino son el mismo tenant, área y versión.' })
+  if (!entidad || !entidadDestino) return res.status(400).json({ error: 'Falta la tabla de origen o la de destino.' })
+  if (!origen.planningArea || !destino.planningArea) {
+    return res.status(400).json({ error: 'Falta el área de planificación de origen o de destino.' })
   }
 
   try {
@@ -62,20 +45,19 @@ export default async function handler(req, res) {
       tenantDe(session.clientId, destino.connectionId, 'destino'),
     ])
 
-    const plan = await planificarMigracion({
-      origen: { ...deOrigen, planningArea: origen.planningArea, versionId: origen.versionId },
-      destino: { ...deDestino, planningArea: destino.planningArea, versionId: destino.versionId },
-      tablas,
-      tablasDelDestino,
-      destinoDe,
-      filtroPorTabla: Object.fromEntries(
-        Object.entries(condicionesPorTabla).map(([tabla, suyas]) => [tabla, filtroDeCondiciones(suyas)]),
-      ),
+    const analisis = await analizarTabla({
+      origen: { ...deOrigen, planningArea: origen.planningArea, versionId: origen.versionId || '' },
+      destino: { ...deDestino, planningArea: destino.planningArea, versionId: destino.versionId || '' },
+      entidad,
+      entidadDestino,
+      // El filtro es DE ESA TABLA: filtrar por marca solo tiene sentido en la de productos.
+      extraFilter: filtroDeCondiciones(Array.isArray(condiciones) ? condiciones : []),
     })
 
-    return res.status(200).json(plan)
+    return res.status(200).json(analisis)
   } catch (error) {
     console.error(`[ibp/migration] ${error.stack || error.message}`)
-    return res.status(400).json({ error: explicarFallo(error, ACUERDOS), detalle: error.detail ?? '' })
+    const detalle = error.detail ?? ''
+    return res.status(400).json({ error: `${explicarFallo(error, ACUERDOS)}${detalle ? ` — ${detalle}` : ''}`, detalle })
   }
 }

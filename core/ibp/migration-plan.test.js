@@ -5,9 +5,18 @@ import {
   emparejarTabla,
   emparejarTablas,
   raicesDe,
-  resumirPlan,
-  revisarEntrada,
-  sePuedeCopiar,
+  BASE_VERSION_ID,
+  ESPERA_DE_PROCESO_MS,
+  FILAS_POR_SEGMENTO,
+  esFalloTransitorio,
+  esRechazo,
+  esperaAntesDeReintentar,
+  estadoDeCorrida,
+  estadoDeTabla,
+  filasPorSegmento,
+  iniciosDeSegmento,
+  paralelismo,
+  partirPorBytes,
 } from './migration-plan.js'
 
 describe('raicesDe', () => {
@@ -84,79 +93,83 @@ describe('compararCampos', () => {
   })
 })
 
-describe('revisarEntrada', () => {
-  const buena = { destino: 'AS1PRODUCT', verificable: true, comunes: ['A'], soloEnOrigen: [], soloEnDestino: [], filas: 10 }
-
-  it('una tabla emparejada, con columnas y con filas está bien', () => {
-    expect(revisarEntrada(buena).estado).toBe('ok')
+describe('la forma de la corrida, como en v8', () => {
+  it('conserva los números de v8', () => {
+    expect(FILAS_POR_SEGMENTO).toBe(20_000)
+    expect(BASE_VERSION_ID).toBe('__BASELINE')
+    expect(ESPERA_DE_PROCESO_MS).toBe(120_000)
+    expect(esperaAntesDeReintentar(1)).toBe(1500)
+    expect(esperaAntesDeReintentar(3)).toBe(4500)
   })
 
-  it('sin pareja no se puede copiar', () => {
-    expect(revisarEntrada({ ...buena, destino: null }).estado).toBe('sin-pareja')
+  // Con páginas normales el segmento es el de v8; con páginas pequeñas se achica para caber en una
+  // llamada de la función.
+  it('el segmento es el de v8 salvo que no quepa en una llamada', () => {
+    expect(filasPorSegmento(5000)).toBe(20_000)
+    expect(filasPorSegmento(1500)).toBe(20_000)
+    expect(filasPorSegmento(250)).toBe(250 * 6 * 3)
+    expect(filasPorSegmento(250, { paralelo: 1 })).toBe(750)
   })
 
-  it('sin columnas comunes tampoco', () => {
-    expect(revisarEntrada({ ...buena, comunes: [] }).estado).toBe('sin-campos')
+  it('un tamaño de página raro no deja el segmento en cero', () => {
+    expect(filasPorSegmento(0)).toBeGreaterThan(0)
+    expect(filasPorSegmento(undefined)).toBeGreaterThan(0)
   })
 
-  it('sin poder comparar, se avisa de que se mandaría todo', () => {
-    expect(revisarEntrada({ ...buena, verificable: false }).estado).toBe('a-ciegas')
+  // Sin un orden estable, dos ventanas leídas a la vez se solapan o dejan huecos.
+  it('sin claves lee en serie: una página y un segmento', () => {
+    expect(paralelismo(['PRDID'])).toEqual({ paginas: 6, segmentos: 6 })
+    expect(paralelismo([])).toEqual({ paginas: 1, segmentos: 1 })
+    expect(paralelismo(undefined)).toEqual({ paginas: 1, segmentos: 1 })
   })
 
-  // Si no hay filas no va a pasar nada, y eso se lee antes que la pérdida de columnas.
-  it('una tabla vacía se marca vacía aunque le falten columnas', () => {
-    expect(revisarEntrada({ ...buena, filas: 0, soloEnOrigen: ['X'] }).estado).toBe('vacia')
+  it('reparte la tabla en segmentos', () => {
+    expect(iniciosDeSegmento(45_000, 20_000)).toEqual([0, 20_000, 40_000])
+    expect(iniciosDeSegmento(0, 20_000)).toEqual([])
+    expect(iniciosDeSegmento(20_000, 20_000)).toEqual([0])
   })
 
-  it('las columnas que se pierden se avisan, en singular y en plural', () => {
-    expect(revisarEntrada({ ...buena, soloEnOrigen: ['X'] }).mensaje).toMatch(/1 columna del origen no existe/)
-    expect(revisarEntrada({ ...buena, soloEnOrigen: ['X', 'Y'] }).mensaje).toMatch(/2 columnas del origen no existen/)
+  it('solo repite lo que puede salir distinto la segunda vez', () => {
+    expect(esFalloTransitorio({ status: 503 })).toBe(true)
+    expect(esFalloTransitorio({ status: 403 })).toBe(true)
+    expect(esFalloTransitorio({ status: 0 })).toBe(true)
+    expect(esFalloTransitorio(new TypeError('Failed to fetch'))).toBe(true)
+    expect(esFalloTransitorio({ status: 400 })).toBe(false)
+    expect(esFalloTransitorio({ status: 404 })).toBe(false)
   })
 
-  // Que el destino tenga columnas de más no impide nada: se quedan como estén.
-  it('las columnas de más del destino no son un problema', () => {
-    expect(revisarEntrada({ ...buena, soloEnDestino: ['Z'] }).estado).toBe('ok')
+  // Un aviso informativo de SAP no es una fila rechazada.
+  it('solo la gravedad E y la A son filas rechazadas', () => {
+    expect(esRechazo({ Severity: 'E' })).toBe(true)
+    expect(esRechazo({ Severity: 'A' })).toBe(true)
+    expect(esRechazo({ Severity: 'W' })).toBe(false)
+    expect(esRechazo({ Severity: 'I' })).toBe(false)
+    expect(esRechazo(null)).toBe(false)
+  })
+
+  it('el estado de una tabla sigue el orden de v8', () => {
+    expect(estadoDeTabla({ conError: true, rechazadas: 3, sinConfirmar: true })).toBe('error')
+    expect(estadoDeTabla({ rechazadas: 3, sinConfirmar: true })).toBe('warning')
+    expect(estadoDeTabla({ sinConfirmar: true })).toBe('processing')
+    expect(estadoDeTabla({})).toBe('ok')
+  })
+
+  it('el estado de la corrida es el peor de sus tablas', () => {
+    expect(estadoDeCorrida([{ status: 'ok' }, { status: 'warning' }])).toBe('warning')
+    expect(estadoDeCorrida([{ status: 'processing' }, { status: 'error' }])).toBe('error')
+    expect(estadoDeCorrida([{ status: 'error' }, { status: 'cancelled' }])).toBe('cancelled')
+    expect(estadoDeCorrida([{ status: 'skipped' }])).toBe('ok')
+    expect(estadoDeCorrida([])).toBe('ok')
+  })
+
+  // La foto de claves del borrado viaja en el cuerpo de una petición, que tiene límite.
+  it('parte por filas y por bytes', () => {
+    const filas = Array.from({ length: 10 }, (_, i) => ({ K: String(i).padStart(10, '0') }))
+    expect(partirPorBytes(filas, { maxFilas: 4 }).map((uno) => uno.length)).toEqual([4, 4, 2])
+    const porBytes = partirPorBytes(filas, { maxBytes: 40 })
+    expect(porBytes.every((uno) => JSON.stringify(uno).length <= 60)).toBe(true)
+    expect(porBytes.flat()).toHaveLength(10)
+    expect(partirPorBytes([])).toEqual([])
   })
 })
 
-describe('sePuedeCopiar', () => {
-  const buena = { destino: 'D', verificable: true, comunes: ['A'], soloEnOrigen: [], soloEnDestino: [], filas: 10 }
-
-  it('se puede copiar aunque se pierdan columnas', () => {
-    expect(sePuedeCopiar({ ...buena, soloEnOrigen: ['X'] })).toBe(true)
-  })
-
-  it('no se puede sin pareja, sin columnas ni sin filas', () => {
-    expect(sePuedeCopiar({ ...buena, destino: null })).toBe(false)
-    expect(sePuedeCopiar({ ...buena, comunes: [] })).toBe(false)
-    expect(sePuedeCopiar({ ...buena, filas: 0 })).toBe(false)
-  })
-})
-
-describe('resumirPlan', () => {
-  const entradas = [
-    { origen: 'A', destino: 'A2', verificable: true, comunes: ['X'], soloEnOrigen: [], soloEnDestino: [], filas: 100 },
-    { origen: 'B', destino: 'B2', verificable: true, comunes: ['X'], soloEnOrigen: ['Y'], soloEnDestino: [], filas: 50 },
-    { origen: 'C', destino: null, verificable: false, comunes: null, soloEnOrigen: [], soloEnDestino: [], filas: 999 },
-  ]
-
-  // Contar las filas de una tabla que no se va a copiar daría una cifra que no se corresponde con
-  // lo que va a pasar.
-  it('solo suma las filas de lo que se puede copiar', () => {
-    expect(resumirPlan(entradas)).toMatchObject({ tablas: 3, copiables: 2, filas: 150 })
-  })
-
-  it('cuenta por estado y marca si hay algo que mirar', () => {
-    const resumen = resumirPlan(entradas)
-    expect(resumen.porEstado).toEqual({ ok: 1, 'con-perdida': 1, 'sin-pareja': 1 })
-    expect(resumen.hayQueMirar).toBe(true)
-  })
-
-  it('un plan sin sorpresas no pide que se mire nada', () => {
-    expect(resumirPlan([entradas[0]]).hayQueMirar).toBe(false)
-  })
-
-  it('un plan vacío no revienta', () => {
-    expect(resumirPlan(undefined)).toMatchObject({ tablas: 0, copiables: 0, filas: 0 })
-  })
-})

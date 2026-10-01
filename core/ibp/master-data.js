@@ -20,9 +20,9 @@ import { clavesDesdeUri, filtroDeDatos, sinMetadatos } from './master-data-model
 export const masterDataRoot = (baseUrl) => serviceRoot(baseUrl, 'MASTER_DATA_API_SRV')
 
 /** Arma la consulta y pide. Devuelve las filas ya sin el sobre de OData. */
-async function leer({ baseUrl, credentials, entidad, consulta }) {
+async function leer({ baseUrl, credentials, entidad, consulta, timeoutMs }) {
   const url = `${masterDataRoot(baseUrl)}/${entidad}?$format=json&${consulta}`
-  const { json } = await sapFetch({ url, credentials, kind: 'ibp' })
+  const { json } = await sapFetch({ url, credentials, kind: 'ibp', ...(timeoutMs ? { timeoutMs } : {}) })
   return json?.d ?? {}
 }
 
@@ -130,7 +130,7 @@ export async function readEntityPage(opciones) {
  */
 export async function readEntityPageWithTotal({
   baseUrl, credentials, entidad, skip = 0, top = 2000,
-  planningArea, versionId, extraFilter, select, orderby, conTotal = false,
+  planningArea, versionId, extraFilter, select, orderby, conTotal = false, timeoutMs,
 }) {
   const filtro = filtroDeDatos({ planningArea, versionId, extraFilter })
   const partes = [`$top=${top}`, `$skip=${skip}`]
@@ -139,7 +139,9 @@ export async function readEntityPageWithTotal({
   if (filtro) partes.push(`$filter=${encodeURIComponent(filtro)}`)
   if (conTotal) partes.push('$inlinecount=allpages')
 
-  const d = await leer({ baseUrl, credentials, entidad, consulta: partes.join('&') })
+  // `timeoutMs` es para quien lee páginas grandes en lote, como la migración: una lectura filtrada
+  // por versión se midió en más de sesenta segundos, y v8 le daba noventa. Sin él, la espera común.
+  const d = await leer({ baseUrl, credentials, entidad, consulta: partes.join('&'), timeoutMs })
   const leido = Number.parseInt(d.__count ?? '', 10)
 
   return {

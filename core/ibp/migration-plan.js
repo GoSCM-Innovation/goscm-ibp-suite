@@ -94,60 +94,168 @@ export function compararCampos(camposOrigen, camposDestino, { ignorar = [] } = {
   }
 }
 
+// ── La corrida, como la hacía v8 ─────────────────────────────────────────────────────────────────
+//
+// Lo de aquí abajo es la forma de la carga de `Migration.jsx` de v8 (`runMigration`), sacada a
+// funciones puras para que la pantalla y el servidor digan lo mismo y para poder probarla. Los
+// números son los de v8, medidos allí contra tenants reales; lo que cambia es DÓNDE se ejecuta cada
+// paso: v8 lo hacía todo en el navegador a través de un proxy, aquí cada lectura y cada escritura a
+// SAP es una llamada a nuestro servidor, y el navegador solo encadena.
+
 /**
- * Si una entrada del plan merece que alguien la mire antes de seguir.
+ * El identificador de la versión base al CONTAR en el destino.
  *
- * No es lo mismo un aviso que un impedimento: sin pareja no se puede copiar, y sin campos comunes
- * tampoco. Lo demás se puede copiar sabiendo qué se pierde.
+ * v8 contaba el destino «antes» y «después» con `versionId || '__BASELINE'`. Ojo: para LEER y para
+ * ESCRIBIR la versión base sigue siendo la versión vacía —la transacción se mienta sin área ni
+ * versión—; este identificador es solo el de la cuenta, como en v8.
  */
-export function revisarEntrada(entrada) {
-  if (!entrada.destino) return { estado: 'sin-pareja', mensaje: 'No hay ninguna tabla equivalente en el destino.' }
-  if (entrada.verificable && entrada.comunes.length === 0) {
-    return { estado: 'sin-campos', mensaje: 'Las dos tablas existen pero no comparten ninguna columna.' }
-  }
-  if (!entrada.verificable) {
-    return { estado: 'a-ciegas', mensaje: 'Alguna de las dos está vacía: no se pudo comparar y se mandarían todas las columnas.' }
-  }
-  // Antes que la pérdida de columnas: si no hay filas no va a pasar nada, y eso es lo que hay que
-  // leer primero.
-  if ((entrada.filas ?? 0) === 0) return { estado: 'vacia', mensaje: 'No hay nada que copiar.' }
-  if (entrada.soloEnOrigen.length > 0) {
-    return {
-      estado: 'con-perdida',
-      mensaje: `${entrada.soloEnOrigen.length} ${entrada.soloEnOrigen.length === 1 ? 'columna del origen no existe' : 'columnas del origen no existen'} en el destino y no se copian.`,
-    }
-  }
-  return { estado: 'ok', mensaje: '' }
+export const BASE_VERSION_ID = '__BASELINE'
+
+/** Filas por segmento confirmado. Cada segmento es su propia transacción (v8: `SEGMENT_SIZE`). */
+export const FILAS_POR_SEGMENTO = 20_000
+
+/**
+ * Cuántos segmentos se copian a la vez (v8: `CONCURRENT_SEGMENTS`).
+ *
+ * Son transacciones independientes sobre rangos de claves distintos, así que mientras una escribe
+ * otra lee. v8 lo midió: 4 → 821 filas/s, 6 → 1.505 filas/s, sin errores. Aquí cada segmento es una
+ * llamada a nuestro servidor, y es el navegador el que tiene seis en vuelo.
+ */
+export const SEGMENTOS_A_LA_VEZ = 6
+
+/** Páginas que se leen a la vez dentro de un segmento (v8: `PARALLEL_R`). */
+export const PAGINAS_A_LA_VEZ = 6
+
+/** Envíos a staging a la vez dentro de un segmento (v8: `PARALLEL_W`). */
+export const ENVIOS_A_LA_VEZ = 4
+
+/**
+ * Cuántas veces se intenta un segmento, contando el primero (v8: `MAX_SEGMENT_ATTEMPTS`).
+ *
+ * Cada intento es una transacción NUEVA: la que falló se queda sin confirmar y SAP la descarta. Un
+ * envío ya mandado a staging no se repite nunca dentro de la misma transacción.
+ */
+export const INTENTOS_POR_SEGMENTO = 5
+
+/** La espera antes del intento `n` (v8: `1500 * attempt`). */
+export const esperaAntesDeReintentar = (intento) => 1500 * intento
+
+/**
+ * Cuántas rondas de lectura en paralelo caben en UNA llamada al servidor.
+ *
+ * Esto no existía en v8, que no tenía funciones con límite de tiempo. Un segmento de veinte mil filas
+ * con páginas de 250 —una tabla de filas muy pesadas— son ochenta páginas: trece rondas de seis, más
+ * de un minuto solo leyendo, y luego hay que escribirlo. Con tres rondas como mucho, una llamada lee
+ * a lo sumo dieciocho páginas (tres veces el costo fijo de ~6 s por petición, más lo que tarde cada
+ * una) y escribe lo leído en dos rondas de envíos, lejos del tiempo de la función.
+ */
+export const RONDAS_DE_LECTURA_POR_LLAMADA = 3
+
+/**
+ * El tamaño de segmento para una tabla, sabiendo cuántas filas caben en una página.
+ *
+ * El de v8 —veinte mil— salvo cuando las páginas son tan pequeñas que el segmento no cabría en una
+ * llamada: entonces se achica a lo que se lee en `RONDAS_DE_LECTURA_POR_LLAMADA` rondas. Sin claves
+ * se lee de una página en una (ver `paginasALaVez`), y el tope se calcula con eso.
+ */
+export function filasPorSegmento(porPagina, { paralelo = PAGINAS_A_LA_VEZ } = {}) {
+  const pagina = Math.max(1, Number(porPagina) || 0)
+  return Math.max(pagina, Math.min(FILAS_POR_SEGMENTO, pagina * Math.max(1, paralelo) * RONDAS_DE_LECTURA_POR_LLAMADA))
 }
 
-/** Los estados que impiden copiar una tabla, frente a los que solo avisan. */
-export const ESTADOS_QUE_IMPIDEN = Object.freeze(['sin-pareja', 'sin-campos'])
-
-/** Si esa entrada se puede copiar tal como está. */
-export const sePuedeCopiar = (entrada) =>
-  !ESTADOS_QUE_IMPIDEN.includes(revisarEntrada(entrada).estado) && (entrada.filas ?? 0) > 0
-
 /**
- * El resumen del plan: cuántas tablas y filas, y qué hay que mirar.
+ * Páginas a la vez y segmentos a la vez, según haya o no claves para ordenar.
  *
- * Las filas se suman solo de las tablas que se pueden copiar: contar las que no van daría una cifra
- * que no se corresponde con lo que va a pasar.
+ * Sin un `$orderby` estable, dos ventanas de `$skip` leídas a la vez se solapan o dejan huecos, y un
+ * hueco es un registro que no se copia. v8 lo resolvía leyendo en serie: una página y un segmento.
  */
-export function resumirPlan(entradas) {
-  const lista = entradas ?? []
-  const copiables = lista.filter(sePuedeCopiar)
-
-  const porEstado = {}
-  for (const entrada of lista) {
-    const { estado } = revisarEntrada(entrada)
-    porEstado[estado] = (porEstado[estado] ?? 0) + 1
-  }
-
+export function paralelismo(claves) {
+  const conOrden = (claves ?? []).length > 0
   return {
-    tablas: lista.length,
-    copiables: copiables.length,
-    filas: copiables.reduce((suma, una) => suma + (una.filas ?? 0), 0),
-    porEstado,
-    hayQueMirar: lista.some((una) => revisarEntrada(una).estado !== 'ok'),
+    paginas: conOrden ? PAGINAS_A_LA_VEZ : 1,
+    segmentos: conOrden ? SEGMENTOS_A_LA_VEZ : 1,
   }
 }
+
+/** Dónde empieza cada segmento de una tabla de `total` filas. */
+export function iniciosDeSegmento(total, tamano = FILAS_POR_SEGMENTO) {
+  const inicios = []
+  const paso = Math.max(1, Number(tamano) || FILAS_POR_SEGMENTO)
+  for (let desde = 0; desde < (Number(total) || 0); desde += paso) inicios.push(desde)
+  return inicios
+}
+
+/**
+ * Si un fallo merece otro intento (v8: `status === 403 || status == null || status >= 500`).
+ *
+ * El 403 cuenta porque en v8 era el token de escritura caducado; aquí cada llamada pide el suyo, así
+ * que repetir es justo lo que lo renueva. Un 400 es un dato que SAP no acepta, y repetirlo no cambia
+ * nada.
+ */
+export function esFalloTransitorio(error) {
+  const estado = error?.status
+  return estado == null || estado === 0 || estado === 403 || estado >= 500
+}
+
+/** Un mensaje de SAP que significa una fila RECHAZADA. Solo la gravedad E y la A. */
+export const esRechazo = (mensaje) => ['E', 'A'].includes(mensaje?.Severity)
+
+/**
+ * El estado de una tabla al terminar (v8, en este orden):
+ *
+ *   - alguna transacción terminó en ERROR → `error`;
+ *   - SAP rechazó filas → `warning` («Procesado con errores»);
+ *   - alguna no se llegó a confirmar como procesada → `processing` (sigue aplicándose en SAP);
+ *   - si no, `ok`.
+ */
+export function estadoDeTabla({ conError = false, rechazadas = 0, sinConfirmar = false } = {}) {
+  if (conError) return 'error'
+  if (rechazadas > 0) return 'warning'
+  if (sinConfirmar) return 'processing'
+  return 'ok'
+}
+
+/** El estado de la corrida entera, para el historial (v8: el peor de las tablas, en este orden). */
+export function estadoDeCorrida(resultados) {
+  const estados = (resultados ?? []).map((uno) => uno.status)
+  for (const estado of ['cancelled', 'error', 'processing', 'warning']) {
+    if (estados.includes(estado)) return estado
+  }
+  return 'ok'
+}
+
+/**
+ * Parte filas en trozos de como mucho `maxFilas` y `maxBytes`.
+ *
+ * Para las claves del borrado: v8 las leía TODAS antes de borrar —una foto, para que confirmar un
+ * segmento de borrado no corriera las ventanas de `$skip` de los siguientes— y las borraba de veinte
+ * mil en veinte mil. Aquí esa foto viaja del navegador al servidor, y el cuerpo de una petición tiene
+ * un límite de unos 4,5 MB, así que el trozo se corta también por bytes.
+ */
+export function partirPorBytes(filas, { maxFilas = FILAS_POR_SEGMENTO, maxBytes = 3_000_000 } = {}) {
+  const trozos = []
+  const codificador = new TextEncoder()
+  let actual = []
+  let bytes = 0
+
+  for (const fila of filas ?? []) {
+    // Bytes de verdad, no caracteres: una clave con acentos ocupa más de lo que mide.
+    const suyos = codificador.encode(JSON.stringify(fila)).length + 1
+    if (actual.length > 0 && (bytes + suyos > maxBytes || actual.length >= maxFilas)) {
+      trozos.push(actual)
+      actual = []
+      bytes = 0
+    }
+    actual.push(fila)
+    bytes += suyos
+  }
+
+  if (actual.length > 0) trozos.push(actual)
+  return trozos
+}
+
+/**
+ * Cuánto se espera a que SAP procese una transacción (v8:
+ * `Math.min(1800000, Math.max(120000, SEGMENT_SIZE * 4))`).
+ */
+export const ESPERA_DE_PROCESO_MS = Math.min(1_800_000, Math.max(120_000, FILAS_POR_SEGMENTO * 4))
