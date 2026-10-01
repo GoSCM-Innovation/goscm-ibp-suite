@@ -50,7 +50,8 @@ export default function ProductionVisualizer({ destino }) {
   const [recarga, setRecarga] = useState(0)
   const descarga = useRef(null)
 
-  const [pestanas, setPestanas] = useState([{ id: 1 }])
+  // `prdid` es el producto que mira cada pestaña: v7 lo ponía de título (`tab.prdid || 'Nueva búsqueda'`).
+  const [pestanas, setPestanas] = useState([{ id: 1, prdid: '' }])
   const [activa, setActiva] = useState(1)
   const siguiente = useRef(2)
 
@@ -92,7 +93,7 @@ export default function ProductionVisualizer({ destino }) {
     if (pestanas.length >= MAX_PESTANAS) return
     const id = siguiente.current
     siguiente.current += 1
-    setPestanas((previas) => [...previas, { id }])
+    setPestanas((previas) => [...previas, { id, prdid: '' }])
     setActiva(id)
   }
 
@@ -124,34 +125,33 @@ export default function ProductionVisualizer({ destino }) {
       {/* ── ② Las pestañas de producto ───────────────────────────────────────────────────────── */}
       {/* No existen hasta que hay algo que enseñar, igual que en v7. Y NO SE MONTAN: montarlas
           escondidas las haría leer una base vacía, que es el fallo que esto viene a cerrar. */}
-      <div ref={lienzo} className="a-pantalla-completa">
+      <div ref={lienzo} className="a-pantalla-completa bom-wrap">
         {hayDatos === true && (
         <>
         <div className="bom-tabs-bar">
           <div className="bom-tabs-scroll">
-            {pestanas.map((una, indice) => (
-              <span key={una.id} style={{ display: 'flex', alignItems: 'center' }}>
-                <button
-                  type="button"
-                  className={`bom-tab-btn${activa === una.id ? ' active' : ''}`}
-                  onClick={() => setActiva(una.id)}
-                >
-                  Árbol {indice + 1}
-                </button>
+            {pestanas.map((una) => (
+              <button
+                key={una.id}
+                type="button"
+                className={`bom-tab-btn${activa === una.id ? ' active' : ''}`}
+                onClick={() => setActiva(una.id)}
+              >
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{una.prdid || 'Nueva búsqueda'}</span>
                 {pestanas.length > 1 && (
-                  <button
-                    type="button"
+                  <span
                     className="bom-tab-close"
-                    onClick={() => cerrar(una.id)}
-                    aria-label={`Cerrar árbol ${indice + 1}`}
+                    role="button"
+                    aria-label="Cerrar pestaña"
+                    onClick={(evento) => { evento.stopPropagation(); cerrar(una.id) }}
                   >
-                    ✕
-                  </button>
+                    ×
+                  </span>
                 )}
-              </span>
+              </button>
             ))}
             {pestanas.length < MAX_PESTANAS && (
-              <button type="button" className="bom-tab-btn" onClick={agregar} aria-label="Abrir otro árbol">
+              <button type="button" className="bom-tab-add" title="Nueva pestaña (máx 15)" onClick={agregar}>
                 +
               </button>
             )}
@@ -172,13 +172,16 @@ export default function ProductionVisualizer({ destino }) {
         {pestanas.map((una, indice) => (
           <div key={una.id} style={{ display: activa === una.id ? 'block' : 'none' }}>
             <BomTree
-              sinPantallaCompleta
               recarga={recarga}
               // Solo el primero informa: el resumen es de la base, no de la pestaña, y con quince
               // abiertas se escribiría quince veces la misma línea.
               onCargados={indice === 0
                 ? (cuantos) => descarga.current?.decir('ok', resumenDelArbol(cuantos))
                 : null}
+              onProducto={(prdid) => setPestanas((previas) => previas.map(
+                (otra) => (otra.id === una.id ? { ...otra, prdid } : otra),
+              ))}
+              onEstado={(tipo, texto) => descarga.current?.decir(tipo, texto)}
             />
           </div>
         ))}

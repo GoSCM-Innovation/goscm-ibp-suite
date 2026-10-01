@@ -129,9 +129,9 @@ describe('lineasDeTabla', () => {
 })
 
 describe('estadoAlTerminar', () => {
-  it('todo bien: cuántas filas quedaron', () => {
+  it('todo bien: no escribe nada propio, como v7 (lo dice quien usa la descarga)', () => {
     expect(estadoAlTerminar({ guardadas: 98956, conError: 0, incompletas: 0 }))
-      .toEqual({ tipo: 'ok', texto: '98.956 filas guardadas.' })
+      .toEqual({ tipo: 'ok', texto: '' })
   })
 
   // Faltar filas NO puede salir en verde: es lo que antes pasaba por «descarga terminada».

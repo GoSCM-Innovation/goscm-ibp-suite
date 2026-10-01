@@ -125,6 +125,18 @@ async function cargarMaestros(indices, productos) {
   await porCursor('bom_loc', (fila) => { plantas.push(fila) })
   indexarMaestro(indices.ubicaciones, plantas, 'LOCID')
 
+  // Las descripciones de los recursos que salen en las recetas de este árbol: v7 las enseñaba como
+  // ayuda de cada insignia de recurso (`RES_DESCR`). Fuera de `core/`: solo es una anotación.
+  const recursos = new Set()
+  for (const lista of Object.values(indices.recursosPorSid)) for (const uno of lista) recursos.add(uno)
+  const maestros = await Promise.all([...recursos]
+    .map((res) => leerUno('bom_res', res).catch(() => null)))
+  indices.descRecursos = {}
+  for (const fila of maestros.filter(Boolean)) {
+    const descr = texto(fila.RESDESCR)
+    if (descr) indices.descRecursos[texto(fila.RESID)] = descr
+  }
+
   return indices
 }
 
@@ -170,6 +182,33 @@ export async function productosConReceta({ limite = 0 } = {}) {
     .sort((a, b) => a.prdid.localeCompare(b.prdid))
 
   return limite > 0 ? lista.slice(0, limite) : lista
+}
+
+/**
+ * Las descripciones de TODOS los productos de la lista, de una vez.
+ *
+ * v7 buscaba por código O por descripción sobre la lista entera (`prodSuggestions` traía la
+ * descripción de cada uno). Pedirlas de a pocas, como antes, hacía imposible encontrar un material por
+ * su nombre. Se recorre `bom_prd` por cursor y se guarda solo el texto de los que están en la lista.
+ */
+export async function descripcionesDeLosProductos(prdids) {
+  const quiero = new Set(prdids)
+  const salida = {}
+  await porCursor('bom_prd', (fila) => {
+    const id = texto(fila.PRDID)
+    if (quiero.has(id)) salida[id] = texto(fila.PRDDESCR)
+  })
+  return salida
+}
+
+/**
+ * Si la descarga trajo vigencias de componentes. Es el `BOM_VALIDITY_ON` de v7: sin ellas, las
+ * columnas «Válido desde» y «Válido hasta» no existen.
+ */
+export async function hayValidez() {
+  let alguna = false
+  await porCursor('bom_psi_validity', () => { alguna = true; return false })
+  return alguna
 }
 
 /** Las descripciones de una lista de productos, para enseñarlas en el buscador. */

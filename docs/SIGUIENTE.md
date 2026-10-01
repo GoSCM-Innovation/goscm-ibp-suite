@@ -7,6 +7,11 @@ actualiza al terminar cada sesión, y su orden es el de prioridad acordada.
 
 ## Dónde estamos
 
+- **Decisión del usuario, 2026-10-01: Data Tools tiene que ser IDÉNTICO a v7.** La auditoría completa
+  está en [`docs/PARIDAD-DATA-TOOLS.md`](PARIDAD-DATA-TOOLS.md) con el orden propuesto. Hecho: Glosario y
+  Production Visualizer (árbol con la forma de v7, textos de descarga sin contador de filas). **Pendiente
+  y grande**: Production Analyzer, Network Visualizer, Network Analyzer y Planning Area Documenter —los
+  analizadores no tienen la vista web ni el Excel de v7—. Empezar por el mapeo ① compartido.
 - **Tres correcciones más del 2026-10-01 al conectar un tenant** (pendientes de verlas en el sitio):
   1. El asistente **se cierra** al terminar el paso ③, como `closeConnectDialog` de v7. Ya no hay cuadro
      «Conexión activa» con «Cerrar» (ese panel solo sale al abrir el diálogo estando ya conectado).

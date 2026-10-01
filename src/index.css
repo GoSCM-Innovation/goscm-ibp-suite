@@ -3214,3 +3214,133 @@ a { color: var(--cyan); }
   .glosario-content { padding: var(--sp-4); }
 }
 
+
+/* ── Production Visualizer: la pantalla del árbol, copiada de v7 ────────────────────────────────
+   Barra de controles, mensaje inicial, spinner, tabla con colores por nivel, insignias. Los estilos
+   de `table`, `th` y `td` de v7 eran globales; aquí van acotados a `.bom-pane` para no tocar el resto
+   de tablas de la suite. */
+:root {
+  --lvl-1: #29ABE2; --lvl-2: #34d399; --lvl-3: #F7A800; --lvl-4: #f472b6;
+  --lvl-5: #a78bfa; --lvl-6: #fb923c; --lvl-7: #2dd4bf; --lvl-8: #f87171;
+  --pink: #f472b6;
+}
+:root[data-theme="light"] { --pink: #db2777; }
+
+.bom-pane .prod-search-group { display: flex; flex-direction: column; gap: 4px; }
+.bom-pane .prod-ss-wrap { width: 320px; }
+.bom-pane .controls-bar {
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  padding: 10px 24px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.bom-pane .controls-bar label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--text3);
+}
+.bom-pane .stats-row { margin-left: auto; display: flex; gap: 16px; font-size: 11px; color: var(--text2); }
+.bom-pane .stats-row strong { color: var(--accent); font-weight: 700; }
+
+.bom-pane .empty-state { text-align: center; padding: 60px 20px; color: var(--text3); }
+.bom-pane .empty-state .icon { font-size: 40px; margin-bottom: 12px; }
+
+.bom-pane .bom-loading {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 60px 20px; gap: 14px; color: var(--text3);
+}
+.bom-pane .bom-loading-spinner {
+  width: 36px; height: 36px;
+  border: 3px solid rgba(247,168,0,.2); border-top-color: var(--accent);
+  border-radius: 50%; animation: bom-spin 0.75s linear infinite;
+}
+@keyframes bom-spin { to { transform: rotate(360deg); } }
+.bom-pane .bom-loading-prd { font-family: var(--mono); font-size: 13px; color: var(--accent); font-weight: 600; }
+.bom-pane .bom-loading-msg { font-size: 12px; color: var(--text3); }
+
+.bom-pane .table-wrap { margin: 0; overflow-x: auto; overflow-y: auto; max-height: calc(100vh - 125px); }
+.bom-pane table { border-collapse: collapse; min-width: max-content; }
+.bom-pane th {
+  position: sticky; top: 0; z-index: 2;
+  background: var(--bg3);
+  font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--text2); padding: 8px 10px; text-align: left;
+  border-bottom: 2px solid var(--border2);
+}
+.bom-pane td {
+  padding: 6px 10px; border-bottom: 1px solid var(--border);
+  font-size: var(--text-sm); vertical-align: middle; white-space: nowrap;
+}
+.bom-pane tr:hover td { background: rgba(247, 168, 0, .04); }
+.bom-pane .col-exp { min-width: 36px; }
+.bom-pane .col-rootmat, .bom-pane .col-parentmat { min-width: 130px; }
+.bom-pane .col-lvl { min-width: 50px; }
+.bom-pane .col-loc { min-width: 95px; }
+.bom-pane .col-src { min-width: 165px; }
+.bom-pane .col-prd { min-width: 145px; }
+.bom-pane .col-coef, .bom-pane .col-mat { min-width: 90px; }
+.bom-pane .col-type { min-width: 150px; }
+.bom-pane .col-res { min-width: 200px; }
+
+.bom-pane tr.rt-root td { background: rgba(247, 168, 0, .06); }
+.bom-pane tr.rt-coprod td { background: rgba(167, 139, 250, .06); }
+.bom-pane tr.rt-subprod td { background: rgba(244, 114, 182, .04); }
+.bom-pane tr.rt-cycle td { background: rgba(255, 107, 107, .08); }
+
+.bom-pane .lvl-badge {
+  display: inline-block; min-width: 16px; padding: 1px 7px; border-radius: 10px;
+  font-family: var(--mono); font-size: 11px; font-weight: 700; text-align: center;
+  color: #0b1120; background: var(--text3);
+}
+.bom-pane tr.lvl-c1 .lvl-badge { background: var(--lvl-1); }
+.bom-pane tr.lvl-c2 .lvl-badge { background: var(--lvl-2); }
+.bom-pane tr.lvl-c3 .lvl-badge { background: var(--lvl-3); }
+.bom-pane tr.lvl-c4 .lvl-badge { background: var(--lvl-4); }
+.bom-pane tr.lvl-c5 .lvl-badge { background: var(--lvl-5); }
+.bom-pane tr.lvl-c6 .lvl-badge { background: var(--lvl-6); }
+.bom-pane tr.lvl-c7 .lvl-badge { background: var(--lvl-7); }
+.bom-pane tr.lvl-c8 .lvl-badge { background: var(--lvl-8); }
+.bom-pane tr.lvl-c1 td:first-child { box-shadow: inset 3px 0 0 var(--lvl-1); }
+.bom-pane tr.lvl-c2 td:first-child { box-shadow: inset 3px 0 0 var(--lvl-2); }
+.bom-pane tr.lvl-c3 td:first-child { box-shadow: inset 3px 0 0 var(--lvl-3); }
+.bom-pane tr.lvl-c4 td:first-child { box-shadow: inset 3px 0 0 var(--lvl-4); }
+.bom-pane tr.lvl-c5 td:first-child { box-shadow: inset 3px 0 0 var(--lvl-5); }
+.bom-pane tr.lvl-c6 td:first-child { box-shadow: inset 3px 0 0 var(--lvl-6); }
+.bom-pane tr.lvl-c7 td:first-child { box-shadow: inset 3px 0 0 var(--lvl-7); }
+.bom-pane tr.lvl-c8 td:first-child { box-shadow: inset 3px 0 0 var(--lvl-8); }
+
+.bom-pane .badge {
+  display: inline-block; padding: 2px 7px; border-radius: 4px;
+  font-family: var(--mono); font-size: 10px; font-weight: 600;
+}
+.bom-pane .badge-coprod { background: rgba(167, 139, 250, .15); color: var(--purple); }
+.bom-pane .badge-alt { background: rgba(247, 168, 0, .18); color: var(--accent); cursor: help; }
+.bom-pane .badge-res {
+  background: rgba(244, 114, 182, .12); color: var(--pink);
+  margin: 1px 2px; font-size: 9px; padding: 1px 5px;
+}
+.bom-pane .badge-psh { background: rgba(72, 199, 120, .16); color: #48c778; font-weight: 700; }
+
+.bom-pane tr.tr-comp-divider td {
+  padding: 1px 6px; background: transparent !important;
+  border-bottom: 1px dashed rgba(255, 255, 255, .07) !important;
+}
+.bom-pane .divider-lbl { font-size: 10px; color: var(--text3); font-style: italic; letter-spacing: .03em; }
+
+.bom-pane .exp-btn {
+  width: 22px; height: 22px; border: 1px solid var(--border); border-radius: 4px;
+  background: var(--surface); color: var(--text2); font-size: 10px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; transition: all .15s;
+}
+.bom-pane .exp-btn:hover { border-color: var(--accent); color: var(--accent); background: rgba(247, 168, 0, .08); }
+.bom-pane .exp-btn.no-ch { opacity: .2; cursor: default; }
+
+.bom-tab-add {
+  font-size: 18px; color: var(--text3); background: none; border: none;
+  cursor: pointer; padding: 4px 12px; flex-shrink: 0; transition: color .15s;
+}
+.bom-tab-add:hover { color: var(--accent); }

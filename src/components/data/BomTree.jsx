@@ -1,326 +1,276 @@
-// El árbol de materiales de un producto: qué lleva, planta por planta.
+// El árbol de materiales de UN producto: la pantalla de una pestaña de v7.
 //
-// Portado de `bom.js` de v7. Las reglas de SAP y el armado de nodos están en `core/ibp/bom-tree.js`
-// con sus pruebas; la lectura por niveles desde el navegador, en `src/lib/bom-load.js`. Aquí solo se
-// dibuja y se decide qué se abre.
+// Portado de `bomBuildTabPane`, `bomRenderTable` y compañía de `bom.js` de v7, con SU forma:
+//
+//   - Arriba, la barra de controles: «BUSCAR PRODUCTO» (código o descripción, con lista de hasta 30
+//     coincidencias), «⊟ Colapsar», «⬇ Exportar», «✕ Limpiar» y los contadores Raíces / Visibles /
+//     Prof.máx.
+//   - Sin producto elegido, solo el mensaje «Busca un producto en el campo superior…». NO hay lista de
+//     productos a la vista ni selector de planta: es lo que v7 hacía y lo que se pidió respetar.
+//   - Con producto, UNA tabla con las raíces de todas las plantas juntas y sus once columnas, con el
+//     color del nivel, las insignias de tipo y de recursos y las columnas de vigencia si la descarga
+//     las trajo.
+//
+// Las reglas de SAP y el armado de nodos siguen en `core/ibp/bom-tree.js` con sus pruebas, y la lectura
+// por niveles en `src/lib/bom-load.js`. Aquí solo se dibuja y se decide qué se abre.
 //
 // Dos cosas heredadas de v7 que no son estilo:
 //
 //   - El árbol se abre PEREZOSO. Los hijos de un nodo se construyen al abrirlo y se sueltan al
-//     cerrarlo. Un árbol de veinte niveles construido entero no cabe en memoria, y meterlo además en
-//     el estado de React lo haría el doble de caro. Por eso los nodos viven en un `ref` y el redibujo
-//     se pide con un contador: es la única parte de la aplicación donde eso está justificado.
-//   - Se carga el subárbol de UN producto, no el tenant. Un tenant real son cientos de miles de filas
-//     de recetas y nadie mira más de un árbol a la vez.
+//     cerrarlo. Un árbol de veinte niveles construido entero no cabe en memoria. Por eso los nodos
+//     viven en un `ref` y el redibujo se pide con un contador.
+//   - Se carga el subárbol de UN producto, no el tenant.
 //
 // Y una que v7 no hacía: los CICLOS se enseñan. v7 los detectaba, borraba la rama en silencio y
-// declaraba una lista de ciclos que nunca llenaba. Un árbol al que le falta una rama sin avisar se
-// entrega como si estuviera completo.
+// declaraba una lista de ciclos que nunca llenaba.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import {
-  TIPOS, abrirTodo, armarHijos, invertirArbol, profundidad, raicesPorPlanta, soltarHijos,
+  TIPOS, abrirTodo, armarHijos, profundidad, raicesPorPlanta, soltarHijos,
 } from '../../../core/ibp/bom-tree.js'
-import { cargarSubarbol, descripcionesDe, productosConReceta } from '../../lib/bom-load.js'
+import {
+  cargarSubarbol, descripcionesDeLosProductos, hayValidez, productosConReceta,
+} from '../../lib/bom-load.js'
 import { aplanarArbol, armarLibroDeUnProducto, descargarLibro, nombreDeArchivo } from '../../lib/bom-export.js'
-import { usePantallaCompleta } from '../../lib/usePantallaCompleta.js'
-import BotonPantallaCompleta from '../ui/BotonPantallaCompleta.jsx'
 
-const numero = (valor) => Number(valor ?? 0).toLocaleString('es')
+/** Cuántas coincidencias ofrece el buscador, como en v7. */
+const SUGERENCIAS = 30
 
-/** Cuántos productos se ofrecen a la vez en el buscador. Con mil el desplegable no se usa. */
-const VISIBLES = 60
-
-/** Un coeficiente de SAP como se lee: sin los seis decimales con los que viene. */
+/** Un coeficiente como lo escribía v7 (`fmtCoef`): configuración chilena, hasta 4 decimales. */
 function coeficiente(valor) {
+  if (valor === '' || valor === null || valor === undefined) return ''
+  const n = Number(valor)
+  return Number.isNaN(n) ? String(valor) : n.toLocaleString('es-CL', { maximumFractionDigits: 4 })
+}
+
+/** Una fecha OData v2 (`/Date(ms)/`) a AAAA-MM-DD; vacío si no se entiende. De `bomFmtSapDate`. */
+function fechaDeSap(valor) {
   const texto = String(valor ?? '').trim()
   if (!texto) return ''
-  const suelto = Number.parseFloat(texto.replace(',', '.'))
-  return Number.isFinite(suelto) ? suelto.toLocaleString('es', { maximumFractionDigits: 4 }) : texto
+  const m = /\/Date\((-?\d+)/.exec(texto)
+  const fecha = m ? new Date(Number(m[1])) : new Date(texto)
+  if (Number.isNaN(fecha.getTime())) return m ? '' : texto
+  return fecha.toISOString().slice(0, 10)
 }
 
-/** El icono de cada clase de nodo. Se lee antes que el texto. */
-const ICONO = {
-  [TIPOS.raiz]: '🏭',
-  [TIPOS.componente]: '⚙️',
-  [TIPOS.hoja]: '📦',
-  [TIPOS.ciclo]: '🔁',
-}
+/** El nivel que se muestra: raíz = 1, sus componentes directos = 1 y cada receta que se explota suma 1. */
+const nivelMostrado = (nivel) => Math.max(1, (nivel || 1) - 1)
 
-/** Una fila del árbol. Se dibuja plana y con sangría, no anidada: mil nodos anidados van lentos. */
-function Fila({ nodo, abierto, onAlternar }) {
-  const esCiclo = nodo.tipo === TIPOS.ciclo
+/** La celda de coeficientes: `↓ 2,5 (PSI) · ↑ 1 (PSH) KG`. Es `fmtDualCoef` de v7. */
+function CoeficienteDoble({ entrada, salida, unidad }) {
+  const hayEntrada = entrada !== '' && entrada != null
+  const haySalida = salida !== '' && salida != null
+  const etiqueta = (texto) => <span style={{ fontSize: 10, opacity: 0.65, fontWeight: 600 }}>({texto})</span>
+  const uom = unidad
+    ? <> <span style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--mono)' }}>{unidad}</span></>
+    : null
 
+  if (!hayEntrada && !haySalida) return uom
   return (
-    <div
-      className={`bom-fila${esCiclo ? ' bom-ciclo' : ''}`}
-      style={{ paddingLeft: `${(nodo.nivel - 1) * 20 + 6}px` }}
-    >
-      {nodo.sePuedeAbrir ? (
-        <button
-          type="button"
-          className="bom-flecha"
-          onClick={() => onAlternar(nodo)}
-          aria-expanded={abierto}
-          aria-label={abierto ? `Cerrar ${nodo.prdid}` : `Abrir ${nodo.prdid}`}
-        >
-          {abierto ? '▾' : '▸'}
-        </button>
-      ) : <span className="bom-flecha bom-flecha-hueca" />}
-
-      <span className="bom-icono" title={nodo.tipo}>{ICONO[nodo.tipo] ?? '•'}</span>
-
-      <span className="bom-prd mono">{nodo.prdid}</span>
-      <span className="bom-descr">{nodo.descripcion}</span>
-
-      {nodo.coeficienteDeEntrada && (
-        <span className="tag" title="Cuánto entra de este componente">
-          {coeficiente(nodo.coeficienteDeEntrada)} {nodo.unidad}
-        </span>
-      )}
-      {nodo.tipoDeMaterial && <span className="exp-sub">{nodo.tipoDeMaterial}</span>}
-      {nodo.receta && <span className="exp-sub mono" title="Receta (SOURCEID)">{nodo.receta}</span>}
-
-      {nodo.esAlternativo && <span className="tag tag-accent" title="Componente alternativo">alt</span>}
-
-      {nodo.recursos?.length > 0 && (
-        <span className="exp-sub" title="Recursos de la receta">
-          🛠 {nodo.recursos.slice(0, 3).join(', ')}
-          {nodo.recursos.length > 3 && ` +${nodo.recursos.length - 3}`}
-        </span>
-      )}
-
-      {nodo.coproductos?.length > 0 && (
-        <span className="exp-sub" title="La misma receta produce además">
-          ⊕ {nodo.coproductos.map((uno) => uno.prdid).join(', ')}
-        </span>
-      )}
-
-      {esCiclo && (
-        <span className="tag tag-error">
-          vuelve a una receta ya vista — se corta aquí
-        </span>
-      )}
-    </div>
+    <>
+      {hayEntrada && <span style={{ color: 'var(--blue)' }}>↓ {coeficiente(entrada)} {etiqueta('PSI')}</span>}
+      {hayEntrada && haySalida && <> <span style={{ color: 'var(--text3)' }}>·</span> </>}
+      {haySalida && <span style={{ color: '#48c778' }}>↑ {coeficiente(salida)} {etiqueta('PSH')}</span>}
+      {uom}
+    </>
   )
+}
+
+const mono11 = { fontFamily: 'var(--mono)', fontSize: 11 }
+const sub10 = { color: 'var(--text3)', fontSize: 10 }
+
+/** Los nodos sin hijos van antes que los que los tienen, como `sortedNodes` de v7. */
+function ordenados(nodos) {
+  const conHijos = (n) => Boolean(n.sePuedeAbrir || n.hijos?.length)
+  return [...nodos].sort((a, b) => Number(conHijos(a)) - Number(conHijos(b)))
 }
 
 /**
  * `recarga` sube cuando termina una descarga y es lo que hace que el árbol vuelva a leer la base.
  *
- * Sin ella, la lista de productos se leía UNA vez al montar —cuando todavía no se había bajado nada—
- * y no se volvía a mirar nunca. En v7 no hacía falta porque bajar y armar la lista eran la misma
- * función (`doFetchAll` terminaba llamando a `idbBuildProdSuggestions`); al separarlas, el aviso hay
- * que darlo a mano.
- *
  * `onCargados` informa de cuántos productos con receta salieron, para la línea «✓ N productos en
- * caché local» que v7 escribía al terminar de indexar.
+ * caché local» que v7 escribía al terminar de indexar. `onProducto` dice qué producto hay elegido, que
+ * es lo que la pestaña pone de título (v7: `tab.prdid || 'Nueva búsqueda'`). `onEstado` es la línea de
+ * estado del panel de descarga.
  */
-export default function BomTree({ sinPantallaCompleta = false, recarga = 0, onCargados = null }) {
+export default function BomTree({ recarga = 0, onCargados = null, onProducto = null, onEstado = null }) {
   const [productos, setProductos] = useState(null)
-  const [exportando, setExportando] = useState(false)
   const [descripciones, setDescripciones] = useState({})
-  const [busqueda, setBusqueda] = useState('')
-  const [error, setError] = useState('')
+  const [conValidez, setConValidez] = useState(false)
+  const [texto, setTexto] = useState('')
+  const [lista, setLista] = useState(false)
 
   const [elegido, setElegido] = useState('')
   const [cargando, setCargando] = useState(null)
   const [arbol, setArbol] = useState(null)
-  const [planta, setPlanta] = useState('')
   const [ciclos, setCiclos] = useState([])
+  const [error, setError] = useState('')
+  const [exportando, setExportando] = useState(false)
+  const [profundidadMax, setProfundidadMax] = useState(null)
 
-  // Los nodos NO viven en el estado de React: se mutan al abrir y cerrar, y son muchos. El contador es
-  // lo que pide el redibujo.
+  // Los nodos NO viven en el estado de React: se mutan al abrir y cerrar, y son muchos.
   const indices = useRef(null)
-  const lienzo = useRef(null)
-  const pantalla = usePantallaCompleta(lienzo)
+  // Lo mismo que `indices`, para leerlo al dibujar: React no deja leer un `ref` mientras dibuja.
+  const [datos, setDatos] = useState(null)
   const [redibujo, setRedibujo] = useState(0)
   const pedirRedibujo = useCallback(() => setRedibujo((previo) => previo + 1), [])
-
   const [abiertos, setAbiertos] = useState(() => new Set())
-
-  // El árbol al revés: qué usa cada insumo, en vez de qué lleva cada producto. Portado de
-  // `bomToggleInvert` de v7. Se guarda aparte del normal para poder alternar sin reconstruir.
-  const [invertido, setInvertido] = useState(null)
 
   useEffect(() => {
     let abandonado = false
 
-    productosConReceta()
-      .then(async (lista) => {
+    Promise.all([productosConReceta(), hayValidez()])
+      .then(async ([encontrados, validez]) => {
+        if (abandonado) return
+        const todas = await descripcionesDeLosProductos(encontrados.map((uno) => uno.prdid))
         if (abandonado) return
 
         // Lo que se estaba mirando es de ANTES de la descarga, y las filas de las que salió pueden
-        // haberse borrado —bajar de otro tenant vacía la base—. Se suelta, que es lo que hacía v7 al
-        // terminar de bajar (`TREE = { locids: [], roots: {}, stats: {}, cycles: [] }`). Al montar no
-        // hay nada que soltar y esto no hace nada.
+        // haberse borrado. Se suelta, que es lo que hacía v7 al terminar de bajar.
         setElegido('')
+        setTexto('')
         setArbol(null)
-        setInvertido(null)
         setCiclos([])
         setAbiertos(new Set())
+        setProfundidadMax(null)
         indices.current = null
+        setDatos(null)
+        onProducto?.('')
 
-        setProductos(lista)
-        onCargados?.(lista.length)
-        // Las descripciones de los primeros, que son los que se ven sin buscar.
-        setDescripciones(await descripcionesDe(lista.slice(0, VISIBLES).map((uno) => uno.prdid)))
+        setProductos(encontrados)
+        setDescripciones(todas)
+        setConValidez(validez)
+        onCargados?.(encontrados.length)
       })
       .catch((fallo) => {
         if (!abandonado) { setError(fallo.message); setProductos([]) }
       })
 
     return () => { abandonado = true }
-    // `onCargados` queda fuera a propósito: es una función nueva en cada dibujo del padre y meterla
-    // aquí volvería a leer la base entera cada vez que el padre se redibuja.
+    // Los avisos al padre quedan fuera a propósito: son funciones nuevas en cada dibujo del padre y
+    // meterlas aquí volvería a leer la base entera cada vez que el padre se redibuja.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recarga])
 
-  const visibles = useMemo(() => {
-    const texto = busqueda.trim().toUpperCase()
-    const lista = productos ?? []
-    const filtrados = texto
-      ? lista.filter((uno) => uno.prdid.includes(texto)
-        || (descripciones[uno.prdid] ?? '').toUpperCase().includes(texto))
-      : lista
-    return filtrados.slice(0, VISIBLES)
-  }, [productos, busqueda, descripciones])
+  const coincidencias = useMemo(() => {
+    const f = texto.trim().toLowerCase()
+    if (!f || !productos) return []
+    return productos
+      .filter((uno) => uno.prdid.toLowerCase().includes(f)
+        || (descripciones[uno.prdid] ?? '').toLowerCase().includes(f))
+      .slice(0, SUGERENCIAS)
+  }, [productos, descripciones, texto])
 
-  // Al buscar, se piden las descripciones de lo que se está viendo: pedirlas todas de golpe son miles.
-  useEffect(() => {
-    const faltan = visibles.map((uno) => uno.prdid).filter((prd) => descripciones[prd] === undefined)
-    if (faltan.length === 0) return
+  /** Todas las raíces de todas las plantas, juntas, como las juntaba `bomGetRoots`. */
+  const raices = useMemo(
+    () => (arbol ? arbol.plantas.flatMap((planta) => arbol.porPlanta[planta]) : []),
+    [arbol],
+  )
 
-    let abandonado = false
-    descripcionesDe(faltan)
-      .then((leidas) => {
-        if (abandonado) return
-        // Lo que no tiene descripción se marca con cadena vacía, o se volvería a pedir sin fin.
-        const completas = Object.fromEntries(faltan.map((prd) => [prd, leidas[prd] ?? '']))
-        setDescripciones((previas) => ({ ...previas, ...completas }))
-      })
-      .catch(() => {})
-
-    return () => { abandonado = true }
-  }, [visibles, descripciones])
-
-  async function abrirProducto(prdid) {
+  async function elegirProducto(prdid) {
+    setLista(false)
     setElegido(prdid)
     setArbol(null)
-    setInvertido(null)
     setCiclos([])
     setAbiertos(new Set())
     setError('')
+    setProfundidadMax(null)
     setCargando({ nivel: 1, productos: 1 })
+    onProducto?.(prdid)
+    onEstado?.('info', `Cargando BOM para ${prdid}...`)
 
     try {
       const { indices: leidos } = await cargarSubarbol(prdid, { onAvance: setCargando })
       indices.current = leidos
-
-      // Acotado al producto elegido: el resto del índice está para armar sus descendientes, no para
-      // ser raíz. Ver la cabecera de `raicesPorPlanta`.
+      setDatos(leidos)
       const armado = raicesPorPlanta(leidos, { soloDe: prdid })
       setArbol(armado)
-      // La planta se elige sola solo si hay una: con varias, el árbol cambia por completo según cuál.
-      setPlanta(armado.plantas.length === 1 ? armado.plantas[0] : '')
+      onEstado?.('ok', `¡Listo! ${armado.plantas.length} plantas · profundidad máx: ${
+        Math.max(0, ...armado.plantas.flatMap((p) => armado.porPlanta[p].map(profundidad)))}`)
     } catch (fallo) {
       setError(fallo.message)
+      onEstado?.('err', `Error cargando BOM: ${fallo.message}`)
     } finally {
       setCargando(null)
     }
   }
 
-  const normales = planta ? (arbol?.porPlanta[planta] ?? []) : []
-  const raices = invertido ?? normales
+  function alEscribir(valor) {
+    setTexto(valor)
+    if (!valor.trim()) {
+      setLista(false)
+      if (elegido) {
+        // Borrar el campo suelta el producto, como en v7.
+        setElegido('')
+        setArbol(null)
+        setAbiertos(new Set())
+        setProfundidadMax(null)
+        onProducto?.('')
+      }
+      return
+    }
+    setLista(true)
+  }
 
-  /**
-   * Abre o cierra un nodo. Cerrar SUELTA el subárbol: es lo que sostiene un árbol grande.
-   *
-   * En el árbol invertido NO se suelta nada: sus nodos no salen de los índices —se calculan a partir
-   * del árbol ya construido— y soltarlos los borraría sin poder rehacerlos.
-   */
+  function limpiar() {
+    setTexto('')
+    setLista(false)
+    setElegido('')
+    setArbol(null)
+    setCiclos([])
+    setAbiertos(new Set())
+    setProfundidadMax(null)
+    indices.current = null
+    setDatos(null)
+    onProducto?.('')
+  }
+
+  function colapsar() {
+    for (const raiz of raices) soltarHijos(raiz)
+    setAbiertos(new Set())
+    pedirRedibujo()
+  }
+
+  /** Abre o cierra un nodo. Cerrar SUELTA el subárbol: es lo que sostiene un árbol grande. */
   function alternar(nodo) {
     setAbiertos((previos) => {
       const siguientes = new Set(previos)
       if (siguientes.has(nodo.id)) {
         siguientes.delete(nodo.id)
-        if (!invertido) soltarHijos(nodo)
+        soltarHijos(nodo)
       } else {
         siguientes.add(nodo.id)
-        if (!invertido) {
-          const nuevos = armarHijos(nodo, indices.current)
-          if (nuevos.length > 0) setCiclos((antes) => juntarCiclos(antes, nuevos))
-        }
+        const nuevos = armarHijos(nodo, indices.current)
+        if (nuevos.length > 0) setCiclos((antes) => juntarCiclos(antes, nuevos))
       }
       return siguientes
     })
     pedirRedibujo()
   }
 
-  /** Marca como abiertos todos los nodos abribles de un bosque. */
-  function marcarTodosAbiertos(nodos) {
-    const puestos = new Set()
-    const marcar = (lista) => {
-      for (const nodo of lista ?? []) {
-        if (nodo.sePuedeAbrir) puestos.add(nodo.id)
-        marcar(nodo.hijos)
-      }
-    }
-    marcar(nodos)
-    return puestos
-  }
-
-  function abrirTodoElArbol() {
-    if (!invertido) {
-      const nuevos = abrirTodo(raices, indices.current)
-      setCiclos((antes) => juntarCiclos(antes, nuevos))
-    }
-    setAbiertos(marcarTodosAbiertos(raices))
-    pedirRedibujo()
-  }
-
-  function cerrarTodo() {
-    if (!invertido) for (const raiz of raices) soltarHijos(raiz)
-    setAbiertos(new Set())
-    pedirRedibujo()
-  }
-
   /**
-   * Alterna entre «qué lleva este producto» y «dónde se usa cada insumo».
-   *
-   * Portado de `bomToggleInvert` de v7. Invertir exige el árbol ENTERO construido: la vista se arma
-   * recorriendo todos los caminos hoja→raíz, y una rama sin abrir no tiene caminos que recorrer.
-   */
-  function alternarInvertido() {
-    if (invertido) { setInvertido(null); setAbiertos(new Set()); pedirRedibujo(); return }
-
-    const nuevos = abrirTodo(normales, indices.current)
-    if (nuevos.length > 0) setCiclos((antes) => juntarCiclos(antes, nuevos))
-    const alReves = invertirArbol(normales)
-    setInvertido(alReves)
-    setAbiertos(marcarTodosAbiertos(alReves))
-    pedirRedibujo()
-  }
-
-  /**
-   * El árbol a Excel, con las columnas de v7.
-   *
-   * Se construye ENTERO antes de volcar, esté abierto o no en pantalla: lo que se lleva a una reunión
-   * es la jerarquía completa, no lo que quedó desplegado. Ver `bomExportExcel` de v7.
+   * El árbol a Excel, con las columnas de v7: la jerarquía COMPLETA, esté o no abierta en pantalla.
+   * Ver `bomExportExcel` de v7.
    */
   async function exportar() {
+    if (!elegido || raices.length === 0) {
+      onEstado?.('warn', 'Carga un producto antes de exportar.')
+      return
+    }
     setExportando(true)
+    onEstado?.('info', `Generando Excel de la jerarquía de ${elegido}…`)
     try {
-      // Se vuelca SIEMPRE el árbol normal: las columnas del Excel —material padre, nivel, coeficiente
-      // de entrada— son las de una explosión de arriba abajo, y en la vista invertida significarían
-      // otra cosa. v7 hacía lo mismo.
-      const nuevos = abrirTodo(normales, indices.current)
+      const nuevos = abrirTodo(raices, indices.current)
       if (nuevos.length > 0) setCiclos((antes) => juntarCiclos(antes, nuevos))
-      const libro = await armarLibroDeUnProducto(aplanarArbol(normales))
+      setProfundidadMax(Math.max(0, ...raices.map(profundidad)))
+      const filas = aplanarArbol(raices)
+      const libro = await armarLibroDeUnProducto(filas)
       descargarLibro(libro, nombreDeArchivo(elegido, new Date().toISOString().slice(0, 10)))
+      onEstado?.('ok', `Excel exportado: ${filas.length} filas.`)
     } catch (fallo) {
       setError(fallo.message)
+      onEstado?.('err', `Error: ${fallo.message}`)
     } finally {
       setExportando(false)
     }
@@ -329,198 +279,272 @@ export default function BomTree({ sinPantallaCompleta = false, recarga = 0, onCa
   /** Aplana el bosque a las filas que hay que dibujar, según qué está abierto. */
   const filas = useMemo(() => {
     const salida = []
-    const recorrer = (nodos) => {
-      for (const nodo of nodos ?? []) {
-        salida.push(nodo)
-        if (abiertos.has(nodo.id)) recorrer(nodo.hijos)
+    const recorrer = (nodos, raiz, padre) => {
+      for (const nodo of nodos) {
+        salida.push({ nodo, raiz, padre })
+        if (abiertos.has(nodo.id) && nodo.hijos) recorrer(ordenados(nodo.hijos), raiz, nodo.prdid)
       }
     }
-    recorrer(raices)
+    for (const nodo of raices) {
+      salida.push({ nodo, raiz: nodo.prdid, padre: '' })
+      if (abiertos.has(nodo.id) && nodo.hijos) recorrer(ordenados(nodo.hijos), nodo.prdid, nodo.prdid)
+    }
     return salida
     // `redibujo` está a propósito: los hijos se mutan y sin él la lista no se recalcula.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [raices, abiertos, redibujo])
 
-  const niveles = useMemo(
-    () => (raices.length > 0 ? Math.max(...raices.map(profundidad)) : 0),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [raices, redibujo],
-  )
+  const ubicaciones = datos?.ubicaciones ?? {}
+  const descRecursos = datos?.descRecursos ?? {}
+  const sustitutos = datos?.subsPorSid ?? {}
+  const vigencias = datos?.validezPorSid ?? {}
 
-  if (productos === null) return <div className="page-hint">Leyendo lo que hay descargado…</div>
-
-  if (productos.length === 0) {
-    return (
-      <div className="module-body">
-        {error
-          ? <div className="notice notice-error">✕ {error}</div>
-          : (
-            <div className="notice notice-info">
-              No hay recetas descargadas. Vuelve al paso <b>① Mapeo de entidades</b> y pulsa
-              «Descargar datos y construir jerarquía»; este visor trabaja sobre lo que quedó guardado
-              en este navegador, sin volver a preguntarle a SAP.
-            </div>
-          )}
-      </div>
-    )
+  /** `bomGetValidity`: todos los periodos del componente en su receta, por fecha de inicio. */
+  function vigenciaDe(nodo) {
+    const periodos = (vigencias[nodo.recetaDelPadre] ?? [])
+      .filter((uno) => String(uno.PRDID ?? '').trim() === nodo.prdid)
+      .map((uno) => ({ fr: fechaDeSap(uno.COMPVALIDFR), to: fechaDeSap(uno.COMPVALIDTO) }))
+      .sort((a, b) => a.fr.localeCompare(b.fr))
+    return { fr: periodos.map((p) => p.fr).join('; '), to: periodos.map((p) => p.to).join('; ') }
   }
 
+  const columnasExtra = conValidez ? 2 : 0
+
   return (
-    <div className="module-body a-pantalla-completa" ref={lienzo}>
-      {error && <div className="notice notice-error">✕ {error}</div>}
-
-      <div className="tablero">
-        <div className="card">
-          <div className="card-label">
-            Producto a mirar
-            <span className="exp-sub">{numero(productos.length)} con receta</span>
-          </div>
-
-          <input
-            className="input input-sm"
-            value={busqueda}
-            onChange={(evento) => setBusqueda(evento.target.value)}
-            placeholder="Buscar por código o descripción"
-            aria-label="Buscar un producto"
-          />
-
-          <div className="bom-lista">
-            {visibles.map((uno) => (
-              <button
-                key={uno.prdid}
-                type="button"
-                className={`bom-opcion${elegido === uno.prdid ? ' active' : ''}`}
-                onClick={() => abrirProducto(uno.prdid)}
-              >
-                <span className="mono">{uno.prdid}</span>
-                <span className="bom-descr">{descripciones[uno.prdid] ?? ''}</span>
-                <span className="exp-sub">
-                  {uno.plantas.join(', ')} · {uno.recetas} {uno.recetas === 1 ? 'receta' : 'recetas'}
-                </span>
-              </button>
-            ))}
-            {visibles.length === 0 && <div className="sin-datos">Ninguno coincide</div>}
-          </div>
-
-          {productos.length > visibles.length && (
-            <div className="exp-sub">
-              Se ven {visibles.length} de {numero(productos.length)}; busca para acotar.
+    <div className="bom-pane">
+      <div className="controls-bar" style={{ display: 'flex' }}>
+        <div className="prod-search-group">
+          <label>Buscar producto</label>
+          <div className="ss-wrap prod-ss-wrap">
+            <input
+              type="text"
+              className="ss-input-vis bom-search-inp"
+              placeholder="Código o descripción..."
+              autoComplete="off"
+              value={texto}
+              onChange={(evento) => alEscribir(evento.target.value)}
+              onFocus={() => { if (texto.trim()) setLista(true) }}
+              onBlur={() => setLista(false)}
+              onKeyDown={(evento) => { if (evento.key === 'Escape') setLista(false) }}
+            />
+            <div className={`ss-list bom-sugg-list${lista ? ' open' : ''}`}>
+              {coincidencias.length === 0
+                ? <div className="ss-none">Sin coincidencias</div>
+                : coincidencias.map((uno) => (
+                  // `onMouseDown` y no `onClick`: el campo pierde el foco antes del clic y cierra la lista.
+                  <div
+                    key={uno.prdid}
+                    className="ss-opt"
+                    onMouseDown={(evento) => {
+                      evento.preventDefault()
+                      setTexto(`${uno.prdid}${descripciones[uno.prdid] ? `  ·  ${descripciones[uno.prdid]}` : ''}`)
+                      elegirProducto(uno.prdid)
+                    }}
+                  >
+                    <span style={{ color: 'var(--accent)', fontWeight: 600 }}>{uno.prdid}</span>
+                    {descripciones[uno.prdid] && (
+                      <span style={{ color: 'var(--text3)', fontSize: 10 }}> · {descripciones[uno.prdid]}</span>
+                    )}
+                  </div>
+                ))}
             </div>
-          )}
+          </div>
         </div>
 
-        <div className="card">
-          <div className="card-label">Cómo leer esto</div>
-          <p className="exp-sub">
-            El árbol se arma por <b>planta</b>: los componentes de una receta se buscan solo entre las
-            recetas de la misma planta. Un mismo producto puede ser el terminado en una planta y un
-            insumo en otra, y su árbol es distinto en cada una.
-          </p>
-          <div className="bom-leyenda">
-            <span>🏭 encabeza su receta</span>
-            <span>⚙️ tiene receta propia</span>
-            <span>📦 se compra o es materia prima</span>
-            <span>🔁 cierra un ciclo</span>
-            <span>⊕ la receta produce además</span>
-            <span>🛠 recursos</span>
-          </div>
+        <button type="button" className="btn btn-secondary btn-small" onClick={colapsar}>⊟ Colapsar</button>
+        <button
+          type="button"
+          className="btn btn-secondary btn-small"
+          title="Exportar la jerarquía completa del producto a Excel"
+          onClick={exportar}
+          disabled={exportando}
+        >
+          ⬇ Exportar
+        </button>
+        <button type="button" className="btn btn-danger btn-small" onClick={limpiar}>✕ Limpiar</button>
+
+        <div className="stats-row">
+          <span>Raíces: <strong>{elegido && arbol ? raices.length : '-'}</strong></span>
+          <span>Visibles: <strong>{elegido && arbol ? filas.length : '-'}</strong></span>
+          <span>Prof.máx: <strong>{elegido && arbol ? (profundidadMax ?? '?') : '-'}</strong></span>
         </div>
       </div>
 
+      {error && <div className="notice notice-error" style={{ margin: 12 }}>✕ {error}</div>}
+
+      {!elegido && productos !== null && (
+        <div className="empty-state bom-prompt" style={{ display: 'block' }}>
+          <div className="icon">🔍</div>
+          Busca un producto en el campo superior para visualizar su jerarquía BOM.<br />
+          <span style={{ fontSize: 11, color: 'var(--text3)' }}>
+            Se mostrarán todos los SourceID del producto en cada planta y opción de producción.
+          </span>
+        </div>
+      )}
+
       {cargando && (
-        <div className="page-hint">
-          {cargando.nivel === 'maestro'
-            ? `Leyendo el maestro de ${numero(cargando.productos)} productos…`
-            : `Recorriendo el nivel ${cargando.nivel} · ${numero(cargando.productos)} productos vistos…`}
-        </div>
-      )}
-
-      {arbol && arbol.plantas.length === 0 && (
-        <div className="notice notice-info">
-          {elegido} tiene receta, pero ninguna de sus recetas encabeza un árbol: es componente de otros
-          en todas sus plantas. Busca el producto terminado que lo lleva.
-        </div>
-      )}
-
-      {arbol && arbol.plantas.length > 0 && (
-        <>
-          <div className="monitor-bar">
-            <select
-              className="select input-sm"
-              value={planta}
-              onChange={(evento) => { setPlanta(evento.target.value); setAbiertos(new Set()); setInvertido(null) }}
-              aria-label="Planta"
-            >
-              <option value="">Elige una planta…</option>
-              {arbol.plantas.map((una) => (
-                <option key={una} value={una}>
-                  {arbol.resumen[una].descripcion === una ? una : `${una} — ${arbol.resumen[una].descripcion}`}
-                  {` (${arbol.resumen[una].raices})`}
-                </option>
-              ))}
-            </select>
-
-            {planta && (
-              <>
-                <button type="button" className="btn btn-sm" onClick={abrirTodoElArbol}>Abrir todo</button>
-                <button type="button" className="btn btn-sm" onClick={cerrarTodo}>Cerrar todo</button>
-                <button
-                  type="button"
-                  className={`btn btn-sm${invertido ? ' btn-primary' : ''}`}
-                  onClick={alternarInvertido}
-                  title="Ver dónde se usa cada insumo, en vez de qué lleva cada producto"
-                >
-                  {invertido ? '⇅ Volver al árbol normal' : '⇅ Invertir'}
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-sm"
-                  onClick={exportar}
-                  disabled={exportando}
-                  title="La jerarquía completa a Excel, esté o no desplegada en pantalla"
-                >
-                  {exportando ? 'Generando…' : '⬇ Exportar Excel'}
-                </button>
-                {!sinPantallaCompleta && <BotonPantallaCompleta {...pantalla} que="el árbol" />}
-                <span className="page-hint">
-                  {numero(raices.length)} {raices.length === 1 ? 'raíz' : 'raíces'} ·{' '}
-                  {numero(filas.length)} filas a la vista
-                  {niveles > 1 && ` · ${niveles} niveles abiertos`}
-                </span>
-              </>
-            )}
+        <div className="bom-loading">
+          <div className="bom-loading-spinner" />
+          <div className="bom-loading-prd">{elegido}</div>
+          <div className="bom-loading-msg">
+            {cargando.nivel === 'maestro'
+              ? `Cargando maestro de materiales (${cargando.productos})...`
+              : `Escaneando nivel ${cargando.nivel} — ${cargando.productos} materiales encontrados...`}
           </div>
+        </div>
+      )}
 
-          {/* Esto es lo que v7 no decía. Un ciclo en las recetas de SAP no se arregla solo. */}
-          {ciclos.length > 0 && (
-            <div className="notice notice-error">
-              ⚠ Hay {numero(ciclos.length)} {ciclos.length === 1 ? 'ciclo' : 'ciclos'} en las recetas:
-              una receta acaba usándose a sí misma. El árbol se corta ahí y lo marca con 🔁.
-              <div className="bom-ciclos">
-                {ciclos.slice(0, 8).map((uno) => (
-                  <span key={`${uno.desde}-${uno.receta}`} className="mono">
-                    {uno.desde} → {uno.receta} ({uno.prdid})
-                  </span>
-                ))}
-                {ciclos.length > 8 && <span className="exp-sub">y {ciclos.length - 8} más</span>}
-              </div>
+      {ciclos.length > 0 && (
+        <div className="notice notice-error" style={{ margin: 12 }}>
+          ⚠️ <strong>Ciclos detectados:</strong>{' '}
+          {ciclos.slice(0, 8).map((uno) => `${uno.desde} → ${uno.receta} (${uno.prdid})`).join('; ')}
+          {ciclos.length > 8 && ` y ${ciclos.length - 8} más`}
+        </div>
+      )}
+
+      {elegido && arbol && !cargando && (
+        <div className="table-wrap bom-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th className="col-exp" />
+                <th className="col-rootmat">Material Padre Nivel 1</th>
+                <th className="col-parentmat">Material Padre del Nivel</th>
+                <th className="col-lvl">Nivel</th>
+                <th className="col-loc">Planta</th>
+                <th className="col-src">ID de producción</th>
+                <th className="col-prd">Material</th>
+                <th className="col-alt">Reemplazante</th>
+                <th className="col-coef">Coeficiente</th>
+                <th className="col-mat">Tipo de Material</th>
+                <th className="col-type">Tipo</th>
+                <th className="col-res">Puestos de trabajo</th>
+                {conValidez && <th className="col-validfr">Válido desde</th>}
+                {conValidez && <th className="col-validto">Válido hasta</th>}
+              </tr>
+            </thead>
+            <tbody className="bom-tbody">
+              {filas.map(({ nodo, raiz, padre }) => {
+                const abierto = abiertos.has(nodo.id)
+                const tieneHijos = Boolean(nodo.sePuedeAbrir || nodo.hijos?.length)
+                const clase = nodo.tipo === TIPOS.raiz ? 'rt-root'
+                  : nodo.tipo === TIPOS.ciclo ? 'rt-cycle'
+                    : tieneHijos ? 'rt-subprod' : 'rt-leaf'
+                const nivel = nivelMostrado(nodo.nivel)
+                const claseNivel = `lvl-c${((nivel - 1) % 8) + 1}`
+                const sangria = (nodo.nivel - 1) * 20
+                const ubicacion = ubicaciones[nodo.planta]
+                const reemplaza = nodo.esAlternativo === 'X'
+                  ? (sustitutos[nodo.recetaDelPadre] ?? [])
+                    .filter((uno) => String(uno.SPRDFR ?? '').trim() === nodo.prdid)
+                    .map((uno) => String(uno.PRDFR ?? '').trim())
+                  : []
+                const vigencia = conValidez ? vigenciaDe(nodo) : null
+
+                return [
+                  <tr key={nodo.id} className={`${clase} ${claseNivel}`}>
+                    <td style={{ paddingLeft: sangria + 6 }}>
+                      {tieneHijos
+                        ? (
+                          <button type="button" className="exp-btn" onClick={() => alternar(nodo)}>
+                            {abierto ? '▼' : '▶'}
+                          </button>
+                        )
+                        : <button type="button" className="exp-btn no-ch">·</button>}
+                    </td>
+                    <td style={mono11}>{raiz}</td>
+                    <td style={mono11}>{padre}</td>
+                    <td><span className="lvl-badge">{nivel}</span></td>
+                    <td style={mono11}>
+                      {nodo.planta}
+                      {ubicacion?.LOCDESCR && <span style={sub10}> — {ubicacion.LOCDESCR}</span>}
+                    </td>
+                    <td style={mono11}>{nodo.receta}</td>
+                    <td style={mono11}>
+                      {nodo.tipo === TIPOS.ciclo && '🔁 '}{nodo.prdid}
+                      {nodo.descripcion && <span style={sub10}> — {nodo.descripcion}</span>}
+                    </td>
+                    <td style={{ textAlign: 'center' }}>
+                      {nodo.esAlternativo === 'X' && (
+                        <span
+                          className="badge badge-alt"
+                          title={reemplaza.length > 0 ? `Reemplaza a: ${reemplaza.join(', ')}` : 'Material de reemplazo'}
+                        >
+                          X
+                        </span>
+                      )}
+                    </td>
+                    <td style={{ textAlign: 'right', fontFamily: 'var(--mono)' }}>
+                      <CoeficienteDoble
+                        entrada={nodo.coeficienteDeEntrada}
+                        salida={nodo.coeficienteDeSalida}
+                        unidad={nodo.unidad}
+                      />
+                    </td>
+                    <td style={mono11}>{nodo.tipoDeMaterial}</td>
+                    <td>
+                      {nodo.tipoDeReceta && (
+                        <span className={`badge ${nodo.tipoDeReceta === 'C' ? 'badge-coprod' : 'badge-psh'}`}>
+                          {nodo.tipoDeReceta}
+                        </span>
+                      )}
+                    </td>
+                    <td>
+                      {(nodo.recursos ?? []).map((res) => (
+                        <span key={res} className="badge badge-res" title={descRecursos[res] || undefined}>{res}</span>
+                      ))}
+                    </td>
+                    {conValidez && <td style={mono11}>{vigencia.fr}</td>}
+                    {conValidez && <td style={mono11}>{vigencia.to}</td>}
+                  </tr>,
+
+                  ...(abierto && nodo.coproductos?.length > 0
+                    ? nodo.coproductos.map((cp) => (
+                      <tr key={`${nodo.id}/co/${cp.prdid}`} className={`rt-coprod ${claseNivel}`}>
+                        <td style={{ paddingLeft: sangria + 28 }} />
+                        <td style={mono11}>{raiz}</td>
+                        <td style={mono11}>{nodo.prdid}</td>
+                        <td /><td /><td />
+                        <td style={mono11}>
+                          {cp.prdid}
+                          {cp.descripcion && <span style={sub10}> — {cp.descripcion}</span>}
+                        </td>
+                        <td />
+                        <td style={{ textAlign: 'right', fontFamily: 'var(--mono)' }}>
+                          <CoeficienteDoble entrada="" salida={cp.coeficiente} unidad={cp.unidad} />
+                        </td>
+                        <td style={mono11}>{cp.tipoDeMaterial}</td>
+                        <td>
+                          {cp.tipo && (
+                            <span className={`badge ${cp.tipo === 'C' ? 'badge-coprod' : 'badge-psh'}`}>{cp.tipo}</span>
+                          )}
+                        </td>
+                        <td />
+                        {conValidez && <><td /><td /></>}
+                      </tr>
+                    ))
+                    : []),
+
+                  ...(abierto && tieneHijos
+                    ? [(
+                      <tr key={`${nodo.id}/div`} className="tr-comp-divider">
+                        <td style={{ paddingLeft: sangria + 28 }} />
+                        <td colSpan={11 + columnasExtra}>
+                          <span className="divider-lbl">↓ Componentes PSI ({nodo.hijos?.length || '…'})</span>
+                        </td>
+                      </tr>
+                    )]
+                    : []),
+                ]
+              })}
+            </tbody>
+          </table>
+          {filas.length === 0 && (
+            <div className="empty-state bom-empty">
+              <div className="icon">🔍</div>Producto no encontrado como raíz en la jerarquía BOM.
             </div>
           )}
-
-          {planta && (
-            <div className="table-scroll table-alta bom-arbol">
-              {filas.map((nodo) => (
-                <Fila
-                  key={nodo.id}
-                  nodo={nodo}
-                  abierto={abiertos.has(nodo.id)}
-                  onAlternar={alternar}
-                />
-              ))}
-              {filas.length === 0 && <div className="sin-datos">Esta planta no tiene raíces</div>}
-            </div>
-          )}
-        </>
+        </div>
       )}
     </div>
   )

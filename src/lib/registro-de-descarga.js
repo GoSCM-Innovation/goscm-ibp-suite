@@ -147,7 +147,10 @@ export function estadoAlTerminar(salida) {
     }
   }
 
-  return { tipo: 'ok', texto: `${numero(salida.guardadas)} filas guardadas.` }
+  // Sin texto propio: en v7 la línea no decía «N filas guardadas», seguía en «Descargando…» hasta que
+  // quien la usa escribía lo suyo (el árbol: «✓ N productos en caché local…»; los analizadores:
+  // «Iniciando análisis...»). Un contador de filas ahí era un invento de esta suite.
+  return { tipo: 'ok', texto: '' }
 }
 
 /** El resumen del árbol, literal de `main.bom.loadedSummary` de v7. */

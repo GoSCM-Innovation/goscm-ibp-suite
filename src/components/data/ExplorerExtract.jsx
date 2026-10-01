@@ -151,7 +151,8 @@ export default function ExplorerExtract({
         onProgreso: (paso) => {
           const cual = pasosQueVan.findIndex((uno) => uno.tabla === paso.tabla)
           if (cual >= 0) setPorcentaje(Math.round((cual / pasosQueVan.length) * 100))
-          decir('info', `${descargando(paso)} ${Number(paso.bajadas ?? 0).toLocaleString('es')} filas`)
+          // Sin contador de filas: v7 decía solo «Descargando Production Source Header...».
+          decir('info', descargando(paso))
         },
         cancelado: () => cancelar.current,
       })

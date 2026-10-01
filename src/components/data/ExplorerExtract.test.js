@@ -118,7 +118,7 @@ describe('la forma de v7', () => {
     await bajar()
 
     expect(barra()).not.toBeNull()
-    expect(estado()).toBe('98.956 filas guardadas.')
+    expect(estado()).toBe('')
     expect(botonDeLogs().textContent).toBe('Ver logs técnicos')
   })
 
