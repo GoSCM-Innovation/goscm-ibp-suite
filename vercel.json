@@ -5,7 +5,7 @@
     "api/ibp/[...ruta].js": { "maxDuration": 300 }
   },
   "rewrites": [
-    { "source": "/((?!api/).*)", "destination": "/index.html" }
+    { "source": "/((?!api/|assets/).*)", "destination": "/index.html" }
   ],
   "headers": [
     {
