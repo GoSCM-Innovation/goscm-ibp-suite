@@ -8,6 +8,8 @@
 // repositorio donde estás parado y con identificadores nuevos. Traerse el destino haría que importar
 // en producción algo exportado de pruebas apuntara en silencio al repositorio equivocado.
 
+import { isV8Steps, stepsFromV8File, stepsToGraph } from './ibp-orchestration.js'
+
 /** Marca del formato. Si algún día cambia la forma del archivo, esto es lo que lo distingue. */
 export const FILE_FORMAT = 'goscm.cids.orchestrations.v1'
 
@@ -29,6 +31,11 @@ export function toFile(orquestaciones) {
  * Acepta también el formato viejo de v9, donde una orquestación podía guardarse como una lista plana
  * de pasos (`steps`) en vez de un grafo. Se convierte aquí, al entrar: el motor de v9 lo hacía al
  * vuelo en cada ejecución, y hacerlo una vez al importar deja un solo formato guardado.
+ *
+ * Y el del orquestador de IBP de v8, que también guardaba `steps` pero con plantillas de trabajo
+ * (`jobTemplateName`) y grupos (`children`). Antes se leía como si fuera de v9, no encontraba ninguna
+ * tarea y entraba vacía. Se reconoce por esos campos y se arma como lo guarda la pantalla de IBP:
+ * los pasos en cadena y los hijos de cada grupo en paralelo.
  */
 export function fromFile(contenido) {
   const crudas = Array.isArray(contenido)
@@ -48,7 +55,9 @@ export function fromFile(contenido) {
       const tieneGrafo = Array.isArray(una.nodes) && una.nodes.length > 0
       const { nodes, edges } = tieneGrafo
         ? { nodes: una.nodes, edges: Array.isArray(una.edges) ? una.edges : [] }
-        : dePasosPlanos(una.steps)
+        : isV8Steps(una.steps)
+          ? stepsToGraph(stepsFromV8File(una.steps))
+          : dePasosPlanos(una.steps)
 
       return { name: nombre, nodes, edges }
     })

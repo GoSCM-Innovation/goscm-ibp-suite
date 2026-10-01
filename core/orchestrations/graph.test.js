@@ -109,11 +109,60 @@ describe('normalizeGraph', () => {
       expect(soloDatos({}).label).toBe('Sin nombre')
     })
 
+    // Sin esto cada paso de IBP se guardaba sin plantilla y fallaba al ejecutarse.
+    it('conserva la plantilla y el texto de un paso de IBP', () => {
+      const datos = soloDatos({ templateName: 'ZCARGA', jobText: 'Carga diaria' })
+      expect(datos).toMatchObject({ templateName: 'ZCARGA', jobText: 'Carga diaria', label: 'Carga diaria' })
+    })
+
+    it('acepta los nombres con que v8 exportaba la plantilla', () => {
+      expect(soloDatos({ jobTemplateName: 'ZCARGA', jobTemplateText: 'Carga' }))
+        .toMatchObject({ templateName: 'ZCARGA', jobText: 'Carga' })
+    })
+
+    it('un paso de CI-DS no gana campos de IBP', () => {
+      const datos = soloDatos({ taskName: 'CARGA' })
+      expect(datos).not.toHaveProperty('templateName')
+      expect(datos).not.toHaveProperty('jobText')
+    })
+
+    it('sin texto, la etiqueta de un paso de IBP es el nombre técnico de la plantilla', () => {
+      expect(soloDatos({ templateName: 'ZCARGA' }).label).toBe('ZCARGA')
+    })
+
+    it('la etiqueta de un grupo puede quedar vacía: es una descripción opcional', () => {
+      const [grupo] = normalizeGraph({ nodes: [{ id: 'g', type: 'group', data: {} }] }).nodes
+      expect(grupo.data.label).toBe('')
+    })
+
     it('descarta variables sin nombre y pasa los valores a texto', () => {
       const { globalVariables } = soloDatos({
         globalVariables: [{ name: 'FECHA', value: 20260804 }, { name: '', value: 'x' }, {}],
       })
       expect(globalVariables).toEqual([{ name: 'FECHA', value: '20260804' }])
+    })
+  })
+
+  // Los de IBP son los del orquestador de v8; los de CI-DS siguen siendo los de v9.
+  describe('topes de reintentos según el tipo de conexión', () => {
+    const datosDe = (kind, data) => normalizeGraph({ nodes: [{ ...tarea('a'), data }] }, { kind }).nodes[0].data
+
+    it('IBP: de 1 a 10 reintentos, 3 por omisión', () => {
+      expect(datosDe('ibp', { maxRetries: 99 }).maxRetries).toBe(10)
+      expect(datosDe('ibp', { maxRetries: 0 }).maxRetries).toBe(1)
+      expect(datosDe('ibp', {}).maxRetries).toBe(3)
+    })
+
+    it('IBP: espera de 10 a 3600 s, 60 por omisión', () => {
+      expect(datosDe('ibp', { retryDelaySec: 1 }).retryDelaySeconds).toBe(10)
+      expect(datosDe('ibp', { retryDelaySeconds: 99999 }).retryDelaySeconds).toBe(3600)
+      expect(datosDe('ibp', {}).retryDelaySeconds).toBe(60)
+    })
+
+    it('CI-DS conserva los suyos, también sin decir el tipo', () => {
+      expect(datosDe('cids', { maxRetries: 9 }).maxRetries).toBe(MAX_RETRIES_LIMIT)
+      expect(datosDe(undefined, {}).retryDelaySeconds).toBe(30)
+      expect(datosDe('cids', {}).maxRetries).toBe(0)
     })
   })
 

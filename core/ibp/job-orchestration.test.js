@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 
 import {
-  estadoParaElMotor, identificadorDeEjecucion, partirIdentificador,
+  CODIGO_CANCELADO, estadoParaElMotor, identificadorDeEjecucion, partirIdentificador,
 } from './job-orchestration.js'
 import { nextStepState } from '../orchestrations/step-outcome.js'
 
@@ -19,6 +19,12 @@ describe('identificadorDeEjecucion', () => {
     expect(partirIdentificador('FA163E6E')).toBeNull()
     expect(partirIdentificador('|7')).toBeNull()
     expect(partirIdentificador(undefined)).toBeNull()
+  })
+
+  // `JobSchedule` no siempre devuelve la repetición. Rechazarlo dejaba el paso corriendo para siempre.
+  it('sin repetición se parte igual, para preguntar solo por el nombre', () => {
+    expect(identificadorDeEjecucion('FA163E6E', undefined)).toBe('FA163E6E|')
+    expect(partirIdentificador('FA163E6E|')).toEqual({ jobName: 'FA163E6E', jobRunCount: '' })
   })
 })
 
@@ -39,9 +45,26 @@ describe('estadoParaElMotor', () => {
     expect(run('U')).toMatchObject({ statusCode: 'ERROR' })
   })
 
-  // El monitor lo pinta como un final más; para el motor no hizo su trabajo.
-  it('cancelado es un fallo para el motor', () => {
-    expect(run('C').statusCode).toBe('ERROR')
+  // v8 daba «saltado» por terminado y lo contaba como error.
+  it('saltado (K) también es un fallo', () => {
+    expect(run('K').statusCode).toBe('ERROR')
+  })
+
+  // Como en v8: cancelado no es un fallo, el paso queda «Cancelado» y la cadena sigue.
+  it('cancelado (C) y borrado (D) son cancelados', () => {
+    expect(run('C').statusCode).toBe(CODIGO_CANCELADO)
+    expect(run('D').statusCode).toBe(CODIGO_CANCELADO)
+  })
+
+  // v8 no los daba por terminados: se sigue preguntando.
+  it('desconocido (X), por saltar (k) y cancelándose (c) no son finales', () => {
+    for (const letra of ['X', 'k', 'c']) expect(run(letra).statusCode).toBe('RUNNING')
+  })
+
+  // La pantalla de v8 la enseñaba junto al trabajo: «Job: … [F]».
+  it('devuelve la letra de SAP tal cual', () => {
+    expect(run('F').codigoSap).toBe('F')
+    expect(estadoParaElMotor(null)).not.toHaveProperty('codigoSap')
   })
 
   it('lo que sigue en marcha no decide nada', () => {
@@ -79,7 +102,7 @@ describe('estadoParaElMotor', () => {
 // pasaban igual, porque el problema no estaba en lo que devolvía sino en lo que el motor hace con eso.
 describe('lo que el motor decide con cada traducción', () => {
   const enMarcha = { status: 'running', sapRunId: 'J|1', retryCount: 0 }
-  const decidir = (run) => nextStepState(enMarcha, estadoParaElMotor(run), {}, 1000)
+  const decidir = (run) => nextStepState(enMarcha, estadoParaElMotor(run), {}, 1000, { cancelledCodes: [CODIGO_CANCELADO] })
 
   it('una ejecución sin registrar deja el paso corriendo', () => {
     expect(decidir(null).status).toBe('running')
@@ -97,8 +120,12 @@ describe('lo que el motor decide con cada traducción', () => {
     expect(decidir({ JobStatus: 'A' }).status).toBe('error')
   })
 
-  it('un trabajo cancelado también', () => {
-    expect(decidir({ JobStatus: 'C' }).status).toBe('error')
+  it('un trabajo cancelado deja el paso cancelado, no fallado', () => {
+    expect(decidir({ JobStatus: 'C' })).toMatchObject({ status: 'cancelled', error: 'SAP: C' })
+  })
+
+  it('uno desconocido para SAP (X) sigue esperando', () => {
+    expect(decidir({ JobStatus: 'X' }).status).toBe('running')
   })
 
   it('uno en marcha no decide nada', () => {

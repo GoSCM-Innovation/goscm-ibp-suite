@@ -28,12 +28,33 @@ export const ERROR_STRATEGIES = Object.freeze(['stop', 'continue', 'retry'])
  */
 export const EXECUTION_MODES = Object.freeze(['parallel', 'serial'])
 
-/** Tipos de nodo. Un `group` agrupa a otros; un `task` es una tarea de CI-DS. */
+/**
+ * Tipos de nodo. Un `group` agrupa a otros; un `task` es un paso: una tarea de CI-DS o una plantilla
+ * de Application Job de IBP.
+ */
 export const NODE_TYPES = Object.freeze(['task', 'group'])
 
 /** Topes de los reintentos, de v9. */
 export const MAX_RETRIES_LIMIT = 5
 export const MAX_RETRY_DELAY_SECONDS = 3600
+
+/**
+ * Los reintentos de cada tipo de conexión: mínimo, máximo y valor por omisión.
+ *
+ * No son los mismos porque vienen de dos aplicaciones distintas y cada una se porta tal cual era:
+ * CI-DS los de v9 (hasta 5, espera de 30 s) y los Application Jobs de IBP los del orquestador de v8,
+ * cuyas casillas iban de 1 a 10 reintentos y de 10 a 3600 segundos, con 3 y 60 al crear un paso.
+ */
+export const RETRY_LIMITS = Object.freeze({
+  cids: Object.freeze({
+    maxRetries: Object.freeze({ min: 0, max: MAX_RETRIES_LIMIT, porOmision: 0 }),
+    retryDelaySeconds: Object.freeze({ min: 0, max: MAX_RETRY_DELAY_SECONDS, porOmision: 30 }),
+  }),
+  ibp: Object.freeze({
+    maxRetries: Object.freeze({ min: 1, max: 10, porOmision: 3 }),
+    retryDelaySeconds: Object.freeze({ min: 10, max: 3600, porOmision: 60 }),
+  }),
+})
 
 /**
  * La librería del lienzo nombra sus tipos distinto de como se guardan. Se traduce en la frontera para
@@ -57,28 +78,47 @@ const aTextoOnulo = (valor) => {
   return texto === '' ? null : texto
 }
 
-/** Lo que configura un nodo: qué tarea corre, con qué, y qué hacer si falla. */
-function normalizarDatos(datos = {}) {
+/**
+ * Lo que configura un nodo: qué corre, con qué, y qué hacer si falla.
+ *
+ * Un paso de IBP dice qué plantilla lanzar (`templateName`) y con qué texto (`jobText`). Se guardan
+ * SOLO cuando vienen, para que una orquestación de CI-DS siga guardándose igual que antes. Perderlos
+ * aquí dejaba cada paso de IBP sin plantilla: se guardaba, y al ejecutarlo fallaba con «El paso no
+ * dice qué plantilla de trabajo lanzar.». También se aceptan los nombres con que los exportaba v8
+ * (`jobTemplateName`, `jobTemplateText`).
+ *
+ * La etiqueta de un GRUPO puede quedar vacía: en v8 era una descripción opcional, y rellenarla con
+ * «Sin nombre» la haría aparecer escrita en la casilla al volver a abrirlo.
+ */
+function normalizarDatos(datos = {}, { tipo, limites }) {
+  const templateName = aTextoOnulo(datos.templateName) ?? aTextoOnulo(datos.jobTemplateName)
+  const jobText = aTextoOnulo(datos.jobText) ?? aTextoOnulo(datos.jobTemplateText)
+
+  const etiqueta = aTextoOnulo(datos.label)
+  const label = tipo === 'group'
+    ? etiqueta ?? ''
+    : etiqueta ?? aTextoOnulo(datos.taskName) ?? jobText ?? templateName ?? 'Sin nombre'
+
   return {
     taskName: aTextoOnulo(datos.taskName),
     taskGuid: aTextoOnulo(datos.taskGuid),
     taskType: aTextoOnulo(datos.taskType),
-    label: aTextoOnulo(datos.label) ?? aTextoOnulo(datos.taskName) ?? 'Sin nombre',
+    ...(templateName ? { templateName } : {}),
+    ...(jobText ? { jobText } : {}),
+    label,
     agentName: aTextoOnulo(datos.agentName),
     profileName: aTextoOnulo(datos.profileName),
     globalVariables: (Array.isArray(datos.globalVariables) ? datos.globalVariables : [])
       .map((variable) => ({ name: String(variable?.name ?? ''), value: String(variable?.value ?? '') }))
       .filter((variable) => variable.name !== ''),
     errorStrategy: ERROR_STRATEGIES.includes(datos.errorStrategy) ? datos.errorStrategy : 'stop',
-    maxRetries: aEntero(datos.maxRetries, { min: 0, max: MAX_RETRIES_LIMIT, porOmision: 0 }),
-    retryDelaySeconds: aEntero(datos.retryDelaySeconds ?? datos.retryDelaySec, {
-      min: 0, max: MAX_RETRY_DELAY_SECONDS, porOmision: 30,
-    }),
+    maxRetries: aEntero(datos.maxRetries, limites.maxRetries),
+    retryDelaySeconds: aEntero(datos.retryDelaySeconds ?? datos.retryDelaySec, limites.retryDelaySeconds),
     executionMode: datos.executionMode === 'serial' ? 'serial' : 'parallel',
   }
 }
 
-function normalizarNodo(nodo, indice) {
+function normalizarNodo(nodo, indice, limites) {
   if (!nodo?.id) throw new Error(`El nodo en la posición ${indice} no tiene identificador.`)
 
   const tipo = TIPOS_DEL_LIENZO[nodo.type] ?? nodo.type
@@ -90,7 +130,7 @@ function normalizarNodo(nodo, indice) {
     id: String(nodo.id),
     type: tipo,
     position: { x: aNumero(nodo.position?.x), y: aNumero(nodo.position?.y) },
-    data: normalizarDatos(nodo.data),
+    data: normalizarDatos(nodo.data, { tipo, limites }),
   }
 
   // `parentId` es lo que mete un nodo dentro de un grupo. `extent: 'parent'` es de la librería del
@@ -156,12 +196,16 @@ function nodosQueNuncaCorrerian(nodos, aristas) {
  *
  * Lanza con un mensaje que se pueda mostrar: quien guarda es una persona que acaba de dibujar algo y
  * tiene que poder arreglarlo.
+ *
+ * `kind` es el tipo de la conexión (`cids` o `ibp`) y solo decide los topes de los reintentos; sin
+ * él valen los de CI-DS, que eran los únicos que había.
  */
-export function normalizeGraph({ nodes = [], edges = [] } = {}) {
+export function normalizeGraph({ nodes = [], edges = [] } = {}, { kind = 'cids' } = {}) {
   if (!Array.isArray(nodes)) throw new Error('Los nodos tienen que venir en una lista.')
   if (!Array.isArray(edges)) throw new Error('Las conexiones tienen que venir en una lista.')
 
-  const nodosNormalizados = nodes.map(normalizarNodo)
+  const limites = RETRY_LIMITS[kind] ?? RETRY_LIMITS.cids
+  const nodosNormalizados = nodes.map((nodo, indice) => normalizarNodo(nodo, indice, limites))
   const aristasNormalizadas = edges.map(normalizarArista)
 
   const identificadores = new Set()

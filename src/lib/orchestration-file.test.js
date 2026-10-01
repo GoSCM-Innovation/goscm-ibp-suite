@@ -31,6 +31,30 @@ describe('toFile', () => {
 })
 
 describe('fromFile', () => {
+  // Antes entraba vacía: se leía como un archivo de v9 y no encontraba ninguna `taskName`.
+  it('lee un archivo del orquestador de IBP de v8: cadena de pasos y grupos en paralelo', () => {
+    const [una] = fromFile({
+      version: '1.0',
+      orchestrations: [{
+        name: 'Cierre',
+        steps: [
+          { id: 's1', type: 'task', jobTemplateName: 'ZA', jobTemplateText: 'Carga A', errorStrategy: 'retry', maxRetries: 5, retryDelaySec: 120 },
+          { id: 'g1', type: 'group', label: 'Paralelo', children: [
+            { id: 'c1', type: 'task', jobTemplateName: 'ZB' },
+            { id: 'c2', type: 'task', jobTemplateName: 'ZC' },
+          ] },
+          { id: 's2', type: 'task', jobTemplateName: 'ZD' },
+        ],
+      }],
+    })
+
+    expect(una.name).toBe('Cierre')
+    expect(una.nodes.find((n) => n.id === 's1').data)
+      .toMatchObject({ templateName: 'ZA', jobText: 'Carga A', maxRetries: 5, retryDelaySeconds: 120 })
+    expect(una.nodes.filter((n) => n.parentId === 'g1').map((n) => n.id)).toEqual(['c1', 'c2'])
+    expect(una.edges.map((e) => [e.source, e.target])).toEqual([['s1', 'g1'], ['g1', 's2']])
+  })
+
   it('lee lo que escribió toFile', () => {
     expect(fromFile(toFile([orquestacion]))).toEqual([
       { name: 'Carga diaria', nodes: orquestacion.nodes, edges: [] },

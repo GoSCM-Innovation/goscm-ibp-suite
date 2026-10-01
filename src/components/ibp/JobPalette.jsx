@@ -93,7 +93,7 @@ export default function JobPalette({ destino, onAgregar, onAgregarGrupo }) {
 
         {plantillas !== null && plantillas.length > visibles.length && (
           <div className="page-hint">
-            y {plantillas.length - visibles.length} más; afiná la búsqueda para verlas.
+            y {plantillas.length - visibles.length} más; afina la búsqueda para verlas.
           </div>
         )}
       </div>
