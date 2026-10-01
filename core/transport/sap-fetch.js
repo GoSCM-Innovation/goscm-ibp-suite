@@ -79,7 +79,12 @@ export function extractSapError(text) {
  * Pide el token de escritura y las cookies de sesión. Se piden UNA vez por operación y se
  * reutilizan en todos sus envíos.
  */
-export async function fetchCsrf({ serviceRoot, credentials, kind = 'ibp' }) {
+export async function fetchCsrf({ serviceRoot: raiz, credentials, kind = 'ibp' }) {
+  // La raíz de un servicio se escribe sin barra final (`.../MASTER_DATA_API_SRV`), pero el portero
+  // exige una barra después del nombre del servicio para reconocerlo. Sin ella rechazaba la raíz de
+  // TODAS las escrituras: «La ruta no es un servicio de OData de IBP». SAP contesta lo mismo con la
+  // barra: es el documento del servicio.
+  const serviceRoot = String(raiz).split('?')[0].replace(/\/?$/, '/')
   await assertSapUrl(serviceRoot, { kind })
 
   const response = await fetch(serviceRoot, {

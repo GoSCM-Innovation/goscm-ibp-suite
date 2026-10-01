@@ -192,6 +192,22 @@ describe('token de escritura', () => {
     expect(fetch.mock.calls[0][1].headers['X-CSRF-Token']).toBeUndefined()
   })
 
+  // La raíz de un servicio no lleva barra final. El portero la rechazaba y TODA escritura fallaba con
+  // «La ruta no es un servicio de OData de IBP» antes de llegar a SAP.
+  it('pide el token a la raíz del servicio aunque venga sin barra final', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => respuesta({ headers: { 'x-csrf-token': 'T' } })))
+    const raiz = 'https://c-api.scmibp.ondemand.com/sap/opu/odata/IBP/MASTER_DATA_API_SRV'
+    await expect(fetchCsrf({ serviceRoot: raiz, credentials: CREDENCIALES })).resolves.toMatchObject({ token: 'T' })
+    expect(fetch.mock.calls[0][0]).toBe(`${raiz}/`)
+  })
+
+  it('con barra final tampoco la duplica', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => respuesta({ headers: { 'x-csrf-token': 'T' } })))
+    const raiz = 'https://c-api.scmibp.ondemand.com/sap/opu/odata/IBP/PLANNING_DATA_API_SRV/'
+    await fetchCsrf({ serviceRoot: raiz, credentials: CREDENCIALES })
+    expect(fetch.mock.calls[0][0]).toBe(raiz)
+  })
+
   it('revienta si SAP no entrega token', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => respuesta({})))
     await expect(fetchCsrf({ serviceRoot: URL_IBP, credentials: CREDENCIALES }))
