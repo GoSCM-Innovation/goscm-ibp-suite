@@ -14,6 +14,32 @@
 
 import { isStepDone } from './step-outcome.js'
 
+/**
+ * Las reglas del motor que NO son iguales para todos los tipos de conexión.
+ *
+ * El motor es uno solo, pero sustituye a dos orquestadores que se portan cada uno tal cual: el de v9
+ * para CI-DS y el de v8 para los Application Jobs de IBP. En lo que el usuario ve —qué pasa con un
+ * paso cancelado, si se avisa a SAP al cortar, cómo termina la ejecución— los dos no decidían igual,
+ * y aquí está escrita cada diferencia con su nombre. Cada adaptador trae la suya (`politica`, en
+ * `adapters.js`); esta es la de CI-DS, que también vale cuando un adaptador no trae ninguna.
+ *
+ *   - `cancelInSap`: al cortar, pedirle a SAP que detenga lo que está corriendo.
+ *   - `cancelledBlocks`: un paso cancelado saltea lo que viene detrás.
+ *   - `exhaustedRetryBlocks`: un paso con «reintentar» que agotó los reintentos saltea lo que viene
+ *     detrás (si no, se trata como «continuar»).
+ *   - `assumedFailureFailsRun`: un paso fallado con «continuar» deja la ejecución en error al final.
+ *   - `cancelledChildCancelsGroup`: un hijo cancelado deja cancelado a su grupo.
+ *   - `cancelledCodes`: los códigos de SAP que dejan el paso cancelado. Ver `nextStepState`.
+ */
+export const DEFAULT_RUN_POLICY = Object.freeze({
+  cancelInSap: true,
+  cancelledBlocks: true,
+  exhaustedRetryBlocks: false,
+  assumedFailureFailsRun: true,
+  cancelledChildCancelsGroup: false,
+  cancelledCodes: Object.freeze([]),
+})
+
 /** El estado inicial de un paso, antes de que arranque nada. */
 const pasoPendiente = (nodeId) => ({
   nodeId,
@@ -70,15 +96,23 @@ export function directPredecessors(nodes, edges) {
  *   - un predecesor salteado arrastra a los que vienen detrás;
  *   - un predecesor fallado lo bloquea SOLO si su estrategia era parar. Con "continuar" el fallo se
  *     da por asumido y la cadena sigue, que es justamente para lo que existe esa estrategia.
+ *
+ * Con la política de IBP (v8) cambian dos cosas: un paso cancelado NO bloquea, y uno que agotó sus
+ * reintentos SÍ. Ver `DEFAULT_RUN_POLICY`.
  */
-export function decideForPending(predecesores, estados, configPorId) {
+export function decideForPending(predecesores, estados, configPorId, politica = DEFAULT_RUN_POLICY) {
   const todosTerminados = predecesores.every((id) => isStepDone(estados[id]?.status))
   if (!todosTerminados) return 'esperar'
 
   const bloqueado = predecesores.some((id) => {
     const estado = estados[id]?.status
-    if (estado === 'skipped' || estado === 'cancelled') return true
-    if (estado === 'error') return (configPorId[id]?.errorStrategy ?? 'stop') === 'stop'
+    if (estado === 'skipped') return true
+    if (estado === 'cancelled') return politica.cancelledBlocks
+    if (estado === 'error') {
+      const estrategia = configPorId[id]?.errorStrategy ?? 'stop'
+      if (estrategia === 'stop') return true
+      return estrategia === 'retry' && politica.exhaustedRetryBlocks
+    }
     return false
   })
 
@@ -90,11 +124,37 @@ export function decideForPending(predecesores, estados, configPorId) {
  *
  * Sigue corriendo mientras quede alguno sin terminar. Una sola fallada la deja fallada: si algo no
  * se hizo, decir que la carga salió bien sería mentir.
+ *
+ * Salvo con la política de IBP: allí, como en v8, un paso fallado con «continuar» no cuenta —la
+ * cadena siguió y la ejecución termina «Completado»—. Para eso hace falta la configuración de cada
+ * paso (`configPorId`).
  */
-export function runOutcome(topNodeIds, estados) {
+export function runOutcome(topNodeIds, estados, { configPorId = {}, politica = DEFAULT_RUN_POLICY } = {}) {
   const terminados = topNodeIds.every((id) => isStepDone(estados[id]?.status))
   if (!terminados) return 'running'
-  return topNodeIds.some((id) => estados[id]?.status === 'error') ? 'error' : 'success'
+
+  const fallada = topNodeIds.some((id) => {
+    if (estados[id]?.status !== 'error') return false
+    if (politica.assumedFailureFailsRun) return true
+    return (configPorId[id]?.errorStrategy ?? 'stop') !== 'continue'
+  })
+  return fallada ? 'error' : 'success'
+}
+
+/**
+ * Cómo quedó un grupo mirando sus hijos.
+ *
+ * Un hijo fallado deja fallado al grupo, sea cual sea la estrategia del hijo: la que decide si la
+ * cadena sigue es la del GRUPO. Con la política de IBP, además, un hijo cancelado deja cancelado al
+ * grupo —antes que un fallo, como en v8— y la cadena sigue.
+ */
+export function groupOutcome(childIds, estados, politica = DEFAULT_RUN_POLICY) {
+  const terminados = childIds.every((id) => isStepDone(estados[id]?.status))
+  if (!terminados) return 'running'
+  if (politica.cancelledChildCancelsGroup && childIds.some((id) => estados[id]?.status === 'cancelled')) {
+    return 'cancelled'
+  }
+  return childIds.some((id) => estados[id]?.status === 'error') ? 'error' : 'success'
 }
 
 /**

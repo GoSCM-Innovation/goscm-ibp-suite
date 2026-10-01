@@ -170,5 +170,7 @@ export async function scheduleJob({ baseUrl, credentials, templateName, jobText,
 
   const { json } = await sapFetch({ url, method: 'POST', credentials, kind: 'ibp', serviceRoot: raiz })
   const creado = json?.d ?? json ?? {}
-  return { ok: true, jobName: creado.JobName ?? '', jobRunCount: creado.JobRunCount ?? '' }
+  // Hay tenants que devuelven el trabajo dentro de `JobSchedule`; el orquestador de v8 miraba los dos.
+  const trabajo = creado.JobName ? creado : (creado.JobSchedule ?? creado)
+  return { ok: true, jobName: trabajo.JobName ?? '', jobRunCount: trabajo.JobRunCount ?? '' }
 }

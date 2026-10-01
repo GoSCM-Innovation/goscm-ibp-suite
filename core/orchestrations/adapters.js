@@ -10,12 +10,43 @@
 
 import { getConnectionTarget, getCredentials } from '../connections/index.js'
 import { runCidsOperation } from '../cids/operations.js'
-import { estadoParaElMotor, identificadorDeEjecucion, partirIdentificador } from '../ibp/job-orchestration.js'
-import { cancelJobRun, readJobRun } from '../ibp/job-runs.js'
+import {
+  CODIGO_CANCELADO,
+  estadoParaElMotor,
+  identificadorDeEjecucion,
+  partirIdentificador,
+} from '../ibp/job-orchestration.js'
+import { cancelJobRun, readJobRun, readLatestTemplateRun } from '../ibp/job-runs.js'
 import { scheduleJob } from '../ibp/job-schedule.js'
 
 /** El acuerdo de los Application Jobs. */
 const ACUERDO_DE_TRABAJOS = 'SAP_COM_0326'
+
+/**
+ * Cuánto esperaba v8 antes de buscar el trabajo que `JobSchedule` no nombró. Ver `lanzar` de IBP.
+ */
+export const ESPERA_ANTES_DE_BUSCAR_MS = 2000
+
+const esperar = (ms) => new Promise((resolver) => { setTimeout(resolver, ms) })
+
+/**
+ * Las reglas de ejecución de los Application Jobs: las del orquestador de v8 (`useOrchRun.js`), en
+ * lo que difiere del de v9. Ver `DEFAULT_RUN_POLICY` en `run-state.js` para qué es cada una.
+ *
+ *   - Cortar no le pide nada a SAP: v8 solo dejaba de preguntar.
+ *   - Un trabajo `C` o `D` deja el paso «Cancelado» y la cadena SIGUE; un hijo cancelado deja
+ *     cancelado a su grupo.
+ *   - Agotar los reintentos PARA la cadena, igual que «Detener si falla».
+ *   - Un paso fallado con «Continuar si falla» no deja la ejecución en error: termina «Completado».
+ */
+export const POLITICA_IBP = Object.freeze({
+  cancelInSap: false,
+  cancelledBlocks: false,
+  exhaustedRetryBlocks: true,
+  assumedFailureFailsRun: false,
+  cancelledChildCancelsGroup: true,
+  cancelledCodes: Object.freeze([CODIGO_CANCELADO]),
+})
 
 const adaptadorCids = {
   /** Lanza una tarea en CI-DS y devuelve el identificador de la ejecución. */
@@ -59,11 +90,17 @@ async function tenantDeIbp({ clientId, connectionId }) {
 }
 
 const adaptadorIbp = {
+  politica: POLITICA_IBP,
+
   /**
    * Lanza una plantilla de Application Job.
    *
-   * El usuario con el que SAP lo corre lo decide el servidor, igual que en la pantalla de trabajos:
-   * dejar que lo ponga la orquestación sería una forma de correr algo en nombre de un tercero.
+   * El usuario con el que SAP lo corre es el de comunicación de la conexión, el mismo que manda la
+   * pantalla «Job Templates» (y el que v8 inyectaba en `JobUser`). Lo pone el servidor: dejar que lo
+   * diga la orquestación sería una forma de correr algo en nombre de un tercero.
+   *
+   * Si `JobSchedule` no devuelve el nombre del trabajo creado, se hace lo que hacía v8: esperar dos
+   * segundos y tomar el último trabajo de esa plantilla.
    */
   async lanzar(destino, nodo) {
     const datos = nodo.data ?? {}
@@ -74,10 +111,15 @@ const adaptadorIbp = {
       ...tenant,
       templateName: datos.templateName,
       jobText: datos.jobText || datos.templateName,
+      jobUser: tenant.credentials?.user,
     })
 
-    if (!salida?.jobName) throw new Error(`SAP no devolvió la ejecución de "${datos.templateName}".`)
-    return identificadorDeEjecucion(salida.jobName, salida.jobRunCount ?? '')
+    if (salida?.jobName) return identificadorDeEjecucion(salida.jobName, salida.jobRunCount ?? '')
+
+    await esperar(ESPERA_ANTES_DE_BUSCAR_MS)
+    const ultimo = await readLatestTemplateRun({ ...tenant, templateName: datos.templateName })
+    if (!ultimo?.JobName) throw new Error(`No se encontró el job programado para ${datos.templateName}`)
+    return identificadorDeEjecucion(ultimo.JobName, ultimo.JobRunCount ?? '')
   },
 
   /**
@@ -87,6 +129,9 @@ const adaptadorIbp = {
    * por vuelta y por cada paso en marcha, así que traer el lote entero para buscar dentro sería
    * pagar una lectura de dos mil filas muchas veces.
    *
+   * Sin repetición se pregunta solo por el nombre, como v8, y la que conteste SAP se devuelve en
+   * `sapRunId` para que el motor la guarde: sin ella no se pueden abrir los «Steps SAP» del paso.
+   *
    * Si SAP todavía no la registró, `estadoParaElMotor` lo traduce como «en cola» y no como fallo.
    */
   async consultar(destino, sapRunId) {
@@ -94,10 +139,22 @@ const adaptadorIbp = {
     if (!partes) throw new Error(`Identificador de ejecución ilegible: "${sapRunId}".`)
 
     const tenant = await tenantDeIbp(destino)
-    return estadoParaElMotor(await readJobRun({ ...tenant, ...partes }))
+    const fila = await readJobRun({ ...tenant, ...partes })
+    const estado = estadoParaElMotor(fila)
+
+    const repeticion = fila?.JobRunCount
+    if (!partes.jobRunCount && repeticion !== undefined && repeticion !== null && repeticion !== '') {
+      return { ...estado, sapRunId: identificadorDeEjecucion(partes.jobName, repeticion) }
+    }
+    return estado
   },
 
-  /** Le pide a SAP que detenga la ejecución. Solo se puede con las que están en marcha. */
+  /**
+   * Le pide a SAP que detenga la ejecución. Solo se puede con las que están en marcha.
+   *
+   * El motor NO lo llama para IBP (`cancelInSap: false`); queda para el día que se decida avisar a
+   * SAP al cortar, que es una decisión de producto y no de código.
+   */
   async cancelar(destino, sapRunId) {
     const partes = partirIdentificador(sapRunId)
     if (!partes) return null

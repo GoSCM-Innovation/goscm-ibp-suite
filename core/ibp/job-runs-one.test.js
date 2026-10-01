@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 vi.mock('../transport/sap-fetch.js', () => ({ sapFetch: vi.fn() }))
 
 const { sapFetch } = await import('../transport/sap-fetch.js')
-const { readJobRun } = await import('./job-runs.js')
+const { readJobRun, readLatestTemplateRun } = await import('./job-runs.js')
 
 const ctx = { baseUrl: 'https://tenant-api.scmibp1.ondemand.com', credentials: { user: 'u', password: 'p' } }
 
@@ -49,5 +49,30 @@ describe('readJobRun', () => {
     sapFetch.mockResolvedValueOnce({ json: { d: { results: [] } } })
     await readJobRun({ ...ctx, jobName: "O'Brien" })
     expect(urlDe()).toContain("JobName eq 'O''Brien'")
+  })
+})
+
+// El respaldo de v8 cuando `JobSchedule` no devuelve el nombre del trabajo creado.
+describe('readLatestTemplateRun', () => {
+  it('pide la última de la plantilla por fecha planificada, una sola fila', async () => {
+    sapFetch.mockResolvedValueOnce({ json: { d: { results: [{ JobName: 'J9', JobRunCount: '1' }] } } })
+
+    await expect(readLatestTemplateRun({ ...ctx, templateName: 'ZCARGA' }))
+      .resolves.toMatchObject({ JobName: 'J9' })
+
+    const url = urlDe()
+    expect(url).toContain("JobTemplateName eq 'ZCARGA'")
+    expect(url).toContain('$orderby=JobPlannedStartDateTime desc')
+    expect(url).toContain('$top=1')
+  })
+
+  it('sin ejecuciones devuelve null', async () => {
+    sapFetch.mockResolvedValueOnce({ json: { d: { results: [] } } })
+    await expect(readLatestTemplateRun({ ...ctx, templateName: 'ZCARGA' })).resolves.toBeNull()
+  })
+
+  it('sin plantilla no llega a SAP', async () => {
+    await expect(readLatestTemplateRun({ ...ctx, templateName: '' })).resolves.toBeNull()
+    expect(sapFetch).not.toHaveBeenCalled()
   })
 })

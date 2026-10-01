@@ -224,6 +224,12 @@ describe('scheduleJob', () => {
     expect(salida).toEqual({ ok: true, jobName: 'J1', jobRunCount: '7' })
   })
 
+  it('lee el trabajo también cuando SAP lo devuelve dentro de JobSchedule', async () => {
+    sapFetch.mockResolvedValueOnce({ json: { d: { JobSchedule: { JobName: 'J2', JobRunCount: '3' } } } })
+    await expect(scheduleJob({ baseUrl: BASE, credentials: cred, templateName: 'T' }))
+      .resolves.toEqual({ ok: true, jobName: 'J2', jobRunCount: '3' })
+  })
+
   it('sin texto usa el nombre de la plantilla', async () => {
     sapFetch.mockResolvedValueOnce({ json: {} })
     await scheduleJob({ baseUrl: BASE, credentials: cred, templateName: 'T' })

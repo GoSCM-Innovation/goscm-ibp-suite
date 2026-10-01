@@ -188,3 +188,29 @@ describe('isStepDone', () => {
     expect(isStepDone(estado)).toBe(false)
   })
 })
+
+// Lo que añade la política de un adaptador; sin ella, CI-DS sigue igual.
+describe('nextStepState con política', () => {
+  const politica = { cancelledCodes: ['CANCELLED'] }
+
+  it('un código de cancelado deja el paso cancelado, sin reintentos', () => {
+    const siguiente = nextStepState(corriendo(), { statusCode: 'CANCELLED', codigoSap: 'C' },
+      { errorStrategy: 'retry', maxRetries: 3 }, AHORA, politica)
+    expect(siguiente).toMatchObject({ status: 'cancelled', error: 'SAP: C', retryCount: 0 })
+    expect(siguiente.finishedAt).toBeTruthy()
+  })
+
+  it('sin la política, ese código no significa nada para el motor', () => {
+    expect(decidir({ statusCode: 'CANCELLED' }).status).toBe('running')
+  })
+
+  // Los mensajes del orquestador de v8 cuando SAP manda su letra.
+  it('con la letra de SAP, el fallo dice «SAP: A»', () => {
+    expect(decidir({ statusCode: 'ERROR', statusMsg: 'Fallado', codigoSap: 'A' }).error).toBe('SAP: A')
+  })
+
+  it('con la letra de SAP, el reintento dice «Reintentando 1/3…»', () => {
+    const siguiente = decidir({ statusCode: 'ERROR', codigoSap: 'A' }, { errorStrategy: 'retry', maxRetries: 3 })
+    expect(siguiente).toMatchObject({ status: 'pending', error: 'Reintentando 1/3…' })
+  })
+})

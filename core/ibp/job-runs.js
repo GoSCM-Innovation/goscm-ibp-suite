@@ -144,6 +144,30 @@ export async function readJobRun({ baseUrl, credentials, jobName, jobRunCount })
   return filas[0] ?? null
 }
 
+/**
+ * La ejecución más reciente de una plantilla. `null` si no tiene ninguna.
+ *
+ * Es el respaldo del orquestador de v8 cuando `JobSchedule` no devolvía el nombre del trabajo que
+ * acababa de crear: esperaba dos segundos y leía el último de esa plantilla por fecha planificada.
+ * La misma consulta, con el `$select` de siempre para no traer la fila entera.
+ */
+export async function readLatestTemplateRun({ baseUrl, credentials, templateName }) {
+  if (!templateName) return null
+
+  const consulta = `$select=${encodeURIComponent(JOB_HEADER_SELECT.join(','))}`
+    + `&$filter=${encodeURIComponent(`JobTemplateName eq '${literal(templateName)}'`)}`
+    + `&$orderby=${encodeURIComponent('JobPlannedStartDateTime desc')}&$top=1`
+
+  const { json } = await sapFetch({
+    url: `${appJobRoot(baseUrl)}/JobHeaderSet?${consulta}&$format=json`,
+    credentials,
+    kind: 'ibp',
+  })
+
+  const filas = json?.d?.results ?? json?.value ?? []
+  return filas[0] ?? null
+}
+
 /** El catálogo de estados que describe el tenant. Las etiquetas vienen de SAP. */
 export async function readJobStatuses({ baseUrl, credentials }) {
   return readAllPages({ baseUrl, credentials, entity: 'JobStatusInfoSet' })

@@ -15,7 +15,15 @@ import { getRedis, globalKey, tenantKey } from '../persistence/redis.js'
 import { getConnectionTarget } from '../connections/index.js'
 import { adaptadorPara } from './adapters.js'
 import { getOrchestration } from './orchestrations.js'
-import { decideForPending, directPredecessors, initRunState, resetForResume, runOutcome } from './run-state.js'
+import {
+  DEFAULT_RUN_POLICY,
+  decideForPending,
+  directPredecessors,
+  groupOutcome,
+  initRunState,
+  resetForResume,
+  runOutcome,
+} from './run-state.js'
 import { isRetryDue, isStepDone, nextStepState } from './step-outcome.js'
 
 /**
@@ -120,8 +128,13 @@ async function conCerrojo(clientId, orchestrationId, hacer) {
   }
 }
 
-// Qué se lanza y cómo se pregunta cómo va depende del tipo de conexión, y solo eso: las reglas de
-// dependencias, grupos y reintentos son las mismas para CI-DS y para IBP. Ver `adapters.js`.
+// Qué se lanza y cómo se pregunta cómo va depende del tipo de conexión. Las reglas de dependencias,
+// grupos y reintentos son las mismas para CI-DS y para IBP, salvo las que cada adaptador declara en
+// su `politica` —las diferencias entre el orquestador de v9 y el de v8—. Ver `adapters.js` y
+// `DEFAULT_RUN_POLICY` en `run-state.js`.
+
+/** La política de un adaptador; sin ella, la de CI-DS. */
+const politicaDe = (adaptador) => ({ ...DEFAULT_RUN_POLICY, ...(adaptador?.politica ?? {}) })
 
 /**
  * Avanza un nivel de pasos: el primer nivel de la orquestación, o los hijos de un grupo.
@@ -129,7 +142,7 @@ async function conCerrojo(clientId, orchestrationId, hacer) {
  * Es la misma lógica en los dos casos, y por eso está una sola vez. Modifica `estados` en el sitio;
  * quien llama lo guarda.
  */
-async function avanzarNivel({ nodos, aristas, estados, destino, adaptador, porOmision, ahora }) {
+async function avanzarNivel({ nodos, aristas, estados, destino, adaptador, porOmision, ahora, politica }) {
   const predecesores = directPredecessors(nodos, aristas)
   const configPorId = Object.fromEntries(nodos.map((nodo) => [nodo.id, nodo.data ?? {}]))
   const porId = Object.fromEntries(nodos.map((nodo) => [nodo.id, nodo]))
@@ -142,6 +155,9 @@ async function avanzarNivel({ nodos, aristas, estados, destino, adaptador, porOm
     // Un grupo no se lanza en SAP: no es una tarea. Ponerlo en marcha es todo lo que hace falta —
     // sus hijos empiezan a avanzar solos a partir de la vuelta siguiente.
     if (porId[id].type === 'group') return
+
+    // La letra de SAP de un intento anterior no es de esta ejecución nueva.
+    if ('sapStatus' in paso) paso.sapStatus = null
 
     try {
       paso.sapRunId = await adaptador.lanzar(destino, porId[id], porOmision)
@@ -165,7 +181,12 @@ async function avanzarNivel({ nodos, aristas, estados, destino, adaptador, porOm
       } catch {
         return // No se pudo preguntar: se vuelve a intentar en la vuelta siguiente.
       }
-      Object.assign(paso, nextStepState(paso, sapStatus, configPorId[nodo.id], ahora))
+      // Lo que el adaptador sabe además del estado: el identificador ya completo —un trabajo de IBP
+      // que se lanzó sin número de repetición lo gana al contarlo SAP— y la letra de SAP tal cual,
+      // que la pantalla de IBP enseña junto al trabajo. CI-DS no manda ninguno de los dos.
+      if (sapStatus?.sapRunId) paso.sapRunId = sapStatus.sapRunId
+      if (sapStatus?.codigoSap) paso.sapStatus = sapStatus.codigoSap
+      Object.assign(paso, nextStepState(paso, sapStatus, configPorId[nodo.id], ahora, politica))
       return
     }
 
@@ -180,7 +201,7 @@ async function avanzarNivel({ nodos, aristas, estados, destino, adaptador, porOm
     const paso = estados[nodo.id]
     if (!paso || paso.status !== 'pending' || paso.retryAt) return
 
-    const decision = decideForPending(predecesores.get(nodo.id) ?? [], estados, configPorId)
+    const decision = decideForPending(predecesores.get(nodo.id) ?? [], estados, configPorId, politica)
     if (decision === 'esperar') return
     if (decision === 'saltear') {
       paso.status = 'skipped'
@@ -235,6 +256,7 @@ export async function tickRun(clientId, orchestrationId, ahora = Date.now()) {
       })
     }
     const porOmision = run.defaults ?? {}
+    const politica = politicaDe(adaptador)
     const primerNivel = nodes.filter((nodo) => !nodo.parentId)
 
     // Los grupos que ya arrancaron avanzan por dentro antes de mirar el primer nivel: así un grupo
@@ -252,8 +274,9 @@ export async function tickRun(clientId, orchestrationId, ahora = Date.now()) {
           adaptador,
           porOmision,
           ahora,
+          politica,
         })
-        const resultado = runOutcome(hijos.map((hijo) => hijo.id), estadoGrupo.children)
+        const resultado = groupOutcome(hijos.map((hijo) => hijo.id), estadoGrupo.children, politica)
         if (resultado !== 'running') {
           estadoGrupo.status = resultado
           estadoGrupo.finishedAt = new Date(ahora).toISOString()
@@ -268,6 +291,7 @@ export async function tickRun(clientId, orchestrationId, ahora = Date.now()) {
       adaptador,
       porOmision,
       ahora,
+      politica,
     })
 
     // Un grupo recién arrancado no lanza tareas: `avanzarNivel` lo puso en marcha y sus hijos
@@ -281,7 +305,10 @@ export async function tickRun(clientId, orchestrationId, ahora = Date.now()) {
       }
     }
 
-    const resultado = runOutcome(primerNivel.map((nodo) => nodo.id), run.nodes)
+    const resultado = runOutcome(primerNivel.map((nodo) => nodo.id), run.nodes, {
+      configPorId: Object.fromEntries(primerNivel.map((nodo) => [nodo.id, nodo.data ?? {}])),
+      politica,
+    })
     if (resultado !== 'running') {
       run.status = resultado
       run.finishedAt = new Date(ahora).toISOString()
@@ -344,6 +371,9 @@ export async function resumeRun(clientId, orchestrationId) {
  * Se le pide a CI-DS que cancele los pasos que estén corriendo, pero lo que ya entró en SAP no se
  * deshace: cancelar detiene, no revierte. Un paso que no se pueda cancelar no impide cortar los
  * demás — quedarse a medias por uno sería lo peor de los dos mundos.
+ *
+ * En IBP no se le pide nada a SAP (`cancelInSap: false` en su política): se corta solo la
+ * orquestación, como en v8.
  */
 export async function cancelRun(clientId, orchestrationId, ahora = Date.now()) {
   const orquestacion = await getOrchestration(clientId, orchestrationId)
@@ -373,7 +403,11 @@ export async function cancelRun(clientId, orchestrationId, ahora = Date.now()) {
       }
     }
 
-    await Promise.allSettled(enMarcha.map(async (paso) => {
+    // IBP no avisa a SAP: el orquestador de v8 solo dejaba de preguntar, y los trabajos lanzados
+    // terminaban por su cuenta. Ver la política de su adaptador.
+    const avisarASap = adaptador && politicaDe(adaptador).cancelInSap
+
+    await Promise.allSettled((avisarASap ? enMarcha : []).map(async (paso) => {
       try {
         await adaptador?.cancelar(destino, paso.sapRunId)
       } catch {

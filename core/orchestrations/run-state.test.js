@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import {
+  DEFAULT_RUN_POLICY,
   decideForPending,
   directPredecessors,
+  groupOutcome,
   initRunState,
   resetForResume,
   runOutcome,
@@ -133,6 +135,70 @@ describe('runOutcome', () => {
 
   it('un paso sin estado se considera sin terminar', () => {
     expect(runOutcome(['a', 'b'], { a: conEstado('success') })).toBe('running')
+  })
+
+  // CI-DS (v9): un fallo con «continuar» igual deja la ejecución en error.
+  it('sin política, un fallo asumido con «continuar» deja fallada la ejecución', () => {
+    expect(runOutcome(['a'], { a: conEstado('error') }, { configPorId: { a: { errorStrategy: 'continue' } } }))
+      .toBe('error')
+  })
+})
+
+describe('groupOutcome', () => {
+  it('un hijo fallado deja fallado al grupo, sea cual sea su estrategia', () => {
+    expect(groupOutcome(['a', 'b'], { a: conEstado('success'), b: conEstado('error') })).toBe('error')
+  })
+
+  it('sin política, un hijo cancelado no cambia nada: el grupo sale bien', () => {
+    expect(groupOutcome(['a', 'b'], { a: conEstado('success'), b: conEstado('cancelled') })).toBe('success')
+  })
+
+  it('sigue corriendo mientras quede un hijo sin terminar', () => {
+    expect(groupOutcome(['a', 'b'], { a: conEstado('success'), b: conEstado('running') })).toBe('running')
+  })
+})
+
+// Las reglas del orquestador de v8, que son las de los Application Jobs de IBP.
+describe('con la política de IBP', () => {
+  const ibp = {
+    ...DEFAULT_RUN_POLICY,
+    cancelledBlocks: false,
+    exhaustedRetryBlocks: true,
+    assumedFailureFailsRun: false,
+    cancelledChildCancelsGroup: true,
+  }
+
+  it('un predecesor cancelado NO bloquea: la cadena sigue', () => {
+    expect(decideForPending(['a'], { a: conEstado('cancelled') }, {}, ibp)).toBe('lanzar')
+  })
+
+  it('un predecesor que agotó sus reintentos bloquea, igual que «detener»', () => {
+    expect(decideForPending(['a'], { a: conEstado('error') }, { a: { errorStrategy: 'retry' } }, ibp)).toBe('saltear')
+  })
+
+  it('sin la política, agotar los reintentos no bloquea (CI-DS)', () => {
+    expect(decideForPending(['a'], { a: conEstado('error') }, { a: { errorStrategy: 'retry' } })).toBe('lanzar')
+  })
+
+  it('un fallo con «continuar» no deja fallada la ejecución: termina «Completado»', () => {
+    const estados = { a: conEstado('error'), b: conEstado('success') }
+    expect(runOutcome(['a', 'b'], estados, { configPorId: { a: { errorStrategy: 'continue' } }, politica: ibp }))
+      .toBe('success')
+  })
+
+  it('un fallo con «detener» o «reintentar» sí la deja fallada', () => {
+    const estados = { a: conEstado('error'), b: conEstado('skipped') }
+    for (const errorStrategy of ['stop', 'retry']) {
+      expect(runOutcome(['a', 'b'], estados, { configPorId: { a: { errorStrategy } }, politica: ibp })).toBe('error')
+    }
+  })
+
+  it('un paso cancelado no deja fallada la ejecución', () => {
+    expect(runOutcome(['a'], { a: conEstado('cancelled') }, { politica: ibp })).toBe('success')
+  })
+
+  it('un hijo cancelado deja cancelado al grupo, aunque otro haya fallado', () => {
+    expect(groupOutcome(['a', 'b'], { a: conEstado('cancelled'), b: conEstado('error') }, ibp)).toBe('cancelled')
   })
 })
 

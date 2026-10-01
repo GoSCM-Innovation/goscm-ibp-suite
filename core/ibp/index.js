@@ -41,6 +41,7 @@ export {
   readCatalogMeta,
   readJobRun,
   readJobRuns,
+  readLatestTemplateRun,
   readJobStatuses,
   readLogMessages,
   readRunParams,

@@ -56,14 +56,27 @@ const suenaAError = (mensaje) => /error|fail/i.test(String(mensaje ?? ''))
  *
  * `now` se pasa en vez de leer el reloj para que la espera entre reintentos se pueda probar sin
  * esperarla de verdad.
+ *
+ * `politica` es la del adaptador (ver `DEFAULT_RUN_POLICY` en `run-state.js`). De ella solo se lee
+ * `cancelledCodes`: los códigos que dejan el paso CANCELADO —sin reintentos— en vez de fallado. CI-DS
+ * no tiene ninguno; IBP marca así sus trabajos `C` y `D`, como v8.
+ *
+ * Cuando SAP manda su propio código además del traducido (`codigoSap`, la letra de un Application
+ * Job), los mensajes son los del orquestador de v8: «SAP: A» y «Reintentando 1/3…».
  */
-export function nextStepState(estado, sapStatus, config = {}, now = Date.now()) {
+export function nextStepState(estado, sapStatus, config = {}, now = Date.now(), politica = {}) {
   const codigo = String(sapStatus?.statusCode ?? '').trim().toUpperCase()
   const mensaje = sapStatus?.statusMsg ?? ''
   const tieneFin = Boolean(sapStatus?.endTime)
+  const letra = sapStatus?.codigoSap
 
   const detalle = mensaje ? ` - ${mensaje}` : ''
   const terminado = (extra) => ({ ...estado, finishedAt: new Date(now).toISOString(), ...extra })
+  const textoDeFallo = () => (letra ? `SAP: ${letra}` : `SAP: ${codigo}${detalle}`)
+
+  if ((politica.cancelledCodes ?? []).includes(codigo)) {
+    return terminado({ status: 'cancelled', sapStatusCode: codigo, error: textoDeFallo() })
+  }
 
   if (CODIGOS_CORRECTOS.has(codigo)) {
     return terminado({
@@ -92,11 +105,13 @@ export function nextStepState(estado, sapStatus, config = {}, now = Date.now()) 
         sapStatusCode: null,
         retryCount: yaIntentados + 1,
         retryAt: new Date(now + espera * 1000).toISOString(),
-        error: `SAP: ${codigo}${detalle} (intento ${yaIntentados + 1} de ${intentosPermitidos})`,
+        error: letra
+          ? `Reintentando ${yaIntentados + 1}/${intentosPermitidos}…`
+          : `SAP: ${codigo}${detalle} (intento ${yaIntentados + 1} de ${intentosPermitidos})`,
       }
     }
 
-    return terminado({ status: 'error', sapStatusCode: codigo, error: `SAP: ${codigo}${detalle}` })
+    return terminado({ status: 'error', sapStatusCode: codigo, error: textoDeFallo() })
   }
 
   if (CODIGOS_EN_MARCHA.has(codigo)) return estado

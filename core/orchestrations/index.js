@@ -1,4 +1,5 @@
-// Superficie pública de core/orchestrations: encadenar tareas de CI-DS con dependencias y grupos.
+// Superficie pública de core/orchestrations: encadenar tareas de CI-DS y Application Jobs de IBP
+// con dependencias y grupos.
 
 export {
   createOrchestration,
@@ -22,8 +23,10 @@ export {
 } from './runner.js'
 
 export {
+  DEFAULT_RUN_POLICY,
   decideForPending,
   directPredecessors,
+  groupOutcome,
   initRunState,
   resetForResume,
   runOutcome,
@@ -42,5 +45,6 @@ export {
   MAX_RETRIES_LIMIT,
   MAX_RETRY_DELAY_SECONDS,
   NODE_TYPES,
+  RETRY_LIMITS,
   normalizeGraph,
 } from './graph.js'

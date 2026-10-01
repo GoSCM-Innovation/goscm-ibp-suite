@@ -7,11 +7,13 @@
 //
 // Traducir en vez de duplicar el motor: las reglas de reintento, de dependencias y de grupos son las
 // mismas, y tenerlas dos veces significa arreglar un fallo en una copia y no en la otra. Es la misma
-// decisión que ya se tomó con los gráficos de los tableros.
+// decisión que ya se tomó con los gráficos de los tableros. Lo que en IBP se decide distinto que en
+// CI-DS (qué hace un paso cancelado, si se avisa a SAP al cortar…) va en la política del adaptador
+// de IBP, en `core/orchestrations/adapters.js`.
 //
 // Sin dependencias que hablen con SAP: solo traduce.
 
-import { isJobFailed, isJobFinished, isJobQueued, isJobRunning, jobStatusMeta } from './job-status.js'
+import { isJobQueued, isJobRunning, jobStatusMeta } from './job-status.js'
 
 /**
  * Una ejecución de IBP se identifica con DOS datos y el motor guarda uno.
@@ -23,34 +25,56 @@ import { isJobFailed, isJobFinished, isJobQueued, isJobRunning, jobStatusMeta } 
 export const SEPARADOR_DE_EJECUCION = '|'
 
 export const identificadorDeEjecucion = (jobName, jobRunCount) =>
-  `${jobName}${SEPARADOR_DE_EJECUCION}${jobRunCount}`
+  `${jobName}${SEPARADOR_DE_EJECUCION}${jobRunCount ?? ''}`
 
-/** Lo contrario. Devuelve `null` si no tiene esa forma, para no consultar a SAP con datos rotos. */
+/**
+ * Lo contrario. Devuelve `null` si no tiene esa forma, para no consultar a SAP con datos rotos.
+ *
+ * La repetición SÍ puede faltar (`J|`): `JobSchedule` no siempre la devuelve. Sin ella se pregunta
+ * solo por el nombre, como hacía v8, y el motor la completa en cuanto SAP la cuenta. Rechazarla
+ * dejaba el paso «En ejecución» para siempre: cada consulta fallaba y el motor esperaba a la
+ * siguiente.
+ */
 export function partirIdentificador(identificador) {
   const partes = String(identificador ?? '').split(SEPARADOR_DE_EJECUCION)
-  if (partes.length !== 2 || !partes[0] || !partes[1]) return null
+  if (partes.length !== 2 || !partes[0]) return null
   return { jobName: partes[0], jobRunCount: partes[1] }
 }
 
 /**
+ * El código con que el motor marca un paso CANCELADO en SAP. No es de CI-DS: solo lo entiende el
+ * motor cuando la política del adaptador de IBP se lo pide (`cancelledCodes`).
+ */
+export const CODIGO_CANCELADO = 'CANCELLED'
+
+/** Las letras que el orquestador de v8 daba por terminadas, y cómo las clasificaba. */
+const BIEN = new Set(['F'])
+const CON_AVISOS = new Set(['W'])
+const FALLADOS = new Set(['A', 'U', 'K'])
+const CANCELADOS = new Set(['C', 'D'])
+
+/**
  * El estado de un trabajo en el idioma que entiende el motor.
  *
- * Las tres decisiones que importan:
+ * Es la clasificación de `useOrchRun.js` de v8, letra por letra:
  *
- *   - «Terminado con avisos» (`W`) cuenta como CORRECTO, igual que en CI-DS: el trabajo hizo lo suyo
- *     y dejó el dato, así que lo que viene detrás puede seguir. Tratarlo como fallo pararía cadenas
- *     enteras por un aviso.
- *   - Un trabajo CANCELADO es un FALLO para el motor, aunque el monitor lo pinte como un final más.
- *     No hizo su trabajo, así que dar por bueno lo que venía detrás sería mentir. Es exactamente el
- *     mismo criterio que el motor ya aplica a `TERMINATED` de CI-DS.
- *   - Una ejecución que SAP TODAVÍA NO REGISTRÓ cuenta como EN COLA, no como desconocida. Esto no es
- *     un matiz: el motor trata «desconocido» como FALLO —a propósito, para no colgarse esperando algo
- *     de lo que SAP no sabe nada—, así que devolverlo aquí marcaría fallado un trabajo sano en la
- *     primera vuelta, antes de que SAP alcance a anotarlo. El orquestador de v8 seguía preguntando
- *     en ese caso, y esto es lo mismo.
+ *   - `F` terminó bien y `W` terminó con avisos: los dos dejan seguir.
+ *   - `A`, `U` y `K` son fallos (`K`, «saltado», también: v8 lo daba por terminado y lo contaba
+ *     como error).
+ *   - `C` y `D` son CANCELADOS, no fallos: el paso queda «Cancelado» y la cadena SIGUE. Es lo que
+ *     hacía v8, que solo paraba ante un error.
+ *   - Lo demás no es final y se sigue preguntando. Incluye `X` (desconocido) y `k` (por saltar), que
+ *     v8 no daba por terminados, y `c` (cancelándose).
+ *   - Una ejecución que SAP TODAVÍA NO REGISTRÓ cuenta como EN COLA. El motor trata «desconocido»
+ *     como FALLO, así que devolverlo aquí marcaría fallado un trabajo sano en la primera vuelta,
+ *     antes de que SAP alcance a anotarlo. v8 seguía preguntando en ese caso, y esto es lo mismo.
  *
- * Contrapartida asumida, igual que en v8: si la ejecución no aparece NUNCA —porque alguien la borró—
- * el paso se queda esperando. Es preferible a romper cadenas sanas, que pasaría siempre.
+ * Además de lo que el motor entiende, devuelve la letra tal cual (`codigoSap`): la pantalla de v8 la
+ * enseñaba junto al trabajo, «Job: … [F]», y el motor la guarda en el paso.
+ *
+ * Un código que v8 no conocía y esta tabla tampoco se pasa como `UNKNOWN`, y el motor lo da por
+ * fallado con la letra en el mensaje. Es la única desviación: v8 se quedaba preguntando para
+ * siempre, y un paso colgado sin explicación es peor que uno que dice qué letra no entendió.
  */
 export function estadoParaElMotor(run) {
   if (!run) return { statusCode: 'QUEUEING', statusMsg: 'SAP todavía no la registró', endTime: null }
@@ -58,17 +82,17 @@ export function estadoParaElMotor(run) {
   const codigo = run.JobStatus
   const meta = jobStatusMeta(codigo)
   const fin = run.JobEndDateTime || null
+  const comun = { statusMsg: meta.label, ...(codigo ? { codigoSap: codigo } : {}) }
 
-  if (isJobFinished(codigo)) {
-    // `F` es limpio; `W` terminó con avisos, y el motor tiene un estado propio para eso.
-    return { statusCode: codigo === 'W' ? 'SUCCESS_WITH_ERRORS_D' : 'SUCCESS', statusMsg: meta.label, endTime: fin }
+  if (BIEN.has(codigo)) return { ...comun, statusCode: 'SUCCESS', endTime: fin }
+  if (CON_AVISOS.has(codigo)) return { ...comun, statusCode: 'SUCCESS_WITH_ERRORS_D', endTime: fin }
+  if (FALLADOS.has(codigo)) return { ...comun, statusCode: 'ERROR', endTime: fin }
+  if (CANCELADOS.has(codigo)) return { ...comun, statusCode: CODIGO_CANCELADO, endTime: fin }
+
+  if (isJobQueued(codigo)) return { ...comun, statusCode: 'QUEUEING', endTime: null }
+  if (isJobRunning(codigo) || codigo === 'X' || codigo === 'k') {
+    return { ...comun, statusCode: 'RUNNING', endTime: null }
   }
 
-  if (isJobFailed(codigo)) return { statusCode: 'ERROR', statusMsg: meta.label, endTime: fin }
-  if (isJobRunning(codigo)) return { statusCode: 'RUNNING', statusMsg: meta.label, endTime: null }
-  if (isJobQueued(codigo)) return { statusCode: 'QUEUEING', statusMsg: meta.label, endTime: null }
-
-  // Un código que no está en ninguna lista. Se pasa tal cual con la hora de fin: el motor tiene una
-  // red de seguridad que decide por ahí, y suponer aquí escondería el caso raro en vez de mostrarlo.
-  return { statusCode: 'UNKNOWN', statusMsg: meta.label, endTime: fin }
+  return { ...comun, statusCode: 'UNKNOWN', endTime: fin }
 }
