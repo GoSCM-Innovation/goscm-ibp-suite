@@ -39,6 +39,12 @@ import { BASE_VERSION_ID, ENVIOS_A_LA_VEZ, PAGINAS_A_LA_VEZ, esRechazo } from '.
 /** Filas de la muestra con que se mide el peso de una fila (v8: `measureRowBytes`, 200). */
 export const FILAS_DE_MUESTRA = 200
 
+/**
+ * Cuánto se espera una página de lectura de la carga (v8: `READ_TIMEOUT`, 90 s). Una lectura
+ * filtrada por versión se midió en más de sesenta segundos en algunos tenants.
+ */
+export const ESPERA_DE_LECTURA_MS = 90_000
+
 /** Mensajes por página. Con `$expand` cada mensaje trae su fila, y la respuesta tiene un límite. */
 export const MENSAJES_POR_PAGINA = 1000
 
@@ -90,6 +96,7 @@ export async function medirPorPagina({ origen, entidad, columnas, extraFilter, m
     url: `${masterDataRoot(origen.baseUrl)}/${entidad}?$format=json&${partes.join('&')}`,
     credentials: origen.credentials,
     kind: 'ibp',
+    timeoutMs: ESPERA_DE_LECTURA_MS,
   })
 
   const filas = json?.d?.results ?? []
@@ -146,6 +153,7 @@ async function leerSegmento({ origen, entidad, columnas, claves, desde, cuantas,
         select: columnas?.length ? columnas : undefined,
         orderby: claves,
         extraFilter,
+        timeoutMs: ESPERA_DE_LECTURA_MS,
       })
     }))
 

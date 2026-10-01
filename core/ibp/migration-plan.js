@@ -234,11 +234,13 @@ export function estadoDeCorrida(resultados) {
  */
 export function partirPorBytes(filas, { maxFilas = FILAS_POR_SEGMENTO, maxBytes = 3_000_000 } = {}) {
   const trozos = []
+  const codificador = new TextEncoder()
   let actual = []
   let bytes = 0
 
   for (const fila of filas ?? []) {
-    const suyos = JSON.stringify(fila).length + 1
+    // Bytes de verdad, no caracteres: una clave con acentos ocupa más de lo que mide.
+    const suyos = codificador.encode(JSON.stringify(fila)).length + 1
     if (actual.length > 0 && (bytes + suyos > maxBytes || actual.length >= maxFilas)) {
       trozos.push(actual)
       actual = []

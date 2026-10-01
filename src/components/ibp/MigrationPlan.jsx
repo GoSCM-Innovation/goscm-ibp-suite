@@ -849,9 +849,14 @@ export default function MigrationPlan({ connection }) {
           // Cada segmento es su propia transacción: un fallo pasajero rehace SOLO ese segmento, en una
           // transacción nueva, y lo ya confirmado se queda. Sin claves no hay orden estable y se lee en
           // serie: una página y un segmento a la vez.
-          const srcKeys = entry?.srcKeys?.length ? entry.srcKeys
-            : entry?.failed ? (await readWithRetry(() => fetchMasterSchema(srcConnId, { entidad: srcName, planningArea: srcPa, versionId: srcVersion })).catch(e => { if (isCancel(e)) throw e; return { claves: [] } })).claves || []
-              : []
+          // Las claves salen de la muestra del análisis; si el análisis de esta tabla falló, se leen
+          // aquí, como hacía v8 con `fetchKeyNames` justo antes de cargar.
+          let srcKeys = entry?.srcKeys || []
+          if (!entry || entry.failed) {
+            try {
+              srcKeys = (await readWithRetry(() => fetchMasterSchema(srcConnId, { entidad: srcName, planningArea: srcPa, versionId: srcVersion }))).claves || []
+            } catch (e) { if (isCancel(e)) throw e; srcKeys = [] }
+          }
           const { paginas, segmentos } = paralelismo(srcKeys)
           const segSize = filasPorSegmento(readPage, { paralelo: paginas })
           const segStarts = iniciosDeSegmento(totalRows, segSize)
