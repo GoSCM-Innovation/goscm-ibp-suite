@@ -96,6 +96,7 @@ export async function getTransactionId({ baseUrl, credentials, entidad, planning
     credentials,
     kind: 'ibp',
     csrf,
+    timeoutMs: ESPERA_DE_TRANSACCION_MS,
   })
 
   const id = json?.d?.Value
@@ -141,6 +142,14 @@ export async function initiateParallelProcess({
 }
 
 /**
+ * Cuánto se le espera a SAP en cada paso de una escritura: los de v8. `GetTransactionID` tarda más de
+ * un minuto en algunos tenants (v8: 90 s), y un envío grande o la confirmación, más todavía (v8:
+ * 110 s). Con los 30 s por omisión del transporte, un tenant lento cortaba la escritura a medias.
+ */
+const ESPERA_DE_TRANSACCION_MS = 90_000
+const ESPERA_DE_ESCRITURA_MS = 110_000
+
+/**
  * Paso 3: mandar un lote de filas a la zona de preparación.
  *
  * SIN reintento, a propósito. Ver el punto 1 de la cabecera: repetir un envío duplica claves y al
@@ -164,6 +173,7 @@ export async function postTransChunk({
     kind: 'ibp',
     method: 'POST',
     csrf,
+    timeoutMs: ESPERA_DE_ESCRITURA_MS,
     body: {
       TransactionID: transactionId,
       ...contexto,
@@ -185,6 +195,7 @@ export async function commitTransaction({ baseUrl, credentials, transactionId, c
     kind: 'ibp',
     method: 'POST',
     csrf,
+    timeoutMs: ESPERA_DE_ESCRITURA_MS,
   })
   return json ?? {}
 }

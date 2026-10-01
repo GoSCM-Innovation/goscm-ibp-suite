@@ -63,6 +63,14 @@ export function partirEnEnvios(filas, cuantasCifras) {
 export const abrirSesionDeEscritura = ({ baseUrl, credentials }) =>
   fetchCsrf({ serviceRoot: planningRoot(baseUrl), credentials, kind: 'ibp' })
 
+/**
+ * Cuánto se le espera a SAP en cada paso de una escritura: los de v8. `getTransactionID` puede tardar
+ * más de un minuto (v8: 90 s) y un envío grande o la confirmación, más (v8: 110 s). Con los 30 s por
+ * omisión del transporte, un tenant lento cortaba la escritura a medias.
+ */
+const ESPERA_DE_TRANSACCION_MS = 90_000
+const ESPERA_DE_ESCRITURA_MS = 110_000
+
 /** Paso 1: pedir un identificador de transacción. Sin parámetros — ver el punto 1 de la cabecera. */
 export async function getTransactionId({ baseUrl, credentials, csrf }) {
   const { json } = await sapFetch({
@@ -70,6 +78,7 @@ export async function getTransactionId({ baseUrl, credentials, csrf }) {
     credentials,
     kind: 'ibp',
     csrf,
+    timeoutMs: ESPERA_DE_TRANSACCION_MS,
   })
 
   const id = json?.d?.Value
@@ -148,6 +157,7 @@ export async function postKfChunk({
       kind: 'ibp',
       method: 'POST',
       csrf,
+      timeoutMs: ESPERA_DE_ESCRITURA_MS,
       body: cuerpo,
     })
     return json ?? {}
@@ -169,6 +179,7 @@ export async function commitTransaction({ baseUrl, credentials, transactionId, c
     kind: 'ibp',
     method: 'POST',
     csrf,
+    timeoutMs: ESPERA_DE_ESCRITURA_MS,
   })
   return json ?? {}
 }
