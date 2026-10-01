@@ -33,7 +33,7 @@ import {
   partirEnEnvios,
   postTransChunk,
 } from './master-data-write.js'
-import { filasPorPagina, filasPorPaginaSegunCampos, filtroDeDatos } from './master-data-model.js'
+import { filasPorPagina, filasPorPaginaSegunCampos, filtroDeDatos, sinMetadatos } from './master-data-model.js'
 import { BASE_VERSION_ID, ENVIOS_A_LA_VEZ, PAGINAS_A_LA_VEZ, esRechazo } from './migration-plan.js'
 
 /** Filas de la muestra con que se mide el peso de una fila (v8: `measureRowBytes`, 200). */
@@ -279,6 +279,6 @@ export async function leerMensajes({
     pagina = await pedir(false)
   }
 
-  const rechazos = pagina.filter(esRechazo).map(({ __metadata, ...resto }) => resto)
+  const rechazos = pagina.filter(esRechazo).map(sinMetadatos)
   return { rechazos, leidos: pagina.length, conExpand: usado }
 }
