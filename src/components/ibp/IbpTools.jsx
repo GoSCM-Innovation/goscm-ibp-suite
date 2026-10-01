@@ -25,7 +25,6 @@ import { lazy, Suspense, useEffect, useState } from 'react'
 
 import { puedeSalir } from '../../lib/guarda-de-salida.js'
 import { listIbpConnections } from '../../lib/ibp.js'
-import { lectorDeIbp } from '../../lib/run-logs.js'
 import { abrir, abrirLasGuardadas, cerrar, guardarAbiertas } from '../../lib/pestanas-de-conexion.js'
 import { useIsMobile } from '../../lib/useIsMobile.js'
 import ConnectionTabs from '../ui/ConnectionTabs.jsx'
@@ -42,10 +41,7 @@ const PlanningDataViewer = lazy(() => import('./PlanningDataViewer.jsx'))
 const MigrationTabs = lazy(() => import('./MigrationTabs.jsx'))
 const VisorConPestanas = lazy(() => import('./VisorConPestanas.jsx'))
 
-// La pantalla de orquestaciones es la MISMA que la de CI-DS: encadenar tareas y encadenar trabajos
-// son la misma cosa por dentro, y lo único que cambia es de dónde salen los pasos.
-const Orchestrations = lazy(() => import('../cids/orchestrations/Orchestrations.jsx'))
-const JobPalette = lazy(() => import('./JobPalette.jsx'))
+const IbpOrchestrations = lazy(() => import('./orchestrations/IbpOrchestrations.jsx'))
 
 /** Las pestañas de v8, en su orden y con el acuerdo que cada una necesita. */
 const APPS = [
@@ -115,13 +111,12 @@ function SystemView({ connection }) {
           {activeApp === 'resumen' && <Resumen connection={connection} />}
           {activeApp === 'jobs' && <JobTemplates connection={connection} />}
           {activeApp === 'monitor' && <JobMonitor connection={connection} />}
-          {activeApp === 'orquestador' && (
-            // Un tenant de IBP no tiene dos repositorios como CI-DS: `production` va fijo en falso.
-            <Orchestrations
-              destino={{ connectionId: connection.id, production: false }}
-              Paleta={JobPalette}
-              leerRegistro={lectorDeIbp(connection.id)}
-            />
+          {/* El orquestador se queda montado una vez visitado: una ejecución avanza mientras la
+              pantalla está montada, y en v8 seguía corriendo al cambiar de pestaña. */}
+          {visited.orquestador && (
+            <div style={{ display: activeApp === 'orquestador' ? 'flex' : 'none', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+              <IbpOrchestrations connection={connection} />
+            </div>
           )}
           {activeApp === 'stats' && <ResourceStats connection={connection} />}
           {activeApp === 'metering' && <Metering connection={connection} />}
