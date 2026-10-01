@@ -75,7 +75,7 @@ export default async function handler(req, res) {
       }))
     }
 
-    const { definicion, error } = definicionDeLaCifra(entrada)
+    const { definicion, error } = definicionDeLaCifra(entrada, { nivelObligatorio: accion !== 'contar' })
     if (error) return res.status(400).json({ error })
 
     const deOrigen = await tenantDe(session.clientId, origen, 'origen')

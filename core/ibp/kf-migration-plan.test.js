@@ -104,6 +104,10 @@ describe('definicionDeLaCifra', () => {
     expect(definicionDeLaCifra({ ...definicion, nivel: [{ destino: 'VERSIONID', origen: 'VERSIONID' }] }).error).toBeTruthy()
   })
 
+  it('para contar, el nivel puede estar vacío', () => {
+    expect(definicionDeLaCifra({ ...definicion, nivel: [] }, { nivelObligatorio: false }).definicion.nivel).toEqual([])
+  })
+
   it('soloConValor: false se respeta', () => {
     expect(definicionDeLaCifra({ ...definicion, soloConValor: false }).definicion.soloConValor).toBe(false)
   })

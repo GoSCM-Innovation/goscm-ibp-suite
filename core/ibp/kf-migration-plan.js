@@ -162,10 +162,12 @@ const esFecha = (valor) => /^\d{4}-\d{2}-\d{2}$/.test(String(valor ?? ''))
  *
  * Devuelve `{ definicion }` o `{ error }`. Los nombres van a la dirección de SAP: solo pasan los que
  * son nombres de campo de verdad. El `$filter` lo arma el servidor con esto, no el navegador.
+ * `nivelObligatorio: false` es para contar: v8 dejaba contar con el nivel todavía vacío.
  */
-export function definicionDeLaCifra(entrada = {}) {
+export function definicionDeLaCifra(entrada = {}, { nivelObligatorio = true } = {}) {
   const nivel = Array.isArray(entrada.nivel) ? entrada.nivel : []
-  if (nivel.length === 0) return { error: 'Falta el nivel de planificación.' }
+  // «Contar registros» de v8 cuenta aunque el nivel todavía esté vacío; copiar, nunca.
+  if (nivel.length === 0 && nivelObligatorio) return { error: 'Falta el nivel de planificación.' }
   if (!nivel.every((uno) => esCampo(uno?.destino) && esCampo(uno?.origen))) {
     return { error: 'Hay un atributo del nivel sin su atributo de origen.' }
   }
