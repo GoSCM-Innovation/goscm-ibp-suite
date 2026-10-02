@@ -110,7 +110,7 @@ export default function ProductionVisualizer({ destino }) {
     <>
       {/* ── ① Mapeo de entidades, con la descarga dentro ─────────────────────────────────────── */}
       <PanelMapeo
-        grupo="arbol"
+        variante="pv"
         destino={destino}
         abierto={mapeoAbierto}
         onAlternar={() => setMapeoAbierto((previo) => !previo)}

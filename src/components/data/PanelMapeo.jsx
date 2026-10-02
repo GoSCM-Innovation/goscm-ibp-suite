@@ -16,86 +16,88 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
-import { ROLES_DEL_ARBOL, ROLES_DE_RED, gruposEfectivos } from '../../../core/ibp/explorer-entities.js'
+import { NINGUNA, gruposEfectivos } from '../../../core/ibp/explorer-entities.js'
 import { fetchExplorerMap, resetExplorerMap, saveExplorerMap } from '../../lib/ibp-explorer.js'
 import { verAsistente } from '../../lib/conexion-activa.js'
+import { MAPEO_V7 } from '../../lib/mapeo-v7.js'
 
-/** Los papeles de cada grupo, para poder decir qué campos exige cada uno. */
-const ROLES = { arbol: ROLES_DEL_ARBOL, red: ROLES_DE_RED }
+/**
+ * El desplegable con buscador de v7 (`initSearchSelect`): se escribe para filtrar, «(ninguna)» va
+ * siempre primero y cada opción dice cuántos campos tiene. Cerrar sin elegir deja lo que había.
+ */
+function BuscadorDeEntidad({ valor, entidades, campos, onElegir }) {
+  // `null` = no se está escribiendo: se ve la etiqueta de lo elegido.
+  const [filtro, setFiltro] = useState(null)
+  const [abierta, setAbierta] = useState(false)
 
-/** Cómo se ve cada estado de un papel. Los colores son los de v7. */
-function estadoDe(uno) {
-  if (!uno.entidad) return { label: 'Sin resolver', color: 'var(--red)' }
-  if (uno.corregido) return { label: 'Corregido a mano', color: 'var(--cyan)' }
-  if (!uno.seguro) return { label: 'Deducido del nombre', color: 'var(--accent)' }
-  return { label: 'Reconocido', color: 'var(--green)' }
-}
+  const etiqueta = (nombre) => (nombre ? `${nombre} (${(campos?.[nombre] ?? []).length} campos)` : '')
+  const f = (filtro ?? '').toLowerCase()
+  const coincidencias = entidades.filter((una) => !f || una.toLowerCase().includes(f))
 
-/** Una tarjeta del mapeo: el papel, contra qué tabla resuelve, y cómo cambiarla. */
-function Tarjeta({ grupo, papel, uno, entidades, campos, onCambiar }) {
-  const estado = estadoDe(uno)
-
-  // Primero las que encajaban, después el resto del área: cambiar a una que no encaja es raro pero
-  // legítimo —el tenant puede tener una tabla con otro nombre de campo ya mapeado—.
-  //
-  // Sin repetir: la elegida puede estar además entre las alternativas, y dos opciones con el mismo
-  // valor rompen el listado.
-  const opciones = useMemo(() => {
-    const cerca = [...new Set([uno.entidad, ...(uno.alternativas ?? [])].filter(Boolean))]
-    const resto = entidades.filter((una) => !cerca.includes(una))
-    return { cerca, resto }
-  }, [uno.entidad, uno.alternativas, entidades])
-
-  // Debajo, los campos de la tabla elegida —como en v7— y los que el papel exige, marcados si están.
-  // Es lo que deja ver de un vistazo POR QUÉ esta tabla y no otra, y qué falta cuando falta algo.
-  const exige = ROLES[grupo]?.[papel]?.debeTener ?? []
-  const suyos = campos?.[uno.entidad] ?? []
+  function elegir(nombre) {
+    onElegir(nombre)
+    setFiltro(null)
+    setAbierta(false)
+  }
 
   return (
-    <div className="mdt-card">
-      <div className="mdt-label">{uno.etiqueta}</div>
-      <select
-        value={uno.entidad ?? ''}
-        onChange={(evento) => onCambiar(papel, evento.target.value)}
-        aria-label={`Tabla para ${uno.etiqueta}`}
-      >
-        {/* «Sin resolver» solo aparece cuando ES el estado actual. Ofrecerlo como elección cuando ya
-            hay una tabla detectada dejaría un valor vacío que no significa «apaga este papel» sino
-            «sin corrección», y las dos cosas se verían igual. */}
-        {!uno.entidad && <option value="">— sin resolver —</option>}
-        {opciones.cerca.length > 0 && (
-          <optgroup label="Encajan por sus campos">
-            {opciones.cerca.map((una) => <option key={una} value={una}>{una}</option>)}
-          </optgroup>
-        )}
-        {opciones.resto.length > 0 && (
-          <optgroup label={`Otras del área (${opciones.resto.length})`}>
-            {opciones.resto.map((una) => <option key={una} value={una}>{una}</option>)}
-          </optgroup>
-        )}
-      </select>
-      <div className="mdt-fields">
-        <span style={{ color: estado.color }}>● {estado.label}</span>
-        {exige.length > 0 && (
-          <div>
-            {exige.map((campo) => (
-              <span
-                key={campo}
-                style={{ color: suyos.length === 0 || suyos.includes(campo) ? 'var(--text3)' : 'var(--red)' }}
-              >
-                {campo}{' '}
-              </span>
-            ))}
+    <div className="ss-wrap">
+      <input
+        type="text"
+        className="ss-input-vis"
+        placeholder="Buscar entidad..."
+        autoComplete="off"
+        value={filtro ?? etiqueta(valor)}
+        onFocus={(evento) => { evento.target.select(); setAbierta(true) }}
+        onChange={(evento) => { setFiltro(evento.target.value); setAbierta(true) }}
+        onBlur={() => { setFiltro(null); setAbierta(false) }}
+        onKeyDown={(evento) => { if (evento.key === 'Escape') evento.target.blur() }}
+      />
+      <div className={`ss-list${abierta ? ' open' : ''}`}>
+        {/* `onMouseDown` y no `onClick`: el campo pierde el foco antes del clic y cierra la lista. */}
+        <div
+          className={`ss-opt${!valor ? ' active' : ''}`}
+          onMouseDown={(evento) => { evento.preventDefault(); elegir('') }}
+        >
+          (ninguna)
+        </div>
+        {coincidencias.map((una) => (
+          <div
+            key={una}
+            className={`ss-opt${valor === una ? ' active' : ''}`}
+            onMouseDown={(evento) => { evento.preventDefault(); elegir(una) }}
+          >
+            {etiqueta(una)}
           </div>
-        )}
-        {suyos.length > 0 && <div>{suyos.length} campos</div>}
+        ))}
+        {f && coincidencias.length === 0 && <div className="ss-none">Sin resultados para "{filtro}"</div>}
       </div>
     </div>
   )
 }
 
+/** Una tarjeta del mapeo: el nombre de v7, el buscador y, debajo, los campos de la tabla elegida. */
+function Tarjeta({ tarjeta, uno, entidades, campos, onCambiar }) {
+  const suyos = campos?.[uno.entidad] ?? null
+  return (
+    <div className="mdt-card">
+      <div className="mdt-label">
+        {tarjeta.etiqueta}
+        {tarjeta.maestro && <span style={{ fontSize: 10, color: 'var(--text3)' }}> (maestro)</span>}
+      </div>
+      <BuscadorDeEntidad
+        valor={uno.entidad ?? ''}
+        entidades={entidades}
+        campos={campos}
+        onElegir={(nombre) => onCambiar(tarjeta.grupo, tarjeta.papel, nombre)}
+      />
+      <div className="mdt-fields">{suyos ? suyos.join(', ') : '—'}</div>
+    </div>
+  )
+}
+
 export default function PanelMapeo({
-  grupo,
+  variante,
   destino,
   abierto,
   onAlternar,
@@ -144,18 +146,19 @@ export default function PanelMapeo({
     [mapa, correcciones],
   )
 
-  const papeles = useMemo(() => Object.entries(efectivo[grupo] ?? {}), [efectivo, grupo])
-  const porRevisar = papeles.filter(([, uno]) => !uno.entidad || !uno.seguro).length
+  const { pista, tarjetas } = MAPEO_V7[variante]
 
   const hayCambios = mapa && JSON.stringify(correcciones) !== JSON.stringify(mapa.guardado.roles ?? {})
 
-  function cambiar(papel, entidad) {
+  function cambiar(grupo, papel, entidad) {
     setCorrecciones((previas) => {
       const suyas = { ...(previas[grupo] ?? {}) }
       const detectada = mapa.detectado?.[grupo]?.[papel]?.entidad ?? null
 
       // Volver a lo que la máquina había deducido NO se guarda como corrección.
-      if (entidad === detectada || (!entidad && !detectada)) delete suyas[papel]
+      if (entidad === (detectada ?? '')) delete suyas[papel]
+      // «(ninguna)» sobre algo detectado SÍ es una decisión, y se guarda con su propio valor.
+      else if (!entidad) suyas[papel] = NINGUNA
       else suyas[papel] = entidad
 
       const salida = { ...previas }
@@ -207,7 +210,7 @@ export default function PanelMapeo({
         tabIndex={0}
         aria-expanded={abierto}
       >
-        <span>① Mapeo de entidades</span>
+        <span>MAPEO DE ENTIDADES</span>
         <span style={{ fontSize: 11 }}>{abierto ? '▼' : '▶'}</span>
       </div>
 
@@ -216,54 +219,25 @@ export default function PanelMapeo({
           {error && <div className="notice notice-error">✕ {error}</div>}
 
           {mapa === null && (
-            <p className="panel-desc">Leyendo el catálogo del tenant… tarda unos segundos.</p>
+            <p className="panel-desc">Leyendo el catálogo del tenant…</p>
           )}
 
           {mapa && (
             <>
-              <p className="panel-desc">
-                La auto-detección asignó las entidades más probables. Ajusta manualmente si es
-                necesario. Prefijo de este tenant: <b className="mono">{mapa.prefijo || '—'}</b>
-                {' · '}{mapa.entidades.length} tablas en el área.
-              </p>
-
-              {porRevisar > 0
-                ? (
-                  <div className="mattype-note">
-                    {porRevisar === 1
-                      ? 'Hay 1 papel que conviene mirar: '
-                      : `Hay ${porRevisar} papeles que conviene mirar: `}
-                    o no se resolvió, o se dedujo por el nombre de la tabla y no por sus campos. Si
-                    están bien, no hace falta tocar nada — se marcan para que nadie dé por bueno un
-                    análisis sin haberlos visto.
-                  </div>
-                )
-                : (
-                  <div className="mattype-note">
-                    ✓ Todas las tablas se reconocieron por sus campos, que es la señal fiable.
-                  </div>
-                )}
+              <p className="panel-desc">{pista}</p>
 
               <div className="mdt-grid">
-                {papeles.map(([papel, uno]) => (
+                {tarjetas.map((tarjeta) => (
                   <Tarjeta
-                    key={papel}
-                    grupo={grupo}
-                    papel={papel}
-                    uno={uno}
+                    key={`${tarjeta.grupo}/${tarjeta.papel}`}
+                    tarjeta={tarjeta}
+                    uno={efectivo[tarjeta.grupo]?.[tarjeta.papel] ?? {}}
                     entidades={mapa.entidades}
                     campos={mapa.campos}
                     onCambiar={cambiar}
                   />
                 ))}
               </div>
-
-              {mapa.guardado?.updatedAt && (
-                <p className="panel-desc" style={{ marginTop: 10, marginBottom: 0 }}>
-                  Hay correcciones guardadas para este destino, de{' '}
-                  {new Date(mapa.guardado.updatedAt).toLocaleString('es')}. Las ve todo el equipo.
-                </p>
-              )}
 
               <div className="btn-row">
                 <button

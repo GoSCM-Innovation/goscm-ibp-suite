@@ -22,8 +22,6 @@ vi.mock('../../lib/ibp-explorer.js', () => ({
 const extraer = vi.fn()
 vi.mock('../../lib/explorer-extract.js', () => ({ extraer }))
 
-const contar = vi.fn(async () => 0)
-vi.mock('../../lib/explorer-db.js', () => ({ contar }))
 
 const { default: ExplorerExtract } = await import('./ExplorerExtract.jsx')
 
@@ -94,7 +92,6 @@ const abrirLogs = async () => {
 beforeEach(() => {
   vi.clearAllMocks()
   fetchExplorerMap.mockResolvedValue(MAPA)
-  contar.mockResolvedValue(0)
 })
 
 afterEach(async () => {
@@ -231,42 +228,5 @@ describe('cuando no se puede bajar', () => {
 
     expect(salida).toBeNull()
     expect(estado()).toBe('Error: HTTP 503')
-  })
-})
-
-describe('bajarSiVacio', () => {
-  // v7 bajaba siempre porque no guardaba nada entre sesiones. Aquí sí, y rebajar tres millones de
-  // filas por volver a pulsar sería un castigo.
-  it('con datos guardados no vuelve a bajar', async () => {
-    contar.mockResolvedValue(500)
-    await montar()
-
-    let salida
-    await act(async () => { salida = await mando.current.bajarSiVacio() })
-    expect(salida).toBe(true)
-    expect(extraer).not.toHaveBeenCalled()
-  })
-
-  it('con la base vacía baja, como v7', async () => {
-    contar.mockResolvedValue(0)
-    extraer.mockResolvedValue(salidaLimpia)
-    await montar()
-
-    let salida
-    await act(async () => { salida = await mando.current.bajarSiVacio() })
-    expect(salida).toBe(true)
-    expect(extraer).toHaveBeenCalledTimes(1)
-  })
-
-  // El analizador tiene que poder distinguir «ya estaba» de «no se pudo»: juzgar sin datos daría un
-  // informe creíble y falso.
-  it('dice que no se puede seguir cuando la descarga no arrancó', async () => {
-    fetchExplorerMap.mockResolvedValue({ guardado: { roles: {}, fields: {} }, efectivo: { arbol: {} } })
-    contar.mockResolvedValue(0)
-    await montar()
-
-    let salida
-    await act(async () => { salida = await mando.current.bajarSiVacio() })
-    expect(salida).toBe(false)
   })
 })

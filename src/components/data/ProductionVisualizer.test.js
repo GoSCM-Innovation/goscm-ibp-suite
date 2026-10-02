@@ -41,7 +41,6 @@ vi.mock('./PanelMapeo.jsx', () => ({
 /** El mando que la descarga de verdad publica en su `ref`. */
 const mando = {
   bajar: vi.fn(),
-  bajarSiVacio: vi.fn(),
   decir: vi.fn(),
   anotar: vi.fn(),
   avanzar: vi.fn(),

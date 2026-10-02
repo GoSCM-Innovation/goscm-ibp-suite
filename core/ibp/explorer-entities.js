@@ -301,6 +301,9 @@ export function detectarRoles(entidades, roles, prefijo = '') {
   }))
 }
 
+/** El valor guardado cuando se elige «(ninguna)» en un papel. No es nombre de ninguna tabla de SAP. */
+export const NINGUNA = '(ninguna)'
+
 /**
  * La respuesta DEFINITIVA de qué entidad cumple cada papel: lo detectado, con lo corregido encima.
  *
@@ -316,6 +319,19 @@ export function rolesEfectivos(detectados, corregidos = {}) {
   return Object.fromEntries(Object.entries(detectados ?? {}).map(([papel, uno]) => {
     const corregido = corregidos?.[papel]
     if (!corregido || corregido === uno.entidad) return [papel, { ...uno, corregido: false }]
+
+    // «(ninguna)»: quien miró el tenant decidió que este papel no se usa (v7 lo ofrecía en cada
+    // desplegable). Queda sin entidad —los pasos que dependen de él se saltan, como los opcionales de v7—
+    // pero como decisión tomada, no como algo que quedó sin resolver.
+    if (corregido === NINGUNA) {
+      return [papel, {
+        ...uno,
+        entidad: null,
+        seguro: true,
+        corregido: true,
+        alternativas: [...new Set([uno.entidad, ...(uno.alternativas ?? [])].filter(Boolean))],
+      }]
+    }
 
     return [papel, {
       ...uno,

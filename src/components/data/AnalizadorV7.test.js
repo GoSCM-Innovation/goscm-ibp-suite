@@ -105,7 +105,7 @@ describe('los pasos aparecen de uno en uno', () => {
   it('al abrir solo está el ①', async () => {
     await montar()
     const pasos = pasosVisibles()
-    expect(pasos).toEqual(['① Mapeo de entidades'])
+    expect(pasos).toEqual(['MAPEO DE ENTIDADES'])
   })
 
   it('confirmar ① hace aparecer el ②, y nada más', async () => {

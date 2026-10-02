@@ -7,6 +7,7 @@ import {
   entidadesDelTenant,
   esTablaDeTraduccion,
   gruposEfectivos,
+  NINGUNA,
   mejorEntidadPara,
   prefijoDelTenant,
   rolesEfectivos,
@@ -287,5 +288,23 @@ describe('rolesPorRevisar', () => {
 
   it('si todo salió por campos no hay nada que revisar', () => {
     expect(rolesPorRevisar({ a: { entidad: 'X', seguro: true } })).toEqual([])
+  })
+})
+
+describe('«(ninguna)»', () => {
+  const detectados = {
+    itemValidity: { etiqueta: 'Validez', entidad: 'VALIDEZ', seguro: true, alternativas: ['OTRA'] },
+  }
+
+  it('deja el papel sin entidad, como decisión tomada y no como algo sin resolver', () => {
+    const salida = rolesEfectivos(detectados, { itemValidity: NINGUNA })
+    expect(salida.itemValidity.entidad).toBeNull()
+    expect(salida.itemValidity.seguro).toBe(true)
+    expect(salida.itemValidity.corregido).toBe(true)
+  })
+
+  it('la que se había detectado queda como alternativa para poder volver', () => {
+    const salida = rolesEfectivos(detectados, { itemValidity: NINGUNA })
+    expect(salida.itemValidity.alternativas).toEqual(['VALIDEZ', 'OTRA'])
   })
 })

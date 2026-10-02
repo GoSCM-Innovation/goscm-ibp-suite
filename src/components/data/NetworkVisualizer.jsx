@@ -144,11 +144,11 @@ export default function NetworkVisualizer({ destino }) {
     <>
       {/* ── ① Mapeo de entidades ─────────────────────────────────────────────────────────────── */}
       <PanelMapeo
-        grupo="red"
+        variante="nv"
         destino={destino}
         abierto={mapeoAbierto}
         onAlternar={() => setMapeoAbierto((previo) => !previo)}
-        textoConfirmar="Confirmar mapeo y cargar materiales"
+        textoConfirmar="Confirmar mapeo y cargar productos"
         confirmando={cargandoCatalogo}
         onConfirmar={() => { setConfirmado(true); setMapeoAbierto(false); cargarCatalogo() }}
       />

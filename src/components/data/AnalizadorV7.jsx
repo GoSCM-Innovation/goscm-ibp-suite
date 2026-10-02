@@ -135,17 +135,19 @@ export default function AnalizadorV7({
    * «▶ Ejecutar análisis»: bajar y juzgar de un tirón, que es lo que hacía v7.
    *
    * En v7 este botón corría la fase 1 —traerse las tablas— y la fase 2 —juzgarlas— sin preguntar
-   * nada en medio. Lo único distinto aquí es que lo ya descargado se reutiliza en vez de volver a
-   * bajarlo: v7 no guardaba nada entre sesiones y no tenía esa opción.
+   * nada en medio. Y SIEMPRE bajaba: una versión de esta pantalla reutilizaba lo guardado para ahorrar la
+   * descarga, pero entonces lo que se cambió en el tenant desde la última vez no llegaba al análisis, y
+   * un informe con datos viejos se lee igual de creíble que uno al día. Decidido con el usuario el
+   * 2026-10-01: se baja siempre, como v7.
    */
   async function ejecutar() {
     setError('')
     setResultados(null)
     setAvance({ paso: 'empezando' })
     try {
-      // Si la descarga hacía falta y no pudo ni empezar, no se juzga: un informe salido de una base
-      // vacía se lee igual de creíble que uno bueno. El porqué queda en la línea de estado.
-      if ((await descarga.current?.bajarSiVacio()) === false) return
+      // Si la descarga no pudo ni empezar o falló, no se juzga: un informe salido de una base vacía o a
+      // medias se lee igual de creíble que uno bueno. El porqué queda en la línea de estado.
+      if (!(await descarga.current?.bajar())) return
 
       descarga.current?.anotar('ok', 'Índices listos. Iniciando análisis...')
       descarga.current?.decir('info', 'Iniciando análisis...')
@@ -200,7 +202,7 @@ export default function AnalizadorV7({
     <>
       {/* ── ① ─────────────────────────────────────────────────────────────────────────────────── */}
       <PanelMapeo
-        grupo={grupo}
+        variante={grupo === 'arbol' ? 'pa' : 'na'}
         destino={destino}
         abierto={mapeoAbierto}
         onAlternar={() => setMapeoAbierto((previo) => !previo)}

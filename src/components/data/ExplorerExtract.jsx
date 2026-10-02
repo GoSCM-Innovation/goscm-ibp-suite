@@ -22,7 +22,6 @@ import { useCallback, useEffect, useImperativeHandle, useRef, useState } from 'r
 
 import { planificarExtraccion } from '../../../core/ibp/explorer-extract-plan.js'
 import { fetchExplorerMap } from '../../lib/ibp-explorer.js'
-import { contar } from '../../lib/explorer-db.js'
 import { extraer } from '../../lib/explorer-extract.js'
 import {
   PREPARANDO,
@@ -79,19 +78,6 @@ export default function ExplorerExtract({
     (clase, texto) => setRegistro((previas) => [...previas, linea(clase, texto)]),
     [],
   )
-
-  /** Cuántas filas hay ya guardadas del plan. Sirve para no rebajar lo que ya está. */
-  const contarLoGuardado = useCallback(async (plan) => {
-    let total = 0
-    for (const paso of plan.pasos) {
-      try {
-        total += await contar(paso.tabla)
-      } catch {
-        // Una tabla que no se puede contar cuenta como vacía: rebajar de más es recuperable.
-      }
-    }
-    return total
-  }, [])
 
   /**
    * Baja lo que dice el plan, contando el avance como lo contaba v7.
@@ -188,46 +174,17 @@ export default function ExplorerExtract({
     }
   }, [bajando, pedirMapa, gruposFijos, extras, destino, decir, anotar, onTerminada])
 
-  /**
-   * Baja solo si no hay nada guardado. Devuelve si se puede seguir con lo que haya.
-   *
-   * v7 bajaba SIEMPRE, porque no guardaba nada entre sesiones. Aquí sí se guarda, y volver a bajar
-   * tres millones de filas por haber vuelto a pulsar sería un castigo. Con la base vacía se comporta
-   * como v7; con datos, sigue de largo.
-   *
-   * Devuelve `false` solo cuando la descarga hacía falta y no pudo ni empezar. Quien la llama —el
-   * analizador— tiene que parar ahí: juzgar sin datos daría un informe creíble y falso.
-   */
-  const bajarSiVacio = useCallback(async () => {
-    let leido
-    try {
-      leido = await pedirMapa()
-    } catch {
-      return Boolean(await bajar())
-    }
-    const plan = planificarExtraccion({
-      efectivo: leido.efectivo,
-      mapa: leido.guardado.fields,
-      grupos: gruposFijos ?? ['arbol', 'red'],
-      extras: extras ?? {},
-    })
-    const guardadas = await contarLoGuardado(plan)
-    if (guardadas > 0) return true
-    return Boolean(await bajar())
-  }, [pedirMapa, gruposFijos, extras, contarLoGuardado, bajar])
-
   // Lo que se puede pedir desde fuera. `decir`, `anotar` y `avanzar` están porque en v7 `setStatus`,
   // `log` y `setProgress` eran globales y las llamaba quien quisiera: la barra, la línea y el
   // registro del paso ⑤ de un analizador servían a las DOS fases —bajar y juzgar—, no solo a la
   // descarga. El árbol las usa para «✓ N productos en caché local».
   useImperativeHandle(ref, () => ({
     bajar,
-    bajarSiVacio,
     decir,
     anotar,
     avanzar: (pct) => setPorcentaje(Math.max(0, Math.min(100, Math.round(pct)))),
     cancelar: () => { cancelar.current = true },
-  }), [bajar, bajarSiVacio, decir, anotar])
+  }), [bajar, decir, anotar])
 
   // Hasta que se dispara no hay nada que enseñar. En v7 la barra, el estado y los logs estaban
   // ocultos hasta que `doFetchAll` los mostraba.
