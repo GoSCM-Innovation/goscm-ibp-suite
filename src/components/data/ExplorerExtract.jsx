@@ -42,7 +42,29 @@ const COLOR = {
 }
 
 export default function ExplorerExtract({
-  destino, gruposFijos = null, extras = null, onTerminada = null, ref = null,
+  destino,
+  gruposFijos = null,
+  extras = null,
+  /**
+   * Para los módulos que bajan un subconjunto propio: `tablas` es la lista ordenada de lo que se baja
+   * (manda sobre `gruposFijos`), `camposMas` son campos canónicos extra por tabla, y `requeridas` las
+   * tablas sin las cuales no se empieza. Lo usa el Production Analyzer: v7 bajaba diez tablas de dos
+   * grupos y se negaba a correr si faltaban la cabecera, los componentes, los sustitutos o los arcos.
+   */
+  tablas = null,
+  camposMas = null,
+  requeridas = null,
+  /**
+   * Cómo habla este módulo mientras baja, si no es como el árbol:
+   * `{ estado(paso) → { texto, pct? }, lineas({ plan, salida, destino, inicio, tiempos }) → líneas,
+   *    alFaltar(pasos) → texto }`.
+   * Sin esto se usan los textos del árbol de v7 (`registro-de-descarga.js`).
+   */
+  formato = null,
+  /** v7 no tenía botón «Cancelar» en los analizadores: la descarga corre hasta el final. */
+  sinCancelar = false,
+  onTerminada = null,
+  ref = null,
 }) {
   const [estado, setEstado] = useState(null)
   const [registro, setRegistro] = useState([])
@@ -79,6 +101,50 @@ export default function ExplorerExtract({
     [],
   )
 
+  /** Las tablas imprescindibles que este tenant no puede dar. */
+  const tablasQueFaltan = useCallback(
+    (plan) => plan.pasos.filter((uno) => !uno.sePuede && (requeridas ?? []).includes(uno.tabla)),
+    [requeridas],
+  )
+  const textoDeLoQueFalta = useCallback(
+    (faltan) => formato?.alFaltar?.(faltan) ?? 'Falta alguna tabla imprescindible. Revisa el mapeo de entidades.',
+    [formato],
+  )
+
+  /**
+   * ¿Se puede correr con este mapeo? Sin bajar nada.
+   *
+   * Es lo que v7 hacía ANTES de preguntar cómo se quería ver el análisis: si falta algo, el error sale
+   * enseguida y no después de elegir y esperar. Devuelve `true` si se puede seguir; si no, deja el
+   * motivo en la línea de estado y en el registro.
+   */
+  const validar = useCallback(async () => {
+    let leido
+    try {
+      leido = await pedirMapa()
+    } catch (fallo) {
+      decir('err', `Error: ${fallo.message}`)
+      anotar('err', `Error leyendo el catálogo del tenant: ${fallo.message}`)
+      return false
+    }
+    const plan = planificarExtraccion({
+      efectivo: leido.efectivo,
+      mapa: leido.guardado.fields,
+      grupos: gruposFijos ?? ['arbol', 'red'],
+      extras: extras ?? {},
+      tablas,
+      mas: camposMas ?? {},
+    })
+    const faltan = tablasQueFaltan(plan)
+    if (faltan.length === 0) return true
+
+    const texto = textoDeLoQueFalta(faltan)
+    setRegistro([...plan.avisos.map((aviso) => linea('warn', aviso)), linea('err', texto)])
+    setLogsAbiertos(true)
+    decir('err', texto)
+    return false
+  }, [pedirMapa, gruposFijos, extras, tablas, camposMas, tablasQueFaltan, textoDeLoQueFalta, decir, anotar])
+
   /**
    * Baja lo que dice el plan, contando el avance como lo contaba v7.
    *
@@ -109,7 +175,24 @@ export default function ExplorerExtract({
       mapa: leido.guardado.fields,
       grupos: gruposFijos ?? ['arbol', 'red'],
       extras: extras ?? {},
+      tablas,
+      mas: camposMas ?? {},
     })
+
+    // Las tablas sin las que v7 no corría. Se comprueba ANTES de bajar nada: bajar nueve tablas para
+    // enterarse de que falta la décima es hacer esperar al consultor por un informe que no va a salir.
+    const faltan = tablasQueFaltan(plan)
+    if (faltan.length > 0) {
+      const texto = textoDeLoQueFalta(faltan)
+      setRegistro([
+        ...plan.avisos.map((aviso) => linea('warn', aviso)),
+        linea('err', texto),
+      ])
+      setLogsAbiertos(true)
+      decir('err', texto)
+      setBajando(false)
+      return null
+    }
 
     // Lo que no se va a poder, ANTES de bajar nada. Es lo que v7 hacía con su panel de corrección:
     // enterarse a los seis minutos de que falta la tabla principal, después de bajar tres que no
@@ -125,6 +208,10 @@ export default function ExplorerExtract({
     setRegistro(previas)
 
     const pasosQueVan = plan.pasos.filter((uno) => uno.sePuede)
+    const inicio = Date.now()
+    // Cuándo llegó la última página de cada tabla: es lo que v7 escribía como `[+1234ms]` delante de
+    // cada línea del registro, y el registro se arma al final.
+    const tiempos = new Map()
 
     try {
       const salida = await extraer({
@@ -135,10 +222,13 @@ export default function ExplorerExtract({
         // La barra avanza MIENTRAS se baja, como la de v7, y no de golpe al final: una barra quieta
         // durante seis minutos y luego llena de un salto no informa de nada.
         onProgreso: (paso) => {
+          tiempos.set(paso.tabla, Date.now() - inicio)
           const cual = pasosQueVan.findIndex((uno) => uno.tabla === paso.tabla)
-          if (cual >= 0) setPorcentaje(Math.round((cual / pasosQueVan.length) * 100))
+          const propio = formato?.estado?.(paso)
+          if (propio?.pct !== undefined) setPorcentaje(propio.pct)
+          else if (cual >= 0) setPorcentaje(Math.round((cual / pasosQueVan.length) * 100))
           // Sin contador de filas: v7 decía solo «Descargando Production Source Header...».
-          decir('info', descargando(paso))
+          decir('info', propio ? propio.texto : descargando(paso))
         },
         cancelado: () => cancelar.current,
       })
@@ -146,11 +236,15 @@ export default function ExplorerExtract({
       // El registro se arma al final y no paso a paso porque `extraer` no avisa de cada tabla
       // terminada: avisa de cada PÁGINA. Las líneas salen de lo que devolvió, que es lo mismo que
       // v7 escribía justo después de cada `fetchAndIndex`.
-      const lineas = []
-      for (const paso of plan.pasos) {
-        const suyo = salida.hechos.find((uno) => uno.tabla === paso.tabla)
-        if (paso.sePuede) lineas.push(lineaDePeticion(paso, destino))
-        lineas.push(...lineasDeTabla(paso, suyo))
+      let lineas = []
+      if (formato?.lineas) {
+        lineas = await formato.lineas({ plan, salida, destino, inicio, tiempos })
+      } else {
+        for (const paso of plan.pasos) {
+          const suyo = salida.hechos.find((uno) => uno.tabla === paso.tabla)
+          if (paso.sePuede) lineas.push(lineaDePeticion(paso, destino))
+          lineas.push(...lineasDeTabla(paso, suyo))
+        }
       }
       setRegistro((antes) => [...antes, ...lineas])
 
@@ -172,7 +266,7 @@ export default function ExplorerExtract({
     } finally {
       setBajando(false)
     }
-  }, [bajando, pedirMapa, gruposFijos, extras, destino, decir, anotar, onTerminada])
+  }, [bajando, pedirMapa, gruposFijos, extras, tablas, camposMas, tablasQueFaltan, textoDeLoQueFalta, formato, destino, decir, anotar, onTerminada])
 
   // Lo que se puede pedir desde fuera. `decir`, `anotar` y `avanzar` están porque en v7 `setStatus`,
   // `log` y `setProgress` eran globales y las llamaba quien quisiera: la barra, la línea y el
@@ -180,11 +274,12 @@ export default function ExplorerExtract({
   // descarga. El árbol las usa para «✓ N productos en caché local».
   useImperativeHandle(ref, () => ({
     bajar,
+    validar,
     decir,
     anotar,
     avanzar: (pct) => setPorcentaje(Math.max(0, Math.min(100, Math.round(pct)))),
     cancelar: () => { cancelar.current = true },
-  }), [bajar, decir, anotar])
+  }), [bajar, validar, decir, anotar])
 
   // Hasta que se dispara no hay nada que enseñar. En v7 la barra, el estado y los logs estaban
   // ocultos hasta que `doFetchAll` los mostraba.
@@ -198,7 +293,7 @@ export default function ExplorerExtract({
       registro={registro}
       logsAbiertos={logsAbiertos}
       onAlternarLogs={() => setLogsAbiertos((previo) => !previo)}
-      onCancelar={() => { cancelar.current = true }}
+      onCancelar={sinCancelar ? null : () => { cancelar.current = true }}
     />
   )
 }
@@ -221,7 +316,7 @@ export function ProgresoDeDescarga({
       <div className="prog-estado">
         <span style={{ color: COLOR[estado.tipo] ?? COLOR.info }}>{estado.texto}</span>
 
-        {bajando && (
+        {bajando && onCancelar && (
           <button type="button" className="btn btn-secondary btn-small" onClick={onCancelar}>
             Cancelar
           </button>

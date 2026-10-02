@@ -12,7 +12,7 @@ Este documento es la lista de trabajo. Se tacha lo que se termina; no se contest
 |---|---|
 | Glosario Analyzers | ✅ Portado tal cual (2026-10-01) |
 | Production Visualizer | ✅ Árbol, textos de descarga y pestañas como v7 (2026-10-01). Falta mirarlo en el tenant |
-| Production Analyzer | ❌ Pendiente — ver abajo |
+| Production Analyzer | ✅ Algoritmos, vista web, Excel, modal y pasos ②–⑤ como v7 (2026-10-01). Falta mirarlo en el tenant |
 | Network Visualizer | ✅ Igualado a v7 (2026-10-01), con las diferencias dichas abajo. Falta mirarlo en el tenant |
 | Network Analyzer | ❌ Pendiente — ver abajo |
 | Planning Area Documenter | ✅ Hecho (2026-10-01) — ver abajo |
@@ -31,33 +31,72 @@ de **ciclos** y el aviso de tabla **incompleta** (SAP dice N filas y llegaron me
 
 Sin botón «Invertir»: en v7 la función existía pero ningún botón la llamaba.
 
-## Production Analyzer — pendiente (de más a menos visible)
+## Production Analyzer — hecho (2026-10-01)
 
-1. **Pantalla de resultados** (grande). v7: vista web `snWebView.js` con cabecera «🌐 Production Analyzer
-   — vista web», botones «⬇️ Descargar Excel / ⛶ Pantalla completa / Cerrar» (y «Ver resultados»),
-   tarjetas de resumen por hoja, pestañas por hoja con total (Resumen, Product, Location, Resource,
-   Resource Location, Prod Source Header, Prod Source Item, Prod Source Resource, Tipos Excluidos,
-   📈 Estadísticas), chips «Todos / ⛔ Alertas / ⚠ Advertencias / ✅ OK», buscador «Buscar en {hoja}...»,
-   columnas redimensionables, popup de celda con «Copiar», paginación de 50 con «Mostrando a–b de n».
-   La suite tiene tres pestañas propias (Por producto / ubicación / recurso), chips 🔴🟡🔵🟢 y «Descargar CSV».
-2. **Excel** `ProductionHierarchyAnalysis_<fecha>.xlsx` con una hoja por pestaña. La suite no genera Excel.
-3. **Modal «¿Cómo quieres ver el análisis?»** al ejecutar (Ver en la web / Descargar Excel / Ambos /
-   Cancelar) y banner «✅ ¡Análisis completado!».
-4. **Mapeo ①**: 10 tarjetas de v7 (con Location Product y Location Source; sin «Validez de los
-   componentes»), etiquetas en inglés, buscador «Buscar entidad...», «(ninguna)», lista de campos,
-   «Continuar →» / «Reconectar». La suite tiene 9 tarjetas con etiquetas en español.
-5. **Descarga**: el análisis necesita las tablas de red (`sn_loc`, `sn_loc_prod`) y la suite descarga solo
-   el grupo `arbol` (no confirmado: hay que correrlo).
-6. **Tipos de material**: v7 los trae con una lectura ligera de SAP al confirmar el mapeo, antes de bajar
-   nada; la suite los lee de lo ya descargado y en la primera corrida juzga sin configuración.
-7. **② Excluir tipos** (columnas «Tipo / Productos / Incluir en análisis», «N prods», «Incluido/Excluido»),
-   **③ Categorizar** (matriz con tooltips «?», nombres de categoría de v7), **④ Campos adicionales**
-   (siete botones con modal, buscador, «Campos obligatorios», contador).
-8. **⑤ Ejecutar**: textos de progreso de v7 (`Descargando X → IDB...`, `Indexando Product...`,
-   `Analizando...`, `✓ Completado · N ms`), log `[+Nms] [GET]…`, el botón no cambia de texto, sin «Cancelar».
-9. Panel «Interpretación de resultados» (enlace al glosario) bajo el banner. Falta.
-10. v7 **siempre** vuelve a descargar; la suite omite la descarga si hay datos (`bajarSiVacio`).
-    Decisión a tomar con el usuario: es una mejora deliberada, pero cambia el comportamiento.
+Se reemplazó el analizador anterior de la suite (tabla de calidad propia: Error / Aviso / Nota / Bien, tres
+pestañas, «Descargar CSV») por el de v7, con **los mismos algoritmos**. Lo que quedó idéntico, mirado
+control por control contra `prodAnalyzer.js`, `snWebView.js`, `mattype-config.js`, `extraFields.js`,
+`statsSheet.js`, `runSummary.js` e `index.html` (`tab-pa`) de la rama `master` de v7:
+
+- **El algoritmo** (`core/ibp/production-analyzer.js`, `mattype-config.js`): port literal de
+  `paAnalyzeAndExport` y de la matriz de reglas por categoría. Las ocho hojas con sus columnas, notas de
+  encabezado, grupos de color y observaciones; estados «⛔ Alerta / ⚠ Advertencia / ✅ OK» (sin «Nota»);
+  hoja Resumen con sus bloques de metadatos; hoja Estadísticas. Las pruebas
+  (`production-analyzer.test.js`) usan un tenant de juguete cuyas respuestas se **calcularon a mano
+  leyendo el código de v7**, no corriendo el nuestro.
+- **El Excel** `ProductionHierarchyAnalysis_<fecha>.xlsx` (`src/lib/xlsx-analisis.js`): port de
+  `StreamingXlsx` de v7 (el escritor que usaban los dos analizadores; no usaban ExcelJS). Resumen,
+  Estadísticas y una hoja por pestaña, con fuente DM Sans, encabezado por color de grupo con su nota,
+  fila 1 congelada, color de pestaña, relleno por severidad, números como números.
+- **La vista web** (`VistaWebAnalisis.jsx`): cabecera, tarjetas, pestañas con total, chips, buscador,
+  columnas redimensionables, popup de celda con «Copiar», paginación de 50, pantalla completa,
+  «Cerrar» → barra «Ver resultados», Estadísticas. **Modal «¿Cómo quieres ver el análisis?»**
+  (`ModalModoDeSalida.jsx`) y banner «¡Análisis completado!» si fue solo Excel.
+- **Pasos ②–⑤** (`AnalizadorProduccion.jsx` + `TablaExcluirTipos`, `MatrizDeCategorias`,
+  `CamposAdicionales`): textos, controles, resúmenes y «Volver» que oculta el paso, como v7. Los tipos de
+  material se leen de SAP con una consulta ligera al confirmar ① (`tipos-de-material.js`,
+  «⏳ Cargando tipos de material desde SAP IBP…»), no de lo ya descargado. El botón ▶ no cambia de texto
+  y no hay «Cancelar».
+- **La descarga** baja las diez tablas de v7, **incluidas Location Product y Location Source** (antes
+  solo bajaba el grupo del árbol y el análisis no tenía los arcos): `ExplorerExtract` admite `tablas`,
+  `camposMas`, `requeridas`, `formato` y `sinCancelar`. Textos de v7 (`Descargando X → IDB...`,
+  `Indexando Product...`, `Analizando...`, `✓ Completado · N ms`, `[+Nms] PSH: N reg (M SOURCEIDs)`,
+  avisos de «0 registros» sin voseo).
+
+### Diferencias que quedan, y por qué
+
+1. **El Resumen del Excel no trae la «API Base URL»** (dice «—»), y la línea del registro dice
+   `[GET] <entidad>` en vez de la URL: el navegador nunca conoce la dirección del tenant (vive cifrada en
+   el servidor). Regla de seguridad de la plataforma.
+2. **La vista web tiene todas las filas en memoria**; v7 mandaba las hojas grandes a IndexedDB. Para las
+   ocho hojas del Production Analyzer sobra (decenas de miles de filas); para las de arcos de la red
+   puede no sobrar (ver abajo).
+3. **La clasificación de tipos se guarda con el formato de la suite** (`mattype_<área>`:
+   `{ tipo: { excluido, categorias } }`), no con el `mattype_cfg_<pa>` de v7, para seguir compartida con el
+   Network Analyzer mientras este no se migre. Los campos adicionales sí usan las claves de v7
+   (`ef_sel_pa_<entidad>_<área>`).
+4. **El diálogo de campos adicionales muestra descripción solo de los campos que la suite conoce**
+   (`DESCRIPCION_DE_CAMPO`); v7 mostraba la etiqueta que traía SAP de cada campo (`fieldMeta`). Falta
+   decidir de dónde sale esa etiqueta aquí (el catálogo de etiquetas de `ibp-master-data.js` es candidato;
+   no se comprobó su forma).
+5. **No hay panel de corrección de campos** (`validateEntityFields` + `fmShowCorrectionPanel`): si un
+   campo no existe en este tenant, la descarga lo omite y lo avisa en el registro, y el análisis sigue
+   sin él. Es una brecha previa, no de esta pasada.
+6. **Solo español**: v7 tenía `es`/`en`. El idioma queda para el final (decisión previa).
+7. **Una rama de v7 es inalcanzable** y se portó igual: «{label} — sin hallazgos en modo permisivo»
+   (un producto sin categoría siempre tiene al menos un hallazgo, porque las reglas de «tener receta» y
+   «no tener receta» se contradicen). No se corrigió: la regla es paridad.
+8. **«Resumen» no es una pestaña de la vista web**, es el renglón de tarjetas: así está en el código de
+   v7 (`name !== _PA_SUMMARY_NAME`). Sí es la primera hoja del Excel.
+9. Quedan en el esquema de IndexedDB las tablas `pa_*` del analizador anterior, sin uso. No se
+   tocaron para no subir la versión del esquema; se quitan cuando se migre la red.
+
+### Sin confirmar (hay que verlo en el tenant de pruebas)
+
+- Que las diez tablas se resuelvan por sus campos en el tenant, y que `PLEADTIME` y `PRATIO` existan en
+  la cabecera (si no, la descarga los omite y avisa).
+- El Excel abierto en Excel de verdad (se verificó el XML y que el zip se reabre, no el archivo en Excel).
+- El aspecto en un navegador real con decenas de miles de filas (se miró con datos de muestra).
 
 ## Network Visualizer — hecho (2026-10-01), falta mirarlo contra un tenant
 
@@ -191,6 +230,62 @@ comprobó ningún `Download Configuration File` de un tenant. Texto de v7 que no
 conexión a SAP IBP (pestaña Conexión).» (aquí la conexión se hace con «Conectar SAP IBP»). Pendiente de la fase
 de idioma: el inglés del documento (`T.en` de v7); el diccionario ya se lee por idioma en
 `src/lib/pa-doc-textos.js`.
+
+## Infraestructura reutilizable para Network Analyzer
+
+Lo que construyó el Production Analyzer, el Network Analyzer debe **usarlo**, no rehacerlo. Todo es
+genérico salvo lo marcado «propio de PA».
+
+**1. El modelo del informe** — `core/ibp/analisis-hojas.js`
+- `crearHojaDeTabla({ nombre, color, encabezados, notas, grupos, conEstado })` devuelve una hoja con
+  `.agregar(celdas, relleno)` (relleno = `COLORES.C_RED`, `COLORES.C_YEL` o `null`; cuenta total / red /
+  yel / ok sola) y `.agregarLibre(celdas, relleno)` (filas bajo la tabla, para los metadatos del Resumen).
+- `crearHojaLibre({ nombre, color, capturar })` para la hoja Estadísticas (`capturar` recibe cada fila en
+  texto para la vista web).
+- `etiquetaDeRelleno`, `porcentajeOk`, `codigos`, `limpiarXml`, `COLORES`, `NA_DASH`.
+- La forma del `Informe` (`{ titulo, archivo, generadoEl, hojas, resumen, estadisticas,
+  nombreEstadisticas, orden, hojasWeb }`) está documentada al principio del archivo; el molde para
+  producirlo es `analizarProduccion` en `core/ibp/production-analyzer.js` (mira `hojaDeAnalisis` y el
+  cierre con el Resumen). `bloquesDeResumen(hoja, opts)` (mismo archivo) sirve tal cual para los bloques
+  de metadatos del Resumen: cambia `opts.analyzer` y las entidades.
+- Propio de PA: `construirEstadisticas` (port de `StatsSheet.buildPA`). El de la red es `buildSN`, que en
+  v7 lee IndexedDB; hay que portarlo recibiendo los datos ya leídos.
+
+**2. El Excel** — `src/lib/xlsx-analisis.js`: `armarLibroDeAnalisis(informe, { ceder })` → `ArrayBuffer`,
+y `descargarLibro(buffer, informe.archivo)` de `bom-export.js`. No hay que tocarlo. Ojo: el
+`analyzeAndStreamExcel` de v7 parte las hojas de más de 900.000 filas; esto **no** lo hace todavía.
+
+**3. La vista web y el modal** — `VistaWebAnalisis.jsx` (`datos`, `descargarExcel`, `excelDescargado`;
+`datos` se arma como `datosWeb` en `AnalizadorProduccion.jsx`) y `ModalModoDeSalida.jsx`
+(`onElegir('web'|'excel'|'both'|null)`). Cambiar de análisis = montar con otra `key`. **Decisión
+pendiente para la red:** la vista tiene las filas en memoria; las hojas Location Source / Customer Source
+de v7 pueden tener cientos de miles de filas y v7 las paginaba desde IndexedDB. O se capa y se avisa, o
+se hace una variante paginada.
+
+**4. Los pasos ②–④** — `TablaExcluirTipos`, `MatrizDeCategorias`, `CamposAdicionales` (props en el
+encabezado de cada archivo) dentro de `PasoPlegable`. `core/ibp/mattype-config.js` trae las categorías,
+los resúmenes de una línea (`resumenDeExclusionV7`, `resumenDeCategoriasV7`, `resumenDeEjecucionV7`),
+`desdeClasificacion` / `actualizarTipos`. La clasificación se guarda con `clasificacion-de-tipos.js`
+(compartida con PA). Para los campos adicionales: `campos-adicionales.js` (`leerCamposAdicionales('sn',
+…)`; `TABLA_DE_ENTIDAD` es de PA, la red necesita la suya: product → `bom_prd`, location → `bom_loc`,
+customer → `sn_cust_master`, locationSource → `sn_loc`, customerSource → `sn_cust`) y las listas de
+campos obligatorios/ocultos de `EF_MAND_VISIBLE.sn` / `EF_MAND_HIDDEN.sn` (en `extraFields.js` de v7).
+
+**5. El recorrido y la descarga** — copiar `AnalizadorProduccion.jsx` (guía de pasos, modal, validar →
+preguntar → bajar → analizar → entregar, banner, vista). Propio de PA: las tablas, los campos de más, el
+`formato` (`registro-pa.js`), `leerDatosDeProduccion` y `analizarProduccion`. Para la red hay que
+escribir su `registro-sn.js` (textos de la fase 1 de `analyzer.js`), su lector y su algoritmo.
+`ExplorerExtract` ya admite `tablas`, `camposMas`, `requeridas`, `formato`, `sinCancelar` y el mango
+`validar() / bajar() / decir() / anotar() / avanzar()`. `planificarExtraccion` admite `tablas` y `mas`.
+`leerTiposDeMaterial` (consulta ligera de `PRDID,MATTYPEID`) sirve igual.
+
+**6. Cómo probar** — el patrón de `production-analyzer.test.js` (fixture pequeña con respuestas
+calculadas a mano contra v7) y el de `AnalizadorProduccion.test.js` (dobles de descarga, análisis y Excel).
+
+**7. Qué se puede retirar cuando la red se migre** — `AnalizadorV7.jsx`, `InformeDeCalidad.jsx`,
+`production-rules.js`, `production-analysis.js` (solo conserva `texto`), `production-analyze.js` (solo
+conserva `tiposDeMaterial`), `network-analysis.js`, `network-analyze.js`, `network-load-sap.js` y las
+tablas `pa_*` / `sn_*_web` de IndexedDB.
 
 ## Decisiones del usuario (2026-10-01)
 

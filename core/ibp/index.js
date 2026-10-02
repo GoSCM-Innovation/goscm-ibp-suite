@@ -350,32 +350,39 @@ export {
   resumirRedes,
 } from './network-analysis.js'
 
-export {
-  COLUMNAS as COLUMNAS_DEL_ANALISIS,
-  analizarProducto,
-  esCeroOVacio,
-  filaDelInforme,
-  laPeor,
-  resumirAnalisis,
-} from './production-analysis.js'
+export { texto } from './production-analysis.js'
 
 export {
-  COLUMNAS as COLUMNAS_DE_UBICACION,
-  EXIGENCIAS as EXIGENCIAS_DE_UBICACION,
-  ROLES as ROLES_DE_UBICACION,
-  analizarUbicacion,
-  filaDeUbicacion,
-  resumirUbicaciones,
-  rolesDe,
-} from './location-analysis.js'
+  MATTYPE_CATS,
+  TEXTOS_DE_CATEGORIA,
+  actualizarTipos,
+  categoriasDe,
+  desdeClasificacion,
+  estaExcluido,
+  iniciarTipos,
+  reglasDeCategorias,
+  resumenDeCategoriasV7,
+  resumenDeEjecucionV7,
+  resumenDeExclusionV7,
+} from './mattype-config.js'
 
 export {
-  COLUMNAS as COLUMNAS_DE_RECURSO,
-  ESTADOS as ESTADOS_DE_RECURSO,
-  analizarRecurso,
-  filaDeRecurso,
-  resumirRecursos,
-} from './resource-analysis.js'
+  COLORES as COLORES_DE_INFORME,
+  ETIQUETA_DE_SEVERIDAD,
+  crearHojaDeTabla,
+  crearHojaLibre,
+  etiquetaDeRelleno,
+  limpiarXml,
+  rellenoDeSeveridad,
+  severidadDeRelleno,
+} from './analisis-hojas.js'
+
+export {
+  CAMPOS_OBLIGATORIOS as CAMPOS_OBLIGATORIOS_DE_PA,
+  ENTIDADES_CON_EXTRAS as ENTIDADES_CON_EXTRAS_DE_PA,
+  NOMBRES_DE_HOJA as NOMBRES_DE_HOJA_DE_PA,
+  analizarProduccion,
+} from './production-analyzer.js'
 
 export {
   ARCOS as ARCOS_DE_RED,

@@ -3689,3 +3689,459 @@ a { color: var(--cyan); }
 .padoc-enrich-hint { margin-top: 6px; font-size: 0.75rem; color: var(--text2); }
 .padoc-enrich-hint.ok { color: var(--accent); }
 .padoc-log { min-height: 40px; }
+
+/* ═══════════════════════════════════════════════════════════════════════════════════════════════
+   Production Analyzer de v7 (2026-10-01): pasos ②–④, vista web de resultados y modal de modo de salida.
+   Copiado de `css/styles.css` y de `snWebView.js` de v7. Selectores acotados por prefijo: `.mattype-*`,
+   `.ef-*`, `#efModal`/`.connect-dialog` (diálogo de campos) y `.snwv-*` (vista web).
+   ═══════════════════════════════════════════════════════════════════════════════════════════════ */
+
+/* ═══════════════════════════════════════════════════════════════════════════════════════════════
+   Cuerpos de los pasos ② Excluir tipos, ③ Categorizar tipos y ④ Campos adicionales.
+   Copiado de `css/styles.css` de v7 (bloques `.mattype-*`, `#mattype-floating-tooltip`, `.ef-*` y los
+   diálogos `.connect-dialog`). Los nombres de variable de tema son los de este repo; se anexa al final
+   de `src/index.css`.
+
+   Ya existen en `src/index.css` y NO se repiten: `.mattype-panel*`, `.mattype-optional-badge`,
+   `.mattype-summary`, `.mattype-reset-btn`, `.mattype-arr`, `.mattype-note`, `.btn-secondary`, `.btn-small`,
+   `.btn-row`.
+   ═══════════════════════════════════════════════════════════════════════════════════════════════ */
+
+/* ── Vacío y código de tipo ── */
+.mattype-empty { font-size: 12px; color: var(--text3); font-style: italic; padding: 8px 0; }
+.mattype-code  { font-size: 12px; font-weight: 700; color: var(--text); font-family: var(--mono); }
+
+/* ── Interruptor ── */
+.mattype-toggle {
+  position: relative;
+  display: inline-block;
+  width: 36px;
+  height: 20px;
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+.mattype-toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+  position: absolute;
+}
+.mattype-toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  inset: 0;
+  background: rgba(255,255,255,.1);
+  border-radius: 20px;
+  transition: background .2s;
+}
+.mattype-toggle-slider::before {
+  content: '';
+  position: absolute;
+  height: 14px;
+  width: 14px;
+  left: 3px;
+  top: 3px;
+  background: var(--text3);
+  border-radius: 50%;
+  transition: transform .2s, background .2s;
+}
+/* Exclusión: cian cuando está incluido */
+.mattype-toggle input:checked + .mattype-toggle-slider {
+  background: rgba(41,171,226,.3);
+}
+.mattype-toggle input:checked + .mattype-toggle-slider::before {
+  transform: translateX(16px);
+  background: var(--cyan);
+}
+/* Categorías: color propio por categoría */
+.mattype-toggle[data-cat="finished"] input:checked + .mattype-toggle-slider { background: rgba(247,168,0,.25); }
+.mattype-toggle[data-cat="finished"] input:checked + .mattype-toggle-slider::before { background: var(--accent); }
+.mattype-toggle[data-cat="semi"]     input:checked + .mattype-toggle-slider { background: rgba(41,171,226,.25); }
+.mattype-toggle[data-cat="semi"]     input:checked + .mattype-toggle-slider::before { background: var(--cyan); }
+.mattype-toggle[data-cat="rawmat"]   input:checked + .mattype-toggle-slider { background: rgba(52,211,153,.25); }
+.mattype-toggle[data-cat="rawmat"]   input:checked + .mattype-toggle-slider::before { background: var(--green); }
+.mattype-toggle[data-cat="trading"]  input:checked + .mattype-toggle-slider { background: rgba(167,139,250,.25); }
+.mattype-toggle[data-cat="trading"]  input:checked + .mattype-toggle-slider::before { background: var(--purple); }
+
+/* ── Paso ②: tabla de exclusión ── */
+.mattype-toggle-label {
+  font-size: 11px;
+  color: var(--text3);
+  margin-left: 8px;
+  vertical-align: middle;
+}
+.mattype-toggle-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 6px;
+}
+.mattype-toggle-table thead th {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text3);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  padding: 5px 10px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+}
+.mattype-toggle-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(255,255,255,.04);
+  font-size: 12px;
+  vertical-align: middle;
+}
+.mattype-toggle-table tbody tr:last-child td { border-bottom: none; }
+.mattype-toggle-table tbody tr:hover td { background: rgba(255,255,255,.015); }
+.mattype-row-excluded td { opacity: .45; }
+.mattype-col-count  { color: var(--text3); font-size: 11px; }
+.mattype-col-toggle { display: flex; align-items: center; }
+
+/* ── Paso ③: matriz de categorización ── */
+.mattype-matrix-scroll { overflow-x: auto; }
+.mattype-matrix-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 6px;
+}
+.mattype-matrix-table thead th {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border);
+  text-align: center;
+  white-space: nowrap;
+}
+.mattype-matrix-th-type  { text-align: left; color: var(--text3); }
+.mattype-matrix-th-count { text-align: left; color: var(--text3); }
+.mattype-matrix-th-cat   { min-width: 110px; }
+.mattype-matrix-table tbody td {
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(255,255,255,.04);
+  font-size: 12px;
+  vertical-align: middle;
+}
+.mattype-matrix-table tbody tr:last-child td { border-bottom: none; }
+.mattype-matrix-table tbody tr:hover td { background: rgba(255,255,255,.015); }
+.mattype-matrix-cell { text-align: center; }
+
+/* ── Icono «?» de cada categoría y su tooltip ── */
+.mattype-cat-help {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  margin-left: 5px;
+  border-radius: 50%;
+  background: rgba(255,255,255,.12);
+  color: var(--text2);
+  font-size: 9px;
+  font-weight: 700;
+  font-style: normal;
+  cursor: help;
+  vertical-align: middle;
+  flex-shrink: 0;
+  line-height: 1;
+}
+.mattype-cat-help:hover {
+  background: rgba(255,255,255,.22);
+  color: var(--text);
+}
+
+/* Tooltip flotante: se monta en <body> (portal) para escapar del overflow de la matriz.
+   DESVIACIÓN de v7: el fondo era `#1a2540` fijo, que con el tema claro de esta suite dejaba texto
+   oscuro sobre fondo oscuro; `--surface2` es casi el mismo azul en el tema oscuro y se lee en el claro. */
+#mattype-floating-tooltip {
+  position: fixed;
+  width: 240px;
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  border-radius: var(--r);
+  padding: 10px 12px;
+  font-size: 11px;
+  font-weight: 400;
+  text-transform: none;
+  color: var(--text);
+  text-align: left;
+  white-space: normal;
+  line-height: 1.55;
+  box-shadow: var(--shadow-lg);
+  z-index: 99999;
+  pointer-events: none;
+}
+#mattype-floating-tooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: var(--border2);
+}
+.mattype-cat-tooltip-title {
+  font-weight: 700;
+  margin-bottom: 4px;
+  font-size: 11px;
+}
+.mattype-cat-tooltip-rules {
+  margin: 5px 0 0;
+  padding-left: 12px;
+  color: var(--text2);
+}
+.mattype-cat-tooltip-rules li { margin-bottom: 2px; }
+.mattype-cat-tooltip-ex {
+  margin-top: 6px;
+  padding: 4px 7px;
+  background: rgba(255,255,255,.05);
+  border-radius: 3px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text2);
+}
+
+/* ── Paso ④: botones de entidad ── */
+.ef-entity-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.ef-count-badge {
+  background: var(--accent); color: var(--navy, #0b1120);
+  font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 10px;
+}
+
+/* ── Diálogo base de v7 (`.connect-dialog`): lo usa el de campos adicionales ── */
+.connect-dialog {
+  margin: auto;
+  padding: 0;
+  border: 1px solid var(--border2);
+  border-radius: var(--r-xl);
+  background: var(--bg2);
+  box-shadow: var(--shadow-lg);
+  color: var(--text);
+  font-family: var(--font);
+  overflow: hidden;
+  width: min(840px, 94vw);
+}
+.connect-dialog::backdrop {
+  background: rgba(0,0,0,.55);
+  backdrop-filter: blur(3px);
+  animation: connect-dialog-backdrop-in var(--dur-std) var(--ease-out);
+}
+/* v7 usa `--dur-modal` (300 ms); aquí no existe, y `--dur-std` (250 ms) es la duración estándar. */
+.connect-dialog[open] {
+  animation: connect-dialog-in var(--dur-std) var(--ease-out) forwards;
+}
+@keyframes connect-dialog-in {
+  from { opacity: 0; transform: scale(0.97); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes connect-dialog-backdrop-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.connect-dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--sp-3) var(--sp-6);
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+}
+.connect-dialog-title {
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--text);
+}
+.dialog-close-btn {
+  background: none;
+  border: none;
+  color: var(--text3);
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  padding: 4px 8px;
+  border-radius: var(--r-sm);
+  transition: color var(--dur-fast) var(--ease-out),
+              background var(--dur-fast) var(--ease-out);
+}
+.dialog-close-btn:hover {
+  color: var(--text);
+  background: rgba(255,255,255,.06);
+}
+
+/* ── Diálogo de campos adicionales (`#efModal`) ── */
+.ef-fields-dialog { width: min(520px, 94vw); }
+
+.ef-fields-dialog-body {
+  display: flex; flex-direction: column;
+  height: min(560px, 70vh);
+  overflow: hidden;
+}
+
+.ef-fields-search-wrap {
+  padding: 12px 20px 10px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+}
+
+.ef-fields-search {
+  width: 100%; box-sizing: border-box;
+  padding: 7px 10px; border-radius: 6px;
+  border: 1px solid var(--border); background: var(--bg);
+  color: var(--text); font-size: 12px; outline: none;
+  font-family: var(--font);
+}
+.ef-fields-search:focus { border-color: var(--accent); }
+
+.ef-fields-list {
+  flex: 1; overflow-y: auto; padding: 4px 20px 8px;
+}
+
+.ef-fields-footer {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 20px; border-top: 1px solid var(--border); flex-shrink: 0;
+}
+
+.ef-fields-count {
+  font-size: 11px; color: var(--text2); flex: 1;
+}
+
+/* ── Filas de campos ── */
+.ef-section-label {
+  font-size: 10px; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--text3); font-weight: 600; margin: 10px 0 4px;
+}
+
+.ef-field-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,.04);
+}
+
+.ef-field-info {
+  display: flex; flex-direction: column; gap: 1px; flex: 1; min-width: 0;
+}
+
+.ef-field-name {
+  font-size: 12px; font-family: var(--mono, monospace);
+  color: var(--text); white-space: nowrap;
+}
+
+.ef-field-desc {
+  font-size: 11px; color: var(--text2);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+.ef-mandatory-badge {
+  font-size: 10px; color: var(--text3); background: rgba(255,255,255,.06);
+  padding: 1px 6px; border-radius: 8px; flex-shrink: 0;
+}
+
+.ef-toggle-wrap {
+  position: relative; display: inline-flex; align-items: center;
+  width: 32px; height: 17px; cursor: pointer; flex-shrink: 0;
+}
+.ef-toggle-wrap input { opacity: 0; width: 0; height: 0; position: absolute; }
+.ef-toggle-slider {
+  position: absolute; inset: 0; border-radius: 17px;
+  background: var(--border); transition: background .2s;
+}
+.ef-toggle-slider::before {
+  content: ''; position: absolute; width: 11px; height: 11px;
+  left: 3px; top: 3px; border-radius: 50%; background: #fff;
+  transition: transform .2s;
+}
+.ef-toggle-wrap input:checked + .ef-toggle-slider { background: var(--accent); }
+.ef-toggle-wrap input:checked + .ef-toggle-slider::before { transform: translateX(15px); }
+.ef-toggle-wrap.locked { opacity: .55; cursor: default; }
+
+
+/* ══════════════════════════════════════════════════════════════════
+   Vista web de los analizadores (VistaWebAnalisis / ModalModoDeSalida)
+   Portado de `injectCss()` de v7 (snWebView.js). Todos los selectores van acotados con `.snwv-*`.
+   Se escribe aquí y no se inyecta desde JS: así el tema claro/oscuro lo resuelven las variables.
+   ══════════════════════════════════════════════════════════════════ */
+.snwv-wrap{margin-top:24px;border:1px solid var(--border);border-radius:10px;background:var(--bg2);overflow:hidden}
+.snwv-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 18px;border-bottom:1px solid var(--border);background:var(--surface);flex-wrap:wrap}
+.snwv-title{font-size:15px;font-weight:700;color:var(--text);display:flex;align-items:center;gap:8px}
+.snwv-sub{font-size:12px;color:var(--text2);margin-top:2px}
+.snwv-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.snwv-btn{cursor:pointer;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:12px;padding:7px 13px;border-radius:6px;font-family:inherit}
+.snwv-btn:hover{border-color:var(--accent)}
+.snwv-btn:disabled{opacity:.55;cursor:default}
+.snwv-btn-primary{background:var(--accent);color:#0b1120;border-color:var(--accent);font-weight:600}
+.snwv-cards{display:flex;gap:10px;padding:14px 18px;flex-wrap:wrap;border-bottom:1px solid var(--border)}
+.snwv-card{flex:1 1 150px;min-width:140px;border:1px solid var(--border);border-radius:8px;padding:10px 12px;background:var(--bg);cursor:pointer;transition:border-color .15s}
+.snwv-card:hover{border-color:var(--accent)}
+.snwv-card.active{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
+.snwv-card-name{font-size:12px;color:var(--text2);font-weight:600}
+.snwv-card-total{font-size:22px;font-weight:700;color:var(--text);margin:3px 0}
+.snwv-card-sev{display:flex;gap:6px 8px;font-size:11px;flex-wrap:wrap}
+.snwv-dot{display:inline-flex;align-items:center;gap:3px;white-space:nowrap}
+.snwv-dot b{font-weight:700}
+.snwv-tabs{display:flex;gap:4px;padding:12px 18px 0;flex-wrap:wrap}
+.snwv-tab{cursor:pointer;border:1px solid var(--border);border-bottom:none;background:var(--bg);color:var(--text2);font-size:12px;padding:7px 14px;border-radius:6px 6px 0 0}
+.snwv-tab.active{background:var(--bg2);color:var(--text);font-weight:600;border-color:var(--accent)}
+.snwv-toolbar{display:flex;gap:10px;align-items:center;padding:12px 18px;flex-wrap:wrap;border-bottom:1px solid var(--border)}
+.snwv-chips{display:flex;gap:6px;flex-wrap:wrap}
+.snwv-chip{cursor:pointer;border:1px solid var(--border);background:var(--bg);color:var(--text2);font-size:11px;padding:5px 11px;border-radius:20px}
+.snwv-chip.active{border-color:var(--accent);color:var(--text);font-weight:600}
+.snwv-search{flex:1;min-width:160px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:12px;padding:7px 11px;border-radius:6px;font-family:inherit}
+.snwv-tablewrap{overflow:auto;max-height:62vh}
+.snwv-table{border-collapse:collapse;width:100%;font-size:12px}
+.snwv-table th{position:sticky;top:0;background:var(--surface);color:var(--text);text-align:left;padding:8px 10px;border-bottom:2px solid var(--accent2);white-space:nowrap;font-weight:600;z-index:1}
+.snwv-table td{padding:6px 10px;border-bottom:1px solid var(--border);color:var(--text);vertical-align:top;max-width:340px;overflow-wrap:anywhere;word-break:break-word}
+.snwv-table tr.snwv-red td:first-child{box-shadow:inset 3px 0 0 var(--red)}
+.snwv-table tr.snwv-yel td:first-child{box-shadow:inset 3px 0 0 var(--amber)}
+.snwv-table tr.snwv-ok td:first-child{box-shadow:inset 3px 0 0 var(--green)}
+.snwv-table tr.snwv-red{background:rgba(255,107,107,.07)}
+.snwv-table tr.snwv-yel{background:rgba(247,168,0,.07)}
+.snwv-sevcell{white-space:nowrap;font-weight:600}
+.snwv-sevcell.snwv-red{color:var(--red)}
+.snwv-sevcell.snwv-yel{color:var(--amber)}
+.snwv-sevcell.snwv-ok{color:var(--green)}
+.snwv-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 18px;flex-wrap:wrap}
+.snwv-pager{display:flex;align-items:center;gap:8px}
+.snwv-count{font-size:12px;color:var(--text2)}
+.snwv-cap{font-size:11px;color:var(--accent2);margin-top:4px}
+.snwv-note{font-size:11px;color:var(--text3);margin-top:4px}
+.snwv-na{color:var(--text3);font-style:italic}
+.snwv-dlnote{font-size:12px;color:var(--green);font-weight:600;align-self:center}
+/* tabla de datos: ancho fijo por columna, recorte con elipsis, columnas ajustables */
+.snwv-dtable{border-collapse:collapse;table-layout:fixed;font-size:12px}
+.snwv-dtable th,.snwv-dtable td{padding:6px 10px;border-bottom:1px solid var(--border);border-right:1px solid var(--border);color:var(--text);text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;box-sizing:border-box;vertical-align:top}
+.snwv-dtable th{position:sticky;top:0;background:var(--surface);font-weight:600;z-index:1;border-bottom:2px solid var(--accent2);user-select:none}
+.snwv-dtable tr.snwv-red{background:rgba(255,107,107,.07)}
+.snwv-dtable tr.snwv-yel{background:rgba(247,168,0,.07)}
+.snwv-dtable tr.snwv-red td:first-child{box-shadow:inset 3px 0 0 var(--red)}
+.snwv-dtable tr.snwv-yel td:first-child{box-shadow:inset 3px 0 0 var(--amber)}
+.snwv-dtable tr.snwv-ok td:first-child{box-shadow:inset 3px 0 0 var(--green)}
+.snwv-resizer{position:absolute;top:0;right:0;width:7px;height:100%;cursor:col-resize}
+.snwv-resizer:hover{background:var(--accent)}
+.snwv-empty{padding:30px;text-align:center;color:var(--text2);font-size:13px}
+.snwv-statsbox{padding:16px 18px}
+.snwv-st-h{font-size:13px;font-weight:700;color:var(--accent);margin:18px 0 8px;padding-bottom:4px;border-bottom:1px solid var(--border)}
+.snwv-statsbox .snwv-st-h:first-child{margin-top:0}
+.snwv-ov{position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;z-index:9999}
+.snwv-modal{background:var(--bg2);border:1px solid var(--border);border-radius:12px;max-width:460px;width:90%;padding:22px;box-shadow:0 20px 60px rgba(0,0,0,.4)}
+.snwv-modal h3{margin:0 0 6px;font-size:16px;color:var(--text)}
+.snwv-modal p{margin:0 0 16px;font-size:13px;color:var(--text2)}
+.snwv-opts{display:flex;flex-direction:column;gap:10px}
+.snwv-opt{cursor:pointer;border:1px solid var(--border);background:var(--bg);border-radius:8px;padding:12px 14px;text-align:left;color:var(--text);transition:border-color .15s;font-family:inherit}
+.snwv-opt:hover{border-color:var(--accent)}
+.snwv-opt b{display:block;font-size:13px;margin-bottom:2px}
+.snwv-opt span{font-size:11px;color:var(--text2)}
+.snwv-modal-foot{margin-top:14px;text-align:right}
+/* clip clicable, pantalla completa, popup de contenido de celda */
+.snwv-clip{cursor:pointer}
+.snwv-clip:hover{text-decoration:underline dotted;text-underline-offset:2px}
+.snwv-wrap.snwv-fs{position:fixed;inset:0;z-index:9998;margin:0;border:none;border-radius:0;background:var(--bg2);display:flex;flex-direction:column;overflow:auto}
+.snwv-wrap.snwv-fs .snwv-tablewrap{max-height:calc(100vh - 250px)}
+.snwv-cellpop-h{font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;word-break:break-word}
+.snwv-cellpop-body{font-size:13px;color:var(--text);white-space:pre-wrap;word-break:break-word;max-height:52vh;overflow:auto;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px 14px;line-height:1.5}
+/* barra minimizada (tras Cerrar) */
+.snwv-collapsed{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 18px;flex-wrap:wrap}
+.snwv-collapsed-txt{font-size:13px;font-weight:600;color:var(--text2)}
+/* Añadido respecto a v7: las tarjetas, pestañas y chips son <div>/<span> con role y tabindex en React
+   (para llegar a ellos con el teclado); sin esto el foco no se vería. */
+.snwv-card:focus-visible,.snwv-tab:focus-visible,.snwv-chip:focus-visible,.snwv-opt:focus-visible,.snwv-btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+

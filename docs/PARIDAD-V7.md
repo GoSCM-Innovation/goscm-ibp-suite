@@ -23,7 +23,7 @@ con el motivo escrito en [Los informes por entidad](#los-informes-por-entidad).
 | Módulo (nombre en su menú) | Archivo | Líneas | Estado |
 |---|---|---|---|
 | Production Visualizer | `bom.js` | 1.594 | **Portado** — `core/ibp/bom-tree.js` + `src/lib/bom-load.js` + `data/BomTree.jsx` |
-| Production Analyzer | `prodAnalyzer.js` | 2.789 | **Portado** — `core/ibp/production-rules.js` + `production-analysis.js` + `location-analysis.js` + `resource-analysis.js` + `data/ProductionAnalyzer.jsx` |
+| Production Analyzer | `prodAnalyzer.js` + `snWebView.js` + `mattype-config.js` + `extraFields.js` + `statsSheet.js` + `runSummary.js` | 2.789 + | **Portado idéntico (2026-10-01)** — `core/ibp/production-analyzer.js` + `mattype-config.js` + `analisis-hojas.js` + `src/lib/produccion-analizar.js` + `xlsx-analisis.js` + `data/AnalizadorProduccion.jsx` + `VistaWebAnalisis.jsx`. Ver `PARIDAD-DATA-TOOLS.md` |
 | Network Visualizer | `visualizer.js` | 1.448 | **Portado** — `core/ibp/supply-network.js` + `src/lib/network-load-sap.js` + `data/NetworkVisualizer.jsx` (ver `PARIDAD-DATA-TOOLS.md`) |
 | Network Analyzer | `analyzer.js` + `snWebView.js` | 3.531 | **Portado** — `core/ibp/network-analysis.js` + `src/lib/network-analyze.js` |
 | Glosario Analyzers | `glosario.js` | 1.409 | **Portado tal cual** — `data/Glosario.jsx` + `src/lib/glosario-v7.js` (el texto de v7) + `glosario-pdf.js` |
@@ -189,6 +189,14 @@ ver.
 Queda pendiente la misma revisión de alcance y filtros en **v8 y v9**.
 
 ## Cómo se porta el analizador de la jerarquía
+
+> **Retirado el 2026-10-01.** Las secciones «Cómo se porta el analizador de la jerarquía» y «Los informes por
+> entidad» (y la medición de abajo) describen el analizador de producción ANTERIOR de la suite, con una
+> tabla de calidad propia (Error / Aviso / Nota / Bien) y tres pestañas. Esa lógica se eliminó: el
+> Production Analyzer usa ahora el algoritmo de v7, idéntico (`core/ibp/production-analyzer.js`), con sus
+> hojas, su vista web y su Excel. Se deja el texto como historia de las decisiones; lo vigente está en
+> `docs/PARIDAD-DATA-TOOLS.md`. El analizador de la red sigue como aquí se describe hasta que se migre.
+
 
 Lo que hace es contestar, producto a producto: **¿está listo para que SAP planifique con él?** Y la
 respuesta depende de **qué es** el material, que es lo que decide la matriz de
