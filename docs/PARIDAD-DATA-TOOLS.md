@@ -115,6 +115,22 @@ Excel que la pantalla no entrega.
 10. Voseo en la suite: «Soltá el ZIP…» → v7: «Arrastra los CSV aquí». Corregir ya.
 11. Textos de las zonas de carga y de los paneles (los de v7).
 
+## Decisiones del usuario (2026-10-01)
+
+- Orden de trabajo: el propuesto abajo.
+- **Los analizadores se migran con los algoritmos de v7, idénticos, con el mismo funcionamiento exacto**:
+  era la idea principal de la migración. Se descarta la tabla de calidad propia.
+- **La descarga se repite SIEMPRE**, como v7. Reutilizar lo guardado no captura los cambios hechos en el
+  tenant desde la última vez. (Hecho.)
+
+## Hecho de la lista de abajo
+
+- ✅ Mapeo ① compartido (2026-10-01): título «MAPEO DE ENTIDADES», el texto de ayuda de cada aplicación,
+  las tarjetas de v7 por aplicación (8 / 10 / 9 / 9) con etiquetas en inglés, buscador con «(ninguna)» y
+  «nombre (N campos)», y los campos de la tabla debajo. Cada papel se puede dejar en «(ninguna)».
+  Se conserva «Volver a la detección automática» (las correcciones aquí se guardan para el equipo).
+- ✅ Descarga siempre en los analizadores (`bajarSiVacio` eliminado).
+
 ## Orden propuesto
 
 1. Mapeo ① compartido (PanelMapeo con las tarjetas, etiquetas y buscador de v7): lo usan Production
