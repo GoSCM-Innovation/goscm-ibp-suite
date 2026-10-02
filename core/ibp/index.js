@@ -362,15 +362,18 @@ export {
 export {
   ARCOS as ARCOS_DE_RED,
   CLASES as CLASES_DE_RED,
-  COLUMNAS as COLUMNAS_DE_RED,
   TIPO_PROVEEDOR,
+  UMBRAL_DE_CLIENTES,
   armarRed,
   claseDeUbicacion,
-  nodosSueltos,
-  plazoLegible,
-  repartirEnColumnas,
+  clientesParaFiltro,
+  clientesQueSobran,
+  coincideConComodin,
+  colocarNodos,
+  insumosDeProveedor,
+  plantasDetectadas,
   resumirRed,
-  vecinosDe,
+  ubicacionesParaFiltro,
 } from './supply-network.js'
 
 export {

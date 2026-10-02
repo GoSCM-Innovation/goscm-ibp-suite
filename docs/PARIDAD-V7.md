@@ -24,7 +24,7 @@ con el motivo escrito en [Los informes por entidad](#los-informes-por-entidad).
 |---|---|---|---|
 | Production Visualizer | `bom.js` | 1.594 | **Portado** — `core/ibp/bom-tree.js` + `src/lib/bom-load.js` + `data/BomTree.jsx` |
 | Production Analyzer | `prodAnalyzer.js` | 2.789 | **Portado** — `core/ibp/production-rules.js` + `production-analysis.js` + `location-analysis.js` + `resource-analysis.js` + `data/ProductionAnalyzer.jsx` |
-| Network Visualizer | `visualizer.js` | 1.448 | **Portado** — `core/ibp/supply-network.js` + `src/lib/network-load.js` + `data/SupplyNetwork.jsx` |
+| Network Visualizer | `visualizer.js` | 1.448 | **Portado** — `core/ibp/supply-network.js` + `src/lib/network-load-sap.js` + `data/NetworkVisualizer.jsx` (ver `PARIDAD-DATA-TOOLS.md`) |
 | Network Analyzer | `analyzer.js` + `snWebView.js` | 3.531 | **Portado** — `core/ibp/network-analysis.js` + `src/lib/network-analyze.js` |
 | Glosario Analyzers | `glosario.js` | 1.409 | **Portado tal cual** — `data/Glosario.jsx` + `src/lib/glosario-v7.js` (el texto de v7) + `glosario-pdf.js` |
 | Planning Area Documenter | `paDoc.js` | 1.055 | **Portado** — `core/ibp/pa-doc-model.js` + `src/lib/docx.js` + `pa-doc.js` + `data/PlanningAreaDoc.jsx` |
@@ -130,16 +130,13 @@ sus dos pantallas**:
   arcos de proveedor por esos componentes, y los maestros por los `LOCID` y `CUSTID` que salieron.
 
 Este port había colgado las dos de la descarga. Corregido: `src/lib/network-load-sap.js` porta la
-secuencia de v7, y la pantalla usa lo descargado cuando está —instantáneo y sin tope— y lee de SAP
-cuando no. **Medido con las tablas vaciadas: 241 nodos y 320 arcos en 5,1 s.**
+secuencia de v7. **Desde el 2026-10-01 el visualizador lee SIEMPRE de SAP**, como v7 (antes usaba
+primero lo descargado, y por eso `network-load.js` ya no existe): reutilizar lo guardado no captura
+los cambios hechos en el tenant. **Medido con las tablas vaciadas: 241 nodos y 320 arcos en 5,1 s.**
 
-Dos cosas que la pantalla dice a propósito, porque la fuente cambia lo que el dato puede afirmar:
-
-- Leyendo de SAP, los arcos de proveedor se piden para los **primeros 100 componentes** de la receta.
-  El tope es el largo de la URL, el mismo motivo y el mismo número que v7. Leyendo de lo descargado no
-  hay tope, y el aviso lo dice con el número.
-- La lista de productos dice «con red» cuando se contó sobre las tablas de arcos, y «en el área» cuando
-  es el maestro entero: saber cuáles tienen red exigiría una consulta por producto.
+Los arcos de proveedor se piden para los **primeros 100 componentes** de la receta. El tope es el largo
+de la URL, el mismo motivo y el mismo número que v7. (Los avisos de «leyendo de SAP en vivo» y de
+«con red / en el área» que tenía la pantalla se quitaron con la lectura local: v7 no los tenía.)
 
 ## Lo que pide la descarga, comparado con lo que pedía v7
 
@@ -492,7 +489,7 @@ suite esté en español: son los que el cliente lleva años viendo. Renombrar «
 
 **El grafo es el de v7, con su misma librería.** `vis-network`, los mismos colores, formas, tamaños,
 grosor de flecha y curvatura de arco, y la física APAGADA con las posiciones calculadas por
-baricentro —`posicionesEnLienzo` en `core/ibp/supply-network.js`—. Antes había columnas estáticas, con
+baricentro —`colocarNodos` en `core/ibp/supply-network.js`—. Antes había columnas estáticas, con
 una nota en el código diciendo que era «una decisión»: era una decisión que no tocaba tomar. Cuesta
 ~500 kB en su propio trozo del build, que solo se descarga al abrir esa aplicación.
 

@@ -1,207 +1,175 @@
 // Las rutas de la red: si lo que sale de cada planta llega a algún cliente.
 //
-// Portado del `vizRutasPanel` de `index.html` de v7 y de `vizRenderRutas`, `vizRutasSetTipo`,
-// `vizRutasRenderTable` y `vizRutasCsv` de `visualizer.js`. El recorrido y la clasificación están en
-// `core/ibp/supply-network.js` con sus pruebas; aquí solo se filtra y se dibuja.
+// Portado del `vizRutasPanel` y del `vizFsRutasPanel` de `index.html` de v7 y de `vizRenderRutas`,
+// `vizRutasSetTipo`, `vizRutasRenderTable` y `vizRutasCsv` de `visualizer.js`. El recorrido y la
+// clasificación están en `core/ibp/supply-network.js` con sus pruebas; el texto, el filtro y el CSV,
+// en `lib/rutas-de-red.js`. Aquí solo se dibuja.
 //
 // POR QUÉ NO BASTA EL DIBUJO: una planta huérfana —cuyo cien por cien de rutas muere sin llegar a
 // nadie— tiene sus flechas como cualquier otra. Mirando el lienzo no se distingue. Esta tabla es lo
 // que la señala, y es el hallazgo que más veces justifica abrir el visualizador.
+//
+// Hay DOS paneles con la misma información —el de debajo del lienzo y el de la pantalla completa— y
+// comparten el filtro, que vive en quien los monta: lo que se filtra en uno se ve filtrado en el otro,
+// como en v7. Cada uno tiene su propio «▶ Rutas / ▼ Rutas».
 
 import { useMemo, useState } from 'react'
 
-import { FINALES, resumirRutas, rutasDeLaRed } from '../../../core/ibp/supply-network.js'
-import { MARCA_DE_CODIFICACION } from '../../../core/ibp/export-csv.js'
-import { descargarTexto } from '../../lib/descargar-csv.js'
-
-const numero = (valor) => Number(valor ?? 0).toLocaleString('es')
-
-/** Cuántas filas se dibujan. Es el tope de v7: con más, la tabla deja de responder. */
-const TOPE_DE_FILAS = 500
+import { FINALES } from '../../../core/ibp/supply-network.js'
+import {
+  TOPE_DE_FILAS, filtrarRutas, notaDeTope, resumenDeRutas, rotuloDeRuta, rutaComoTexto, saltosDe,
+  terminaEn,
+} from '../../lib/rutas-de-red.js'
 
 const TIPOS = [
-  { id: 'todas', label: 'Todas' },
-  { id: 'cliente', label: 'Con llegada a cliente' },
-  { id: 'sinCliente', label: 'Sin llegada a cliente' },
+  { id: 'todas', etiqueta: 'Todas' },
+  { id: 'cliente', etiqueta: 'Con llegada a cliente' },
+  { id: 'sinCliente', etiqueta: 'Sin llegada a cliente' },
 ]
 
-const FINALES_FILTRO = [
-  { id: 'todos', label: 'Todos' },
-  { id: FINALES.sinSalida, label: 'Sin salida' },
-  { id: FINALES.ciclo, label: 'Ciclo' },
+const CAUSAS = [
+  { id: 'todos', etiqueta: 'Todas' },
+  { id: FINALES.sinSalida, etiqueta: 'Dead-end' },
+  { id: FINALES.ciclo, etiqueta: 'Ciclo' },
 ]
 
-export default function PanelDeRutas({ red, nombreDe }) {
-  const [abierto, setAbierto] = useState(false)
-  const [tipo, setTipo] = useState('todas')
-  const [final, setFinal] = useState('todos')
-  const [busqueda, setBusqueda] = useState('')
-
-  // Se recorre una vez por red: en una red grande son decenas de miles de caminos.
-  const { rutas, truncado, plantasHuerfanas } = useMemo(
-    () => rutasDeLaRed(red?.nodos, red?.arcos),
-    [red],
+/** Un botón del filtro: sin borde, el activo en negrita y con el color del acento. */
+function BotonDeFiltro({ activo, onClick, children }) {
+  return (
+    <button
+      type="button"
+      className={`nv-rutas-filtro${activo ? ' activo' : ''}`}
+      onClick={onClick}
+    >
+      {children}
+    </button>
   )
+}
 
-  const resumen = useMemo(() => resumirRutas(rutas), [rutas])
+/**
+ * `analisis` es lo que devuelve `rutasDeLaRed`. `filtro` es `{ tipo, final, q }` y `onFiltro` recibe
+ * lo que cambia. `onResaltar(indice)` resalta la ruta en el grafo; `onExportar` baja el CSV.
+ */
+export default function PanelDeRutas({
+  analisis, filtro, onFiltro, onResaltar, onExportar, variante = 'pagina',
+}) {
+  const [abierto, setAbierto] = useState(false)
 
-  const filtradas = useMemo(() => {
-    const texto = busqueda.trim().toUpperCase()
-    return rutas.filter((una) => {
-      if (tipo === 'cliente' && !una.llegaACliente) return false
-      if (tipo === 'sinCliente' && una.llegaACliente) return false
-      if (tipo === 'sinCliente' && final !== 'todos' && una.final !== final) return false
-      if (!texto) return true
-      return una.planta.toUpperCase().includes(texto)
-        || una.ultimo.toUpperCase().includes(texto)
-        || (una.cliente ?? '').toUpperCase().includes(texto)
-        || una.nodos.some((uno) => uno.toUpperCase().includes(texto))
-    })
-  }, [rutas, tipo, final, busqueda])
+  const { rutas, truncado, plantasHuerfanas } = analisis
+  const resumen = useMemo(
+    () => resumenDeRutas({ rutas, truncado, plantasHuerfanas }),
+    [rutas, truncado, plantasHuerfanas],
+  )
+  const filtradas = useMemo(() => filtrarRutas(rutas, filtro), [rutas, filtro])
 
-  function volcar() {
-    const cabecera = ['Planta', 'Ruta', 'Termina en', 'Cliente', 'Estado']
-    const filas = filtradas.map((una) => [
-      una.planta,
-      una.nodos.join(' > '),
-      una.ultimo,
-      una.cliente ?? '',
-      una.llegaACliente
-        ? 'Con llegada a cliente'
-        : (una.final === FINALES.ciclo ? 'Ciclo' : 'Sin salida'),
-    ])
-    const escapar = (valor) => `"${String(valor).replace(/"/g, '""')}"`
-    const texto = [cabecera, ...filas].map((fila) => fila.map(escapar).join(';')).join('\r\n')
-    // La marca de codificación va delante o Excel abre el CSV con los acentos rotos.
-    descargarTexto(
-      MARCA_DE_CODIFICACION + texto,
-      `Rutas_${red.producto}_${new Date().toISOString().slice(0, 10)}.csv`,
-    )
-  }
-
-  if (!red) return null
+  const mostradas = filtradas.slice(0, TOPE_DE_FILAS)
+  const nota = notaDeTope(filtradas.length)
 
   return (
-    <div className="viz-rutas">
-      <button type="button" className="viz-rutas-cabecera" onClick={() => setAbierto(!abierto)}>
-        <span className="mattype-arr">{abierto ? '▼' : '▶'}</span>
-        <b>Rutas</b>
-        <span className="mattype-summary">
-          {numero(resumen.conCliente)} con llegada a cliente
-          {resumen.sinCliente > 0 && (
-            ` · ${numero(resumen.sinCliente)} sin llegada `
-            + `(${numero(resumen.sinSalida)} sin salida, ${numero(resumen.ciclos)} en ciclo)`
-          )}
-          {plantasHuerfanas.length > 0 && (
-            ` · ⚠ ${plantasHuerfanas.length} `
-            + `${plantasHuerfanas.length === 1 ? 'planta huérfana' : 'plantas huérfanas'}`
-          )}
-          {truncado && ' · lista recortada'}
-        </span>
-      </button>
+    <div className={`nv-rutas${variante === 'pantalla' ? ' nv-rutas--pantalla' : ''}`}>
+      <div className="nv-rutas-cabecera">
+        <div className="nv-rutas-resumen">
+          <button type="button" className="nv-rutas-boton" onClick={() => setAbierto(!abierto)}>
+            {abierto ? '▼ Rutas' : '▶ Rutas'}
+          </button>
+          <span className="nv-rutas-texto">{resumen}</span>
+        </div>
+        {rutas.length > 0 && (
+          <button type="button" className="btn btn-secondary btn-small" style={{ fontSize: 11 }} onClick={onExportar}>
+            ↓ Exportar CSV
+          </button>
+        )}
+      </div>
 
       {abierto && (
-        <div className="viz-rutas-cuerpo">
-          {/* Una planta huérfana no se ve en el dibujo: sus flechas son como las de cualquier otra. */}
-          {plantasHuerfanas.length > 0 && (
-            <div className="notice notice-error">
-              ⚠ <b>{plantasHuerfanas.length === 1 ? 'Una planta no llega a nadie' : `${plantasHuerfanas.length} plantas no llegan a nadie`}</b>:
-              {' '}<span className="mono">{plantasHuerfanas.join(', ')}</span>. Todas sus rutas mueren
-              antes de un cliente. En el lienzo no se distingue: tienen sus flechas como cualquier otra.
-            </div>
-          )}
-
-          {truncado && (
-            <div className="notice notice-info">
-              La red tiene más rutas de las que se pueden recorrer y la lista está <b>recortada</b>.
-              Suele pasar cuando hay ciclos entre ubicaciones: cada vuelta multiplica los caminos.
-            </div>
-          )}
-
-          <div className="monitor-bar">
-            <div className="seg">
-              {TIPOS.map((uno) => (
-                <button
-                  key={uno.id}
-                  type="button"
-                  className={`seg-btn${tipo === uno.id ? ' active' : ''}`}
-                  onClick={() => { setTipo(uno.id); setFinal('todos') }}
-                >
-                  {uno.label}
-                </button>
-              ))}
-            </div>
-
-            {/* El sub-filtro solo tiene sentido dentro de «sin llegada». */}
-            {tipo === 'sinCliente' && (
-              <div className="seg">
-                {FINALES_FILTRO.map((uno) => (
-                  <button
+        <div className="nv-rutas-cuerpo">
+          <div className="nv-rutas-filtros">
+            <span className="nv-rutas-rotulo">Tipo:</span>
+            {TIPOS.map((uno) => (
+              <BotonDeFiltro
+                key={uno.id}
+                activo={filtro.tipo === uno.id}
+                // El filtro de causa solo aplica dentro de «Sin llegada a cliente»: al salir se limpia.
+                onClick={() => onFiltro(uno.id === 'sinCliente'
+                  ? { tipo: uno.id }
+                  : { tipo: uno.id, final: 'todos' })}
+              >
+                {uno.etiqueta}
+              </BotonDeFiltro>
+            ))}
+            {filtro.tipo === 'sinCliente' && (
+              <span className="nv-rutas-causa">
+                <span className="nv-rutas-rotulo chico">Causa:</span>
+                {CAUSAS.map((uno) => (
+                  <BotonDeFiltro
                     key={uno.id}
-                    type="button"
-                    className={`seg-btn${final === uno.id ? ' active' : ''}`}
-                    onClick={() => setFinal(uno.id)}
+                    activo={filtro.final === uno.id}
+                    onClick={() => onFiltro({ final: uno.id })}
                   >
-                    {uno.label}
-                  </button>
+                    {uno.etiqueta}
+                  </BotonDeFiltro>
                 ))}
-              </div>
+              </span>
             )}
-
             <input
-              className="input input-sm"
-              value={busqueda}
-              onChange={(evento) => setBusqueda(evento.target.value)}
+              className="nv-rutas-buscar"
+              type="text"
+              value={filtro.q}
+              onChange={(evento) => onFiltro({ q: evento.target.value })}
               placeholder="Buscar planta, nodo final o cliente…"
               aria-label="Buscar en las rutas"
             />
-
-            <button type="button" className="btn btn-sm" onClick={volcar} disabled={filtradas.length === 0}>
-              ⬇ CSV
-            </button>
-
-            <span className="page-hint">
-              {filtradas.length === rutas.length
-                ? `${numero(rutas.length)} rutas`
-                : `${numero(filtradas.length)} de ${numero(rutas.length)}`}
-              {filtradas.length > TOPE_DE_FILAS && ` · se ven las primeras ${TOPE_DE_FILAS}`}
-            </span>
           </div>
 
-          <div className="table-scroll table-alta">
-            <table className="table-dense">
-              <thead>
-                <tr><th>Planta</th><th>Ruta</th><th>Termina en</th><th>Cliente</th><th>Estado</th></tr>
-              </thead>
-              <tbody>
-                {filtradas.slice(0, TOPE_DE_FILAS).map((una, indice) => (
-                  <tr key={`${una.planta}-${una.nodos.join('>')}-${una.cliente ?? una.ultimo}-${indice}`}>
-                    <td className="mono">{una.planta}</td>
-                    <td className="mono">{una.nodos.join(' › ')}</td>
-                    <td className="mono">
-                      {una.ultimo}
-                      <div className="exp-sub">{nombreDe?.(una.ultimo)}</div>
-                    </td>
-                    <td className="mono">
-                      {una.cliente ?? '—'}
-                      {una.cliente && <div className="exp-sub">{nombreDe?.(una.cliente)}</div>}
-                    </td>
-                    <td>
-                      {una.llegaACliente && <span style={{ color: 'var(--green)' }}>✓ llega</span>}
-                      {!una.llegaACliente && una.final === FINALES.ciclo && (
-                        <span style={{ color: 'var(--accent)' }}>🔁 ciclo</span>
-                      )}
-                      {!una.llegaACliente && una.final === FINALES.sinSalida && (
-                        <span style={{ color: 'var(--red)' }}>✕ sin salida</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-                {filtradas.length === 0 && (
-                  <tr><td colSpan={5} className="table-empty">Ninguna ruta coincide</td></tr>
-                )}
-              </tbody>
-            </table>
+          <div className="nv-rutas-tabla">
+            {filtradas.length === 0 ? (
+              <p className="nv-rutas-vacio">
+                {rutas.length > 0
+                  ? 'Sin rutas que coincidan con el filtro.'
+                  : 'No hay rutas configuradas para este producto.'}
+              </p>
+            ) : (
+              <>
+                {nota && <p className="nv-rutas-nota">{nota}</p>}
+                <table>
+                  <thead>
+                    <tr>
+                      <th>#</th>
+                      <th>Tipo</th>
+                      <th>Ruta</th>
+                      <th>Termina en</th>
+                      <th className="der">Saltos</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {mostradas.map(({ ruta, indice }, i) => {
+                      const rotulo = rotuloDeRuta(ruta)
+                      return (
+                        <tr
+                          key={indice}
+                          className={i % 2 === 0 ? 'par' : 'impar'}
+                          onClick={() => onResaltar(indice)}
+                          title="Click para resaltar en el grafo"
+                        >
+                          <td className="num">{i + 1}</td>
+                          <td><span style={{ color: rotulo.color, fontWeight: 600 }}>{rotulo.texto}</span></td>
+                          <td className="mono">{rutaComoTexto(ruta)}</td>
+                          <td
+                            className="mono"
+                            style={ruta.llegaACliente
+                              ? { color: 'var(--green)' }
+                              : { color: '#F59E0B', fontWeight: 600 }}
+                          >
+                            {terminaEn(ruta)}
+                          </td>
+                          <td className="der num">{saltosDe(ruta)}</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </>
+            )}
           </div>
         </div>
       )}

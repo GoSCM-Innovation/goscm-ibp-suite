@@ -13,7 +13,7 @@ Este documento es la lista de trabajo. Se tacha lo que se termina; no se contest
 | Glosario Analyzers | ✅ Portado tal cual (2026-10-01) |
 | Production Visualizer | ✅ Árbol, textos de descarga y pestañas como v7 (2026-10-01). Falta mirarlo en el tenant |
 | Production Analyzer | ❌ Pendiente — ver abajo |
-| Network Visualizer | ❌ Pendiente — ver abajo |
+| Network Visualizer | ✅ Igualado a v7 (2026-10-01), con las diferencias dichas abajo. Falta mirarlo en el tenant |
 | Network Analyzer | ❌ Pendiente — ver abajo |
 | Planning Area Documenter | ❌ Pendiente — ver abajo |
 
@@ -59,27 +59,79 @@ Sin botón «Invertir»: en v7 la función existía pero ningún botón la llama
 10. v7 **siempre** vuelve a descargar; la suite omite la descarga si hay datos (`bajarSiVacio`).
     Decisión a tomar con el usuario: es una mejora deliberada, pero cambia el comportamiento.
 
-## Network Visualizer — pendiente
+## Network Visualizer — hecho (2026-10-01), falta mirarlo contra un tenant
 
-1. Botones **«⊞ Ajustar»** y **«⊟ Compactar»** (faltan).
-2. **Diálogo «Filtros de red»** (botón «▼ Filtros (N)»): columnas Ubicaciones y Clientes con buscador con
-   comodines, «Seleccionar todo», «Limpiar todo», «Aplicar».
-3. **Auto-ocultado de clientes por encima de 20**, con el aviso «{n} clientes ocultos automáticamente…».
-4. **Pantalla completa** con su propio diálogo (título = PRDID, Ajustar, Compactar, Cerrar, leyenda,
-   detalle de nodo y Rutas como overlay).
-5. **Textos y barra de progreso**: «Confirmar mapeo y cargar productos», «Descargando catálogo de productos…»,
-   «✓ N materiales listos — selecciona uno y haz click en "Cargar red logística"», «⏳ Cargando…»,
-   «Procesando red de {prdid}…», «✓ N nodos · M conexiones», «Ver logs técnicos» con `✓ Location Source: N registros`.
-6. **Detalle del nodo**: cabecera «Seleccionado» con ✕ y, para proveedores, «Insumos abastecidos (N)».
-   La suite lo reemplazó por «Le llega de / Manda a».
-7. **Panel Rutas**: botón «▶ Rutas / ▼ Rutas», etiquetas «Tipo:» y «Causa:», «Dead-end» (no «Sin salida»),
-   columnas `# / Tipo / Ruta / Termina en / Saltos`, **resaltado de la ruta en el grafo al hacer clic**,
-   «↓ Exportar CSV» con todas las rutas y las columnas de v7.
-8. **Leyenda** como cuadro flotante arriba a la derecha con título «Leyenda»; ocultar un tipo no recalcula la
-   disposición (hoy sí).
-9. **Buscador de material**: solo con texto, por código y descripción, hasta 40, ordenado por relevancia.
-10. Estado vacío «Busca un material para visualizar su red logística».
-11. Mapeo ①: 9 tarjetas con etiquetas en inglés y buscador, título sin numeral.
+Recorrido control por control contra `visualizer.js`, el `tab-visualizer` de `index.html` y `es.json` de
+v7 (`origin/master`). Lo de abajo está tachado cuando quedó igual; lo que no, dice por qué.
+
+1. ~~Botones **«⊞ Ajustar»** y **«⊟ Compactar»**.~~ «Compactar» reconstruye el grafo (`armarRed` de
+   nuevo → otro lienzo), que es lo que hacía `vizCompact`.
+2. ~~**Diálogo «Filtros de red»** (botón «▼ Filtros (N)»)~~: dos columnas con buscador con comodines,
+   «Seleccionar todo» (con estado intermedio), «Limpiar todo» y «Aplicar»; el botón pasa a ámbar con el
+   número. **Una diferencia a propósito**: en v7 cada casilla modificaba los filtros al marcarse y cerrar
+   con ✕ o Escape dejaba los cambios puestos sin redibujar (la pantalla decía una cosa y el siguiente
+   «Compactar» aplicaba otra). Aquí es un borrador que solo vale con «Aplicar».
+3. ~~**Auto-ocultado de clientes por encima de 20**~~, con el aviso `{n} clientes ocultos
+   automáticamente. Usa ▼ Filtros para ajustar.`
+4. ~~**Pantalla completa** con su propio `<dialog>`~~: título, «⊞ Ajustar», «⊟ Compactar», «✕ Cerrar», su
+   leyenda, su detalle de nodo y «Rutas» como franja inferior. El botón sale solo tras cargar una red. Es
+   otro grafo (se construye al abrir); la leyenda y el filtro de rutas se comparten con la página, como
+   en v7.
+5. ~~**Textos, barra de progreso y logs**~~: «Confirmar mapeo y cargar productos» → barra al 5 % con
+   «Descargando catálogo de productos…» → «✓ N materiales listos…» al 100 %; «Material: X — haz click
+   en…»; «⏳ Cargando...», «Procesando red de X…», `▶ Cargando red para: X`, `✓ Location Source: N
+   registros` y los demás; «✓ N nodos · M conexiones». El panel ① se pliega al terminar el catálogo y
+   otra vez al cargar la red.
+   - Las líneas `[GET]` llevan la entidad, el `$filter` y el `$select`, **no la URL**: el navegador no
+     conoce la dirección del tenant (vive cifrada en el servidor). v7 la escribía entera.
+   - Las tres primeras tablas (recetas, arcos, clientes) se piden **en paralelo**; v7 las pedía una tras
+     otra. El orden de las líneas del log sale distinto, el resultado es el mismo y se ahorran dos
+     esperas de ~6 s.
+   - Los avisos del plan (una tabla o un campo que este tenant no tiene) se anotan en los logs como
+     `warn`. **Sin portar**: el panel de corrección de campos (`validateEntityFields` /
+     `fmShowCorrectionPanel` de `fieldmap.js`), que en v7 salía al confirmar y al cargar. No se ha
+     comprobado si la suite lo cubre en otro sitio; es común a todas las aplicaciones.
+6. ~~**Detalle del nodo**~~: «Seleccionado» con ✕, insignia, código y el globo del nodo; para un
+   proveedor, «Insumos abastecidos (N):» con chips. Se quitó «Le llega de / Manda a» y el plazo de
+   producción.
+7. ~~**Panel Rutas**~~: «▶ Rutas / ▼ Rutas», resumen, «Tipo:» / «Causa:» (Dead-end, Ciclo), buscador,
+   tabla `# / Tipo / Ruta / Termina en / Saltos`, tope de 500 filas con su nota, **clic en una fila =
+   resalta la ruta** (selecciona nodos y arcos y enfoca; si un nodo estaba apagado en los filtros, lo
+   enciende y reconstruye) y «↓ Exportar CSV» con TODAS las rutas, coma, `\n`, sin marca de
+   codificación y `Rutas_{producto}.csv`. Las rutas se calculan de las **filas** (`rutasDeLaRed(datos)`),
+   no del dibujo, como `vizBuildGraphFromData`.
+8. ~~**Leyenda** flotante arriba a la derecha~~ con título «Leyenda» y cuatro casillas con su globo.
+   Apagar una clase marca sus nodos `hidden` y encuadra con animación, **sin recalcular** (se comprueba
+   con una prueba que cuenta lienzos). Sin quinta etiqueta «Producto».
+   - Igual que v7, apagar «Proveedor» y luego «Compactar» NO crea los nodos ni arcos de proveedor (v7
+     los salta al armar el grafo); las otras tres clases sí se arman, ocultas.
+9. ~~**Buscador de material**~~: solo con texto, código y descripción, sin distinguir mayúsculas, primero
+   los que empiezan por el texto, máximo 40.
+10. ~~Estado vacío «Busca un material para visualizar su red logística»~~ (se esconde al empezar a
+    cargar, y si la carga falla no vuelve: así era en v7).
+11. ~~Mapeo ①~~ (hecho aparte). Quitado lo que v7 no tenía: el aviso de nodos sin arco, el nodo
+    «Producto» (y su arco «fabricación»), «Leyendo de SAP en vivo…», y el contador «materiales» de la barra.
+
+**Más que se alinearon con v7 al recorrerlo** (no estaban en la lista de arriba):
+
+- El grafo es el de `vizBuildGraph`: sin nodo de producto, así que «N nodos · M conexiones» cuenta lo
+  mismo que allí; globos de ayuda con los textos de v7 («Lead time transporte: 2», «Componentes: A
+  [LT:5]»…) y con los plazos **crudos**, tal como llegan de SAP (v7 no los formatea).
+- La disposición es `vizAssignPositions` entera: los proveedores se ordenan por las plantas a las que
+  abastecen, las ubicaciones por las plantas de las que reciben, los clientes por las ubicaciones que los
+  sirven —leído de las filas de SAP—, y los clientes quedan una columna después de las ubicaciones.
+- Un material **insumo** (sin recetas propias) pregunta a SAP qué plantas hay en los destinos de sus
+  arcos (`PSH global por LOCID`, hasta 80), para pintar esas plantas como plantas.
+- **Siempre lee de SAP**, como v7: se quitó la lectura de lo descargado (`network-load.js` y su prueba
+  se borraron). Es la misma razón por la que los analizadores repiten la descarga.
+- Las tarjetas «Product» y «Location» de esta pantalla editan los maestros de la **red**; antes el plan
+  seguía leyendo los del árbol y la elección se ignoraba (`planDeLaRed`).
+
+**Lo que sigue sin verse**: solo se ha visto con datos de muestra (31 nodos) en una página temporal; falta
+un tenant real. No se han mirado: etiquetas de nodo a zoom normal, una red de cientos de nodos, ni el
+rendimiento del diálogo de filtros con miles de ubicaciones o clientes (v7 los pintaba todos).
+**No portado**: el selector de idioma (fase i18n al final). `locProd` / `custProd` (Location Product y
+Customer Product) no se leen: v7 los pedía y los guardaba en `VIZ_DATA`, pero ninguna pantalla los usaba.
 
 ## Network Analyzer — pendiente
 
@@ -135,7 +187,7 @@ Excel que la pantalla no entrega.
 
 1. Mapeo ① compartido (PanelMapeo con las tarjetas, etiquetas y buscador de v7): lo usan Production
    Visualizer, Production Analyzer, Network Visualizer y Network Analyzer, así que se arregla una vez.
-2. Network Visualizer (puntos 1, 5, 6, 8, 9, 10; luego Rutas, Filtros, pantalla completa).
+2. ~~Network Visualizer~~ (hecho, 2026-10-01).
 3. Production Analyzer y Network Analyzer: pasos ②–⑤, modal, vista web y Excel (la parte grande).
 4. Planning Area Documenter: lo pequeño primero (voseo, logo, Autor/Versión, Limpiar), luego el documento.
 
