@@ -15,7 +15,7 @@ Este documento es la lista de trabajo. Se tacha lo que se termina; no se contest
 | Production Analyzer | ❌ Pendiente — ver abajo |
 | Network Visualizer | ✅ Igualado a v7 (2026-10-01), con las diferencias dichas abajo. Falta mirarlo en el tenant |
 | Network Analyzer | ❌ Pendiente — ver abajo |
-| Planning Area Documenter | ❌ Pendiente — ver abajo |
+| Planning Area Documenter | ✅ Hecho (2026-10-01) — ver abajo |
 
 ## Production Visualizer — hecho
 
@@ -149,23 +149,48 @@ otras columnas y otra lógica en `core/ibp/network-analysis.js`. Igualar v7 impl
 v7 (Health Score incluido) y decidir qué pasa con la actual. El banner de `modules.js` ya promete un
 Excel que la pantalla no entrega.
 
-## Planning Area Documenter — pendiente
+## Planning Area Documenter — hecho
 
-1. **Volumetría y Application Jobs en vivo** (SAP_COM_0720 y SAP_COM_0326): columna «Registros (en vivo)»,
-   plantillas con pasos, tipo de paso y marca CI-DS. Faltan endpoints en el backend.
-2. **El cuerpo del documento**: v7 tiene 10 secciones numeradas con prosa y subsecciones, más Anexos A y B;
-   la suite emite una tabla genérica por CSV, sin numeración ni prosa, cortada a 400 filas.
-3. **Columnas de los CSV** (posible error): v7 lee `ID`, `Name`, `Base Planning Level`, `Attribute ID`,
-   `Operator Profile / Operator Type`; la suite busca `Key Figure`, `Attribute`, `Operator`…
-   Hay que contrastar con un export real de SAP. Las pruebas actuales usan encabezados inventados.
-4. **Logo de GoSCM** en la portada: `public/logo-goscm.png` existe y nunca se pasa al documento.
-5. Campos **Autor** y **Versión del documento** (faltan); portada con tabla Campo/Valor y descripción.
-6. Botón **«🗑️ Limpiar»** y quitar el logo (✕); miniatura del logo solo PNG/JPG.
-7. Interruptor de datos en vivo: nace desactivado y deshabilitado sin conexión (la suite nace activado).
-8. Área de **log** paso a paso y estado de las 13 secciones; textos «Detectado: …», «ZIP → …».
-9. Nombre de archivo `Documentacion_PA_<PA>_<AAAA-MM-DD>.docx`.
-10. Voseo en la suite: «Soltá el ZIP…» → v7: «Arrastra los CSV aquí». Corregir ya.
-11. Textos de las zonas de carga y de los paneles (los de v7).
+El documento sale **idéntico byte a byte** al de v7: se comparó el XML de todas las piezas del `.docx`
+(documento, estilos, ajustes, relaciones, tipos de contenido) generado por el `paDoc.js` de v7 contra el de
+la suite, con los mismos CSV, en cuatro casos (completo con logos y datos en vivo, sin logos, mínimo y sin
+área detectada). Incluye las rarezas de v7: el orden de las claves numéricas de un objeto, `getLike` por
+«contiene», los títulos 7.n y 10.n, la muestra de 12 atributos, el top 20 de niveles y la definición recortada
+a 220. Sin tope de filas.
+
+Pantalla: los cuatro paneles de v7 con sus títulos y textos («📥 Archivos de configuración (CSV)»,
+«🎨 Portada del documento», «🔌 Enriquecer con datos en vivo · SAP IBP» y el de generar), la zona «Arrastra los
+CSV aquí», la cuadrícula de las 13 secciones («N filas» / «no provisto»), «Planning Area: X» / «Sin PA detectado
+aún» y «· Logo cargado (w×h)», Cliente / Autor / Versión del documento, logo PNG/JPG con miniatura y ✕,
+interruptor que nace desactivado y deshabilitado, botones «📝 Generar documento Word» (con «⏳ …») y
+«🗑️ Limpiar», y el registro con los mismos mensajes. Lo cargado sobrevive a cambiar de aplicación (como en v7,
+donde el panel solo se ocultaba) y se vacía al cerrar la sesión.
+
+Datos en vivo: operación nueva `POST /api/ibp/pa-doc-live` (`handlers/ibp/pa-doc-live.js`,
+`core/ibp/pa-doc-live.js`), con tres acciones: `entidades`, `volumetria` (concurrencia 6, `$top=1` con
+`$inlinecount=allpages`) y `application-jobs` (`BC_EXT_APPJOB_MANAGEMENT`, sin filtrar las plantillas `/IBP/`,
+con tipo de paso y marca CI-DS). Exige el módulo Data Tools (`explorer`). Las credenciales no salen del servidor.
+
+Diferencias que se conservan a propósito (todas son guardas de integridad):
+
+- La lista de entidades de dato maestro se lee del documento del servicio (unos kB) y solo cae al `$metadata`
+  (4,8 MB) si no trae ninguna; v7 leía siempre el `$metadata`. El resultado es el mismo.
+- La volumetría viaja en tandas de 48 tipos, una tras otra, porque una función de Vercel tiene tiempo limitado;
+  v7 hacía todo desde el navegador.
+- El logo se valida por su contenido: un archivo que no es PNG ni JPEG se rechaza (v7 lo metía como PNG y salía
+  roto en Word). El tipo de contenido de las imágenes se normaliza (`image/jpeg`, `image/svg+xml`).
+- El XML escapa también los caracteres de control que XML 1.0 no admite (uno solo deja el documento «dañado»),
+  y una tabla sin columnas no se dibuja (v7 escribía «Infinity»).
+- El nombre del archivo cambia los caracteres no válidos del identificador del área por `_`.
+- Se quitó lo que v7 no tenía: tabla Sección/Registros/Archivo/Hace falta, resumen «✓ nombre · N cifras
+  clave…», aviso sobre actualizar el índice y el respaldo del área elegida en el selector (la portada dice
+  «SAP IBP» si no se detecta área, como v7).
+
+Sin verificar contra un export real: los encabezados de las columnas son los que lee v7; en esta sesión no se
+comprobó ningún `Download Configuration File` de un tenant. Texto de v7 que no cuadra con la suite: «Requiere
+conexión a SAP IBP (pestaña Conexión).» (aquí la conexión se hace con «Conectar SAP IBP»). Pendiente de la fase
+de idioma: el inglés del documento (`T.en` de v7); el diccionario ya se lee por idioma en
+`src/lib/pa-doc-textos.js`.
 
 ## Decisiones del usuario (2026-10-01)
 
@@ -189,6 +214,6 @@ Excel que la pantalla no entrega.
    Visualizer, Production Analyzer, Network Visualizer y Network Analyzer, así que se arregla una vez.
 2. ~~Network Visualizer~~ (hecho, 2026-10-01).
 3. Production Analyzer y Network Analyzer: pasos ②–⑤, modal, vista web y Excel (la parte grande).
-4. Planning Area Documenter: lo pequeño primero (voseo, logo, Autor/Versión, Limpiar), luego el documento.
+4. Planning Area Documenter: hecho.
 
 Antes de cada una: recorrer los controles de v7 uno a uno y mirar la pantalla en el tenant de pruebas.

@@ -78,8 +78,9 @@ export const APPS_EXPLORER = [
     name: 'Planning Area Documenter',
     icon: '📑',
     requiereConexion: false,
-    banner: 'Genera el documento del área de planificación a partir de los CSV de configuración que '
-      + 'exporta SAP IBP, y lo enriquece con la volumetría real y los Application Jobs del tenant.',
+    // El texto de v7. Lo que va entre ** se pinta en negrita (ver `DataTools.jsx`).
+    banner: 'Genera la documentación Word (.docx) de un Planning Area a partir de los archivos del '
+      + '**Download Configuration File** de SAP IBP.',
   },
 ]
 

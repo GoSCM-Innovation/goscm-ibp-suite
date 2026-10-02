@@ -1,34 +1,37 @@
+// El modelo del documentador. Los encabezados de los CSV de estas pruebas son los que LEE v7
+// (`paDoc.js`): `ID`, `Name`, `Base Planning Level`, `Attribute ID`, `Operator Profile / Operator Type`…
+// Nada de nombres inventados: si una prueba usara un encabezado que v7 no lee, comprobaría otra cosa.
+
 import { describe, it, expect } from 'vitest'
 
 import {
   IDS_DE_SECCION,
   MODULOS,
-  SECCIONES,
+  agregarCsv,
   aObjetos,
   areaDeArchivo,
-  campo,
+  categoriasDeOperador,
+  clasificarCifras,
+  estadoDeSecciones,
+  estadoInicial,
+  get,
+  getLike,
+  idsDeTiposDeDatoMaestro,
   ingerirCsv,
   leerCsv,
   limpiarEncabezado,
-  loRecibido,
-  resumirArea,
+  modulosDetectados,
+  nivelesDistintos,
   seccionDeArchivo,
-  seccionesQueFaltan,
+  str,
+  tiposDeDatoMaestro,
 } from './pa-doc-model.js'
 
 describe('las secciones', () => {
-  it('todas tienen identificador y título', () => {
-    for (const una of SECCIONES) {
-      expect(una.id).toBeTruthy()
-      expect(una.titulo).toBeTruthy()
-    }
-  })
-
-  it('las esenciales son las que hacen que el documento diga algo', () => {
-    const esenciales = SECCIONES.filter((una) => una.esencial).map((una) => una.id)
-    expect(esenciales).toContain('KEYFIGURES')
-    expect(esenciales).toContain('MASTERDATATYPES')
-    expect(esenciales).toContain('PLEVELS_ATTRS')
+  it('son las 13 de v7', () => {
+    expect(IDS_DE_SECCION).toHaveLength(13)
+    expect(IDS_DE_SECCION).toContain('ATTRIBUTES_AS_KEYFIGURE')
+    expect(IDS_DE_SECCION).toContain('GENERAL_INFO')
   })
 })
 
@@ -38,8 +41,8 @@ describe('seccionDeArchivo', () => {
     expect(seccionDeArchivo('ASIBPTS_PLEVELS_ATTRS.csv')).toBe('PLEVELS_ATTRS')
   })
 
-  // Con el orden al revés, PA_ATTRIBUTES se comería a ATTRIBUTES_AS_KEYFIGURE.
-  it('el nombre más largo gana cuando dos se solapan', () => {
+  // `PA_ATTRIBUTES` y `ATTRIBUTES_AS_KEYFIGURE` comparten un trozo: no se pueden comer entre sí.
+  it('dos nombres que se solapan se reconocen cada uno', () => {
     expect(seccionDeArchivo('AS1_ATTRIBUTES_AS_KEYFIGURE.csv')).toBe('ATTRIBUTES_AS_KEYFIGURE')
     expect(seccionDeArchivo('AS1_PA_ATTRIBUTES.csv')).toBe('PA_ATTRIBUTES')
   })
@@ -52,6 +55,10 @@ describe('seccionDeArchivo', () => {
     expect(seccionDeArchivo('cualquier_cosa.csv')).toBe(null)
     expect(seccionDeArchivo('')).toBe(null)
     expect(seccionDeArchivo(undefined)).toBe(null)
+  })
+
+  it('el nombre tiene que ir entre separadores: un trozo suelto no cuenta', () => {
+    expect(seccionDeArchivo('MIKEYFIGURES.csv')).toBe(null)
   })
 
   it('todas las secciones se reconocen a sí mismas', () => {
@@ -101,7 +108,7 @@ describe('leerCsv', () => {
 
 describe('limpiarEncabezado y aObjetos', () => {
   it('quita la marca de bytes que deja Excel', () => {
-    expect(limpiarEncabezado('﻿Key Figure')).toBe('Key Figure')
+    expect(limpiarEncabezado('﻿ID')).toBe('ID')
   })
 
   it('convierte filas en objetos por su encabezado', () => {
@@ -113,13 +120,41 @@ describe('limpiarEncabezado y aObjetos', () => {
   })
 })
 
+describe('str, get y getLike', () => {
+  it('str recorta y convierte lo que no hay en cadena vacía', () => {
+    expect(str('  x ')).toBe('x')
+    expect(str(null)).toBe('')
+    expect(str(undefined)).toBe('')
+    expect(str(0)).toBe('0')
+  })
+
+  it('get busca el nombre EXACTO', () => {
+    expect(get({ Type: ' Simple ' }, 'Type')).toBe('Simple')
+    expect(get({ type: 'x' }, 'Type')).toBe('')
+  })
+
+  it('getLike prefiere la igualdad sin distinguir mayúsculas', () => {
+    expect(getLike({ 'Key Figure ID': 'largo', id: 'corto' }, 'ID')).toBe('corto')
+  })
+
+  // La rareza de v7 que hace falta conservar: sin igualdad, gana la PRIMERA columna que contiene el texto.
+  it('si no hay igualdad, gana la primera columna que lo contiene', () => {
+    expect(getLike({ 'Planning Area ID': 'PA', 'Key Figure ID': 'KF' }, 'ID')).toBe('PA')
+  })
+
+  it('lo que no está es cadena vacía', () => {
+    expect(getLike({ a: '1' }, 'zzz')).toBe('')
+    expect(getLike(undefined, 'a')).toBe('')
+  })
+})
+
 describe('ingerirCsv', () => {
-  const texto = 'Key Figure;Key Figure Description;Stored Key Figure\nKF1;Una cifra;X\nKF2;Otra;\n\n'
+  const texto = 'ID;Name;Base Planning Level\nKF1;Una cifra;PL1\nKF2;Otra;PL2\n\n'
 
   it('reconoce la sección y arma las filas', () => {
     const leido = ingerirCsv('ASIBPTS_KEYFIGURES.csv', texto)
     expect(leido.seccion).toBe('KEYFIGURES')
-    expect(leido.encabezado).toEqual(['Key Figure', 'Key Figure Description', 'Stored Key Figure'])
+    expect(leido.encabezado).toEqual(['ID', 'Name', 'Base Planning Level'])
     expect(leido.objetos).toHaveLength(2)
   })
 
@@ -128,124 +163,156 @@ describe('ingerirCsv', () => {
     expect(ingerirCsv('AS1_KEYFIGURES.csv', texto).filas).toHaveLength(2)
   })
 
+  it('una fila de solo espacios y separadores también es vacía', () => {
+    expect(ingerirCsv('AS1_KEYFIGURES.csv', 'ID;Name\nA;B\n ; \n').filas).toHaveLength(1)
+  })
+
   it('un archivo que no es de ninguna sección se rechaza', () => {
     expect(ingerirCsv('otra_cosa.csv', texto)).toBe(null)
   })
 
-  it('un archivo reconocido pero vacío devuelve la sección sin filas', () => {
-    expect(ingerirCsv('AS1_KEYFIGURES.csv', '')).toMatchObject({ seccion: 'KEYFIGURES', filas: [] })
+  it('un archivo reconocido pero vacío se reconoce y no aporta nada', () => {
+    expect(ingerirCsv('AS1_KEYFIGURES.csv', '')).toMatchObject({ seccion: 'KEYFIGURES', vacio: true })
   })
 })
 
-describe('campo', () => {
-  const objeto = { 'Key Figure': 'KF1', 'Aggregation Mode ': 'SUM' }
-
-  it('encuentra el campo exacto', () => {
-    expect(campo(objeto, 'Key Figure')).toBe('KF1')
+describe('agregarCsv: el estado y el área', () => {
+  it('suma la sección al estado sin tocar el anterior', () => {
+    const inicial = estadoInicial()
+    const { estado, seccion } = agregarCsv(inicial, 'AS1_VERSIONS.csv', 'ID;Name\nV1;Uno')
+    expect(seccion).toBe('VERSIONS')
+    expect(estado.datos.VERSIONS.filas).toHaveLength(1)
+    expect(inicial.datos).toEqual({})
   })
 
-  // Los encabezados de SAP llegan con espacios y variaciones: buscar exacto perdería la mitad.
-  it('encuentra por parecido cuando el nombre no coincide exactamente', () => {
-    expect(campo(objeto, 'Aggregation Mode')).toBe('SUM')
+  it('un archivo desconocido deja el estado como estaba', () => {
+    const inicial = estadoInicial()
+    const salida = agregarCsv(inicial, 'foto.csv', 'a;b\n1;2')
+    expect(salida.seccion).toBe(null)
+    expect(salida.estado).toBe(inicial)
   })
 
-  it('lo que no está devuelve cadena vacía, no undefined', () => {
-    expect(campo(objeto, 'No existe')).toBe('')
-    expect(campo(undefined, 'x')).toBe('')
+  it('un archivo vacío se reconoce pero no se registra', () => {
+    const salida = agregarCsv(estadoInicial(), 'AS1_VERSIONS.csv', '')
+    expect(salida.seccion).toBe('VERSIONS')
+    expect(salida.estado.datos.VERSIONS).toBeUndefined()
+  })
+
+  it('un archivo solo con encabezado se registra con cero filas', () => {
+    const { estado } = agregarCsv(estadoInicial(), 'AS1_VERSIONS.csv', 'ID;Name\n')
+    expect(estado.datos.VERSIONS.filas).toHaveLength(0)
+  })
+
+  it('el área sale del prefijo del nombre del archivo', () => {
+    expect(agregarCsv(estadoInicial(), 'ASIBPTS_VERSIONS.csv', 'ID\nV1').estado.paId).toBe('ASIBPTS')
+  })
+
+  it('el área de GENERAL_INFO es la primera columna de su primera fila', () => {
+    const { estado } = agregarCsv(estadoInicial(), 'X_GENERAL_INFO.csv', 'Planning Area;Description\nMIAREA;Hola')
+    expect(estado.paId).toBe('MIAREA')
+  })
+
+  // El orden de v7: el primer archivo que permite fijar el área la fija, y no se vuelve a tocar.
+  it('el área se fija una vez, con el primer archivo que lo permite', () => {
+    let { estado } = agregarCsv(estadoInicial(), 'UNO_VERSIONS.csv', 'ID\nV1')
+    ;({ estado } = agregarCsv(estado, 'DOS_GENERAL_INFO.csv', 'Planning Area\nOTRA'))
+    expect(estado.paId).toBe('UNO')
+  })
+
+  it('un GENERAL_INFO sin filas deja que el área salga del nombre', () => {
+    expect(agregarCsv(estadoInicial(), 'AREA1_GENERAL_INFO.csv', 'Planning Area\n').estado.paId).toBe('AREA1')
+  })
+
+  it('volver a soltar la misma sección la reemplaza', () => {
+    let { estado } = agregarCsv(estadoInicial(), 'A_VERSIONS.csv', 'ID\nV1\nV2')
+    ;({ estado } = agregarCsv(estado, 'A_VERSIONS.csv', 'ID\nV1'))
+    expect(estado.datos.VERSIONS.filas).toHaveLength(1)
   })
 })
 
-describe('resumirArea', () => {
+describe('los análisis', () => {
   const datos = {
-    GENERAL_INFO: {
-      archivo: 'ASIBPTS_GENERAL_INFO.csv',
-      objetos: [{ 'Planning Area': 'ASIBPTS' }],
-      filas: [['ASIBPTS']],
-    },
     KEYFIGURES: {
-      archivo: 'ASIBPTS_KEYFIGURES.csv',
       filas: [1, 2, 3, 4],
       objetos: [
-        { 'Key Figure': 'A', 'Stored Key Figure': 'X', Hashtags: '#DP #IO' },
-        { 'Key Figure': 'B', 'Calculated Key Figure': 'X', Hashtags: '#DP' },
-        { 'Key Figure': 'C', 'Calculated Key Figure': 'X', 'Helper Key Figure': 'X', Hashtags: '' },
-        { 'Key Figure': 'D', 'Stored Key Figure': 'X', 'Alert Key Figure': 'X', Hashtags: '#XX' },
+        { ID: 'A', 'Stored Key Figure': 'X', Hashtags: '#DP #IO' },
+        { ID: 'B', 'Calculated Key Figure': 'X', Hashtags: '#DP' },
+        { ID: 'C', 'Calculated Key Figure': 'X', 'Helper Key Figure': 'X', Hashtags: '' },
+        { ID: 'D', 'Stored Key Figure': 'X', 'Alert Key Figure': 'X', Hashtags: '#XX' },
       ],
     },
     MASTERDATATYPES: {
-      archivo: 'ASIBPTS_MASTERDATATYPES.csv',
-      filas: [1, 2, 3],
       objetos: [
-        { 'Master Data Type ID': 'PRODUCT', 'Attribute ID': 'PRDID' },
-        { 'Master Data Type ID': 'PRODUCT', 'Attribute ID': 'PRDDESCR' },
-        { 'Master Data Type ID': 'LOCATION', 'Attribute ID': 'LOCID' },
+        { 'Master Data Type ID': 'PRODUCT' },
+        { 'Master Data Type ID': 'PRODUCT' },
+        { 'Master Data Type ID': 'LOCATION' },
       ],
     },
     PLEVELS_ATTRS: {
-      archivo: 'ASIBPTS_PLEVELS_ATTRS.csv',
-      filas: [1, 2, 3],
+      objetos: [{ 'Planning Level': 'PL1' }, { 'Planning Level': 'PL1' }, { 'Planning Level': 'PL2' }],
+    },
+    OPERATORS: {
       objetos: [
-        { 'Planning Level': 'PL1' }, { 'Planning Level': 'PL1' }, { 'Planning Level': 'PL2' },
+        { 'Operator Profile / Operator Type': 'COPY' },
+        { 'Operator Profile / Operator Type': 'COPY' },
+        { 'Operator Profile / Operator Type': 'FORECAST' },
       ],
     },
-    VERSIONS: { archivo: 'v.csv', filas: [1, 2], objetos: [{}, {}] },
-    OPERATORS: { archivo: 'o.csv', filas: [1], objetos: [{}] },
-    SNAPSHOTS: { archivo: 's.csv', filas: [], objetos: [] },
   }
-  const resumen = resumirArea(datos)
 
-  it('el área sale de la información general', () => {
-    expect(resumen.area).toBe('ASIBPTS')
+  it('clasifica las cifras: guardadas, calculadas, auxiliares y de alerta', () => {
+    expect(clasificarCifras(datos)).toEqual({ stored: 2, calc: 2, helper: 1, alert: 1 })
   })
 
-  it('clasifica las cifras clave', () => {
-    expect(resumen).toMatchObject({ cifras: 4, guardadas: 2, calculadas: 2, auxiliares: 1, deAlerta: 1 })
-  })
-
-  // Un tipo de dato maestro con tres atributos son un tipo y tres atributos, no cuatro cosas.
+  // Un tipo con tres atributos son un tipo y tres atributos, no cuatro cosas.
   it('cuenta los tipos de dato maestro sin repetir, y sus atributos aparte', () => {
-    expect(resumen.tiposDeDatoMaestro).toBe(2)
-    expect(resumen.atributosDeMaestro).toBe(3)
+    expect(tiposDeDatoMaestro(datos)).toEqual({ count: 2, attrs: 3 })
   })
 
   it('cuenta los niveles de planificación distintos', () => {
-    expect(resumen.nivelesDePlanificacion).toBe(2)
+    expect(nivelesDistintos(datos)).toBe(2)
+  })
+
+  it('una sección que no vino da null, no cero', () => {
+    expect(nivelesDistintos({})).toBeNull()
+    expect(tiposDeDatoMaestro({})).toBeNull()
+  })
+
+  it('las categorías de operador no se repiten', () => {
+    expect(categoriasDeOperador(datos)).toEqual(['COPY', 'FORECAST'])
   })
 
   // Los módulos no tienen ningún campo que los diga: salen de las etiquetas de las cifras.
-  it('deduce los módulos de las etiquetas, y descarta las que no conoce', () => {
-    expect(resumen.modulos).toEqual([MODULOS.DP, MODULOS.IO].sort())
+  it('deduce los módulos de las etiquetas y descarta las que no conoce', () => {
+    expect(modulosDetectados(datos)).toEqual([MODULOS.DP, MODULOS.IO])
   })
 
-  it('cuenta versiones, operadores y snapshots', () => {
-    expect(resumen).toMatchObject({ versiones: 2, operadores: 1, snapshots: 0 })
+  it('los identificadores de tipo van sin repetir', () => {
+    expect(idsDeTiposDeDatoMaestro(datos)).toEqual(['PRODUCT', 'LOCATION'])
   })
 
   it('sin datos no revienta', () => {
-    expect(resumirArea()).toMatchObject({ cifras: 0, modulos: [] })
-  })
-
-  it('sin información general, el área sale del nombre de un archivo', () => {
-    const sinGeneral = { ...datos, GENERAL_INFO: undefined }
-    expect(resumirArea(sinGeneral).area).toBe('ASIBPTS')
+    expect(clasificarCifras()).toEqual({ stored: 0, calc: 0, helper: 0, alert: 0 })
+    expect(modulosDetectados()).toEqual([])
+    expect(idsDeTiposDeDatoMaestro()).toEqual([])
   })
 })
 
-describe('seccionesQueFaltan y loRecibido', () => {
-  it('dice qué esenciales faltan', () => {
-    const faltan = seccionesQueFaltan({ KEYFIGURES: { filas: [1] } })
-    expect(faltan).toContain('MASTERDATATYPES')
-    expect(faltan).not.toContain('KEYFIGURES')
+describe('estadoDeSecciones', () => {
+  it('lista las 13 en orden alfabético', () => {
+    const lista = estadoDeSecciones({})
+    expect(lista).toHaveLength(13)
+    expect(lista.map((una) => una.id)).toEqual([...IDS_DE_SECCION].sort())
   })
 
-  it('una sección presente pero vacía cuenta como que falta', () => {
-    expect(seccionesQueFaltan({ KEYFIGURES: { filas: [] } })).toContain('KEYFIGURES')
+  it('dice «N filas» o «no provisto»', () => {
+    const lista = estadoDeSecciones({ KEYFIGURES: { filas: [1, 2, 3] } })
+    expect(lista.find((una) => una.id === 'KEYFIGURES')).toMatchObject({ presente: true, texto: '3 filas' })
+    expect(lista.find((una) => una.id === 'VERSIONS')).toMatchObject({ presente: false, texto: 'no provisto' })
   })
 
-  it('lo recibido lista todas las secciones, con cuántas filas trajo cada una', () => {
-    const recibido = loRecibido({ KEYFIGURES: { filas: [1, 2], archivo: 'k.csv' } })
-    expect(recibido).toHaveLength(SECCIONES.length)
-    expect(recibido.find((una) => una.id === 'KEYFIGURES')).toMatchObject({ filas: 2, archivo: 'k.csv' })
-    expect(recibido.find((una) => una.id === 'VERSIONS')).toMatchObject({ filas: 0 })
+  it('una sección con cero filas está presente', () => {
+    const lista = estadoDeSecciones({ VERSIONS: { filas: [] } })
+    expect(lista.find((una) => una.id === 'VERSIONS')).toMatchObject({ presente: true, texto: '0 filas' })
   })
 })
