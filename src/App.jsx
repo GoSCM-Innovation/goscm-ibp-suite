@@ -9,6 +9,7 @@ import { api } from './lib/api.js'
 import { puedeSalir } from './lib/guarda-de-salida.js'
 import { applyTheme, readStoredTheme } from './lib/theme.js'
 import { desconectar } from './lib/conexion-activa.js'
+import { reiniciarTodo as reiniciarPaDoc } from './lib/pa-doc-sesion.js'
 import { MODULES, moduleById, partirRuta } from './lib/modules.js'
 import Login from './components/Login.jsx'
 import Shell from './components/Shell.jsx'
@@ -84,6 +85,8 @@ export default function App() {
     // La conexión vive fuera de React para sobrevivir a los cambios de módulo, así que cerrarla no
     // ocurre solo: sin esto, quien entre después con otra cuenta hereda el tenant del anterior.
     desconectar()
+    // Lo mismo con los CSV del documentador: son la configuración de un cliente.
+    reiniciarPaDoc()
     setSession(null)
     window.location.hash = ''
   }

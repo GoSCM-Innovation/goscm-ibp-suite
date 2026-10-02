@@ -19,6 +19,7 @@ import masterDataEdit from './master-data-edit.js'
 import metering from './metering.js'
 import migration from './migration.js'
 import migrationRun from './migration-run.js'
+import paDocLive from './pa-doc-live.js'
 import planningData from './planning-data.js'
 import planningDataEdit from './planning-data-edit.js'
 import resourceStats from './resource-stats.js'
@@ -36,6 +37,7 @@ export const RUTAS = Object.freeze({
   metering,
   migration,
   'migration-run': migrationRun,
+  'pa-doc-live': paDocLive,
   'planning-data': planningData,
   'planning-data-edit': planningDataEdit,
   'resource-stats': resourceStats,

@@ -83,15 +83,9 @@ export default function DataTools({ appId }) {
         return <NetworkAnalyzer key={clave} area={conexion.planningArea} destino={destino} />
       case 'padoc':
         // No trabaja sobre lo descargado: recibe los CSV de la configuración del área, que SAP no
-        // expone por API. Lo único que lee en vivo son los trabajos del tenant.
-        return (
-          <PlanningAreaDoc
-            key={clave}
-            conexionId={conexion.connectionId}
-            tenant={conexion.nombre}
-            area={conexion.planningArea}
-          />
-        )
+        // expone por API. Sin `key` a propósito: los CSV no son de un tenant, y cambiar de tenant no
+        // debe tirar lo cargado (en v7 tampoco lo hacía). La pantalla lee la conexión ella misma.
+        return <PlanningAreaDoc />
       default:
         return null
     }
@@ -109,7 +103,12 @@ export default function DataTools({ appId }) {
         <span className="tab-info-icon">{app.icon}</span>
         <div className="tab-info-content">
           <div className="page-title" style={{ fontSize: 15, marginBottom: 4 }}>{app.name}</div>
-          <div className="tab-info-desc">{app.banner}</div>
+          <div className="tab-info-desc">
+            {app.banner.split('**').map((trozo, i) => (
+              // Lo que va entre ** es negrita: los pares impares son los trozos marcados.
+              i % 2 === 1 ? <b key={i}>{trozo}</b> : trozo
+            ))}
+          </div>
         </div>
       </div>
 

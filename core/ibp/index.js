@@ -287,18 +287,36 @@ export {
 export {
   IDS_DE_SECCION,
   MODULOS,
-  SECCIONES,
+  agregarCsv,
   aObjetos,
   areaDeArchivo,
-  campo as campoDelCsv,
+  categoriasDeOperador,
+  clasificarCifras,
+  estadoDeSecciones,
+  estadoInicial,
+  get as campoExacto,
+  getLike as campoDelCsv,
+  idsDeTiposDeDatoMaestro,
   ingerirCsv,
   leerCsv,
   limpiarEncabezado,
-  loRecibido,
-  resumirArea,
+  modulosDetectados,
+  nivelesDistintos,
   seccionDeArchivo,
-  seccionesQueFaltan,
+  tiposDeDatoMaestro,
 } from './pa-doc-model.js'
+
+export {
+  CONTEOS_EN_PARALELO,
+  TIPO_CI_DS,
+  armarAppJobs,
+  conjuntosDeDatoMaestro,
+  contarEntidad,
+  contarTipos,
+  entidadesDeJobs,
+  leerAppJobs,
+  resolverEntidades,
+} from './pa-doc-live.js'
 
 export {
   CATEGORIAS,
