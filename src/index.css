@@ -2455,49 +2455,7 @@ a { color: var(--cyan); }
 .bom-tab-close:hover { color: var(--red); }
 .bom-fs-btn { flex-shrink: 0; margin-left: 8px; margin-bottom: 6px; white-space: nowrap; }
 
-/* ── El lienzo de la red (vis-network, igual que v7) ──────────────────────────────────────────── */
-.viz-controls-bar {
-  background: var(--bg2);
-  border: 1px solid var(--border);
-  border-radius: var(--r-lg) var(--r-lg) 0 0;
-  padding: 10px 16px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-.viz-legend {
-  background: var(--bg2);
-  border-left: 1px solid var(--border);
-  border-right: 1px solid var(--border);
-  border-bottom: 1px solid var(--border);
-  padding: 8px 16px;
-  display: flex;
-  align-items: center;
-  gap: 18px;
-  flex-wrap: wrap;
-  font-size: 11px;
-  color: var(--text2);
-}
-.viz-legend label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
-.viz-legend input { width: auto; margin: 0; }
-.viz-swatch { width: 11px; height: 11px; border-radius: 3px; display: inline-block; flex-shrink: 0; }
-.viz-detail {
-  background: var(--bg2);
-  border-left: 1px solid var(--border);
-  border-right: 1px solid var(--border);
-  border-bottom: 1px solid var(--border);
-  padding: 10px 16px;
-  font-size: 12px;
-}
-.viz-canvas {
-  width: 100%;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-top: none;
-  border-radius: 0 0 var(--r-lg) var(--r-lg);
-}
-.viz-canvas:fullscreen { border-radius: 0; height: 100vh !important; }
+/* El lienzo del Network Visualizer vive en el bloque `.nv-*` del final de este archivo. */
 
 /* ── Insignias del detalle de un nodo (las de v7) ─────────────────────────────────────────────── */
 .badge {
@@ -2521,32 +2479,6 @@ a { color: var(--cyan); }
    abajo. */
 .sidebar-nav { display: flex; flex-direction: column; gap: 3px; min-height: 0; overflow-y: auto; }
 .sidebar-footer { margin-top: auto; padding-top: 8px; border-top: 1px solid var(--border); }
-
-/* ── El panel de rutas del visualizador de red ─────────────────────────────────────────────────
-   Portado del `vizRutasPanel` de v7: plegado enseña el resumen, abierto la tabla con sus filtros. */
-.viz-rutas {
-  background: var(--bg2);
-  border: 1px solid var(--border);
-  border-top: none;
-  border-radius: 0 0 var(--r-lg) var(--r-lg);
-  margin-top: -1px;
-}
-.viz-rutas-cabecera {
-  align-items: center;
-  background: none;
-  border: none;
-  cursor: pointer;
-  display: flex;
-  font-family: var(--font);
-  font-size: 12px;
-  gap: 8px;
-  padding: 10px 16px;
-  text-align: left;
-  width: 100%;
-  color: var(--text);
-}
-.viz-rutas-cabecera:hover { background: var(--surface-glass-soft); }
-.viz-rutas-cuerpo { border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 10px; padding: 12px 16px; }
 
 /* ── La tira de pestañas de conexiones abiertas ────────────────────────────────────────────────
    Portada de `ConnectionTabs.jsx` de v9, con sus mismas medidas: 38px de alto, 140 a 220 de ancho
@@ -3344,3 +3276,295 @@ a { color: var(--cyan); }
   cursor: pointer; padding: 4px 12px; flex-shrink: 0; transition: color .15s;
 }
 .bom-tab-add:hover { color: var(--accent); }
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════════
+   NETWORK VISUALIZER — la interfaz de v7, valor por valor
+   ──────────────────────────────────────────────────────────────────────────────────────────────
+   Portado de los `style=""` de `#tab-visualizer` de `index.html` de v7. Todo cuelga de clases `.nv-`
+   para no tocar ninguna otra pantalla. Lo que v7 escribía en línea, aquí tiene nombre.
+   ══════════════════════════════════════════════════════════════════════════════════════════════ */
+
+/* La barra de control: material, botones y estado, en una sola fila. */
+.nv-barra {
+  align-items: center;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+  padding: 8px 16px;
+}
+.nv-barra-rotulo { color: var(--text3); font-size: 10px; letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; }
+.nv-barra-buscador { flex-shrink: 0; width: 260px; }
+.nv-cargar { white-space: nowrap; }
+.nv-cargar:disabled { cursor: not-allowed; }
+.nv-barra-estado {
+  color: var(--text2);
+  font-size: 11px;
+  margin-left: 4px;
+  max-width: 340px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* «▼ Filtros (N)» con algo oculto: ámbar, como en `vizUpdateFilterBtn`. */
+.nv-filtros-activos,
+.nv-filtros-activos:hover:not(:disabled) { background: #F59E0B; border-color: #F59E0B; color: #000; }
+
+/* La franja que sale al cargar una red, con su «Ver logs técnicos». */
+.nv-franja {
+  align-items: center;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-top: none;
+  color: var(--text2);
+  display: flex;
+  font-size: 12px;
+  gap: 8px;
+  padding: 6px 16px;
+}
+.nv-franja-texto { flex: 1; }
+.nv-franja .prog-logs-btn { padding: 2px 8px; font-size: 11px; }
+
+/* El detalle del nodo pulsado. */
+.nv-detalle {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-top: none;
+  font-size: 12px;
+  padding: 10px 16px;
+}
+.nv-detalle-cabecera { align-items: center; display: flex; gap: 10px; }
+.nv-detalle-rotulo { color: var(--text3); flex-shrink: 0; font-size: 10px; letter-spacing: .06em; text-transform: uppercase; }
+.nv-detalle-cerrar { flex-shrink: 0; font-size: 11px; padding: 2px 8px; }
+.nv-detalle-cuerpo { color: var(--text); margin-top: 6px; }
+.nv-detalle-id { font-family: var(--mono); font-size: 12px; }
+.nv-detalle-titulo { color: var(--text2); font-size: 11px; }
+.nv-detalle-insumos { border-top: 1px solid var(--border); margin-top: 8px; padding-top: 8px; }
+.nv-detalle-insumos-titulo { color: var(--text3); font-size: 11px; font-weight: 600; margin-bottom: 4px; }
+.nv-detalle-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.nv-detalle-chip {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 2px 8px;
+}
+.nv-detalle-chip-descr { color: var(--text3); }
+
+/* El lienzo y su leyenda flotante. */
+.nv-lienzo-caja { border-bottom: 1px solid var(--border); border-left: 1px solid var(--border); border-right: 1px solid var(--border); position: relative; }
+.nv-lienzo { background: var(--bg); height: calc(100vh - 230px); min-height: 320px; width: 100%; }
+.nv-vacio {
+  left: 0;
+  padding-top: 100px;
+  pointer-events: none;
+  position: absolute;
+  top: 0;
+  width: 100%;
+  z-index: 5;
+}
+.nv-leyenda {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 11px;
+  padding: 10px 14px;
+  position: absolute;
+  right: 20px;
+  top: 12px;
+  z-index: 10;
+}
+.nv-leyenda-titulo { color: var(--text3); font-size: 10px; letter-spacing: .06em; margin-bottom: 8px; text-transform: uppercase; }
+.nv-leyenda-lista { display: flex; flex-direction: column; gap: 6px; }
+.nv-leyenda-fila { align-items: center; cursor: pointer; display: flex; gap: 8px; }
+.nv-leyenda-fila input { cursor: pointer; }
+.nv-leyenda-marca { display: inline-block; flex-shrink: 0; height: 12px; width: 12px; }
+.nv-leyenda-marca.cuadrado { border-radius: 2px; }
+.nv-leyenda-marca.circulo { border-radius: 50%; }
+.nv-leyenda-marca.rombo { transform: rotate(45deg); }
+.nv-leyenda--pantalla {
+  background: rgba(30, 30, 40, .92);
+  border-color: rgba(255, 255, 255, .15);
+  color: #e2e8f0;
+  top: 58px;
+}
+.nv-leyenda--pantalla .nv-leyenda-titulo { color: #94a3b8; }
+
+/* El panel «Rutas»: debajo del lienzo, y como franja inferior en la pantalla completa. */
+.nv-rutas {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-top: none;
+  padding: 10px 16px;
+}
+.nv-rutas-cabecera { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; }
+.nv-rutas-resumen { align-items: center; display: flex; flex-wrap: wrap; gap: 10px; }
+.nv-rutas-boton {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text2);
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: 11px;
+  line-height: 1.6;
+  padding: 2px 10px;
+  white-space: nowrap;
+}
+.nv-rutas-boton:hover { border-color: var(--accent); color: var(--accent); }
+.nv-rutas-texto { color: var(--text2); font-size: 11px; }
+.nv-rutas-cuerpo { margin-top: 10px; }
+.nv-rutas-filtros { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+.nv-rutas-rotulo { color: var(--text2); font-size: 11px; }
+.nv-rutas-rotulo.chico { color: var(--text3); font-size: 10px; letter-spacing: .05em; text-transform: uppercase; }
+.nv-rutas-filtro {
+  background: none;
+  border: none;
+  color: var(--text2);
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: 11px;
+  font-weight: 400;
+  padding: 2px 6px;
+}
+.nv-rutas-filtro.activo { color: var(--accent); font-weight: 700; }
+.nv-rutas-causa { align-items: center; border-left: 1px solid var(--border); display: inline-flex; gap: 4px; margin-left: 2px; padding-left: 8px; }
+.nv-rutas-buscar {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 11px;
+  padding: 2px 8px;
+  width: 200px;
+}
+.nv-rutas-tabla { max-height: 360px; overflow-y: auto; }
+.nv-rutas-vacio { color: var(--text2); font-size: 12px; margin: 0; }
+.nv-rutas-nota { color: var(--text2); font-size: 11px; margin: 0 0 8px; }
+.nv-rutas-tabla table { border-collapse: collapse; font-size: 12px; width: 100%; }
+.nv-rutas-tabla th {
+  color: var(--text3);
+  font-size: 10px;
+  letter-spacing: .05em;
+  padding: 4px 8px;
+  text-align: left;
+  text-transform: uppercase;
+}
+.nv-rutas-tabla th.der,
+.nv-rutas-tabla td.der { text-align: right; }
+.nv-rutas-tabla td { padding: 4px 8px; }
+.nv-rutas-tabla td.num { color: var(--text2); }
+.nv-rutas-tabla td.mono { font-family: var(--mono); font-size: 11px; }
+.nv-rutas-tabla td.mono:nth-child(3) { color: var(--text); }
+.nv-rutas-tabla tr.par { background: var(--bg); }
+.nv-rutas-tabla tr.impar { background: var(--bg2); }
+.nv-rutas-tabla tbody tr { cursor: pointer; }
+.nv-rutas-tabla tbody tr:hover { outline: 1px solid var(--accent); outline-offset: -1px; }
+.nv-rutas--pantalla {
+  background: rgba(11, 17, 32, .97);
+  border: none;
+  border-top: 1px solid var(--border);
+  bottom: 0;
+  left: 0;
+  padding: 8px 20px;
+  position: absolute;
+  right: 0;
+  z-index: 5;
+}
+.nv-rutas--pantalla .nv-rutas-cuerpo { margin-top: 8px; }
+.nv-rutas--pantalla .nv-rutas-tabla { max-height: 220px; }
+
+/* Los dos diálogos. */
+.nv-dialogo { color: var(--text); }
+.nv-dialogo::backdrop { background: var(--overlay); }
+.nv-pantalla {
+  background: var(--bg);
+  border: none;
+  height: 100vh;
+  inset: 0;
+  margin: 0;
+  max-height: 100vh;
+  max-width: 100vw;
+  overflow: hidden;
+  padding: 0;
+  position: fixed;
+  width: 100vw;
+}
+.nv-pantalla-cabecera {
+  align-items: center;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  height: 46px;
+  justify-content: space-between;
+  left: 0;
+  padding: 0 16px;
+  position: absolute;
+  right: 0;
+  top: 0;
+  z-index: 2;
+}
+.nv-pantalla-titulo { color: var(--text); font-family: var(--mono); font-size: 13px; font-weight: 600; }
+.nv-pantalla-botones { display: flex; gap: 6px; }
+.nv-pantalla-lienzo { bottom: 0; height: auto; left: 0; min-height: 0; position: absolute; right: 0; top: 46px; width: auto; }
+.nv-pantalla-detalle {
+  align-items: flex-start;
+  background: rgba(11, 17, 32, .96);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: flex;
+  font-size: 12px;
+  gap: 8px;
+  justify-content: space-between;
+  left: 16px;
+  max-width: 320px;
+  min-width: 180px;
+  padding: 10px 14px;
+  position: absolute;
+  top: 54px;
+  z-index: 10;
+}
+.nv-pantalla-detalle-x { background: none; border: none; color: var(--text3); cursor: pointer; flex-shrink: 0; font-size: 13px; line-height: 1; padding: 0 2px; }
+
+.nv-filtros {
+  background: var(--surface);
+  border: none;
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, .5);
+  margin: auto;
+  max-width: 95vw;
+  padding: 0;
+  width: 720px;
+}
+.nv-filtros-cabecera { align-items: center; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; padding: 16px 20px; }
+.nv-filtros-nombre { color: var(--text); font-size: 14px; font-weight: 600; }
+.nv-filtros-x { background: none; border: none; color: var(--text2); cursor: pointer; font-size: 18px; line-height: 1; padding: 0; }
+.nv-filtros-cuerpo { display: flex; height: 380px; }
+.nv-filtros-columna { display: flex; flex: 1; flex-direction: column; gap: 8px; min-width: 0; padding: 16px; }
+.nv-filtros-columna + .nv-filtros-columna { border-left: 1px solid var(--border); }
+.nv-filtros-titulo { align-items: center; display: flex; gap: 6px; }
+.nv-filtros-titulo > span:first-child { color: var(--text3); font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
+.nv-filtros-cuenta { color: var(--text2); font-size: 11px; }
+.nv-filtros-buscar {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-sizing: border-box;
+  color: var(--text);
+  font-size: 12px;
+  outline: none;
+  padding: 6px 10px;
+  width: 100%;
+}
+.nv-filtros-todo { align-items: center; color: var(--text2); cursor: pointer; display: flex; font-size: 12px; gap: 8px; padding: 2px 6px; }
+.nv-filtros-raya { background: var(--border); height: 1px; width: 100%; }
+.nv-filtros-lista { display: flex; flex: 1; flex-direction: column; gap: 2px; overflow-y: auto; }
+.nv-filtros-fila { align-items: center; border-radius: 4px; cursor: pointer; display: flex; font-size: 12px; gap: 8px; padding: 5px 6px; }
+.nv-filtros-fila:hover { background: var(--bg2); }
+.nv-filtros-fila input { flex-shrink: 0; }
+.nv-filtros-id { color: var(--text); flex-shrink: 0; font-family: var(--mono); }
+.nv-filtros-descr { color: var(--text3); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nv-filtros-pie { border-top: 1px solid var(--border); display: flex; gap: 8px; justify-content: flex-end; padding: 14px 20px; }
