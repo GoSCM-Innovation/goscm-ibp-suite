@@ -156,7 +156,7 @@ describe('el interruptor de datos en vivo', () => {
     expect(interruptor().checked).toBe(false)
     expect(interruptor().disabled).toBe(true)
     expect(texto()).toContain('Añadir datos en vivo (volumetría + Application Jobs)')
-    expect(texto()).toContain('Requiere conexión a SAP IBP (pestaña Conexión).')
+    expect(texto()).toContain('Requiere conexión a SAP IBP (botón «Conectar SAP IBP» de arriba).')
     expect(contenedor.querySelector('.padoc-phase2.on')).toBeNull()
     expect(texto()).toContain('Con una conexión activa a SAP IBP se añaden al documento la volumetría real')
   })

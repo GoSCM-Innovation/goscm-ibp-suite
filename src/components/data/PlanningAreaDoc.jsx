@@ -281,7 +281,7 @@ export default function PlanningAreaDoc() {
         <div className={`padoc-enrich-hint${conectado ? ' ok' : ''}`}>
           {conectado
             ? 'Conectado a SAP IBP: los Application Jobs se leerán al generar.'
-            : 'Requiere conexión a SAP IBP (pestaña Conexión).'}
+            : 'Requiere conexión a SAP IBP (botón «Conectar SAP IBP» de arriba).'}
         </div>
       </div>
 
