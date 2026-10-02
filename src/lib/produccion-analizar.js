@@ -128,7 +128,7 @@ export function entidadesMapeadas(hechos) {
  * Corre el análisis completo sobre lo que acaba de bajar la descarga.
  *
  * `clasificacion` es la que guarda la pantalla (`{ tipo: { excluido, categorias } }`); aquí se
- * convierte a la forma de v7 y se pone al día con el maestro de productos recién leído, como hacía
+ * convierte a la forma de v7 y se pone al día con el maestro de productos que acaba de leerse, como hacía
  * `mattyeInit(PA_PRD)` al terminar de bajar.
  */
 export async function analizarProduccionDescargada({

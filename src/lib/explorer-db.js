@@ -84,7 +84,7 @@ export function abrirBase() {
 
     peticion.onerror = () => rechazar(peticion.error)
     peticion.onblocked = () => rechazar(new Error(
-      'Hay otra pestaña de la aplicación con la base local abierta. Cerrala y vuelve a intentar.',
+      'Hay otra pestaña de la aplicación con la base local abierta. Ciérrala y vuelve a intentar.',
     ))
   })
 }
