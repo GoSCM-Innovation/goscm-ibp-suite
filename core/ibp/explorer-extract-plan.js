@@ -349,10 +349,17 @@ export const GRUPOS_DE_EXTRACCION = Object.freeze([
  * no tienen nombre canónico que traducir.
  */
 export function planificarExtraccion({
-  efectivo, mapa = {}, grupos = ['arbol', 'red'], extras = {},
+  efectivo, mapa = {}, grupos = ['arbol', 'red'], extras = {}, tablas = null, mas = {},
 } = {}) {
-  const pasos = (EXTRACCIONES.filter((una) => gruposQueLoNecesitan(una)
-    .some((grupo) => grupos.includes(grupo)))).map((una) => {
+  // `tablas` es la lista EXACTA y ORDENADA de lo que se quiere bajar, y manda sobre `grupos`. Lo usa el
+  // Production Analyzer, que baja diez tablas de dos grupos distintos —las del árbol más dos de la red—
+  // en el orden de v7 y sin las que no necesita (validez de componentes, clientes…). El orden importa
+  // porque un paso `atadoA` otro tiene que ir después de él.
+  const elegidos = tablas
+    ? tablas.map((tabla) => EXTRACCIONES.find((una) => una.tabla === tabla)).filter(Boolean)
+    : EXTRACCIONES.filter((una) => gruposQueLoNecesitan(una).some((grupo) => grupos.includes(grupo)))
+
+  const pasos = elegidos.map((una) => {
     const entidad = efectivo?.[una.grupo]?.[una.papel]?.entidad ?? null
 
     if (!entidad) {
@@ -367,14 +374,18 @@ export function planificarExtraccion({
       }
     }
 
-    const base = armarSelect(mapa, entidad, una.campos)
+    // `mas` son campos CANÓNICOS que un módulo necesita además de los del plan (el Production Analyzer
+    // lee `PLEADTIME` y `PRATIO` de la cabecera, que el árbol no pide). Pasan por el mapa como los demás,
+    // así que si este tenant no los tiene se omiten y se avisa.
+    const campos = [...new Set([...una.campos, ...(mas?.[una.tabla] ?? [])])]
+    const base = armarSelect(mapa, entidad, campos)
     // Sin repetir lo que ya está: un campo pedido dos veces en el `$select` hace que SAP rechace la
     // consulta entera, y el error no dice cuál.
     const suyos = [...new Set(extras?.[una.tabla] ?? [])].filter((campo) => !base.includes(campo))
     const select = [...base, ...suyos]
 
     // Los campos que este tenant no tiene. No impiden bajar: se avisa de qué se pierde con ellos.
-    const omitidos = una.campos.filter((campo) => campoReal(mapa, entidad, campo) === null)
+    const omitidos = campos.filter((campo) => campoReal(mapa, entidad, campo) === null)
 
     return {
       ...una,

@@ -358,3 +358,74 @@ describe('planificarExtraccion · campos adicionales (paso ④ de v7)', () => {
     expect(pasoDe(plan, 'bom_prd').extras).toEqual([])
   })
 })
+
+describe('planificarExtraccion · tablas elegidas (Production Analyzer)', () => {
+  // Las diez que baja el Production Analyzer de v7, en SU orden: las del árbol más dos de la red.
+  const DE_PA = [
+    'bom_psh', 'bom_psi', 'bom_psisub', 'bom_psr', 'bom_prd', 'bom_loc', 'bom_res', 'bom_resloc',
+    'sn_loc_prod', 'sn_loc',
+  ]
+
+  it('baja exactamente esas tablas y en ese orden, aunque sean de dos grupos', () => {
+    const { pasos } = planificarExtraccion({ efectivo: todoResuelto(), tablas: DE_PA })
+    expect(pasos.map((uno) => uno.tabla)).toEqual(DE_PA)
+    expect(pasos.every((uno) => uno.sePuede)).toBe(true)
+  })
+
+  it('no baja lo que el analizador no usa', () => {
+    const { pasos } = planificarExtraccion({ efectivo: todoResuelto(), tablas: DE_PA })
+    const tablas = pasos.map((uno) => uno.tabla)
+    expect(tablas).not.toContain('bom_psi_validity')
+    expect(tablas).not.toContain('sn_cust')
+    expect(tablas).not.toContain('sn_plant')
+  })
+
+  it('la cabecera va antes que lo que se ata a ella', () => {
+    const { pasos } = planificarExtraccion({ efectivo: todoResuelto(), tablas: DE_PA })
+    const orden = pasos.map((uno) => uno.tabla)
+    expect(orden.indexOf('bom_psh')).toBeLessThan(orden.indexOf('bom_psi'))
+    expect(orden.indexOf('bom_psh')).toBeLessThan(orden.indexOf('bom_psr'))
+  })
+
+  it('una tabla desconocida se ignora en vez de romper el plan', () => {
+    const { pasos } = planificarExtraccion({ efectivo: todoResuelto(), tablas: ['bom_psh', 'no_existe'] })
+    expect(pasos.map((uno) => uno.tabla)).toEqual(['bom_psh'])
+  })
+})
+
+describe('planificarExtraccion · campos canónicos de más (`mas`)', () => {
+  it('añade al $select los campos que el módulo necesita y el plan no pide', () => {
+    const base = planificarExtraccion({ efectivo: todoResuelto(), tablas: ['bom_psh'] }).pasos[0]
+    expect(base.select).not.toContain('PLEADTIME')
+
+    const { pasos } = planificarExtraccion({
+      efectivo: todoResuelto(),
+      tablas: ['bom_psh'],
+      mas: { bom_psh: ['PLEADTIME', 'PRATIO'] },
+    })
+    expect(pasos[0].select).toEqual(expect.arrayContaining(['PLEADTIME', 'PRATIO']))
+  })
+
+  it('pasan por el mapa de campos: si el tenant no los tiene, se omiten y se avisa', () => {
+    const mapa = { GIDHEADER: { PLEADTIME: NO_EXISTE } }
+    const { pasos, avisos } = planificarExtraccion({
+      efectivo: todoResuelto(),
+      mapa,
+      tablas: ['bom_psh'],
+      mas: { bom_psh: ['PLEADTIME', 'PRATIO'] },
+    })
+    expect(pasos[0].select).not.toContain('PLEADTIME')
+    expect(pasos[0].select).toContain('PRATIO')
+    expect(pasos[0].omitidos).toEqual(['PLEADTIME'])
+    expect(avisos.join(' ')).toContain('PLEADTIME')
+  })
+
+  it('un campo pedido dos veces no se repite en el $select', () => {
+    const { pasos } = planificarExtraccion({
+      efectivo: todoResuelto(),
+      tablas: ['bom_psh'],
+      mas: { bom_psh: ['PRDID', 'PLEADTIME'] },
+    })
+    expect(pasos[0].select.filter((campo) => campo === 'PRDID')).toHaveLength(1)
+  })
+})

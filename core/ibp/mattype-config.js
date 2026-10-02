@@ -112,6 +112,27 @@ export function iniciarTipos(productos) {
 }
 
 /**
+ * Pone al día la configuración con el maestro de productos YA descargado (el `mattyeInit` que v7
+ * llamaba al terminar de bajar).
+ *
+ * Los tipos que el maestro trae y la configuración no conocía entran incluidos y sin categoría; los
+ * que ya estaban conservan lo decidido y se les actualiza el recuento. Un tipo que ya no tiene
+ * productos se queda como estaba. No toca la configuración recibida.
+ */
+export function actualizarTipos(cfg, productos) {
+  const frescos = iniciarTipos(productos)
+  const salida = {}
+  for (const mt of Object.keys(cfg ?? {})) {
+    salida[mt] = { ...cfg[mt], categories: new Set(cfg[mt].categories) }
+  }
+  for (const mt of Object.keys(frescos)) {
+    if (salida[mt]) salida[mt].count = frescos[mt].count
+    else salida[mt] = frescos[mt]
+  }
+  return salida
+}
+
+/**
  * Convierte la clasificación que guarda la pantalla a la configuración de v7.
  *
  * `clasificacion` es `{ tipo: { excluido, categorias, productos } }`. Las categorías que v7 no

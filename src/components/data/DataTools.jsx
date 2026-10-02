@@ -17,7 +17,7 @@ import { destinoDe, estaConectado, useConexionActiva, verAsistente } from '../..
 import BarraDeTenant from './BarraDeTenant.jsx'
 
 const ProductionVisualizer = lazy(() => import('./ProductionVisualizer.jsx'))
-const ProductionAnalyzer = lazy(() => import('./ProductionAnalyzer.jsx'))
+const AnalizadorProduccion = lazy(() => import('./AnalizadorProduccion.jsx'))
 const NetworkVisualizer = lazy(() => import('./NetworkVisualizer.jsx'))
 const NetworkAnalyzer = lazy(() => import('./NetworkAnalyzer.jsx'))
 const Glosario = lazy(() => import('./Glosario.jsx'))
@@ -76,7 +76,7 @@ export default function DataTools({ appId }) {
       case 'bom':
         return <ProductionVisualizer key={clave} destino={destino} />
       case 'pa':
-        return <ProductionAnalyzer key={clave} area={conexion.planningArea} destino={destino} />
+        return <AnalizadorProduccion key={clave} area={conexion.planningArea} destino={destino} />
       case 'visualizer':
         return <NetworkVisualizer key={clave} destino={destino} />
       case 'network':

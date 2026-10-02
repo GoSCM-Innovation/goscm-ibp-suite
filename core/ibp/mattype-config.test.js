@@ -4,6 +4,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  actualizarTipos,
   categoriasDe,
   desdeClasificacion,
   estaExcluido,
@@ -106,6 +107,31 @@ describe('configuración de tipos', () => {
     expect(iniciarTipos(lista).FERT.count).toBe(2)
     expect(iniciarTipos(new Map([['a', { MATTYPEID: 'ROH' }]])).ROH.count).toBe(1)
     expect(iniciarTipos({ a: { MATTYPEID: 'HALB' } }).HALB.count).toBe(1)
+  })
+})
+
+describe('actualizarTipos', () => {
+  const cfg = desdeClasificacion({
+    FERT: { excluido: false, categorias: ['finished'] },
+    VIEJO: { excluido: true, categorias: [] },
+  }, { FERT: 1, VIEJO: 4 })
+
+  it('conserva lo decidido, actualiza el recuento y suma los tipos nuevos', () => {
+    const nuevo = actualizarTipos(cfg, [
+      { MATTYPEID: 'FERT' }, { MATTYPEID: 'FERT' }, { MATTYPEID: 'ROH' },
+    ])
+    expect(nuevo.FERT.count).toBe(2)
+    expect([...nuevo.FERT.categories]).toEqual(['finished'])
+    expect(nuevo.ROH).toEqual({ excluded: false, categories: new Set(), count: 1 })
+    // Un tipo que ya no tiene productos se queda como estaba.
+    expect(nuevo.VIEJO.excluded).toBe(true)
+    expect(nuevo.VIEJO.count).toBe(4)
+  })
+
+  it('no toca la configuración recibida', () => {
+    actualizarTipos(cfg, [{ MATTYPEID: 'FERT' }, { MATTYPEID: 'FERT' }, { MATTYPEID: 'ROH' }])
+    expect(cfg.FERT.count).toBe(1)
+    expect(cfg.ROH).toBeUndefined()
   })
 })
 

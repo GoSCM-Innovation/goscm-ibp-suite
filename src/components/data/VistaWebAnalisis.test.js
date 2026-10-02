@@ -254,6 +254,22 @@ describe('la búsqueda', () => {
     expect(conteo()).toBe('Mostrando 1–11 de 11 (filtrado de 120)')
   })
 
+  // En v7 las celdas de la vista eran texto, así que «0» se podía buscar. Aquí pueden ser números
+  // (el Excel los necesita así) y un 0 tiene que seguir encontrándose.
+  it('un cero numérico se puede buscar', async () => {
+    const datos = datosDePrueba()
+    datos.hojas.Producto.filas = [
+      { s: 'ok', c: ['', 'AAA', 'sin dígitos', 0] },
+      { s: 'ok', c: ['', 'BBB', 'sin dígitos', 7] },
+      { s: 'ok', c: ['', 'CCC', 'sin dígitos', null] },
+    ]
+    datos.hojas.Producto.total = 3
+    await montar({ datos })
+    await escribir('0')
+    await esperar(220)
+    expect(columna(1)).toEqual(['AAA'])
+  })
+
   it('ignora la columna 0: buscar «Alerta» no encuentra nada', async () => {
     await montar()
     await escribir('Alerta')
