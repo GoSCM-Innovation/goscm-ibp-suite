@@ -189,6 +189,30 @@ describe('parseResponse', () => {
     expect(parseResponse('getTaskLogs', xml).monitorLog.messageLines).toEqual(['Path Name+MA61V1 '])
   })
 
+  // `a81ddf6` de v9: cada línea llega en su propio <messageLine>, codificada por separado.
+  it('descodifica cada <messageLine> hijo por separado y los une con salto de línea', () => {
+    const xml = `<r><monitorLog><messageLines><messageLine>${b64('Cabecera\n=====')}</messageLine>`
+      + `<messageLine>${b64('/ruta/paso1  STOP  10')}</messageLine>`
+      + `<messageLine>${b64('/ruta/paso2  STOP  20')}</messageLine></messageLines></monitorLog></r>`
+
+    expect(parseResponse('getTaskLogs', xml).monitorLog.messageLines)
+      .toEqual(['Cabecera\n=====\n/ruta/paso1  STOP  10\n/ruta/paso2  STOP  20'])
+  })
+
+  it('ignora el espacio entre <messageLine> de un XML con sangrías', () => {
+    const xml = `<r><traceLog><messageLines>
+        <messageLine>${b64('uno')}</messageLine>
+        <messageLine>${b64('dos')}</messageLine>
+      </messageLines></traceLog></r>`
+
+    expect(parseResponse('getTaskLogs', xml).traceLog.messageLines).toEqual(['uno\ndos'])
+  })
+
+  it('un <messageLine> en texto plano también pasa tal cual', () => {
+    const xml = '<r><errorLog><messageLines><messageLine>falló el job</messageLine></messageLines></errorLog></r>'
+    expect(parseResponse('getTaskLogs', xml).errorLog.messageLines).toEqual(['falló el job'])
+  })
+
   it('deja pasar tal cual una línea que ya viene en texto plano', () => {
     const xml = '<r><errorLog><messageLines>Error sin codificar</messageLines></errorLog></r>'
     expect(parseResponse('getTaskLogs', xml).errorLog.messageLines).toEqual(['Error sin codificar'])

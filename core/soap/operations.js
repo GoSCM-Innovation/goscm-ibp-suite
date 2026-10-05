@@ -182,8 +182,21 @@ function decodeLogToken(part) {
   return lineas.every((una) => una !== null) ? lineas.join('\n') : part
 }
 
-function decodeLogLine(raw) {
+/** Un trozo de texto del registro: sus líneas separadas por salto, cada una descodificada. */
+function decodeLogText(raw) {
   return xmlText(raw).split(/\r?\n/).map(decodeLogToken).join('\n')
+}
+
+/**
+ * Un `<messageLines>`. Algunos tenants meten dentro un `<messageLine>` por línea, cada uno
+ * codificado por separado (portado de `a81ddf6` de v9). Quitar las etiquetas y descodificar todo
+ * junto dejaba el relleno "=" de una línea en medio del bloque y, según el ancho de cada una, el
+ * resultado salía mal cortado. Con hijos se descodifica cada uno por su cuenta y se unen con salto
+ * de línea; sin hijos, el elemento entero es el texto.
+ */
+function decodeLogLine(raw) {
+  const hijos = xmlAll(raw, 'messageLine')
+  return hijos.length > 0 ? hijos.map(decodeLogText).join('\n') : decodeLogText(raw)
 }
 
 export function parseResponse(operation, xml) {
