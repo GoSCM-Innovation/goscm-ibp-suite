@@ -5,6 +5,7 @@ import {
   INDICE_DE_SEVERIDAD,
   TABLAS,
   TABLAS_DE_VISTA,
+  TABLAS_OBSOLETAS,
   TABLA_DE_ORIGEN,
   existeLaTabla,
   marcaDeOrigen,
@@ -54,19 +55,27 @@ describe('todasLasTablas', () => {
     }
   })
 
-  // Los tres analizadores no comparten tablas: cada uno filtra y enriquece distinto.
-  it('los tres grupos existen y no se pisan', () => {
+  // El árbol y la red tienen sus tablas; el Production Analyzer ya no tiene las suyas (lee las de ellos).
+  it('los dos grupos existen y no quedan tablas de los analizadores anteriores', () => {
     const grupos = (prefijo) => TABLAS.filter((una) => una.nombre.startsWith(prefijo))
     expect(grupos('bom_').length).toBeGreaterThan(0)
     expect(grupos('sn_').length).toBeGreaterThan(0)
-    expect(grupos('pa_').length).toBeGreaterThan(0)
+    expect(grupos('pa_')).toHaveLength(0)
+  })
+
+  it('las tablas obsoletas ya no están en el esquema', () => {
+    for (const nombre of TABLAS_OBSOLETAS) expect(existeLaTabla(nombre)).toBe(false)
+  })
+
+  it('solo las dos hojas de arcos de la red tienen tabla de vista', () => {
+    expect(TABLAS_DE_VISTA).toEqual(['sn_loc_web', 'sn_cust_web'])
   })
 })
 
 describe('existeLaTabla', () => {
   it('reconoce las del esquema', () => {
     expect(existeLaTabla('bom_psh')).toBe(true)
-    expect(existeLaTabla('pa_psi_web')).toBe(true)
+    expect(existeLaTabla('sn_loc_web')).toBe(true)
   })
 
   // Abrir una transacción sobre una tabla inexistente revienta con un error que no explica nada.

@@ -21,6 +21,15 @@ describe('las seis aplicaciones de v7', () => {
     expect(piden).toEqual(['bom', 'pa', 'visualizer', 'network'])
   })
 
+  // `banner.network` de `es.json` de v7. El Network Analyzer de la suite entrega ahora ese Excel, así que
+  // el banner dice lo mismo que v7 y no promete nada que la pantalla no haga.
+  it('el banner del Network Analyzer es el de v7', () => {
+    expect(APPS_EXPLORER.find((una) => una.id === 'network').banner).toBe(
+      'Descarga y analiza la red logística completa de todos los materiales. Genera un informe Excel con '
+      + 'métricas de resiliencia, nodos críticos, ghost nodes y calidad general de la red de suministro.',
+    )
+  })
+
   it('cada una que pide conexión trae su texto de módulo restringido', () => {
     for (const una of APPS_EXPLORER.filter((otra) => otra.requiereConexion)) {
       expect(una.bloqueado, una.id).toBeTruthy()

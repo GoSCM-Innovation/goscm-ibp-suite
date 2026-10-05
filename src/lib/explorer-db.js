@@ -19,6 +19,7 @@
 import {
   NOMBRE_DE_LA_BASE,
   TABLA_DE_ORIGEN,
+  TABLAS_OBSOLETAS,
   VERSION_DEL_ESQUEMA,
   existeLaTabla,
   marcaDeOrigen,
@@ -55,6 +56,11 @@ export function abrirBase() {
 
     peticion.onupgradeneeded = () => {
       const base = peticion.result
+      // Migración: fuera las tablas de versiones anteriores que ya nadie lee. Solo las que se conocen por
+      // su nombre; cualquier otra se deja como está.
+      for (const nombre of TABLAS_OBSOLETAS) {
+        if (base.objectStoreNames.contains(nombre)) base.deleteObjectStore(nombre)
+      }
       for (const tabla of todasLasTablas()) {
         const almacen = base.objectStoreNames.contains(tabla.nombre)
           ? peticion.transaction.objectStore(tabla.nombre)
@@ -207,19 +213,67 @@ export async function porCursor(tabla, porCadaUno, { indice, valor } = {}) {
 }
 
 /**
- * Un tramo de una tabla, para paginar desde el disco.
+ * Un tramo de una tabla, para paginar desde el disco (`idbCursorPage` de v7).
  *
- * Salta con el cursor en vez de traer todo y cortar: saltar cuesta lo que cuesta avanzar el cursor,
- * traer todo cuesta la tabla entera en memoria.
+ * Salta con `advance` en vez de traer todo y cortar: el navegador salta las filas sin entregarlas, que
+ * es lo que hace barato llegar a la página 9.000 de 450.000 filas. Traer todo costaría la tabla entera
+ * en memoria.
  */
 export async function leerTramo(tabla, { desde = 0, cuantos = 100, indice, valor } = {}) {
-  const filas = []
-  await porCursor(tabla, (fila, posicion) => {
-    if (posicion < desde) return true
-    filas.push(fila)
-    return filas.length < cuantos
-  }, { indice, valor })
-  return filas
+  exigirTabla(tabla)
+  const base = await abrirBase()
+
+  return new Promise((resolver, rechazar) => {
+    const tx = base.transaction(tabla, 'readonly')
+    alFallar(tx, rechazar)
+
+    const almacen = tx.objectStore(tabla)
+    const donde = indice ? almacen.index(indice) : almacen
+    const peticion = valor === undefined ? donde.openCursor() : donde.openCursor(valor)
+
+    const filas = []
+    let saltado = desde <= 0
+    peticion.onsuccess = () => {
+      const cursor = peticion.result
+      if (!cursor) { resolver(filas); return }
+      if (!saltado) { saltado = true; cursor.advance(desde); return }
+      filas.push(cursor.value)
+      if (filas.length >= cuantos) { resolver(filas); return }
+      cursor.continue()
+    }
+    peticion.onerror = () => rechazar(peticion.error)
+  })
+}
+
+/**
+ * Busca por cursor las filas que cumplen `prueba`, con tope de coincidencias y de filas revisadas
+ * (`idbCursorScanMatch` de v7). Devuelve `{ filas, truncada }`: `truncada` es verdadera si se cortó por
+ * alguno de los dos topes, y entonces el resultado es parcial. La memoria queda acotada por `maximo`.
+ */
+export async function buscarEnTabla(tabla, prueba, { indice, valor, maximo = 2000, escanear = 300000 } = {}) {
+  exigirTabla(tabla)
+  const base = await abrirBase()
+
+  return new Promise((resolver, rechazar) => {
+    const tx = base.transaction(tabla, 'readonly')
+    alFallar(tx, rechazar)
+
+    const almacen = tx.objectStore(tabla)
+    const donde = indice ? almacen.index(indice) : almacen
+    const peticion = valor === undefined ? donde.openCursor() : donde.openCursor(valor)
+
+    const filas = []
+    let revisadas = 0
+    peticion.onsuccess = () => {
+      const cursor = peticion.result
+      if (!cursor) { resolver({ filas, truncada: false }); return }
+      revisadas += 1
+      if (prueba(cursor.value)) filas.push(cursor.value)
+      if (filas.length >= maximo || revisadas >= escanear) { resolver({ filas, truncada: true }); return }
+      cursor.continue()
+    }
+    peticion.onerror = () => rechazar(peticion.error)
+  })
 }
 
 /** A qué tenant, área y versión pertenece lo guardado. `null` si no hay nada. */

@@ -7,7 +7,9 @@ import { IDBFactory } from 'fake-indexeddb'
 
 import {
   POR_LOTE,
+  abrirBase,
   anotarOrigen,
+  buscarEnTabla,
   contar,
   guardar,
   leerPorIndice,
@@ -122,12 +124,12 @@ describe('porCursor', () => {
 
 describe('leerTramo', () => {
   beforeEach(async () => {
-    await guardar('pa_psi_web', Array.from({ length: 25 }, (_, i) => ({ c: [`fila ${i}`], s: i % 3 === 0 ? 'red' : 'ok' })))
+    await guardar('sn_loc_web', Array.from({ length: 25 }, (_, i) => ({ c: [`fila ${i}`], s: i % 3 === 0 ? 'red' : 'ok' })))
   })
 
   it('trae la página pedida', async () => {
-    const primera = await leerTramo('pa_psi_web', { desde: 0, cuantos: 10 })
-    const segunda = await leerTramo('pa_psi_web', { desde: 10, cuantos: 10 })
+    const primera = await leerTramo('sn_loc_web', { desde: 0, cuantos: 10 })
+    const segunda = await leerTramo('sn_loc_web', { desde: 10, cuantos: 10 })
 
     expect(primera).toHaveLength(10)
     expect(segunda).toHaveLength(10)
@@ -135,18 +137,86 @@ describe('leerTramo', () => {
   })
 
   it('la última página trae lo que queda, no un hueco', async () => {
-    await expect(leerTramo('pa_psi_web', { desde: 20, cuantos: 10 })).resolves.toHaveLength(5)
+    await expect(leerTramo('sn_loc_web', { desde: 20, cuantos: 10 })).resolves.toHaveLength(5)
   })
 
   it('pasado el final no devuelve nada', async () => {
-    await expect(leerTramo('pa_psi_web', { desde: 100, cuantos: 10 })).resolves.toEqual([])
+    await expect(leerTramo('sn_loc_web', { desde: 100, cuantos: 10 })).resolves.toEqual([])
+  })
+
+  // `advance` salta sin entregar las filas: la página 3 empieza exactamente en la fila 20.
+  it('salta hasta el desde pedido, en el orden en que se guardó', async () => {
+    const tercera = await leerTramo('sn_loc_web', { desde: 20, cuantos: 3 })
+    expect(tercera.map((una) => una.c[0])).toEqual(['fila 20', 'fila 21', 'fila 22'])
+  })
+
+  it('con índice, el desde cuenta dentro del valor pedido', async () => {
+    // Rojas: las filas 0, 3, 6, 9, 12, 15, 18, 21, 24. Saltando 2, la primera es la 6.
+    const rojas = await leerTramo('sn_loc_web', { desde: 2, cuantos: 2, indice: 'by_severity', valor: 'red' })
+    expect(rojas.map((una) => una.c[0])).toEqual(['fila 6', 'fila 9'])
   })
 
   // Es para lo que existe el índice por severidad.
   it('puede paginar solo un valor del índice', async () => {
-    const rojas = await leerTramo('pa_psi_web', { desde: 0, cuantos: 50, indice: 'by_severity', valor: 'red' })
+    const rojas = await leerTramo('sn_loc_web', { desde: 0, cuantos: 50, indice: 'by_severity', valor: 'red' })
     expect(rojas.length).toBeGreaterThan(0)
     expect(rojas.every((una) => una.s === 'red')).toBe(true)
+  })
+})
+
+describe('buscarEnTabla', () => {
+  beforeEach(async () => {
+    await guardar('sn_loc_web', Array.from({ length: 30 }, (_, i) => ({ c: ['', `obs ${i}`], s: i % 2 === 0 ? 'red' : 'ok' })))
+  })
+
+  it('devuelve las filas que cumplen la prueba, sin cortar si caben', async () => {
+    const { filas, truncada } = await buscarEnTabla('sn_loc_web', (r) => r.c[1].endsWith('7'))
+    expect(filas.map((una) => una.c[1])).toEqual(['obs 7', 'obs 17', 'obs 27'])
+    expect(truncada).toBe(false)
+  })
+
+  it('se corta al llegar al máximo de coincidencias y lo dice', async () => {
+    const { filas, truncada } = await buscarEnTabla('sn_loc_web', () => true, { maximo: 5 })
+    expect(filas).toHaveLength(5)
+    expect(truncada).toBe(true)
+  })
+
+  it('se corta al revisar el máximo de filas y lo dice', async () => {
+    const { filas, truncada } = await buscarEnTabla('sn_loc_web', (r) => r.c[1] === 'obs 25', { escanear: 10 })
+    expect(filas).toEqual([])
+    expect(truncada).toBe(true)
+  })
+
+  it('puede buscar solo dentro de una severidad', async () => {
+    const { filas } = await buscarEnTabla('sn_loc_web', () => true, { indice: 'by_severity', valor: 'ok' })
+    expect(filas).toHaveLength(15)
+    expect(filas.every((una) => una.s === 'ok')).toBe(true)
+  })
+})
+
+describe('migración del esquema', () => {
+  // Una base creada con la versión 3 del esquema, que tenía las tablas de los analizadores anteriores.
+  it('borra las tablas obsoletas y conserva las demás, incluso las que no conoce', async () => {
+    await new Promise((resolver, rechazar) => {
+      const peticion = indexedDB.open('goscm_explorer', 3)
+      peticion.onupgradeneeded = () => {
+        const base = peticion.result
+        for (const nombre of ['pa_psh', 'pa_psi_web', 'sn_product_web', 'bom_psh', 'otra_tabla']) {
+          base.createObjectStore(nombre, { autoIncrement: true })
+        }
+      }
+      peticion.onsuccess = () => { peticion.result.close(); resolver() }
+      peticion.onerror = () => rechazar(peticion.error)
+    })
+
+    const base = await abrirBase()
+    const nombres = [...base.objectStoreNames]
+    expect(nombres).not.toContain('pa_psh')
+    expect(nombres).not.toContain('pa_psi_web')
+    expect(nombres).not.toContain('sn_product_web')
+    expect(nombres).toContain('bom_psh')
+    expect(nombres).toContain('sn_loc_web')
+    expect(nombres).toContain('otra_tabla') // no es del esquema ni está en la lista de obsoletas
   })
 })
 
@@ -159,11 +229,11 @@ describe('vaciar', () => {
 
   it('vaciarTodo alcanza a las de datos y a las de vista', async () => {
     await guardar('bom_psi', [fuente('S1')])
-    await guardar('pa_psi_web', [{ c: ['x'], s: 'ok' }])
+    await guardar('sn_loc_web', [{ c: ['x'], s: 'ok' }])
 
     await vaciarTodo()
     await expect(contar('bom_psi')).resolves.toBe(0)
-    await expect(contar('pa_psi_web')).resolves.toBe(0)
+    await expect(contar('sn_loc_web')).resolves.toBe(0)
   })
 })
 

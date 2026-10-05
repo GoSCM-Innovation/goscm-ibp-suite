@@ -12,6 +12,21 @@
 /** Dónde se guarda. La clave es la de v7, para no perder lo que ya tuviera guardado quien migre. */
 export const claveGuardada = (area) => `mattype_${area || 'default'}`
 
+/**
+ * La clasificación de partida: cuántos productos hay de cada tipo, todo INCLUIDO y sin categoría.
+ *
+ * Excluir algo o clasificarlo es una decisión, y tomarla por el consultor sería justo el error que esta
+ * clasificación existe para evitar. Los productos sin tipo no cuentan.
+ */
+export function configuracionInicial(cuentaPorTipo) {
+  const salida = {}
+  for (const [tipo, cuantos] of Object.entries(cuentaPorTipo ?? {})) {
+    if (!tipo) continue
+    salida[tipo] = { excluido: false, categorias: [], productos: cuantos }
+  }
+  return salida
+}
+
 /** Lo guardado para un área, o `null` si no hay nada o está ilegible. */
 export function leerGuardada(area) {
   try {

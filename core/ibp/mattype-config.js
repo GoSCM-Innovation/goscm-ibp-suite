@@ -4,10 +4,9 @@
 // del Production Analyzer: la matriz de `reglasDeCategorias` es el juicio de un consultor puesto en una
 // tabla, y por eso se porta idéntica y no «mejorada».
 //
-// Convive con `production-rules.js`, que es otra lectura de la misma idea (cuatro categorías con
-// ids iguales, pero otros textos y una comprobación extra) y que sigue en pie porque todavía la usa el
-// Network Analyzer. Cuando el Network Analyzer se migre a v7 con los mismos algoritmos, este módulo
-// la reemplaza: ver `docs/PARIDAD-DATA-TOOLS.md`, «Infraestructura reutilizable».
+// Lo usan los DOS analizadores (el de producción y el de la red), que en v7 compartían la misma
+// `MATTYPE_CFG`. Antes había otra lectura de la misma idea (`production-rules.js`, con una comprobación
+// extra que v7 no tenía); se retiró al migrar el Network Analyzer.
 //
 // La configuración tiene la forma de v7: `{ MATTYPEID: { excluded, categories: Set, count } }`. La
 // pantalla guarda otra (`{ tipo: { excluido, categorias } }`, en `clasificacion-de-tipos.js`, que es
@@ -250,18 +249,24 @@ export function resumenDeCategoriasV7(cfg) {
   return `${catted.length} tipo(s) categorizado(s)` + (uncatted > 0 ? ` · ${uncatted} sin categoría (reglas 🟡)` : '')
 }
 
+/** Lo que dice el paso ⑤ del Production Analyzer sin nada configurado (`run.paDefault` de v7). */
+export const RESUMEN_POR_DEFECTO_PA = 'Configuración por defecto — análisis estándar'
+
+/** Lo que dice el paso ⑤ del Network Analyzer sin nada configurado (`run.snDefault` de v7). */
+export const RESUMEN_POR_DEFECTO_RED = 'Configuración por defecto — análisis estándar para todos los tipos'
+
 /**
- * El resumen del paso ⑤ (`_paUpdateRunSummary`).
- * `run.paDefault` de v7 cuando no hay nada configurado.
+ * El resumen del paso ⑤ (`_paUpdateRunSummary` y `_snUpdateRunSummary`: el mismo cálculo; solo cambia lo que
+ * dicen cuando no hay nada configurado, que es `porDefecto`).
  */
-export function resumenDeEjecucionV7(cfg) {
+export function resumenDeEjecucionV7(cfg, porDefecto = RESUMEN_POR_DEFECTO_PA) {
   const keys = Object.keys(cfg ?? {})
   const excl = keys.filter((k) => cfg[k].excluded)
   const catted = keys.filter((k) => !cfg[k].excluded && cfg[k].categories.size > 0)
   const inclPrds = keys.filter((k) => !cfg[k].excluded).reduce((s, k) => s + (cfg[k].count || 0), 0)
   const exclPrds = excl.reduce((s, k) => s + (cfg[k].count || 0), 0)
 
-  if (!excl.length && !catted.length) return 'Configuración por defecto — análisis estándar'
+  if (!excl.length && !catted.length) return porDefecto
 
   const parts = []
   parts.push(`${inclPrds} productos incluidos en ${keys.length - excl.length} tipo(s)`)

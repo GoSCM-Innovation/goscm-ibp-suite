@@ -13,8 +13,19 @@
 //     nombreEstadisticas,
 //   }
 //
-// Las filas viven COMPLETAS en memoria (en v7 las hojas grandes iban a IndexedDB; aquí no hay tal cosa).
-// Por eso el filtrado se memoriza —puede haber 100.000 filas— y solo se dibujan las 50 de la página.
+// Las filas viven COMPLETAS en memoria, salvo en las hojas que traen `origen`. Una hoja con `origen` es
+// una de las grandes (Location Source y Customer Source de la red, que pueden tener cientos de miles de
+// filas): sus filas están en la base local del navegador y la vista las pide POR PÁGINAS, sin cargarlas,
+// como hacía `snWebView.js` de v7 con `idbCursorPage` e `idbCursorScanMatch`:
+//
+//   hoja.origen = {
+//     pagina(sev, desde, cuantos) → Promise<filas>,                       // un tramo, con filtro de severidad
+//     buscar(sev, prueba, maximo, escanear) → Promise<{ filas, truncada }>, // búsqueda por cursor con tope
+//   }
+//
+// Si la lectura falla, la hoja cae a lo que haya en `hoja.filas` (el respaldo en memoria) y lo dice.
+// Para las hojas en memoria el filtrado se memoriza —puede haber 100.000 filas— y solo se dibujan las 50
+// de la página.
 //
 // El estado de la vista (hoja, filtro, búsqueda, página) vive en este componente y no en la tabla, para
 // que «Cerrar» —que solo minimiza— y «Ver resultados» lo reabran tal como estaba, sin recalcular nada.
@@ -28,6 +39,10 @@ import { createPortal } from 'react-dom'
 const TAM_PAGINA = 50
 const ANCHO_MINIMO = 40
 const RETARDO_BUSQUEDA_MS = 220
+/** Tope de coincidencias que recoge una búsqueda en una hoja grande (`MAX_SEARCH` de v7). */
+const MAX_BUSQUEDA = 2000
+/** Tope de filas que revisa una búsqueda en una hoja grande (`MAX_SCAN` de v7). */
+const MAX_ESCANEO = 300000
 const HOJA_ESTADISTICAS = '__stats__'
 
 const SEV = {
@@ -80,20 +95,25 @@ function filtrarFilas(filas, sev, texto) {
   const salida = []
   for (const fila of filas) {
     if (sev !== 'all' && fila.s !== sev) continue
-    if (q) {
-      let coincide = false
-      const c = fila.c || []
-      for (let j = 1; j < c.length; j++) {
-        // En v7 las celdas de la vista eran texto ('0' cuenta); aquí pueden ser números, y un 0 también
-        // tiene que poder buscarse. Lo que no cuenta es la celda vacía.
-        const v = c[j]
-        if (v !== null && v !== undefined && v !== '' && String(v).toLowerCase().includes(q)) { coincide = true; break }
-      }
-      if (!coincide) continue
-    }
+    if (q && !coincideConTexto(fila, q)) continue
     salida.push(fila)
   }
   return salida
+}
+
+/**
+ * Si alguna celda de la fila (menos la 0, el estado) contiene `q`, que ya viene en minúsculas.
+ *
+ * En v7 las celdas de la vista eran texto ('0' cuenta); aquí pueden ser números, y un 0 también tiene
+ * que poder buscarse. Lo que no cuenta es la celda vacía.
+ */
+function coincideConTexto(fila, q) {
+  const c = fila.c || []
+  for (let j = 1; j < c.length; j++) {
+    const v = c[j]
+    if (v !== null && v !== undefined && v !== '' && String(v).toLowerCase().includes(q)) return true
+  }
+  return false
 }
 
 /** La hoja Estadísticas: una secuencia de títulos y tablas, como la dejaba `StatsSheet` en el Excel. */
@@ -205,6 +225,11 @@ export default function VistaWebAnalisis({ datos, descargarExcel = null, excelDe
   const [popup, setPopup] = useState(null)
   const [anchos, setAnchos] = useState({}) // por hoja: persisten al paginar
   const [descarga, setDescarga] = useState('inactivo') // 'inactivo' | 'generando' | 'listo'
+  // Hojas paginadas desde la base local: el tramo que se está viendo, la última búsqueda y las hojas cuya
+  // lectura falló (esas caen a la vista en memoria).
+  const [tramo, setTramo] = useState(null) // { clave, filas }
+  const [busqueda, setBusqueda] = useState(null) // { clave, filas, truncada }
+  const [leyoMal, setLeyoMal] = useState({})
 
   const temporizador = useRef(null)
   const soltarRedimension = useRef(null)
@@ -218,14 +243,32 @@ export default function VistaWebAnalisis({ datos, descargarExcel = null, excelDe
     : orden[0]
   const hojaActual = hoja && hoja !== HOJA_ESTADISTICAS ? hojas?.[hoja] ?? null : null
 
+  // Una hoja con `origen` se pide por páginas a la base local; si esa lectura falla, cae a la memoria.
+  const origen = hojaActual?.origen && !leyoMal[hoja] ? hojaActual.origen : null
+  const texto = q.trim().toLowerCase()
+  const claveBusqueda = `${hoja}|${sev}|${texto}`
+  const busquedaLista = origen && texto && busqueda?.clave === claveBusqueda ? busqueda : null
+
   const filtradas = useMemo(
-    () => (hojaActual ? filtrarFilas(hojaActual.filas || [], sev, q) : []),
-    [hojaActual, sev, q],
+    () => (hojaActual && !origen ? filtrarFilas(hojaActual.filas || [], sev, q) : []),
+    [hojaActual, origen, sev, q],
   )
-  const totalPaginas = Math.max(1, Math.ceil(filtradas.length / TAM_PAGINA))
+  // Cuántas filas cumplen el filtro. En una hoja paginada sin búsqueda salen de los contadores de la hoja
+  // (no hace falta leer nada); con búsqueda, de lo que trajo el cursor.
+  const totalFiltradas = !origen
+    ? filtradas.length
+    : texto ? (busquedaLista ? busquedaLista.filas.length : 0) : (sev === 'all' ? hojaActual.total : hojaActual[sev] ?? 0)
+  const totalPaginas = Math.max(1, Math.ceil(totalFiltradas / TAM_PAGINA))
   const paginaActual = Math.min(Math.max(1, pagina), totalPaginas) // acotada: filtrar puede achicar la lista
   const desde = (paginaActual - 1) * TAM_PAGINA
-  const filasPagina = useMemo(() => filtradas.slice(desde, desde + TAM_PAGINA), [filtradas, desde])
+  const claveTramo = `${hoja}|${sev}|${desde}`
+  const filasMemoria = useMemo(() => filtradas.slice(desde, desde + TAM_PAGINA), [filtradas, desde])
+  // `null` = todavía cargando (solo pasa con `origen`).
+  const filasPagina = !origen
+    ? filasMemoria
+    : texto
+      ? (busquedaLista ? busquedaLista.filas.slice(desde, desde + TAM_PAGINA) : null)
+      : (tramo?.clave === claveTramo ? tramo.filas : null)
 
   const nColumnas = hojaActual?.encabezados?.length ?? 0
   const anchosGuardados = hoja ? anchos[hoja] : undefined
@@ -272,6 +315,30 @@ export default function VistaWebAnalisis({ datos, descargarExcel = null, excelDe
       td.classList.toggle('snwv-clip', td.scrollWidth > td.clientWidth + 1)
     })
   }, [filasPagina, anchosHoja, colapsado, hoja])
+
+  // Hoja paginada, sin búsqueda: pide el tramo de la página a la base local. `vigente` descarta la
+  // respuesta de una petición vieja si mientras tanto se cambió de página, de filtro o de hoja (el
+  // `_reqSeq` de v7).
+  useEffect(() => {
+    if (!origen || texto) return undefined
+    let vigente = true
+    origen.pagina(sev, desde, TAM_PAGINA)
+      .then((filas) => { if (vigente) setTramo({ clave: claveTramo, filas: filas || [] }) })
+      .catch(() => { if (vigente) setLeyoMal((previo) => ({ ...previo, [hoja]: true })) })
+    return () => { vigente = false }
+  }, [origen, texto, sev, desde, hoja, claveTramo])
+
+  // Hoja paginada, con búsqueda: recorre la base por cursor con tope. Se hace UNA vez por hoja, filtro y
+  // texto; paginar los resultados no vuelve a buscar.
+  useEffect(() => {
+    if (!origen || !texto) return undefined
+    let vigente = true
+    const prueba = (registro) => coincideConTexto(registro, texto)
+    origen.buscar(sev, prueba, MAX_BUSQUEDA, MAX_ESCANEO)
+      .then((res) => { if (vigente) setBusqueda({ clave: claveBusqueda, filas: res.filas || [], truncada: !!res.truncada }) })
+      .catch(() => { if (vigente) setLeyoMal((previo) => ({ ...previo, [hoja]: true })) })
+    return () => { vigente = false }
+  }, [origen, texto, sev, hoja, claveBusqueda])
 
   if (!datos || !orden.length) {
     return (
@@ -384,8 +451,11 @@ export default function VistaWebAnalisis({ datos, descargarExcel = null, excelDe
     })
 
   const hayFiltro = sev !== 'all' || q.trim() !== ''
-  const mostrandoDesde = filtradas.length ? desde + 1 : 0
-  const mostrandoHasta = Math.min(desde + TAM_PAGINA, filtradas.length)
+  const mostrandoDesde = totalFiltradas ? desde + 1 : 0
+  const mostrandoHasta = Math.min(desde + TAM_PAGINA, totalFiltradas)
+  // Los avisos del pie de una hoja grande: de dónde se lee y si lo que se ve es parcial (los de v7).
+  const cayoALaMemoria = Boolean(hojaActual?.origen) && !origen
+  const vistaParcial = !origen && (cayoALaMemoria || Boolean(hojaActual?.capada))
   const etiquetaFs = fs ? 'Salir de pantalla completa' : 'Pantalla completa'
   const chips = hojaActual && [
     { k: 'all', etiqueta: 'Todos', n: hojaActual.total },
@@ -509,7 +579,9 @@ export default function VistaWebAnalisis({ datos, descargarExcel = null, excelDe
               </div>
 
               <div ref={area} className="snwv-tablearea">
-                {filasPagina.length ? (
+                {filasPagina === null ? (
+                  <div className="snwv-empty">{texto ? 'Buscando...' : 'Cargando...'}</div>
+                ) : filasPagina.length ? (
                   <div className="snwv-tablewrap" onClick={alHacerClicEnTabla}>
                     <table className="snwv-dtable" style={{ width: anchoTotal }}>
                       <colgroup>
@@ -565,9 +637,22 @@ export default function VistaWebAnalisis({ datos, descargarExcel = null, excelDe
                 <div className="snwv-foot">
                   <div>
                     <div className="snwv-count">
-                      {`Mostrando ${fmtN(mostrandoDesde)}–${fmtN(mostrandoHasta)} de ${fmtN(filtradas.length)}`}
+                      {`Mostrando ${fmtN(mostrandoDesde)}–${fmtN(mostrandoHasta)} de ${fmtN(totalFiltradas)}`}
                       {hayFiltro ? ` (filtrado de ${fmtN(hojaActual.total)})` : ''}
                     </div>
+                    {origen && texto && busquedaLista?.truncada ? (
+                      <div className="snwv-cap">
+                        {`⚠ Búsqueda limitada a las primeras ${fmtN(totalFiltradas)} coincidencias. Afina el filtro o descarga el Excel.`}
+                      </div>
+                    ) : null}
+                    {origen && !(texto && busquedaLista?.truncada) ? (
+                      <div className="snwv-note">Navegando el 100% de las filas desde el almacenamiento local del navegador.</div>
+                    ) : null}
+                    {vistaParcial ? (
+                      <div className="snwv-cap">
+                        {`⚠ ${cayoALaMemoria ? 'No se pudo leer el detalle completo. ' : ''}Vista limitada a ${fmtN((hojaActual.filas || []).length)} filas (de ${fmtN(hojaActual.total)}). Descarga el Excel para el detalle completo.`}
+                      </div>
+                    ) : null}
                   </div>
                   <div className="snwv-pager">
                     <button

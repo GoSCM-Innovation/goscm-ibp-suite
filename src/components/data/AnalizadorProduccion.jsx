@@ -16,12 +16,12 @@
 //
 // El algoritmo está en `core/ibp/production-analyzer.js`; la lectura de lo descargado, en
 // `src/lib/produccion-analizar.js`; el Excel, en `src/lib/xlsx-analisis.js`; la vista web, en
-// `VistaWebAnalisis.jsx`. Aquí solo está el recorrido. Es también el MOLDE del Network Analyzer: ver
-// «Infraestructura reutilizable» en `docs/PARIDAD-DATA-TOOLS.md`.
+// `VistaWebAnalisis.jsx`. Aquí solo está el recorrido. Es también el molde de `NetworkAnalyzer.jsx`, que
+// tiene el mismo recorrido con los datos de la red: ver «Infraestructura reutilizable» en
+// `docs/PARIDAD-DATA-TOOLS.md`.
 //
-// Por qué no usa `AnalizadorV7`: ese componente es el recorrido de la versión anterior de los dos
-// analizadores y lo sigue usando el Network Analyzer hasta que se migre. Parametrizarlo para los dos
-// habría obligado a que cada cambio de uno pasara por el otro.
+// No hay un componente de recorrido común a propósito: parametrizarlo para los dos habría obligado a que
+// cada cambio de uno pasara por el otro, y en v7 eran dos pestañas con sus propios paneles.
 
 import { useCallback, useMemo, useRef, useState } from 'react'
 
@@ -33,7 +33,6 @@ import MatrizDeCategorias from './MatrizDeCategorias.jsx'
 import CamposAdicionales from './CamposAdicionales.jsx'
 import ModalModoDeSalida from './ModalModoDeSalida.jsx'
 import VistaWebAnalisis from './VistaWebAnalisis.jsx'
-import { configuracionInicial } from '../../../core/ibp/production-rules.js'
 import { DESCRIPCION_DE_CAMPO } from '../../../core/ibp/explorer-fields.js'
 import {
   desdeClasificacion,
@@ -47,6 +46,7 @@ import {
   ENTIDADES_CON_EXTRAS,
 } from '../../../core/ibp/production-analyzer.js'
 import {
+  configuracionInicial,
   guardarClasificacion,
   leerGuardada,
   mezclarClasificacion,
