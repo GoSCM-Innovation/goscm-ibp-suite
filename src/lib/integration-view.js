@@ -5,16 +5,17 @@
 // los componentes para poder probarlo sin montar nada.
 
 /** Las dimensiones por las que se puede explorar un proyecto, en el orden de v9. */
+// Los rótulos son los de v9 (`ex.dim.*`), con su emoji; `plural` es el de su contador (`ex.dim.counter.*`).
 export const DIMENSIONES = [
   { id: 'integracion', label: 'Integración', icono: '🔗' },
-  { id: 'dst-table', label: 'Tabla destino', icono: '📤', indice: 'byDstTable', fila: 'mIdx' },
-  { id: 'src-table', label: 'Tabla origen', icono: '📥', indice: 'bySrcTable', fila: 'mIdx' },
-  { id: 'dst-field', label: 'Campo destino', icono: '📋', indice: 'byDstField', fila: 'mIdx' },
-  { id: 'src-field', label: 'Campo origen', icono: '📋', indice: 'bySrcField', fila: 'mIdx' },
-  { id: 'filter-table', label: 'Tabla de filtro', icono: '🔍', indice: 'byFilterTable', fila: 'fIdx' },
-  { id: 'filter-field', label: 'Campo de filtro', icono: '🎯', indice: 'byFilterField', fila: 'fIdx' },
+  { id: 'dst-table', label: 'Tabla Destino', icono: '📤', plural: 'tablas destino', indice: 'byDstTable', fila: 'mIdx' },
+  { id: 'src-table', label: 'Tabla Origen', icono: '📥', plural: 'tablas origen', indice: 'bySrcTable', fila: 'mIdx' },
+  { id: 'dst-field', label: 'Campo Destino', icono: '📋', plural: 'campos destino', indice: 'byDstField', fila: 'mIdx' },
+  { id: 'src-field', label: 'Campo Origen', icono: '📋', plural: 'campos origen', indice: 'bySrcField', fila: 'mIdx' },
+  { id: 'filter-table', label: 'Tabla Filtro/Join', icono: '🔍', plural: 'tablas filtro/join', indice: 'byFilterTable', fila: 'fIdx' },
+  { id: 'filter-field', label: 'Campo Filtro/Join', icono: '🎯', plural: 'campos filtro/join', indice: 'byFilterField', fila: 'fIdx' },
   // Solo aparece cuando hay ATL cargados: sin ellos no se sabe ningún proceso.
-  { id: 'atl-proceso', label: 'Proceso de CI-DS', icono: '🧩', soloConAtl: true },
+  { id: 'atl-proceso', label: 'Proceso (ATL)', icono: '🧩', soloConAtl: true },
 ]
 
 export const dimensionPorId = (id) => DIMENSIONES.find((una) => una.id === id) ?? DIMENSIONES[0]
@@ -26,9 +27,15 @@ export function etiquetaDeClave(clave) {
   return datastore ? `${datastore} · ${tabla}` : tabla
 }
 
-/** Los valores distintos de un campo, ordenados, para armar un filtro. */
+/**
+ * Los valores distintos de un campo, ordenados, para armar un filtro.
+ *
+ * Incluye el VACÍO (`''`): v9 lo ofrece como «Sin PA» y «(sin DS)», y se cuenta para decidir si el
+ * filtro se muestra —con un único valor no hay nada que filtrar—. Un predicado sobre un atributo
+ * descartaría esas filas en silencio, así que hay que poder pedirlas.
+ */
 const valoresDistintos = (integraciones, leer) => [...new Set(
-  integraciones.map(leer).filter(Boolean),
+  integraciones.map((una) => leer(una) || ''),
 )].sort((a, b) => a.localeCompare(b))
 
 /** Las áreas de planificación que aparecen en el proyecto. */
@@ -52,9 +59,9 @@ export function baseFiltrada(integraciones, filtros = {}) {
   const { planAreas, srcDS, dstDS, soloTransportadas, transportadas, soloConScript } = filtros
 
   return integraciones.filter((una) => {
-    if (planAreas?.size > 0 && !planAreas.has(una.planArea)) return false
-    if (srcDS?.size > 0 && !srcDS.has(una.srcDSName)) return false
-    if (dstDS?.size > 0 && !dstDS.has(una.dstDSName)) return false
+    if (planAreas?.size > 0 && !planAreas.has(una.planArea || '')) return false
+    if (srcDS?.size > 0 && !srcDS.has(una.srcDSName || '')) return false
+    if (dstDS?.size > 0 && !dstDS.has(una.dstDSName || '')) return false
     if (soloTransportadas && !transportadas?.has((una.jobName || '').toUpperCase())) return false
     if (soloConScript && !tieneScripts(una)) return false
     return true
@@ -84,11 +91,16 @@ export const tieneScripts = (integracion) => (
  */
 export function filtrarIntegraciones(integraciones, indices, texto, filtros = {}) {
   const base = baseFiltrada(integraciones, filtros)
-  const buscado = (texto || '').trim().toLowerCase()
-  if (!buscado) return base
+  // Se parte la consulta por espacios y CADA término tiene que estar en el texto de la integración
+  // (AND), como en v9: «mara matnr» encuentra lo que tenga las dos palabras en cualquier sitio. Antes
+  // se buscaba la frase entera como una sola cadena y esa consulta no encontraba nada.
+  const terminos = (texto || '').toLowerCase().split(/\s+/).filter(Boolean)
+  if (terminos.length === 0) return base
 
   const coinciden = new Set(
-    (indices?.searchTokens ?? []).filter((uno) => uno.tokens.includes(buscado)).map((uno) => uno.idx),
+    (indices?.searchTokens ?? [])
+      .filter((uno) => terminos.every((termino) => uno.tokens.includes(termino)))
+      .map((uno) => uno.idx),
   )
   return base.filter((una) => coinciden.has(una._idx))
 }

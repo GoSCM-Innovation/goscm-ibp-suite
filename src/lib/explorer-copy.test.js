@@ -18,8 +18,9 @@ describe('tareasATsv', () => {
   it('lleva cabecera y una fila por integración', () => {
     const tabla = filas(tareasATsv([integracion()]))
 
-    expect(tabla[0]).toEqual(['Proyecto', 'Tarea', 'Dataflow', 'Sistema origen', 'Sistema destino', 'Tabla destino'])
-    expect(tabla[1]).toEqual(['PROYECTO', 'IBP_001_MD_PRODUCT', 'DF_PRODUCTO', 'SAP_ECC', 'IBP', 'SOPMD_STAG_BNTPRODUCT'])
+    // Las cabeceras y las cinco columnas de v9 (`ex.copy.col.*`).
+    expect(tabla[0]).toEqual(['ZIP', 'Tarea', 'Datastore Origen', 'Datastore Destino', 'Tabla Destino'])
+    expect(tabla[1]).toEqual(['PROYECTO', 'IBP_001_MD_PRODUCT', 'SAP_ECC', 'IBP', 'SOPMD_STAG_BNTPRODUCT'])
   })
 
   // Dos dataflows de la misma tarea pueden escribir a tablas distintas; juntarlos lo escondería.
@@ -50,7 +51,7 @@ describe('dimensionATsv', () => {
 
   it('una dimensión de tabla separa el datastore', () => {
     const tabla = filas(dimensionATsv('src-table', entradas))
-    expect(tabla[0]).toEqual(['Datastore', 'Tabla', 'Integraciones', 'Usos'])
+    expect(tabla[0]).toEqual(['Datastore', 'Tabla', 'Integraciones', 'Mapeos'])
     expect(tabla[1]).toEqual(['SAP_ECC', 'MARA', '2', '3'])
   })
 

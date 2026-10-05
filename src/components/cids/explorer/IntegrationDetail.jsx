@@ -1,9 +1,11 @@
 // Todo lo que se sabe de una integración: de dónde sale cada campo, qué filtra, qué busca y cómo
 // se dibuja.
 //
-// Las secciones nacen cerradas salvo los mapeos, que es lo que se viene a ver. El diagrama además
-// no se carga hasta que se abre: su librería pesa y no tiene sentido descargarla para leer una tabla
-// de mapeos.
+// Las secciones nacen ABIERTAS, como en v9, salvo el diagrama: no se carga hasta que se abre, porque
+// su librería pesa y no tiene sentido descargarla para leer una tabla de mapeos.
+//
+// Los textos son los de v9 («Mappings», «Filtros», «Target:», «ZIP:», «Atrás»…): el texto portado
+// manda sobre la preferencia de idioma.
 
 import { Suspense, lazy, useState } from 'react'
 import {
@@ -19,15 +21,26 @@ import IbpJobsSection from './IbpJobsSection.jsx'
 
 const DataflowDiagram = lazy(() => import('./DataflowDiagram.jsx'))
 
-/** Una sección plegable con su contador. */
-export function Seccion({ titulo, cantidad, abiertaPorOmision = false, children }) {
+/**
+ * Una sección plegable con su contador gris «(N)», como en v9.
+ *
+ * `derecha` es lo que va a la derecha de la cabecera, antes de la flecha: en el detalle de una
+ * dimensión es el «N campos» y el «Ver» que lleva a la integración completa.
+ */
+export function Seccion({ titulo, cantidad, abiertaPorOmision = false, derecha = null, children }) {
   const [abierta, setAbierta] = useState(abiertaPorOmision)
 
   return (
     <div className="exp-section">
       <button type="button" className="exp-section-head" onClick={() => setAbierta((previo) => !previo)}>
-        <span>{titulo} {cantidad !== undefined && <span className="exp-count">{cantidad}</span>}</span>
-        <span className="exp-arrow">{abierta ? '▼' : '▶'}</span>
+        <span>
+          {titulo}
+          {cantidad !== undefined && <span className="exp-count-gris"> ({cantidad})</span>}
+        </span>
+        <span className="exp-section-derecha">
+          {derecha}
+          <span className="exp-arrow">{abierta ? '▼' : '▶'}</span>
+        </span>
       </button>
       {abierta && <div className="exp-section-body">{children}</div>}
     </div>
@@ -59,8 +72,8 @@ function ScriptDelJob({ script }) {
 }
 
 /** La tabla de mapeos. La comparten el detalle y la vista por dimensión. */
-export function TablaDeMapeos({ mapeos, mostrarDestino = true }) {
-  if (mapeos.length === 0) return <p className="exp-empty">Esta integración no mapea ningún campo.</p>
+export function TablaDeMapeos({ mapeos, mostrarDestino = true, conInsigniaLookup = true }) {
+  if (mapeos.length === 0) return <p className="exp-empty">Sin mappings</p>
 
   return (
     <div className="table-scroll">
@@ -68,8 +81,8 @@ export function TablaDeMapeos({ mapeos, mostrarDestino = true }) {
         <thead>
           <tr>
             {mostrarDestino
-              ? <><th>Campo destino</th><th>Origen</th><th>Transformación</th></>
-              : <><th>Origen</th><th>Campo destino</th><th>Transformación</th></>}
+              ? <><th>Campo Destino</th><th>Origen</th><th>Transformación</th></>
+              : <><th>Campo Origen</th><th>Campo Destino</th><th>Transformación</th></>}
           </tr>
         </thead>
         <tbody>
@@ -90,7 +103,9 @@ export function TablaDeMapeos({ mapeos, mostrarDestino = true }) {
                 {mostrarDestino ? <td className="exp-src">{origen}</td> : destino}
                 <td>
                   {uno.ops ? <code className="exp-ops">{uno.ops}</code> : <span className="exp-muted">—</span>}
-                  {/\blookup\s*\(/i.test(uno.ops || '') && <div><span className="tag tag-muted">lookup</span></div>}
+                  {conInsigniaLookup && /\blookup\s*\(/i.test(uno.ops || '') && (
+                    <div><span className="exp-lookup-badge">lookup</span></div>
+                  )}
                 </td>
               </tr>
             )
@@ -103,7 +118,7 @@ export function TablaDeMapeos({ mapeos, mostrarDestino = true }) {
 
 /** La lista de filtros. También compartida con la vista por dimensión. */
 export function ListaDeFiltros({ filtros }) {
-  if (filtros.length === 0) return <p className="exp-empty">Esta integración no filtra nada.</p>
+  if (filtros.length === 0) return <p className="exp-empty">Sin filtros</p>
 
   return filtros.map((uno, i) => (
     <div className="exp-filter" key={`${uno.expression.slice(0, 40)}-${i}`}>
@@ -113,8 +128,11 @@ export function ListaDeFiltros({ filtros }) {
   ))
 }
 
+/** El texto de la vía de una arista: la tabla, el archivo o el lookup que une las dos integraciones. */
+const etiquetaDe = (arista) => arista.label ?? ''
+
 /** Un salto a la integración vecina, con el color de la vía por la que están unidas. */
-function Vecina({ arista, idxVecina, integraciones, transportadas, onIr }) {
+function Vecina({ arista, idxVecina, direccion, integraciones, transportadas, onIr }) {
   const otra = integraciones[idxVecina]
   if (!otra) return null
 
@@ -127,10 +145,10 @@ function Vecina({ arista, idxVecina, integraciones, transportadas, onIr }) {
       className="exp-chain-pill"
       style={{ borderColor: COLOR_DE_VIA[arista.via] }}
       onClick={() => onIr(idxVecina)}
-      title={`Por ${NOMBRE_DE_VIA[arista.via]}: ${arista.label}`}
+      title={`${direccion} (${NOMBRE_DE_VIA[arista.via]}): ${etiquetaDe(arista)}${transportada ? ' · Promovido a producción' : ''}`}
     >
       <span aria-hidden="true">{ICONO_DE_VIA[arista.via]}</span>
-      {transportada && <span className="exp-promoted">✓</span>}
+      {transportada && <span className="exp-promoted" title="Promovido a producción">✓</span>}
       <span className="exp-chain-task">{otra.jobName}</span>
       {dataflow && <span className="exp-sub">↳ {dataflow}</span>}
     </button>
@@ -157,8 +175,8 @@ export default function IntegrationDetail({
     <div className="exp-detail">
       {puedeVolver && (
         <div className="exp-navbar">
-          <button type="button" className="btn btn-sm" onClick={onVolver}>◀ Volver</button>
-          <button type="button" className="btn btn-sm" onClick={onInicio}>⌂ Inicio</button>
+          <button type="button" className="btn btn-sm" onClick={onVolver} title="Volver al paso anterior">◀ Atrás</button>
+          <button type="button" className="btn btn-sm" onClick={onInicio} title="Volver a la integración inicial">⌂ Inicio</button>
         </div>
       )}
 
@@ -172,25 +190,23 @@ export default function IntegrationDetail({
         )}
         <div className="exp-h-flow">{integracion.srcDSName || '—'} → {integracion.dstDSName || '—'}</div>
         <div className="exp-sub">
-          Destino: <b>{integracion.targetTable}</b>
+          Target: <b>{integracion.targetTable}</b>
           {integracion.fileLoaderFileName && <> · Archivo: <b>{integracion.fileLoaderFileName}</b></>}
         </div>
-        <div className="exp-sub">
-          Proyecto: {integracion._zipName}
-          {integracion.planArea && <> · Área: {integracion.planArea}</>}
-        </div>
+        <div className="exp-sub">ZIP: {integracion._zipName}</div>
       </div>
 
       {(entrantes.length > 0 || salientes.length > 0) && (
         <div className="exp-chains">
           {entrantes.length > 0 && (
             <>
-              <div className="exp-chain-label">⬅ La alimentan</div>
+              <div className="exp-chain-label">⬅ Alimentado por</div>
               <div className="exp-chain-row">
                 {entrantes.map((una, i) => (
                   <Vecina
                     key={`in-${una.from}-${i}`}
                     arista={una}
+                    direccion="Alimentado por"
                     idxVecina={una.from}
                     integraciones={integraciones}
                     transportadas={transportadas}
@@ -208,6 +224,7 @@ export default function IntegrationDetail({
                   <Vecina
                     key={`out-${una.to}-${i}`}
                     arista={una}
+                    direccion="Alimenta a"
                     idxVecina={una.to}
                     integraciones={integraciones}
                     transportadas={transportadas}
@@ -233,26 +250,26 @@ export default function IntegrationDetail({
       )}
 
       {hayDiagrama && (
-        <Seccion titulo="🗺️ Diagrama del dataflow" cantidad={integracion.diagram.nodes.length}>
+        <Seccion titulo="🗺️ Diagrama del DataFlow" cantidad={integracion.diagram.nodes.length}>
           <Suspense fallback={<div className="page-hint">Cargando el diagrama…</div>}>
             <DataflowDiagram diagrama={integracion.diagram} nombre={integracion.dataflowName || integracion.jobName} />
           </Suspense>
         </Seccion>
       )}
 
-      <Seccion titulo="🗂️ Mapeos" cantidad={integracion.mappings.length} abiertaPorOmision>
+      <Seccion titulo="🗂️ Mappings" cantidad={integracion.mappings.length} abiertaPorOmision>
         <TablaDeMapeos mapeos={integracion.mappings} />
       </Seccion>
 
-      <Seccion titulo="🔍 Filtros y uniones" cantidad={integracion.filters.length}>
+      <Seccion titulo="🔍 Filtros" cantidad={integracion.filters.length} abiertaPorOmision>
         <ListaDeFiltros filtros={integracion.filters} />
       </Seccion>
 
       {integracion.lookups.length > 0 && (
-        <Seccion titulo="🔗 Lookups" cantidad={integracion.lookups.length}>
+        <Seccion titulo="🔗 Lookups" cantidad={integracion.lookups.length} abiertaPorOmision>
           {integracion.lookups.map((uno, i) => (
             <div className="exp-lookup" key={`${uno.transform}-${i}`}>
-              {uno.transform && <div className="exp-sub">Transformación: {uno.transform}</div>}
+              {uno.transform && <div className="exp-sub">Transform: {uno.transform}</div>}
               <pre className="exp-expr">{uno.func}</pre>
             </div>
           ))}
@@ -260,11 +277,11 @@ export default function IntegrationDetail({
       )}
 
       {integracion.variables.length > 0 && (
-        <Seccion titulo="⚙️ Variables" cantidad={integracion.variables.length}>
+        <Seccion titulo="⚙️ Variables" cantidad={integracion.variables.length} abiertaPorOmision>
           {integracion.variables.map((uno) => (
             <div className="exp-var" key={uno.name}>
               <span className="exp-var-name">{uno.name}</span>
-              <span className="exp-var-value">{uno.value || <span className="exp-muted">sin valor</span>}</span>
+              <span className="exp-var-value">{uno.value || <span className="exp-muted">(vacío)</span>}</span>
             </div>
           ))}
         </Seccion>

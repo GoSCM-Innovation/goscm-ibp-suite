@@ -147,8 +147,7 @@ export default function CidsTools() {
           </div>
           <div className="page-hint">
             {herramienta === 'global' && 'Todos los repositorios de CI-DS a la vez.'}
-            {herramienta === 'explorador' && 'Los exports de tus proyectos, leídos en tu navegador.'}
-            {herramienta === 'documentador' && 'De los exports de un proyecto a un Excel para entregar.'}
+            {/* El explorador y el documentador traen su propio banner, como en v9: no llevan subtítulo. */}
             {!SIN_DESTINO.has(herramienta) && 'Ejecuciones, tareas y orquestaciones del repositorio elegido.'}
           </div>
         </div>

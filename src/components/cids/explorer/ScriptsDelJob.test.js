@@ -106,8 +106,8 @@ describe('la sección «Scripts pre/post-load» del detalle', () => {
       diagram: { nodes: [{ id: 'a', label: 'A', type: 'x' }], edges: [] },
     })))
     const texto = contenedor.textContent
-    expect(texto.indexOf('Scripts pre/post-load')).toBeLessThan(texto.indexOf('Diagrama del dataflow'))
-    expect(texto.indexOf('Scripts pre/post-load')).toBeLessThan(texto.indexOf('Mapeos'))
+    expect(texto.indexOf('Scripts pre/post-load')).toBeLessThan(texto.indexOf('Diagrama del DataFlow'))
+    expect(texto.indexOf('Scripts pre/post-load')).toBeLessThan(texto.indexOf('Mappings'))
   })
 })
 

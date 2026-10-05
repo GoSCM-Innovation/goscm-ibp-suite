@@ -5,11 +5,9 @@
 
 import { useRef, useState } from 'react'
 
-/** Un tamaño legible: los exports van de unos pocos kB a decenas de MB. */
+/** Un tamaño legible, como el de v9: «12 KB», sin decimales. */
 function tamanioLegible(bytes) {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} kB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  return `${Math.round(bytes / 1024)} KB`
 }
 
 /** Cuánto ocupa un archivo ya leído, sea buffer o texto. */
@@ -23,6 +21,10 @@ export default function FileDropzone({
   titulo,
   ayuda,
   icono = '🗂️',
+  // El icono de cada archivo cargado («📦 nombre  12 KB ✕» en v9) y si lleva su tamaño: la lista de
+  // ATL de v9 no lo muestra.
+  iconoDeArchivo = '',
+  conTamano = true,
 }) {
   const entrada = useRef(null)
   const [encima, setEncima] = useState(false)
@@ -75,22 +77,24 @@ export default function FileDropzone({
       />
 
       {archivos.length > 0 && (
-        <ul className="exp-file-list">
+        <div className="exp-file-tags">
           {archivos.map((uno) => (
-            <li key={uno.name}>
+            <span className="exp-file-tag" key={uno.name}>
+              {iconoDeArchivo && <span aria-hidden="true">{iconoDeArchivo}</span>}
               <span className="exp-file-name">{uno.name}</span>
-              <span className="exp-file-size">{tamanioLegible(pesoDe(uno))}</span>
+              {conTamano && <span className="exp-file-size">{tamanioLegible(pesoDe(uno))}</span>}
               <button
                 type="button"
-                className="btn btn-danger btn-sm"
+                className="exp-file-quitar"
                 onClick={() => onCambiar(archivos.filter((otro) => otro.name !== uno.name))}
                 aria-label={`Quitar ${uno.name}`}
+                title="Quitar"
               >
                 ✕
               </button>
-            </li>
+            </span>
           ))}
-        </ul>
+        </div>
       )}
     </div>
   )

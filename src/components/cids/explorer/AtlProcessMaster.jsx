@@ -8,7 +8,7 @@
 
 import { useState } from 'react'
 
-import { COLOR_DE_VIA, NOMBRE_DE_VIA } from '../../../lib/integration-view.js'
+import { COLOR_DE_VIA } from '../../../lib/integration-view.js'
 
 /** Las flechitas de cadena de una integración. */
 function Cadenas({ cadenas, idx }) {
@@ -21,7 +21,7 @@ function Cadenas({ cadenas, idx }) {
         <span
           key={`${una.from}-${una.to}-${i}`}
           style={{ color: COLOR_DE_VIA[una.via] }}
-          title={`${una.to === idx ? 'Alimentada' : 'Alimenta'} por ${NOMBRE_DE_VIA[una.via]}`}
+          title={`${una.to === idx ? 'Alimentado por' : 'Alimenta a'} (${una.via})`}
         >
           {una.to === idx ? '⬅' : '➡'}
         </span>
@@ -37,7 +37,7 @@ function Proceso({ titulo, subtitulo, children }) {
   return (
     <div className="exp-project">
       <button type="button" className="exp-project-head" onClick={() => setAbierto((previo) => !previo)}>
-        <span>{titulo} <span className="exp-count">{subtitulo}</span></span>
+        <span>{titulo} ({subtitulo})</span>
         <span className="exp-arrow">{abierto ? '▼' : '▶'}</span>
       </button>
       {abierto && children}
@@ -71,9 +71,16 @@ export default function AtlProcessMaster({
         onClick={() => onElegir(idx)}
       >
         <span className="exp-item-name">
-          {enConflicto?.has(idx) && <span className="exp-warn" title="Choca con el orden real de ejecución">⚠</span>}
           ↳ {integracion.dataflowName || integracion.targetTable}
           <Cadenas cadenas={cadenas} idx={idx} />
+          {enConflicto?.has(idx) && (
+            <span
+              className="exp-warn"
+              title="Posible conflicto entre la cadena de datos detectada y el orden de ejecución declarado en el ATL."
+            >
+              ⚠
+            </span>
+          )}
         </span>
         <span className="exp-item-sub">{integracion.targetTable}</span>
       </button>
@@ -89,9 +96,9 @@ export default function AtlProcessMaster({
         if (!dataflow.falta) return fila(dataflow.idx)
         if (soloConflictos) return null
         return (
-          <div className="exp-item child exp-falta" key={`falta-${i}`} title="El proceso lo llama, pero no está en los ZIP cargados">
+          <div className="exp-item child exp-falta" key={`falta-${i}`} title="Declarado en el ATL pero ausente en los ZIP subidos">
             <span className="exp-item-name">↳ {dataflow.displayName || 'sin nombre'}</span>
-            <span className="tag tag-muted">no está en los ZIP</span>
+            <span className="exp-atl-faltante">faltante</span>
           </div>
         )
       }).filter(Boolean)
@@ -102,9 +109,12 @@ export default function AtlProcessMaster({
       return (
         <div key={`${grupo.nombre}-${grupoIdx}`}>
           <div className="exp-atl-group-head">
-            {grupo.nombre || 'Sin grupo'}
-            <span className={`tag ${grupo.parallel ? 'tag-accent' : 'tag-muted'}`}>
-              {grupo.parallel ? 'en paralelo' : 'secuencial'}
+            {grupo.nombre || 'Grupo'}
+            <span
+              className={`exp-atl-par ${grupo.parallel ? 'es-paralelo' : 'es-secuencial'}`}
+              title={grupo.parallel ? 'Grupo de ejecución en paralelo' : 'Grupo de ejecución secuencial'}
+            >
+              {grupo.parallel ? '∥ Paralelo' : '→ Secuencial'}
             </span>
           </div>
           {cuerpo}
@@ -130,14 +140,14 @@ export default function AtlProcessMaster({
     : atl.huerfanas.map((idx) => fila(idx)).filter(Boolean)
 
   if (procesos.length === 0 && sueltas.length === 0) {
-    return <p className="exp-empty">No hay nada que coincida.</p>
+    return <p className="exp-empty">No se encontraron integraciones</p>
   }
 
   return (
     <div className="exp-master-list">
       {procesos}
       {sueltas.length > 0 && (
-        <Proceso titulo="Sin proceso de CI-DS" subtitulo={sueltas.length}>{sueltas}</Proceso>
+        <Proceso titulo="Sin proceso ATL" subtitulo={sueltas.length}>{sueltas}</Proceso>
       )}
     </div>
   )

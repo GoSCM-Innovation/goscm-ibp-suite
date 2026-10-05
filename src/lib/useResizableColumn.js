@@ -9,7 +9,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 /** Entre estos dos valores. Más angosto no se lee nada; más ancho no deja sitio al detalle. */
-export const ANCHO = { minimo: 200, maximo: 620, porOmision: 300 }
+export const ANCHO = { minimo: 160, maximo: 620, porOmision: 340 }
 
 const acotar = (valor) => Math.min(ANCHO.maximo, Math.max(ANCHO.minimo, Math.round(valor)))
 

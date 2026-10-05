@@ -57,9 +57,20 @@ describe('planAreaOptions y datastoreOptions', () => {
     integracion(2, { planArea: '', srcDSName: 'ERP', dstDSName: '' }),
   ]
 
-  it('lista los valores distintos, ordenados y sin los vacíos', () => {
-    expect(planAreaOptions(integraciones)).toEqual(['DEMO', 'SAPIBP1'])
-    expect(datastoreOptions(integraciones)).toEqual({ origen: ['BW', 'ERP'], destino: ['IBP'] })
+  // v9 ofrece el vacío como «Sin PA» y «(sin DS)»: un filtro por un valor descarta en silencio las
+  // filas donde ese atributo está vacío, así que tiene que poder pedirse. Va primero al ordenar.
+  it('lista los valores distintos, ordenados y CON el vacío', () => {
+    expect(planAreaOptions(integraciones)).toEqual(['', 'DEMO', 'SAPIBP1'])
+    expect(datastoreOptions(integraciones)).toEqual({ origen: ['BW', 'ERP'], destino: ['', 'IBP'] })
+  })
+
+  it('el filtro por el valor vacío deja pasar las que no lo tienen', () => {
+    expect(baseFiltrada(integraciones, { planAreas: new Set(['']) }).map((una) => una._idx)).toEqual([2])
+    expect(baseFiltrada(integraciones, { dstDS: new Set(['']) }).map((una) => una._idx)).toEqual([2])
+  })
+
+  it('una integración sin el campo (undefined) cuenta como vacía', () => {
+    expect(baseFiltrada([{ _idx: 9 }], { planAreas: new Set(['']) })).toHaveLength(1)
   })
 })
 
