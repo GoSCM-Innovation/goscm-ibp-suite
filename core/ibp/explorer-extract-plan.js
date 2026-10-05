@@ -349,7 +349,7 @@ export const GRUPOS_DE_EXTRACCION = Object.freeze([
  * no tienen nombre canónico que traducir.
  */
 export function planificarExtraccion({
-  efectivo, mapa = {}, grupos = ['arbol', 'red'], extras = {}, tablas = null, mas = {},
+  efectivo, mapa = {}, grupos = ['arbol', 'red'], extras = {}, tablas = null, mas = {}, solo = {},
 } = {}) {
   // `tablas` es la lista EXACTA y ORDENADA de lo que se quiere bajar, y manda sobre `grupos`. Lo usa el
   // Production Analyzer, que baja diez tablas de dos grupos distintos —las del árbol más dos de la red—
@@ -377,7 +377,13 @@ export function planificarExtraccion({
     // `mas` son campos CANÓNICOS que un módulo necesita además de los del plan (el Production Analyzer
     // lee `PLEADTIME` y `PRATIO` de la cabecera, que el árbol no pide). Pasan por el mapa como los demás,
     // así que si este tenant no los tiene se omiten y se avisa.
-    const campos = [...new Set([...una.campos, ...(mas?.[una.tabla] ?? [])])]
+    // `solo` es la lista EXACTA de campos canónicos de una tabla y reemplaza a la del plan y a `mas`: lo usa
+    // el Network Analyzer, que pide a SAP justo lo que pedía v7 (el maestro de productos del árbol trae
+    // además `UOMID` y `UOMDESCR`, que la red no usa, y de no quitarlos un tenant sin ellos vería un aviso
+    // por campos que ni necesita).
+    const campos = solo?.[una.tabla]
+      ? [...new Set(solo[una.tabla])]
+      : [...new Set([...una.campos, ...(mas?.[una.tabla] ?? [])])]
     const base = armarSelect(mapa, entidad, campos)
     // Sin repetir lo que ya está: un campo pedido dos veces en el `$select` hace que SAP rechace la
     // consulta entera, y el error no dice cuál.

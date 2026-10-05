@@ -319,40 +319,6 @@ export {
 } from './pa-doc-live.js'
 
 export {
-  CATEGORIAS,
-  IDS_DE_CATEGORIA,
-  MATRIZ,
-  SEVERIDADES,
-  TEXTOS as TEXTOS_DE_COMPROBACION,
-  configuracionInicial,
-  laMasPermisiva,
-  reglasDe,
-  repartirTipos,
-  sinClasificar,
-} from './production-rules.js'
-
-export {
-  COLUMNAS as COLUMNAS_DE_LA_RED,
-  MAX_CICLOS,
-  analizarRed,
-  callejones,
-  ciclos,
-  claseDeProblema,
-  conjuntosDeRed,
-  estadoDeRed,
-  estadoEsperado,
-  filaDeRed,
-  grafoVacio,
-  llegaAUnCliente,
-  nodosFantasma,
-  plantasAisladas,
-  plazosFaltantes,
-  resumirRedes,
-} from './network-analysis.js'
-
-export { texto } from './production-analysis.js'
-
-export {
   MATTYPE_CATS,
   TEXTOS_DE_CATEGORIA,
   actualizarTipos,
@@ -383,6 +349,17 @@ export {
   NOMBRES_DE_HOJA as NOMBRES_DE_HOJA_DE_PA,
   analizarProduccion,
 } from './production-analyzer.js'
+
+export {
+  CAMPOS_OBLIGATORIOS_RED,
+  CAMPOS_OCULTOS_RED,
+  ENTIDADES_CON_EXTRAS_RED,
+  FILAS_POR_HOJA,
+  NOMBRES_DE_HOJA_RED,
+  analizarRed,
+  crearIndicesDeRed,
+  snComputeHealthScore as puntajeDeSaludDeRed,
+} from './network-analyzer.js'
 
 export {
   ARCOS as ARCOS_DE_RED,

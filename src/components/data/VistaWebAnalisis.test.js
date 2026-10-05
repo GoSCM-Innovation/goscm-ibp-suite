@@ -609,3 +609,137 @@ describe('la hoja Estadísticas', () => {
     expect(filas()).toHaveLength(50)
   })
 })
+
+describe('una hoja grande paginada desde la base local (`origen`)', () => {
+  /** 230 filas guardadas "en disco": la vista solo ve las que le pasa `pagina` o `buscar`. */
+  function hojaGrande({ falla = false, truncada = false } = {}) {
+    const sev = ['red', 'yel', 'ok', 'ok']
+    const disco = Array.from({ length: 230 }, (_, i) => ({ s: sev[i % 4], c: ['', `PRD${i}`, `arco ${i}`] }))
+    const llamadas = { pagina: [], buscar: [] }
+    const origen = {
+      pagina: (sv, desde, cuantos) => {
+        llamadas.pagina.push([sv, desde, cuantos])
+        if (falla) return Promise.reject(new Error('sin disco'))
+        const fuente = sv === 'all' ? disco : disco.filter((f) => f.s === sv)
+        return Promise.resolve(fuente.slice(desde, desde + cuantos))
+      },
+      buscar: (sv, prueba, maximo, escanear) => {
+        llamadas.buscar.push([sv, maximo, escanear])
+        const fuente = sv === 'all' ? disco : disco.filter((f) => f.s === sv)
+        return Promise.resolve({ filas: fuente.filter(prueba).slice(0, maximo), truncada })
+      },
+    }
+    return {
+      llamadas,
+      hoja: {
+        nombre: 'Location Source',
+        encabezados: ['Estado', 'PRDID', 'Observación'],
+        // El respaldo en memoria: las primeras 10 filas.
+        filas: disco.slice(0, 10),
+        total: 230, red: 58, yel: 58, ok: 114,
+        conEstado: true,
+        capada: true,
+        origen,
+      },
+    }
+  }
+
+  const datosGrandes = (hoja) => ({
+    titulo: 'Supply Network Analyzer — vista web',
+    orden: ['Location Source'],
+    hojas: { 'Location Source': hoja },
+    resumen: [{ nombre: 'Location Source', total: 230, red: 58, yel: 58, ok: 114 }],
+    estadisticas: [],
+  })
+
+  const montarGrande = async (opciones) => {
+    const { hoja, llamadas } = hojaGrande(opciones)
+    await montar({ datos: datosGrandes(hoja) })
+    return llamadas
+  }
+
+  it('pide a la base solo la página que se ve y cuenta con los totales de la hoja', async () => {
+    const llamadas = await montarGrande()
+    expect(llamadas.pagina).toEqual([['all', 0, 50]])
+    expect(filas()).toHaveLength(50)
+    expect(conteo()).toBe('Mostrando 1–50 de 230')
+    expect(pagina()).toBe('Página 1 / 5')
+    expect(texto('.snwv-note')).toBe('Navegando el 100% de las filas desde el almacenamiento local del navegador.')
+  })
+
+  it('paginar pide el tramo siguiente, no recorre lo anterior', async () => {
+    const llamadas = await montarGrande()
+    await clic(q('[data-pag="siguiente"]'))
+    expect(llamadas.pagina.at(-1)).toEqual(['all', 50, 50])
+    expect(columna(1)[0]).toBe('PRD50')
+    await clic(q('[data-pag="siguiente"]'))
+    await clic(q('[data-pag="siguiente"]'))
+    await clic(q('[data-pag="siguiente"]'))
+    expect(columna(1)).toHaveLength(30) // 230 - 200
+    expect(pagina()).toBe('Página 5 / 5')
+  })
+
+  it('un chip de severidad filtra en la base con el contador de esa severidad', async () => {
+    const llamadas = await montarGrande()
+    await clic(chip('red'))
+    expect(llamadas.pagina.at(-1)).toEqual(['red', 0, 50])
+    expect(conteo()).toBe('Mostrando 1–50 de 58 (filtrado de 230)')
+    expect(columna(0).every((c) => c === '⛔ Alerta')).toBe(true)
+  })
+
+  describe('con búsqueda', () => {
+    beforeEach(() => { vi.useFakeTimers() })
+
+    it('busca por cursor con los topes de v7 y pagina el resultado sin volver a buscar', async () => {
+      const llamadas = await montarGrande()
+      await escribir('arco 1')
+      await esperar(300)
+      expect(llamadas.buscar).toEqual([['all', 2000, 300000]])
+      // arco 1, arco 10-19, arco 100-199: 1 + 10 + 100 = 111 coincidencias.
+      expect(conteo()).toBe('Mostrando 1–50 de 111 (filtrado de 230)')
+      await clic(q('[data-pag="siguiente"]'))
+      expect(llamadas.buscar).toHaveLength(1)
+      expect(columna(2)[0]).toBe('arco 139') // la coincidencia 51: 1, 10 a 19 y desde 100
+    })
+
+    it('si la búsqueda se cortó por el tope, lo dice', async () => {
+      await montarGrande({ truncada: true })
+      await escribir('arco')
+      await esperar(300)
+      expect(texto('.snwv-cap')).toBe('⚠ Búsqueda limitada a las primeras 230 coincidencias. Afina el filtro o descarga el Excel.')
+    })
+
+    it('mientras busca dice «Buscando...»', async () => {
+      const { hoja } = hojaGrande()
+      let terminar
+      hoja.origen.buscar = () => new Promise((resolver) => { terminar = () => resolver({ filas: [], truncada: false }) })
+      await montar({ datos: datosGrandes(hoja) })
+      await escribir('zzz')
+      await esperar(300)
+      expect(texto('.snwv-empty')).toBe('Buscando...')
+      await act(async () => { terminar() })
+      expect(texto('.snwv-empty')).toBe('Sin filas que coincidan con el filtro.')
+    })
+  })
+
+  it('si la base falla cae al respaldo en memoria y lo dice', async () => {
+    await montarGrande({ falla: true })
+    expect(filas()).toHaveLength(10)
+    expect(texto('.snwv-cap')).toBe('⚠ No se pudo leer el detalle completo. Vista limitada a 10 filas (de 230). Descarga el Excel para el detalle completo.')
+    expect(q('.snwv-note')).toBeNull()
+  })
+
+  it('una hoja capada SIN origen enseña solo las filas de respaldo y lo dice', async () => {
+    const { hoja } = hojaGrande()
+    delete hoja.origen
+    await montar({ datos: datosGrandes(hoja) })
+    expect(filas()).toHaveLength(10)
+    expect(texto('.snwv-cap')).toBe('⚠ Vista limitada a 10 filas (de 230). Descarga el Excel para el detalle completo.')
+  })
+
+  it('una hoja en memoria no dice nada de la base local', async () => {
+    await montar()
+    expect(q('.snwv-note')).toBeNull()
+    expect(q('.snwv-cap')).toBeNull()
+  })
+})

@@ -53,6 +53,17 @@ export default function ExplorerExtract({
    */
   tablas = null,
   camposMas = null,
+  /**
+   * La lista EXACTA de campos canónicos de cada tabla, si el módulo pide justo los de v7 y nada más
+   * (`{ bom_prd: ['PRDID', 'PRDDESCR', 'MATTYPEID'] }`). Manda sobre los del plan y sobre `camposMas`.
+   */
+  solo = null,
+  /**
+   * Ajusta lo que el mapeo resolvió antes de planificar: `(efectivo) → efectivo`. Lo usa el Network
+   * Analyzer, cuyas tarjetas «Product» y «Location» editan los maestros del grupo de la RED y el plan los
+   * lee del árbol.
+   */
+  ajustarEfectivo = null,
   requeridas = null,
   /**
    * Cómo habla este módulo mientras baja, si no es como el árbol:
@@ -128,12 +139,13 @@ export default function ExplorerExtract({
       return false
     }
     const plan = planificarExtraccion({
-      efectivo: leido.efectivo,
+      efectivo: ajustarEfectivo ? ajustarEfectivo(leido.efectivo) : leido.efectivo,
       mapa: leido.guardado.fields,
       grupos: gruposFijos ?? ['arbol', 'red'],
       extras: extras ?? {},
       tablas,
       mas: camposMas ?? {},
+      solo: solo ?? {},
     })
     const faltan = tablasQueFaltan(plan)
     if (faltan.length === 0) return true
@@ -143,7 +155,7 @@ export default function ExplorerExtract({
     setLogsAbiertos(true)
     decir('err', texto)
     return false
-  }, [pedirMapa, gruposFijos, extras, tablas, camposMas, tablasQueFaltan, textoDeLoQueFalta, decir, anotar])
+  }, [pedirMapa, gruposFijos, extras, tablas, camposMas, solo, ajustarEfectivo, tablasQueFaltan, textoDeLoQueFalta, decir, anotar])
 
   /**
    * Baja lo que dice el plan, contando el avance como lo contaba v7.
@@ -171,12 +183,13 @@ export default function ExplorerExtract({
     }
 
     const plan = planificarExtraccion({
-      efectivo: leido.efectivo,
+      efectivo: ajustarEfectivo ? ajustarEfectivo(leido.efectivo) : leido.efectivo,
       mapa: leido.guardado.fields,
       grupos: gruposFijos ?? ['arbol', 'red'],
       extras: extras ?? {},
       tablas,
       mas: camposMas ?? {},
+      solo: solo ?? {},
     })
 
     // Las tablas sin las que v7 no corría. Se comprueba ANTES de bajar nada: bajar nueve tablas para
@@ -266,7 +279,7 @@ export default function ExplorerExtract({
     } finally {
       setBajando(false)
     }
-  }, [bajando, pedirMapa, gruposFijos, extras, tablas, camposMas, tablasQueFaltan, textoDeLoQueFalta, formato, destino, decir, anotar, onTerminada])
+  }, [bajando, pedirMapa, gruposFijos, extras, tablas, camposMas, solo, ajustarEfectivo, tablasQueFaltan, textoDeLoQueFalta, formato, destino, decir, anotar, onTerminada])
 
   // Lo que se puede pedir desde fuera. `decir`, `anotar` y `avanzar` están porque en v7 `setStatus`,
   // `log` y `setProgress` eran globales y las llamaba quien quisiera: la barra, la línea y el

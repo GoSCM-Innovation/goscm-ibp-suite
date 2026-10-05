@@ -11,8 +11,14 @@
 // que se conserva tal cual: meterlos en estado de React degrada el rendimiento y era el motivo por
 // el que v7 podía con áreas de decenas de miles de productos.
 
-/** La versión del esquema. Sube cuando cambian las tablas o los índices. */
-export const VERSION_DEL_ESQUEMA = 3
+/**
+ * La versión del esquema. Sube cuando cambian las tablas o los índices.
+ *
+ * 4: se quitaron las tablas de los analizadores anteriores (ver `TABLAS_OBSOLETAS`). Los analizadores
+ * ahora usan las tablas de datos de la descarga (`bom_` y `sn_`) y solo guardan aparte las filas
+ * ya armadas de las dos hojas de arcos de la red.
+ */
+export const VERSION_DEL_ESQUEMA = 4
 
 /** Cómo se llama la base local. Una sola, con marca de a qué tenant pertenece lo que hay dentro. */
 export const NOMBRE_DE_LA_BASE = 'goscm_explorer'
@@ -32,10 +38,9 @@ const idx = (nombre, campo) => ({ nombre, campo })
 /**
  * Las tablas de datos. `clave` es el campo que identifica cada fila; sin ella, se numeran solas.
  *
- * Los tres grupos son los tres consumidores: el árbol de materiales (`bom_`), el analizador de red
- * de suministro (`sn_`) y el analizador de jerarquía de producción (`pa_`). Comparten origen en SAP
- * pero no las tablas, porque cada uno filtra y enriquece distinto y compartirlas ataría los tres
- * analizadores entre sí.
+ * Los dos grupos son los dos consumidores: el árbol de materiales (`bom_`) y la red de suministro
+ * (`sn_`). El Production Analyzer no tiene tablas propias: lee las del árbol y las dos de la red que
+ * necesita (`sn_loc_prod` y `sn_loc`), igual que el `prodAnalyzer.js` de v7.
  */
 export const TABLAS = Object.freeze([
   // ── Árbol de materiales ────────────────────────────────────────────────────
@@ -62,31 +67,33 @@ export const TABLAS = Object.freeze([
   { nombre: 'sn_loc_prod', indices: [idx('by_prdid', 'PRDID'), idx('by_locid', 'LOCID')] },
   { nombre: 'sn_cust_prod', indices: [idx('by_prdid', 'PRDID'), idx('by_custid', 'CUSTID')] },
   { nombre: 'sn_cust_master', clave: 'CUSTID' },
-
-  // ── Jerarquía de producción ────────────────────────────────────────────────
-  { nombre: 'pa_psh', indices: [idx('by_prdid', 'PRDID'), idx('by_locid', 'LOCID'), idx('by_sourceid', 'SOURCEID')] },
-  { nombre: 'pa_psi', indices: [idx('by_sourceid', 'SOURCEID'), idx('by_prdid', 'PRDID')] },
-  { nombre: 'pa_psisub', indices: [idx('by_sourceid', 'SOURCEID')] },
-  { nombre: 'pa_psr', indices: [idx('by_sourceid', 'SOURCEID')] },
-  { nombre: 'pa_loc_prod', indices: [idx('by_prdid', 'PRDID'), idx('by_locid', 'LOCID')] },
-  { nombre: 'pa_loc_src', indices: [idx('by_prdid', 'PRDID'), idx('by_locfr', 'LOCFR')] },
 ])
 
 /**
- * Las tablas de FILAS YA ARMADAS para mostrar, con su severidad.
+ * Las tablas que existieron en versiones anteriores del esquema y ya no se usan: son de los analizadores
+ * que reemplazó la migración a v7 (la tabla de calidad propia de la suite). Al abrir la base se borran
+ * SOLO estas, por su nombre: una tabla que este código no conoce no se toca.
+ */
+export const TABLAS_OBSOLETAS = Object.freeze([
+  'pa_psh', 'pa_psi', 'pa_psisub', 'pa_psr', 'pa_loc_prod', 'pa_loc_src',
+  'pa_psi_web', 'pa_product_web', 'pa_location_web', 'pa_resource_web',
+  'pa_resloc_web', 'pa_psh_web', 'pa_psr_web',
+  'sn_product_web', 'sn_location_web', 'sn_customer_web',
+])
+
+/**
+ * Las tablas de FILAS YA ARMADAS para mostrar, con su severidad: las dos hojas de arcos de la red
+ * (Location Source y Customer Source), que son las que pueden tener cientos de miles de filas.
  *
  * Guardar la fila calculada y no solo el dato crudo es lo que permite paginar un informe de cien mil
  * filas desde el disco sin retenerlo en memoria: la pantalla pide un tramo y lo dibuja. El campo `s`
  * es la severidad y lleva índice porque filtrar "solo los errores" es lo primero que hace cualquiera.
+ * Es lo que hacía v7 con `sn_loc_web` y `sn_cust_web`.
  *
  * Cada registro es `{ c: [celdas], s: 'red' | 'yel' | 'ok' }`. Los nombres cortos no son descuido:
  * se repiten en cada una de esas cien mil filas.
  */
-export const TABLAS_DE_VISTA = Object.freeze([
-  'sn_loc_web', 'sn_cust_web', 'sn_product_web', 'sn_location_web', 'sn_customer_web',
-  'pa_psi_web', 'pa_product_web', 'pa_location_web', 'pa_resource_web',
-  'pa_resloc_web', 'pa_psh_web', 'pa_psr_web',
-])
+export const TABLAS_DE_VISTA = Object.freeze(['sn_loc_web', 'sn_cust_web'])
 
 /** El campo de severidad de una tabla de vista. */
 export const CAMPO_DE_SEVERIDAD = 's'

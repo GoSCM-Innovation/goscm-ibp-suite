@@ -19,8 +19,10 @@
 import { descartarInvalidas, planificarExtraccion } from '../../core/ibp/explorer-extract-plan.js'
 import { normalizarFilas } from '../../core/ibp/explorer-fields.js'
 import { indexarMaestro } from '../../core/ibp/bom-tree.js'
-import { texto } from '../../core/ibp/production-analysis.js'
 import { fetchMasterRows } from './ibp-master-data.js'
+
+/** Un valor de SAP como texto limpio. */
+const texto = (valor) => String(valor ?? '').trim()
 
 /** Filas por página. El costo de una petición a IBP es casi todo latencia fija. */
 export const FILAS_POR_PAGINA = 5000
@@ -77,20 +79,28 @@ const pasoDe = (plan, tabla) => plan.pasos.find((uno) => uno.tabla === tabla) ??
  * tabla que detectó el árbol. Aquí gana lo de la red, y el árbol solo es el respaldo.
  */
 export function planDeLaRed(efectivo = {}, mapa = {}) {
-  const deLaRed = efectivo.red ?? {}
-  const arbol = efectivo.arbol ?? {}
   return planificarExtraccion({
-    efectivo: {
-      ...efectivo,
-      arbol: {
-        ...arbol,
-        product: deLaRed.product ?? arbol.product,
-        locMaster: deLaRed.locMaster ?? arbol.locMaster,
-      },
-    },
+    efectivo: efectivoDeLaRed(efectivo),
     mapa,
     grupos: ['arbol', 'red'],
   })
+}
+
+/**
+ * Lo que se resolvió en el mapeo, con el maestro de productos y el de ubicaciones de la RED en el lugar
+ * donde el plan los busca (el árbol). Lo usan también los analizadores de la red.
+ */
+export function efectivoDeLaRed(efectivo = {}) {
+  const deLaRed = efectivo.red ?? {}
+  const arbol = efectivo.arbol ?? {}
+  return {
+    ...efectivo,
+    arbol: {
+      ...arbol,
+      product: deLaRed.product ?? arbol.product,
+      locMaster: deLaRed.locMaster ?? arbol.locMaster,
+    },
+  }
 }
 
 /**

@@ -18,6 +18,18 @@ export const TABLA_DE_ENTIDAD = Object.freeze({
   psr: 'bom_psr',
 })
 
+/**
+ * Lo mismo para el Network Analyzer: de qué tabla del plan sale cada entidad del paso ④ (las cinco de
+ * `EF_ENTITY_META.sn` de v7).
+ */
+export const TABLA_DE_ENTIDAD_RED = Object.freeze({
+  product: 'bom_prd',
+  location: 'bom_loc',
+  customer: 'sn_cust_master',
+  locationSource: 'sn_loc',
+  customerSource: 'sn_cust',
+})
+
 const clave = (ns, entidad, area) => `ef_sel_${ns}_${entidad}_${area || 'default'}`
 
 /** Lo elegido para un área: `{ product: ['CAMPO'], … }`, con todas las entidades presentes. */
@@ -45,10 +57,13 @@ export function guardarCamposAdicionales(ns, entidad, area, campos) {
   }
 }
 
-/** Convierte `{ product: [...] }` a `{ bom_prd: [...] }` para el plan de extracción, sin vacíos. */
-export function extrasPorTabla(extras) {
+/**
+ * Convierte `{ product: [...] }` a `{ bom_prd: [...] }` para el plan de extracción, sin vacíos.
+ * `tablaDe` dice qué tabla es cada entidad: la del Production Analyzer por defecto.
+ */
+export function extrasPorTabla(extras, tablaDe = TABLA_DE_ENTIDAD) {
   const salida = {}
-  for (const [entidad, tabla] of Object.entries(TABLA_DE_ENTIDAD)) {
+  for (const [entidad, tabla] of Object.entries(tablaDe)) {
     if ((extras?.[entidad] ?? []).length > 0) salida[tabla] = [...extras[entidad]]
   }
   return salida
