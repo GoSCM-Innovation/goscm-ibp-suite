@@ -7,13 +7,18 @@
 // colorea los nodos, pero ninguna de las dos contesta "el paso 3 tardó cuatro minutos y esto dijo".
 // Eso es justamente lo que se necesita cuando una cadena de doce pasos falló anoche.
 
-/** Los estados de un paso, con su nombre visible. Los colores los pone quien dibuja. */
+/**
+ * Los estados de un paso, con su nombre visible. Los colores los pone quien dibuja.
+ *
+ * Las mismas palabras que `RunLogModal.jsx` de v9. Solo las usa el detalle de CI-DS: la pantalla de
+ * ejecución de IBP tiene las suyas, de v8.
+ */
 export const ESTADO_DE_PASO = Object.freeze({
   pending: 'Pendiente',
   running: 'Ejecutando',
-  success: 'Terminado',
-  success_with_errors: 'Terminado con avisos',
-  error: 'Con fallo',
+  success: 'Completado',
+  success_with_errors: 'Completado con errores',
+  error: 'Error',
   cancelled: 'Cancelado',
   skipped: 'Omitido',
 })
@@ -99,6 +104,10 @@ export function contarPasos(filas) {
 
 /**
  * Los pasos que hay que mirar: los que fallaron y los que se cancelaron.
+ *
+ * Los «omitidos» NO cuentan: o no llegaron a correr porque algo anterior falló (y eso ya aparece en
+ * el paso que falló), o quedaron sin arrancar cuando se cortó la ejecución. En v9 cortar dejaba
+ * esos pasos «omitidos»; solo los que estaban corriendo quedan «cancelados».
  *
  * Es lo primero que se busca al abrir una ejecución que salió mal, y con doce pasos en pantalla
  * encontrarlos a ojo es justo el trabajo que la herramienta debería ahorrar.

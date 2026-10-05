@@ -93,7 +93,7 @@ describe('nextStepState', () => {
 
     it('el mensaje dice por qué intento va', () => {
       const resultado = decidir({ statusCode: 'ERROR' }, conReintentos, corriendo({ retryCount: 1 }))
-      expect(resultado.error).toBe('SAP: ERROR (intento 2 de 3)')
+      expect(resultado.error).toBe('SAP: ERROR (intento 2/3)')
       expect(resultado.retryCount).toBe(2)
     })
 

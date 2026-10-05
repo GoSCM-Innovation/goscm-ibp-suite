@@ -156,10 +156,12 @@ function normalizarArista(arista, indice) {
 }
 
 /**
- * ¿Hay un ciclo entre los nodos de primer nivel?
+ * ¿Hay un ciclo entre los nodos de UN nivel: el primer nivel, o los hijos de un grupo?
  *
- * Se mira solo el primer nivel porque es lo que el motor ordena: los hijos de un grupo corren dentro
- * de él, en serie o en paralelo según el grupo, sin aristas entre ellos.
+ * Se mira nivel por nivel porque es como el motor ordena: las conexiones valen entre nodos del mismo
+ * nivel, y los hijos de un grupo se esperan unos a otros por ellas (`avanzarNivel` en `runner.js`
+ * corre la misma lógica para el primer nivel y para cada grupo). Un ciclo entre hijos dejaría al grupo
+ * esperando para siempre.
  *
  * Es el mismo recorrido que hace el motor. Al terminar, los que siguen esperando a alguien están en
  * un ciclo o cuelgan de uno — y el motor los descartaría en silencio a todos.
@@ -169,7 +171,7 @@ function nodosQueNuncaCorrerian(nodos, aristas) {
   const entrantes = new Map(nodos.map((nodo) => [nodo.id, 0]))
 
   for (const arista of aristas) {
-    // Solo cuentan las aristas entre nodos de primer nivel, como en el motor.
+    // Solo cuentan las aristas entre nodos de este nivel, como en el motor.
     if (!desdeAqui.has(arista.source) || !entrantes.has(arista.target)) continue
     desdeAqui.get(arista.source).push(arista.target)
     entrantes.set(arista.target, entrantes.get(arista.target) + 1)
@@ -188,7 +190,7 @@ function nodosQueNuncaCorrerian(nodos, aristas) {
     listos = siguientes
   }
 
-  return nodos.filter((nodo) => entrantes.get(nodo.id) > 0).map((nodo) => nodo.data.label)
+  return nodos.filter((nodo) => entrantes.get(nodo.id) > 0).map((nodo) => nodo.data.label || nodo.id)
 }
 
 /**
@@ -228,8 +230,14 @@ export function normalizeGraph({ nodes = [], edges = [] } = {}, { kind = 'cids' 
     }
   }
 
-  const primerNivel = nodosNormalizados.filter((nodo) => !nodo.parentId)
-  const atascados = nodosQueNuncaCorrerian(primerNivel, aristasNormalizadas)
+  // El primer nivel y los hijos de cada grupo son niveles distintos: cada uno tiene que poder ordenarse.
+  const niveles = new Map([[null, []]])
+  for (const nodo of nodosNormalizados) {
+    const padre = nodo.parentId ?? null
+    if (!niveles.has(padre)) niveles.set(padre, [])
+    niveles.get(padre).push(nodo)
+  }
+  const atascados = [...niveles.values()].flatMap((nivel) => nodosQueNuncaCorrerian(nivel, aristasNormalizadas))
   if (atascados.length > 0) {
     throw new Error(
       `Hay un ciclo en las conexiones y por eso estos pasos no se ejecutarían nunca: ${atascados.join(', ')}. `

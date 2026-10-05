@@ -246,8 +246,7 @@ describe('normalizeGraph', () => {
       expect(normalizeGraph({ nodes: [tarea('a'), tarea('b')] }).nodes).toHaveLength(2)
     })
 
-    // Los hijos de un grupo no se ordenan con aristas: el grupo dice si van en serie o en paralelo.
-    it('no se confunde con los hijos de un grupo', () => {
+    it('los hijos de un grupo sin conexiones entre ellos están bien', () => {
       const { nodes } = normalizeGraph({
         nodes: [
           { ...tarea('g'), type: 'group' },
@@ -256,6 +255,64 @@ describe('normalizeGraph', () => {
         ],
       })
       expect(nodes).toHaveLength(3)
+    })
+
+    // El motor ordena los hijos de un grupo por las conexiones que hay entre ellos, igual que el
+    // primer nivel. Un ciclo ahí dejaba al grupo esperando para siempre.
+    describe('dentro de un grupo', () => {
+      const grupo = { ...tarea('g', { label: 'Cierre' }), type: 'group' }
+      const hijo = (id, extra) => ({ ...tarea(id, extra), parentId: 'g' })
+
+      it('rechaza un ciclo entre los hijos y nombra sus pasos', () => {
+        expect(() => normalizeGraph({
+          nodes: [grupo, hijo('a', { label: 'Extraer' }), hijo('b', { label: 'Cargar' })],
+          edges: [arista('a', 'b'), arista('b', 'a')],
+        })).toThrow(/ciclo.*(Extraer.*Cargar|Cargar.*Extraer)/)
+      })
+
+      it('no confunde al grupo con sus hijos: el grupo no figura entre los atascados', () => {
+        let mensaje = ''
+        try {
+          normalizeGraph({
+            nodes: [grupo, hijo('a', { label: 'Extraer' }), hijo('b', { label: 'Cargar' })],
+            edges: [arista('a', 'b'), arista('b', 'a')],
+          })
+        } catch (error) { mensaje = error.message }
+        expect(mensaje).not.toContain('Cierre')
+      })
+
+      it('acepta hijos encadenados en fila', () => {
+        const { edges } = normalizeGraph({
+          nodes: [grupo, hijo('a'), hijo('b'), hijo('c')],
+          edges: [arista('a', 'b'), arista('b', 'c')],
+        })
+        expect(edges).toHaveLength(2)
+      })
+
+      it('un ciclo en un grupo se detecta aunque el primer nivel esté bien', () => {
+        expect(() => normalizeGraph({
+          nodes: [tarea('x'), grupo, hijo('a'), hijo('b')],
+          edges: [arista('x', 'g'), arista('a', 'b'), arista('b', 'a')],
+        })).toThrow(/ciclo/)
+      })
+
+      it('con ciclos en el primer nivel y en un grupo, los nombra a todos', () => {
+        expect(() => normalizeGraph({
+          nodes: [tarea('p', { label: 'Uno' }), tarea('q', { label: 'Dos' }), grupo,
+            hijo('a', { label: 'Tres' }), hijo('b', { label: 'Cuatro' })],
+          edges: [arista('p', 'q'), arista('q', 'p'), arista('a', 'b'), arista('b', 'a')],
+        })).toThrow(/Uno.*Dos.*Tres.*Cuatro/)
+      })
+
+      // Una conexión entre niveles distintos no ordena nada: el motor la ignora, y por tanto no
+      // puede formar un ciclo.
+      it('una conexión entre un hijo y un paso de fuera no cuenta como ciclo', () => {
+        const { nodes } = normalizeGraph({
+          nodes: [tarea('x'), grupo, hijo('a')],
+          edges: [arista('a', 'x'), arista('x', 'a')],
+        })
+        expect(nodes).toHaveLength(3)
+      })
     })
   })
 })

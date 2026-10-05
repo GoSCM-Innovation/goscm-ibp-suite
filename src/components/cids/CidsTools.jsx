@@ -217,6 +217,7 @@ export default function CidsTools() {
             key={`orq-${destino.id}`}
             destino={destino}
             leerRegistro={lectorDeCids(destino)}
+            transportadas={transportadasDelDestino}
           />
         </Suspense>
       )}

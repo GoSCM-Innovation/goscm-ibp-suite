@@ -15,8 +15,12 @@
 import { useState } from 'react'
 
 import {
-  arbolDeEjecucion, escribirDuracion, nombreDeEstado, pasosConProblema,
+  arbolDeEjecucion, nombreDeEstado, pasosConProblema,
 } from '../../../../core/orchestrations/run-detail.js'
+import {
+  duracionDeCorrida, etiquetaDeCorrida, horaDeCorrida, sufijoDeIdSap,
+} from '../../../lib/orchestration-run-form.js'
+import './ejecucion.css'
 
 /** El color de cada estado. Mismo criterio que el resto de la aplicación. */
 const COLOR = {
@@ -28,8 +32,6 @@ const COLOR = {
   cancelled: 'var(--accent)',
   skipped: 'var(--text3)',
 }
-
-const hora = (cuando) => (cuando ? new Date(cuando).toLocaleTimeString('es', { hour12: false }) : '—')
 
 /** El registro que un paso dejó en SAP, pedido solo cuando alguien lo abre. */
 function Registro({ paso, leerRegistro }) {
@@ -58,18 +60,18 @@ function Registro({ paso, leerRegistro }) {
   return (
     <>
       <button type="button" className="btn btn-sm" onClick={alternar} disabled={cargando}>
-        {cargando ? '…' : abierto ? 'Ocultar el registro' : '📄 Registro de SAP'}
+        {cargando ? '…' : abierto ? 'ocultar logs' : '📄 Logs SAP'}
       </button>
 
       {abierto && (
         <div className="run-registro">
-          {error && <div className="notice notice-error">✕ {error}</div>}
+          {error && <div className="ej-registro-error">Error: {error}</div>}
           {!error && (secciones ?? []).length === 0 && (
             <div className="exp-sub">SAP no devolvió ningún registro para este paso.</div>
           )}
           {(secciones ?? []).map((seccion) => (
             <div key={seccion.nombre}>
-              <div className="exp-sub mono">{seccion.nombre}</div>
+              <div className="ej-registro-seccion">{seccion.nombre}</div>
               <pre className="run-registro-texto">{seccion.lineas.join('\n')}</pre>
             </div>
           ))}
@@ -98,40 +100,62 @@ export default function RunDetail({ orquestacion, run, leerRegistro }) {
       </button>
 
       {abierto && (
-        <div className="table-scroll">
-          <table className="table-dense">
-            <thead>
-              <tr>
-                <th>Paso</th><th>Estado</th><th>Empezó</th><th>Duró</th><th>Registro</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filas.map((paso) => (
-                <tr key={paso.id}>
-                  <td style={{ paddingLeft: paso.nivel ? 22 : undefined }}>
-                    {paso.esGrupo && <span className="tag">grupo</span>} {paso.nombre}
-                    {paso.error && <div className="exp-sub" style={{ color: 'var(--red)' }}>{paso.error}</div>}
-                    {paso.reintentos > 0 && (
-                      <div className="exp-sub">
-                        {paso.reintentos} {paso.reintentos === 1 ? 'reintento' : 'reintentos'}
-                      </div>
-                    )}
-                  </td>
-                  <td style={{ color: COLOR[paso.status] }}>{nombreDeEstado(paso.status)}</td>
-                  <td className="mono">{hora(paso.startedAt)}</td>
-                  <td className="mono">{escribirDuracion(paso.ms)}</td>
-                  <td>
-                    {/* Solo tiene registro lo que de verdad corrió en SAP: un grupo no se lanza, y un
-                        paso saltado o pendiente no dejó nada. */}
-                    {!paso.esGrupo && paso.sapRunId && leerRegistro
-                      ? <Registro paso={paso} leerRegistro={leerRegistro} />
-                      : <span className="exp-sub">—</span>}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <>
+          {/* La cabecera de v9: cómo terminó la corrida entera, a qué hora empezó y cuánto tardó. */}
+          <div className="ej-detalle-cab">
+            <span className="ej-detalle-titulo">Log de ejecución</span>
+            <span className="ej-insignia" style={{ color: COLOR[run.status] ?? 'var(--text2)' }}>
+              {etiquetaDeCorrida(run.status)}
+            </span>
+            <span className="ej-detalle-tiempo">
+              {horaDeCorrida(run.startedAt)} · {duracionDeCorrida(run.startedAt, run.finishedAt)}
+            </span>
+          </div>
+
+          {filas.length === 0 ? (
+            <div className="ej-detalle-vacio">Sin nodos ejecutados</div>
+          ) : (
+            <div className="table-scroll">
+              <table className="table-dense">
+                <thead>
+                  <tr>
+                    <th>Paso</th><th>Estado</th><th>Empezó</th><th>Duró</th><th>Registro</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filas.map((paso) => (
+                    <tr key={paso.id}>
+                      <td style={{ paddingLeft: paso.nivel ? 22 : undefined }}>
+                        {paso.esGrupo && <span className="tag">grupo</span>} {paso.nombre}
+                        {paso.error && <div className="exp-sub" style={{ color: 'var(--red)' }}>{paso.error}</div>}
+                        {paso.reintentos > 0 && (
+                          <div className="exp-sub">
+                            {paso.reintentos} {paso.reintentos === 1 ? 'reintento' : 'reintentos'}
+                          </div>
+                        )}
+                      </td>
+                      <td style={{ color: COLOR[paso.status] }}>{nombreDeEstado(paso.status)}</td>
+                      <td className="mono">{horaDeCorrida(paso.startedAt)}</td>
+                      <td className="mono">{duracionDeCorrida(paso.startedAt, paso.finishedAt)}</td>
+                      <td>
+                        {/* Solo tiene registro lo que de verdad corrió en SAP: un grupo no se lanza, y un
+                            paso saltado o pendiente no dejó nada. */}
+                        {!paso.esGrupo && paso.sapRunId ? (
+                          <>
+                            <span className="ej-id-sap mono" title="Identificador de la ejecución en SAP">
+                              {sufijoDeIdSap(paso.sapRunId)}
+                            </span>
+                            {leerRegistro && <Registro paso={paso} leerRegistro={leerRegistro} />}
+                          </>
+                        ) : <span className="exp-sub">—</span>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
       )}
     </div>
   )

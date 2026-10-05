@@ -1,6 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createInMemoryRedis } from '../persistence/redis-in-memory.js'
 import {
+  ESPERA_ENTRE_INTENTOS_DE_CORTAR_MS,
   RUN_LOCK_SECONDS,
   cancelRun,
   getRun,
@@ -100,7 +101,25 @@ describe('startRun', () => {
     getOrchestration.mockResolvedValue(orquestacion([tarea('a')]))
     await startRun(CLIENTE, ORQ, {}, entorno.ms)
 
-    await expect(startRun(CLIENTE, ORQ, {}, entorno.ms)).rejects.toThrow(/ya hay una ejecución en curso/i)
+    await expect(startRun(CLIENTE, ORQ, {}, entorno.ms)).rejects.toThrow('Ya hay una ejecución activa')
+  })
+
+  // v9 contestaba 409 cuando ya había una ejecución activa.
+  it('el rechazo por ejecución activa lleva el código 409', async () => {
+    getOrchestration.mockResolvedValue(orquestacion([tarea('a')]))
+    await startRun(CLIENTE, ORQ, {}, entorno.ms)
+
+    await expect(startRun(CLIENTE, ORQ, {}, entorno.ms)).rejects.toMatchObject({ statusCode: 409 })
+  })
+
+  it('si otra vuelta tiene el cerrojo, tampoco arranca una segunda', async () => {
+    getOrchestration.mockResolvedValue(orquestacion([tarea('a')]))
+    await entorno.redis.set(`c:${CLIENTE}:orch-run-lock:${ORQ}`, 'de-otro', { ex: RUN_LOCK_SECONDS })
+
+    await expect(startRun(CLIENTE, ORQ, {}, entorno.ms)).rejects.toMatchObject({
+      message: 'Ya hay una ejecución activa',
+      statusCode: 409,
+    })
   })
 
   it('vuelve a arrancar si la anterior ya terminó', async () => {
@@ -116,7 +135,7 @@ describe('startRun', () => {
 
   it('rechaza una orquestación sin pasos', async () => {
     getOrchestration.mockResolvedValue(orquestacion([]))
-    await expect(startRun(CLIENTE, ORQ, {}, entorno.ms)).rejects.toThrow(/ningún paso/)
+    await expect(startRun(CLIENTE, ORQ, {}, entorno.ms)).rejects.toThrow('La orquestación no tiene nodos')
   })
 
   it('rechaza una orquestación que no es de este cliente', async () => {
@@ -223,19 +242,76 @@ describe('tickRun', () => {
       expect(run.nodes.b.status).toBe('running')
     })
 
-    it('no poder lanzar una tarea falla ese paso, no la vuelta entera', async () => {
-      getOrchestration.mockResolvedValue(orquestacion([tarea('a'), tarea('b')]))
-      await startRun(CLIENTE, ORQ, {}, entorno.ms)
+    // Hay una espera de 1,5 s entre el intento y su reintento (como v9): se adelanta el reloj en vez
+    // de esperarla de verdad.
+    describe('al lanzar', () => {
+      beforeEach(() => { vi.useFakeTimers() })
+      afterEach(() => { vi.useRealTimers() })
 
-      sapResponde({ alLanzar: ({ taskName }) => {
-        if (taskName === 'a') throw new Error('SAP rechazó la tarea')
-        return { runId: '999' }
-      } })
-      const run = await avanzar()
+      it('no poder lanzar una tarea falla ese paso, no la vuelta entera', async () => {
+        getOrchestration.mockResolvedValue(orquestacion([tarea('a'), tarea('b')]))
+        await startRun(CLIENTE, ORQ, {}, entorno.ms)
 
-      expect(run.nodes.a.status).toBe('error')
-      expect(run.nodes.a.error).toBe('SAP rechazó la tarea')
-      expect(run.nodes.b.status).toBe('running')
+        sapResponde({ alLanzar: ({ taskName }) => {
+          if (taskName === 'a') throw new Error('SAP rechazó la tarea')
+          return { runId: '999' }
+        } })
+        const vuelta = avanzar()
+        await vi.advanceTimersByTimeAsync(1500)
+        const run = await vuelta
+
+        expect(run.nodes.a.status).toBe('error')
+        expect(run.nodes.a.error).toBe('SAP rechazó la tarea')
+        expect(run.nodes.b.status).toBe('running')
+      })
+
+      // Como v9: SAP a veces rechaza la primera llamada y la segunda entra.
+      it('un rechazo pasajero al lanzar se reintenta una vez y el paso arranca', async () => {
+        getOrchestration.mockResolvedValue(orquestacion([tarea('a')]))
+        await startRun(CLIENTE, ORQ, {}, entorno.ms)
+
+        let llamadas = 0
+        sapResponde({ alLanzar: () => {
+          llamadas += 1
+          if (llamadas === 1) throw new Error('SOAP error HTTP 500')
+          return { runId: '777' }
+        } })
+        const vuelta = avanzar()
+        await vi.advanceTimersByTimeAsync(1500)
+        const run = await vuelta
+
+        expect(llamadas).toBe(2)
+        expect(run.nodes.a).toMatchObject({ status: 'running', sapRunId: '777' })
+      })
+
+      it('un error de sesión al lanzar falla el paso sin reintentar', async () => {
+        getOrchestration.mockResolvedValue(orquestacion([tarea('a')]))
+        await startRun(CLIENTE, ORQ, {}, entorno.ms)
+
+        let llamadas = 0
+        sapResponde({ alLanzar: () => { llamadas += 1; throw new Error('invalid session') } })
+        const run = await avanzar()
+
+        expect(llamadas).toBe(1)
+        expect(run.nodes.a).toMatchObject({ status: 'error', error: 'invalid session' })
+      })
+    })
+
+    // Como v9 (`mergeVariables`): la variable de la ejecución pisa la del paso, y solo en los pasos que
+    // ya la declaran.
+    it('las variables de la ejecución solo llegan a los pasos que las declaran', async () => {
+      getOrchestration.mockResolvedValue(orquestacion([
+        tarea('a', { globalVariables: [{ name: 'FECHA', value: 'del-paso' }] }),
+        tarea('b'),
+      ]))
+      await startRun(CLIENTE, ORQ, { defaults: { globalVariables: [{ name: 'FECHA', value: 'de-la-ejecucion' }] } }, entorno.ms)
+      await avanzar()
+
+      const variables = Object.fromEntries(runCidsOperation.mock.calls
+        .filter(([{ operation }]) => operation === 'runTask')
+        .map(([{ params }]) => [params.taskName, params.globalVariables]))
+      expect(variables.a).toEqual([{ name: 'FECHA', value: 'de-la-ejecucion' }])
+      expect(variables.b).toEqual([])
     })
 
     it('no poder consultar un paso no decide nada: se sigue esperando', async () => {
@@ -423,7 +499,7 @@ describe('resumeRun', () => {
   it('no se puede retomar una que sigue corriendo', async () => {
     await dejarFallada()
     await resumeRun(CLIENTE, ORQ)
-    await expect(resumeRun(CLIENTE, ORQ)).rejects.toThrow(/en curso/)
+    await expect(resumeRun(CLIENTE, ORQ)).rejects.toThrow('Ya hay una ejecución activa')
   })
 
   it('sin ejecución previa no hay nada que retomar', async () => {
@@ -473,6 +549,123 @@ describe('cancelRun', () => {
 
     expect(run.nodes.a.status).toBe('success')
     expect(run.nodes.b.status).toBe('cancelled')
+  })
+
+  // Como v9: a los que no llegaron a arrancar nadie los canceló, simplemente no corrieron.
+  it('los pasos que corrían quedan cancelados y los que no habían empezado, omitidos', async () => {
+    getOrchestration.mockResolvedValue(orquestacion([tarea('a'), tarea('b')], [arista('a', 'b')]))
+    await startRun(CLIENTE, ORQ, {}, entorno.ms)
+    await avanzar()
+
+    const run = await cancelRun(CLIENTE, ORQ, entorno.ms)
+
+    expect(run.nodes.a.status).toBe('cancelled')
+    expect(run.nodes.b.status).toBe('skipped')
+    expect(run.nodes.b.finishedAt).toBe(new Date(entorno.ms).toISOString())
+    // Solo se le pide a CI-DS que corte lo que de verdad estaba corriendo.
+    expect(runCidsOperation.mock.calls.filter(([{ operation }]) => operation === 'cancelTask')).toHaveLength(1)
+  })
+
+  it('en un grupo, los hijos que corrían se cancelan y los pendientes se omiten', async () => {
+    getOrchestration.mockResolvedValue(orquestacion(
+      [grupo('g'), tarea('h1', {}, 'g'), tarea('h2', {}, 'g'), tarea('post')],
+      [arista('h1', 'h2'), arista('g', 'post')],
+    ))
+    await startRun(CLIENTE, ORQ, {}, entorno.ms)
+    await avanzar()
+    await avanzar()
+
+    const run = await cancelRun(CLIENTE, ORQ, entorno.ms)
+
+    expect(run.nodes.g.status).toBe('cancelled')
+    expect(run.nodes.g.children.h1.status).toBe('cancelled')
+    expect(run.nodes.g.children.h2.status).toBe('skipped')
+    expect(run.nodes.post.status).toBe('skipped')
+  })
+
+  it('un grupo que no había arrancado queda omitido con sus hijos', async () => {
+    getOrchestration.mockResolvedValue(orquestacion(
+      [tarea('a'), grupo('g'), tarea('h1', {}, 'g')],
+      [arista('a', 'g')],
+    ))
+    await startRun(CLIENTE, ORQ, {}, entorno.ms)
+    await avanzar()
+
+    const run = await cancelRun(CLIENTE, ORQ, entorno.ms)
+
+    expect(run.nodes.g.status).toBe('skipped')
+    expect(run.nodes.g.children.h1.status).toBe('skipped')
+  })
+
+  // Un paso que espera su reintento está «pendiente»: tampoco llegó a correr de nuevo.
+  it('un paso que esperaba su reintento queda omitido', async () => {
+    getOrchestration.mockResolvedValue(orquestacion(
+      [tarea('a', { errorStrategy: 'retry', maxRetries: 1, retryDelaySeconds: 60 })],
+    ))
+    await startRun(CLIENTE, ORQ, {}, entorno.ms)
+    await avanzar()
+    sapResponde({ estados: { 101: { statusCode: 'ERROR' } } })
+    expect((await avanzar()).nodes.a.status).toBe('pending')
+
+    expect((await cancelRun(CLIENTE, ORQ, entorno.ms)).nodes.a.status).toBe('skipped')
+  })
+
+  it('una ejecución cortada se puede retomar: lo omitido vuelve a pendiente', async () => {
+    getOrchestration.mockResolvedValue(orquestacion([tarea('a'), tarea('b')], [arista('a', 'b')]))
+    await startRun(CLIENTE, ORQ, {}, entorno.ms)
+    await avanzar()
+    await cancelRun(CLIENTE, ORQ, entorno.ms)
+
+    const run = await resumeRun(CLIENTE, ORQ)
+
+    expect(run.status).toBe('running')
+    expect(run.nodes.a.status).toBe('pending')
+    expect(run.nodes.b.status).toBe('pending')
+  })
+
+  describe('si una vuelta tiene el cerrojo', () => {
+    const lock = `c:${CLIENTE}:orch-run-lock:${ORQ}`
+
+    async function arrancarYAvanzar() {
+      getOrchestration.mockResolvedValue(orquestacion([tarea('a')]))
+      await startRun(CLIENTE, ORQ, {}, entorno.ms)
+      await avanzar()
+    }
+
+    it('reintenta con 500 ms de espera y corta en cuanto lo consigue', async () => {
+      await arrancarYAvanzar()
+      await entorno.redis.set(lock, 'de-otro', { ex: RUN_LOCK_SECONDS })
+      // La vuelta suelta el cerrojo durante la tercera espera.
+      const esperar = vi.fn(async () => {
+        if (esperar.mock.calls.length === 3) await entorno.redis.del(lock)
+      })
+
+      const run = await cancelRun(CLIENTE, ORQ, entorno.ms, { esperar })
+
+      expect(run.status).toBe('cancelled')
+      expect(esperar).toHaveBeenCalledTimes(3)
+      expect(esperar).toHaveBeenCalledWith(ESPERA_ENTRE_INTENTOS_DE_CORTAR_MS)
+      expect(ESPERA_ENTRE_INTENTOS_DE_CORTAR_MS).toBe(500)
+    })
+
+    it('se rinde tras 5 intentos y lo dice, sin dar la ejecución por cortada', async () => {
+      await arrancarYAvanzar()
+      await entorno.redis.set(lock, 'de-otro', { ex: RUN_LOCK_SECONDS })
+      const esperar = vi.fn(async () => {})
+
+      await expect(cancelRun(CLIENTE, ORQ, entorno.ms, { esperar })).rejects.toThrow(/está avanzando en este momento/)
+
+      // Cinco intentos, cuatro esperas entre ellos.
+      expect(esperar).toHaveBeenCalledTimes(4)
+      expect((await getRun(CLIENTE, ORQ)).status).toBe('running')
+    })
+
+    it('sin cerrojo ocupado no espera nada', async () => {
+      await arrancarYAvanzar()
+      const esperar = vi.fn()
+      await cancelRun(CLIENTE, ORQ, entorno.ms, { esperar })
+      expect(esperar).not.toHaveBeenCalled()
+    })
   })
 
   it('cancelar una ya terminada no cambia nada', async () => {

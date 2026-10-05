@@ -83,3 +83,22 @@ export const tickRun = (id) => accion(id, 'tick')
 export const TERMINAL_RUN_STATUSES = Object.freeze(['success', 'error', 'cancelled'])
 
 export const isRunFinished = (run) => Boolean(run) && TERMINAL_RUN_STATUSES.includes(run.status)
+
+/**
+ * Cuántos pasos de una ejecución ya salieron de la cola y cuántos hay en total: el «N/M» que se ve
+ * mientras corre. Cuenta los pasos de dentro de un grupo y no el grupo, igual que la barra de
+ * ejecución, para que las dos hablen de las mismas cosas.
+ */
+export function runProgress(run) {
+  let hechos = 0
+  let total = 0
+  const sumar = (paso) => {
+    total += 1
+    if (paso?.status !== 'pending' && paso?.status !== 'running') hechos += 1
+  }
+  for (const paso of Object.values(run?.nodes ?? {})) {
+    if (paso?.type === 'group') Object.values(paso.children ?? {}).forEach(sumar)
+    else sumar(paso)
+  }
+  return { hechos, total }
+}

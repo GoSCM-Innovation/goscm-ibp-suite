@@ -29,8 +29,16 @@ const VUELTA_MS = 5000
 
 export function useOrchestrationRun(orchestrationId, nombre) {
   const [run, setRun] = useState(null)
-  const [error, setError] = useState('')
+  // Dos errores y no uno: el de una vuelta del reloj se borra solo en la siguiente vuelta buena —un
+  // fallo de red pasajero no debe dejar una franja roja para siempre—, pero el de una acción
+  // (arrancar, cortar) lo causó alguien y se queda hasta la próxima acción. Con uno solo, una vuelta
+  // buena se llevaría por delante «no se pudo cancelar».
+  const [errorDeVuelta, setErrorDeVuelta] = useState('')
+  const [errorDeAccion, setErrorDeAccion] = useState('')
   const [ocupado, setOcupado] = useState(false)
+  // Con qué se arrancó la última vez, para «↺ Repetir». Vive solo mientras la pantalla esté abierta,
+  // igual que en v9.
+  const [ultimosParametros, setUltimosParametros] = useState(null)
 
   // Impide encimar dos vueltas si una tarda más que el reloj: la segunda no aportaría nada y
   // duplicaría las consultas a SAP.
@@ -72,9 +80,10 @@ export function useOrchestrationRun(orchestrationId, nombre) {
           }
           estadoAnterior.current = siguiente?.status ?? null
           setRun(siguiente)
+          setErrorDeVuelta('')
         }
       } catch (fallo) {
-        if (!abandonado) setError(fallo.message)
+        if (!abandonado) setErrorDeVuelta(fallo.message)
       } finally {
         enVuelo.current = false
       }
@@ -87,27 +96,36 @@ export function useOrchestrationRun(orchestrationId, nombre) {
 
   const accion = useCallback(async (hacer) => {
     setOcupado(true)
-    setError('')
+    setErrorDeAccion('')
+    setErrorDeVuelta('')
     try {
       setRun(await hacer())
     } catch (fallo) {
-      setError(fallo.message)
+      setErrorDeAccion(fallo.message)
     } finally {
       setOcupado(false)
     }
   }, [])
 
-  return {
-    run,
-    error,
-    ocupado,
-    enMarcha,
-    arrancar: (defaults) => accion(() => {
+  const arrancar = (defaults) => {
+    setUltimosParametros(defaults ?? {})
+    return accion(() => {
       // El permiso se pide aquí y no al montar: ver `aviso-de-corrida.js`.
       pedirPermisoDeAviso()
       estadoAnterior.current = null
       return startRun(orchestrationId, defaults)
-    }),
+    })
+  }
+
+  return {
+    run,
+    error: errorDeAccion || errorDeVuelta,
+    ocupado,
+    enMarcha,
+    ultimosParametros,
+    arrancar,
+    // «↺ Repetir»: lo mismo que la última vez, con el mismo agente, perfil y variables.
+    repetir: () => (ultimosParametros ? arrancar(ultimosParametros) : undefined),
     retomar: () => accion(() => {
       pedirPermisoDeAviso()
       estadoAnterior.current = null

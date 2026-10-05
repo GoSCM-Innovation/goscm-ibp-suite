@@ -5,7 +5,7 @@
 //   POST   { connectionId, production, name, nodes, edges }   crear
 //   POST   { action: 'duplicate', id }                        duplicar
 //   PATCH  { id, name?, nodes?, edges? }                      guardar cambios
-//   DELETE { id }                                             borrar
+//   DELETE { id }                                             borrar (409 si tiene una ejecución activa)
 //
 // El handler es delgado a propósito: quién es el dueño, si el destino existe y si el grafo se puede
 // ejecutar lo deciden las guardas de `core/orchestrations`. Aquí solo se traduce a HTTP.
@@ -117,7 +117,10 @@ export default async function handler(req, res) {
   } catch (error) {
     // Los mensajes de core/orchestrations están escritos para mostrarse: dicen qué paso tiene el
     // ciclo, o a qué nodo apunta una conexión que no existe.
-    console.error(`[orchestrations] ${error.stack || error.message}`)
-    return res.status(400).json({ error: error.message })
+    //
+    // Un 409 es un choque esperado con una ejecución en marcha («No se puede eliminar con una
+    // ejecución activa»), como en v9: no es un fallo, así que no llena el registro.
+    if (!error.statusCode) console.error(`[orchestrations] ${error.stack || error.message}`)
+    return res.status(error.statusCode ?? 400).json({ error: error.message })
   }
 }

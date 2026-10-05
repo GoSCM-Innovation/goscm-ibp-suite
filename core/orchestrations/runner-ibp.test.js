@@ -204,6 +204,24 @@ describe('el motor con IBP', () => {
     expect(cancelJobRun).not.toHaveBeenCalled()
   })
 
+  // v8 no distinguía «omitido»: todo lo que no había terminado queda «Cancelado». El «omitido» de los
+  // pasos sin arrancar es de v9 (CI-DS) y no se le aplica a IBP.
+  it('cortar deja cancelado TODO lo no terminado, también lo que no había arrancado', async () => {
+    await arrancar(cadena(grupo('g'), paso('x', {}, 'g'), paso('c')))
+    const run = await cancelRun(CLIENTE, ORQ, entorno.ms)
+    expect(run.nodes.g.status).toBe('cancelled')
+    expect(run.nodes.g.children.x.status).toBe('cancelled')
+    expect(run.nodes.c.status).toBe('cancelled')
+  })
+
+  it('cortar con el cerrojo ocupado falla a la primera, sin reintentar', async () => {
+    await arrancar(cadena(paso('a')))
+    await entorno.redis.set(`c:${CLIENTE}:orch-run-lock:${ORQ}`, 'de-otro', { ex: 15 })
+    const esperar = vi.fn()
+    await expect(cancelRun(CLIENTE, ORQ, entorno.ms, { esperar })).rejects.toThrow(/está avanzando/)
+    expect(esperar).not.toHaveBeenCalled()
+  })
+
   // Sin repetición se pregunta por el nombre; el paso no puede quedarse «En ejecución» para siempre.
   it('un trabajo lanzado sin repetición se sigue y gana la repetición al contarla SAP', async () => {
     scheduleJob.mockImplementationOnce(async () => ({ ok: true, jobName: 'SIN-1', jobRunCount: '' }))

@@ -107,7 +107,7 @@ export function nextStepState(estado, sapStatus, config = {}, now = Date.now(), 
         retryAt: new Date(now + espera * 1000).toISOString(),
         error: letra
           ? `Reintentando ${yaIntentados + 1}/${intentosPermitidos}…`
-          : `SAP: ${codigo}${detalle} (intento ${yaIntentados + 1} de ${intentosPermitidos})`,
+          : `SAP: ${codigo}${detalle} (intento ${yaIntentados + 1}/${intentosPermitidos})`,
       }
     }
 

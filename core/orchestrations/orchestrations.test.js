@@ -9,12 +9,19 @@ import {
 } from './orchestrations.js'
 import { queryOneScoped, queryScoped } from '../persistence/tenant-scope.js'
 import { getConnectionTarget } from '../connections/connections.js'
+import { borrarRun, getRun } from './run-store.js'
 
 vi.mock('../persistence/tenant-scope.js', () => ({
   queryScoped: vi.fn(async () => []),
   queryOneScoped: vi.fn(async () => null),
 }))
 vi.mock('../connections/connections.js', () => ({ getConnectionTarget: vi.fn() }))
+// El estado de las ejecuciones vive en Redis; aquí solo importa qué dice y que se limpie.
+vi.mock('./run-store.js', async (importOriginal) => ({
+  ...(await importOriginal()),
+  getRun: vi.fn(async () => null),
+  borrarRun: vi.fn(async () => {}),
+}))
 
 const CLIENTE = 'c-1'
 const CONEXION = 'conn-1'
@@ -33,6 +40,7 @@ const FILA = {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  getRun.mockResolvedValue(null)
   getConnectionTarget.mockResolvedValue({ id: CONEXION, kind: 'cids', name: 'CI-DS' })
   queryOneScoped.mockResolvedValue(FILA)
 })
@@ -241,5 +249,45 @@ describe('deleteOrchestration', () => {
   it('una orquestación ajena no se borra y se contesta que no había nada', async () => {
     queryScoped.mockResolvedValue([])
     await expect(deleteOrchestration(CLIENTE, ORQUESTACION)).resolves.toBe(false)
+    expect(borrarRun).not.toHaveBeenCalled()
+  })
+
+  // Como v9 (409): borrarla a mitad dejaría la carga corriendo en SAP sin nadie que la siga.
+  it('se niega a borrar una orquestación con una ejecución activa', async () => {
+    getRun.mockResolvedValue({ status: 'running' })
+
+    await expect(deleteOrchestration(CLIENTE, ORQUESTACION)).rejects.toMatchObject({
+      message: 'No se puede eliminar con una ejecución activa',
+      statusCode: 409,
+    })
+    expect(queryScoped).not.toHaveBeenCalled()
+    expect(borrarRun).not.toHaveBeenCalled()
+  })
+
+  it('busca la ejecución con el cliente de la sesión', async () => {
+    queryScoped.mockResolvedValue([{ id: ORQUESTACION }])
+    await deleteOrchestration(CLIENTE, ORQUESTACION)
+    expect(getRun).toHaveBeenCalledWith(CLIENTE, ORQUESTACION)
+  })
+
+  it.each(['success', 'error', 'cancelled'])('con una ejecución %s sí la borra', async (status) => {
+    getRun.mockResolvedValue({ status })
+    queryScoped.mockResolvedValue([{ id: ORQUESTACION }])
+    await expect(deleteOrchestration(CLIENTE, ORQUESTACION)).resolves.toBe(true)
+  })
+
+  it('al borrar limpia el estado de su última ejecución y el índice del reloj', async () => {
+    getRun.mockResolvedValue({ status: 'success' })
+    queryScoped.mockResolvedValue([{ id: ORQUESTACION }])
+
+    await deleteOrchestration(CLIENTE, ORQUESTACION)
+
+    expect(borrarRun).toHaveBeenCalledWith(CLIENTE, ORQUESTACION)
+  })
+
+  it('sin ninguna ejecución registrada se borra sin más', async () => {
+    getRun.mockResolvedValue(null)
+    queryScoped.mockResolvedValue([{ id: ORQUESTACION }])
+    await expect(deleteOrchestration(CLIENTE, ORQUESTACION)).resolves.toBe(true)
   })
 })

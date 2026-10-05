@@ -13,6 +13,7 @@
 import { queryOneScoped, queryScoped } from '../persistence/tenant-scope.js'
 import { getConnectionTarget } from '../connections/connections.js'
 import { normalizeGraph } from './graph.js'
+import { borrarRun, errorDeConflicto, esTerminal, getRun } from './run-store.js'
 
 const toOrchestration = (row) => row && ({
   id: row.id,
@@ -155,14 +156,27 @@ export async function duplicateOrchestration(clientId, id) {
 /**
  * Borra una orquestación. Devuelve si había algo que borrar.
  *
- * PENDIENTE (sesión del motor): v9 se negaba a borrar una que tuviera una ejecución en curso. Esa
- * comprobación necesita el estado de ejecución, que todavía no existe; va aquí cuando exista.
+ * Como v9, se niega si tiene una ejecución activa (409): borrarla a mitad dejaría la carga corriendo
+ * en SAP sin nadie que la siga. Para borrarla hay que cortar la ejecución antes. Al borrar se limpia
+ * también el estado de su última ejecución y su lugar en el índice del reloj, que de otro modo
+ * quedarían huérfanos hasta que venza el estado.
+ *
+ * La ejecución se busca con el cliente de la sesión: una orquestación ajena no tiene ejecución aquí,
+ * y por eso tampoco se puede usar este borrado para ver si existe.
  */
 export async function deleteOrchestration(clientId, id) {
+  const run = await getRun(clientId, id)
+  if (run && !esTerminal(run.status)) {
+    throw errorDeConflicto('No se puede eliminar con una ejecución activa')
+  }
+
   const rows = await queryScoped(
     clientId,
     'delete from orchestrations where id = $1 and client_id = $2 returning id',
     [id, clientId],
   )
-  return rows.length > 0
+  if (rows.length === 0) return false
+
+  await borrarRun(clientId, id)
+  return true
 }

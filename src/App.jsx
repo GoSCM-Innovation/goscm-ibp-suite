@@ -5,7 +5,7 @@
 // falta una librería de rutas para tres módulos y un panel.
 
 import { useCallback, useEffect, useState } from 'react'
-import { api } from './lib/api.js'
+import { SESION_VENCIDA, api } from './lib/api.js'
 import { puedeSalir } from './lib/guarda-de-salida.js'
 import { applyTheme, readStoredTheme } from './lib/theme.js'
 import { desconectar } from './lib/conexion-activa.js'
@@ -49,6 +49,13 @@ export default function App() {
   // interfaz no prometa algo que el servidor va a negar.
   const refrescarSesion = useCallback(() => {
     api.get('/api/auth/session').then(setSession).catch(() => setSession(null))
+  }, [])
+
+  // El servidor dijo que la sesión ya no vale (vencida en medio del trabajo): a la pantalla de acceso.
+  useEffect(() => {
+    const alVencer = () => setSession(null)
+    window.addEventListener(SESION_VENCIDA, alVencer)
+    return () => window.removeEventListener(SESION_VENCIDA, alVencer)
   }, [])
 
   useEffect(() => {

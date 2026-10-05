@@ -6,6 +6,9 @@
 
 import { anotarLlamada } from './tech-logs.js'
 
+/** El evento que avisa a la aplicación de que la sesión ya no vale. Lo escucha `App.jsx`. */
+export const SESION_VENCIDA = 'goscm:sesion-vencida'
+
 export class ApiError extends Error {
   constructor(message, status) {
     super(message)
@@ -66,6 +69,14 @@ async function request(path, { method = 'GET', body, params, signal } = {}) {
   }
 
   anotar(response.ok ? '' : (data.error ?? ''))
+
+  // Una sesión vencida a mitad de trabajo (un monitor que refresca solo, por ejemplo) devolvería el
+  // mismo error una y otra vez sin salida. Se avisa UNA vez a la aplicación para que lleve a la
+  // pantalla de acceso. Las rutas de `/api/auth/` quedan fuera: allí un 401 es «código incorrecto»
+  // o «no hay sesión todavía», y las maneja quien las llamó.
+  if (response.status === 401 && !path.startsWith('/api/auth/') && typeof window !== 'undefined') {
+    window.dispatchEvent(new Event(SESION_VENCIDA))
+  }
 
   if (!response.ok) throw new ApiError(data.error || `Error ${response.status}`, response.status)
   return data

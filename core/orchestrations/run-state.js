@@ -30,8 +30,14 @@ import { isStepDone } from './step-outcome.js'
  *   - `assumedFailureFailsRun`: un paso fallado con «continuar» deja la ejecución en error al final.
  *   - `cancelledChildCancelsGroup`: un hijo cancelado deja cancelado a su grupo.
  *   - `cancelledCodes`: los códigos de SAP que dejan el paso cancelado. Ver `nextStepState`.
+ *   - `cancelSkipsPending`: al cortar la ejecución, los pasos que no habían arrancado quedan
+ *     «omitidos» (`skipped`) y solo los que corrían quedan «cancelados». Sin esto, todo queda cancelado.
+ *   - `cancelLockAttempts`: cuántas veces se intenta tomar el cerrojo al cortar (500 ms entre una y
+ *     otra) antes de rendirse, por si una vuelta lo tiene en ese instante.
  */
 export const DEFAULT_RUN_POLICY = Object.freeze({
+  cancelSkipsPending: true,
+  cancelLockAttempts: 5,
   cancelInSap: true,
   cancelledBlocks: true,
   exhaustedRetryBlocks: false,

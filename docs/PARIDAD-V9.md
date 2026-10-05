@@ -99,6 +99,74 @@ repetirlo cuando v9 cambie.
 - **Con los ojos**: se miraron las dos pantallas en el navegador con datos de muestra (andamio temporal,
   ya borrado), en un panel angosto. No se compararon píxeles ni tipografías contra v9.
 
+## Las otras pestañas de CI-DS Tools y su marco, como v9 (2026-10-05)
+
+Segunda mitad de la revisión: Resumen Global, Resumen, Projects & Tasks, Task Monitor, el marco de
+CI-DS Tools y Requisitos Técnicos. Se leyó cada archivo de v9 y el nuestro **control por control**. Lo que
+sigue es lo que se igualó y lo que se dejó distinto a propósito.
+
+**Estados de las tareas** (`core/cids/task-status.js`): los nombres de v9 en inglés («Running», «Success»,
+«Success w/ errors D», «Error», «Queueing»…), con el nombre corto de la leyenda de los gráficos
+(«Success w/err D»); `TERMINATION_FAILED` con su rojo propio; un código desconocido ya no pierde su nombre.
+**Resumen y Resumen Global**: tarjetas «Exitosas»/«Fallidas», el subtítulo con el repositorio, la pantalla
+«Cargando resumen de …», «Sin warnings» y «Éxito con errores (críticos|ignorados)», el selector «Filtrar
+por cliente», el cuadro «Sin repositorios en el filtro», la línea de contexto y las rejillas `v9-grid-*`.
+Sin la nota de «avisos» que se había añadido y sin las llamadas a `getAgents` que v9 no hacía.
+**Projects & Tasks**: contador «N proyectos · repositorio», los tres `title` del botón «Solo fijados», «Limpiar»
+con su título, «Fijar proyecto», «N tasks», los textos de vacío y los del modal («▶ Ejecutar task»,
+«Cargando configuración…», «— Sin especificar —», «✓ Task enviada», «▶ Ver en Task Monitor →»).
+**Task Monitor**: columnas que se arrastran (mínimo 60 px), `title` con el valor crudo de SAP en cada celda,
+«⚠ máx 90d» en rojo con los campos de fecha enmarcados, chip «Todos» azul, la tabla y la paginación
+desaparecen con un error, «pág X/Y», «cargando fin/duración…», «Task», «✕ Error», «📋 Ver logs», «RunID: »,
+cancelar con el `confirm` del navegador y la barra que se suelta sola a los 2,5 s, la insignia «PRD» verde en
+mono («Promovido a producción») y la búsqueda que se suelta al salir del monitor o cambiar de repositorio.
+El visor de logs con los textos de v9 («Logs de ejecución», «Cargando logs…», «Sin contenido en este log»).
+**Error de v9 que se arregla, no se copia**: al cambiar de página con la nueva ya en caché, el aviso «cargando
+fin/duración…» se quedaba encendido y «Copiar» bloqueado (el efecto salía sin apagarlo). Prueba en
+`TaskMonitor.test.js`.
+**Marco** (`CidsTools.jsx`): la cabecera del sistema de v9 (avatar de 34, nombre y
+`dirección · organización · Producción|Sandbox`, con ▴/▾ para contraerla); para ello `/api/connections`
+devuelve también la **organización** (junto a la dirección, que ya salía; no es un secreto y las
+credenciales siguen sin salir). «Sandbox» en vez de «Pruebas». La tira de pestañas de repositorio se ve
+siempre, también sobre el tablero global y los dos módulos de ZIP (desde el global, elegir una lleva a su
+Resumen). El avatar sale del nombre de la conexión, no del texto de la pestaña (antes decía «C·»). El orden
+de las pestañas añadidas es el del menú de v9: **Mapping Dataflow Generator antes que Integration Explorer**.
+El Explorer y el documentador **se quedan montados** al cambiar de pestaña (v9 los mantenía vivos): el ZIP, el
+análisis y lo generado ya no se pierden. Requisitos Técnicos abre en la pestaña del módulo en el que estás,
+con el título de v9, y la guía de IBP ya no se ofrece en las pestañas de CI-DS ni de IBP Tools. El panel de
+«Ver logs técnicos» muestra la operación (`getProjects`, `runTask`…), se oculta mientras no hay llamadas y
+enseña la llamada MÁS RECIENTE de cada grupo (enseñaba la más antigua). Una sesión vencida a mitad del trabajo
+lleva a la pantalla de acceso en vez de repetir el mismo error cada 30 s.
+
+### Lo que sigue siendo distinto en estas pestañas, y por qué
+
+| Qué | v9 | Aquí | Motivo |
+|---|---|---|---|
+| Rango máximo de fechas | 90 días, sin más | 90 días, y al pasarlo se arrastra la otra punta | Regla del servicio de SAP; así nunca queda un rango inválido |
+| Fin del rango | segundo exacto | `:59.999` del minuto elegido | Una ejecución de las 12:30:40 quedaba fuera de un rango que termina a las 12:30 |
+| Fechas a medio escribir | consulta sin rango (devuelve TODO el tenant) | se exige el rango completo y se aplica a los 500 ms | Agujero de v9 en las tres pantallas |
+| Contar «fallidas» | solo `ERROR` | también `TERMINATION_FAILED` | Una terminación fallida es un fallo |
+| Búsqueda del monitor | nombre, estado, RunID | además el JobID y el nombre en pantalla | Es lo que la persona tiene delante |
+| Fin y duración | una consulta por fila en el navegador | las junta el servidor por tandas de 15 (6 a la vez contra SAP) | El navegador no habla con SAP |
+| Insignia «PRD» | la calcula el navegador con la sesión de producción | la calcula el servidor (caché de 15 min) | La sesión de SAP vive en el servidor |
+| Sesión de SAP | modal de login y banner «Sesión expirada» | no existen | Las credenciales nunca llegan al navegador; el servidor renueva la sesión |
+| Pestañas de repositorio | solo las conexiones abiertas, con ✕ y punto de sesión | todas siempre, punto de «productivo» | Decidido por el usuario el 2026-10-05 |
+| Cambiar de repositorio | cada conexión conserva su vista montada | se empieza de cero en el nuevo | Misma decisión que Data Tools (apps que reinician al cambiar de tenant) |
+| Salir del módulo y volver | las conexiones siguen montadas | vuelve a Resumen | Consecuencia del armazón de la suite |
+| Tarjetas 2, 5 y 7 de Requisitos Técnicos | «usuario y contraseña se usan al iniciar sesión», «la contraseña no se almacena», «token Bearer» | las tres dicen cómo funciona AQUÍ (alta por el administrador, contraseña cifrada en el servidor, sesión por cookie) | Los textos de v9 describen un mecanismo que esta plataforma no usa; las tarjetas 3, 5 y 6 conservan sus palabras |
+| Botón de Requisitos | en la cabecera | en el pie del menú lateral | Decisión de armazón de la suite |
+| Logs técnicos | un panel por pantalla, 50 llamadas, sin colores | uno solo para toda la aplicación, 100 llamadas, con colores, «Limpiar» y hora | El panel compartido lo alimenta `api.js`; mantener los extras ya aceptados |
+| Reordenar conexiones arrastrando | en el menú lateral | no existe | El orden lo da el servidor; **sin decisión del usuario** |
+| Lista del menú lateral con las conexiones | sí | no | La tira de pestañas lo sustituye |
+
+### Lo que NO se pudo comprobar en estas pestañas
+
+- **Contra un tenant real**: nada. Los textos, la lógica y los estados están probados con respuestas simuladas.
+- **Con los ojos y píxel por píxel**: no se compararon tipografías, espacios ni la tira de pestañas cuando
+  se envuelve.
+- **El tiempo máximo de la función `api/cids`** ante un rango de 90 días o un log muy grande (`vercel.json`
+  no fija `maxDuration`, igual que v9).
+
 ## Portado
 
 | v9 | Aquí | Notas |

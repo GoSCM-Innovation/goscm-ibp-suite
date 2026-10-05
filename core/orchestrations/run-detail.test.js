@@ -13,8 +13,16 @@ const AHORA = Date.parse('2026-08-10T12:10:00Z')
 
 describe('nombreDeEstado', () => {
   it('traduce los estados del motor', () => {
-    expect(nombreDeEstado('success_with_errors')).toBe('Terminado con avisos')
+    expect(nombreDeEstado('success_with_errors')).toBe('Completado con errores')
     expect(nombreDeEstado('skipped')).toBe('Omitido')
+  })
+
+  // Las palabras de `RunLogModal.jsx` de v9.
+  it('usa las palabras de v9', () => {
+    expect(['pending', 'running', 'success', 'error', 'cancelled', 'skipped', 'success_with_errors']
+      .map(nombreDeEstado)).toEqual([
+      'Pendiente', 'Ejecutando', 'Completado', 'Error', 'Cancelado', 'Omitido', 'Completado con errores',
+    ])
   })
 
   it('un estado desconocido se muestra tal cual', () => {
@@ -157,6 +165,17 @@ describe('pasosConProblema', () => {
       { id: 'g', esGrupo: true, status: 'error' },
     ]
     expect(pasosConProblema(filas).map((una) => una.id)).toEqual(['b', 'c'])
+  })
+
+  // Cortar una ejecución deja «omitidos» los pasos que no llegaron a arrancar (como v9): no son un
+  // problema, y listarlos taparía el paso que de verdad estaba corriendo.
+  it('los omitidos no cuentan: tampoco los que quedaron sin arrancar al cortar', () => {
+    const filas = [
+      { id: 'a', esGrupo: false, status: 'cancelled' },
+      { id: 'b', esGrupo: false, status: 'skipped' },
+      { id: 'c', esGrupo: false, status: 'skipped' },
+    ]
+    expect(pasosConProblema(filas).map((una) => una.id)).toEqual(['a'])
   })
 
   it('una ejecución limpia no tiene ninguno', () => {

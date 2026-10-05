@@ -73,7 +73,9 @@ export default async function handler(req, res) {
   } catch (error) {
     // Los mensajes del motor están escritos para mostrarse: dicen si ya hay una ejecución en curso,
     // si no hay nada que retomar, o qué paso no se pudo lanzar.
-    console.error(`[orchestration-run] ${error.stack || error.message}`)
-    return res.status(400).json({ error: error.message })
+    //
+    // «Ya hay una ejecución activa» llega como 409, como en v9; el resto, como 400.
+    if (!error.statusCode) console.error(`[orchestration-run] ${error.stack || error.message}`)
+    return res.status(error.statusCode ?? 400).json({ error: error.message })
   }
 }

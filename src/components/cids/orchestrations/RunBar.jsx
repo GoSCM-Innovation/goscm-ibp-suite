@@ -1,20 +1,43 @@
-// La barra de ejecución: arrancar, cortar, retomar, y cómo va.
+// La barra de ejecución: iniciar, cancelar, reanudar, repetir, y cómo va.
 //
-// Portada de lo que en v9 eran `RunModal` y `RunSingleModal`. Aquí es una barra y no un diálogo: una
-// ejecución dura minutos u horas y hay que poder mirar el dibujo mientras corre, que es justamente
-// donde se ve qué paso va. Un diálogo encima taparía lo único que interesa.
+// Portada de la barra del editor de `Orchestrations.jsx` de v9 (insignia, «hechos/total» y los
+// botones) y de su `checkBeforeRun`. Aquí es una barra y no un diálogo para el avance: una ejecución
+// dura minutos u horas y hay que poder mirar el dibujo mientras corre, que es justamente donde se ve
+// qué paso va. El diálogo sí aparece para iniciar (`RunModal`), que es cuando hay que elegir agente
+// y variables.
 //
-// El diálogo sí aparece para arrancar, que es cuando hay que elegir agente y variables.
+// Se conserva de esta plataforma, y no de v9:
+//   - «Guarda los cambios antes de ejecutar»: lo que corre es lo GUARDADO, no lo que hay dibujado.
+//   - El recuento por estado («3 correctas, 1 falladas…») junto al «hechos/total» de v9.
+//
+// Props opcionales (sin ellas todo sigue funcionando, con menos):
+//   grafo            { nodes, edges } del dibujo; para la guarda de tasks sueltas, para saber si hay
+//                    algo que iniciar y para ofrecer las variables de sus tareas.
+//   destino          a qué conexión consultar agentes y configuraciones, y cómo se llaman los presets.
+//   ultimosParametros, puedeRepetir, onRepetir
+//                    «↺ Repetir». Si no se pasan, la barra recuerda lo que ella misma inició.
 
-import { useState } from 'react'
-import Modal from '../../ui/Modal.jsx'
+import { useEffect, useRef, useState } from 'react'
 
-/** Cómo se pinta cada estado de la ejecución. */
-const ESTADO = {
-  running: { texto: 'En marcha', color: 'var(--cyan)' },
-  success: { texto: 'Terminó bien', color: 'var(--green)' },
-  error: { texto: 'Terminó con fallos', color: 'var(--red)' },
-  cancelled: { texto: 'Cortada', color: 'var(--text3)' },
+import {
+  avanceDeCorrida,
+  etiquetaDeCorrida,
+  hayNodosDePrimerNivel,
+  tareasFueraDeGrupo,
+  textoDeRepetir,
+} from '../../../lib/orchestration-run-form.js'
+import RunModal from './RunModal.jsx'
+import './ejecucion.css'
+
+/** Cuánto dura a la vista el aviso de tasks sueltas. Es el tiempo de v9. */
+const AVISO_MS = 6000
+
+/** El color de cada estado de la corrida. */
+const COLOR = {
+  running: 'var(--cyan)',
+  success: 'var(--green)',
+  error: 'var(--red)',
+  cancelled: 'var(--text3)',
 }
 
 /** Cuenta cuántos pasos hay en cada estado, mirando también dentro de los grupos. */
@@ -28,29 +51,65 @@ function contar(run) {
   return cuenta
 }
 
-export default function RunBar({ run, error, ocupado, enMarcha, sinGuardar, onArrancar, onCortar, onRetomar }) {
+export default function RunBar({
+  run, error, ocupado, enMarcha, sinGuardar, onArrancar, onCortar, onRetomar,
+  grafo, destino, ultimosParametros, puedeRepetir, onRepetir,
+}) {
   const [pidiendoDatos, setPidiendoDatos] = useState(false)
-  const [agente, setAgente] = useState('')
-  const [variables, setVariables] = useState('')
+  const [sueltas, setSueltas] = useState(null)
+  const [propios, setPropios] = useState(null)
+  const temporizador = useRef(null)
 
-  function arrancar() {
-    setPidiendoDatos(false)
-    onArrancar({
-      ...(agente.trim() ? { agentName: agente.trim() } : {}),
-      globalVariables: leerVariables(variables),
-    })
+  // El aviso se apaga solo; si la barra desaparece antes, el temporizador no debe tocar nada.
+  useEffect(() => () => clearTimeout(temporizador.current), [])
+
+  // Con una acción en curso y sin corrida viva es «Iniciando…»; con la corrida viva, «Cancelando…».
+  const iniciando = Boolean(ocupado) && !enMarcha
+  const cancelando = Boolean(ocupado) && enMarcha
+
+  const parametros = ultimosParametros ?? propios
+  const repetirDisponible = puedeRepetir ?? Boolean(parametros)
+  const sinNodos = grafo ? !hayNodosDePrimerNivel(grafo) : false
+
+  function iniciar() {
+    // `checkBeforeRun` de v9: con grupos en el dibujo, una tarea suelta no tiene dónde correr.
+    const fuera = tareasFueraDeGrupo(grafo)
+    if (fuera.length > 0) {
+      setSueltas(fuera)
+      clearTimeout(temporizador.current)
+      temporizador.current = setTimeout(() => setSueltas(null), AVISO_MS)
+      return
+    }
+    setSueltas(null)
+    setPidiendoDatos(true)
   }
 
-  const estado = run ? ESTADO[run.status] ?? { texto: run.status, color: 'var(--text2)' } : null
+  function arrancar(valores) {
+    setPidiendoDatos(false)
+    setPropios(valores)
+    onArrancar(valores)
+  }
+
+  function repetir() {
+    if (onRepetir) onRepetir()
+    else if (parametros) onArrancar(parametros)
+  }
+
+  const color = run ? COLOR[run.status] ?? 'var(--text2)' : null
   const cuenta = run ? contar(run) : {}
+  const avance = run ? avanceDeCorrida(run) : null
 
   return (
     <>
       <div className="run-bar">
-        {estado ? (
+        {run ? (
           <>
-            <span className="punto" style={{ background: estado.color }} />
-            <span className="run-estado" style={{ color: estado.color }}>{estado.texto}</span>
+            <span className="ej-insignia" style={{ color }}>{etiquetaDeCorrida(run.status)}</span>
+            {enMarcha && avance.total > 0 && (
+              <span className="ej-avance" title="Pasos de primer nivel terminados">
+                {avance.hechos}/{avance.total}
+              </span>
+            )}
             <span className="run-cuenta">
               {cuenta.running > 0 && <span style={{ color: 'var(--cyan)' }}>{cuenta.running} corriendo</span>}
               {cuenta.pending > 0 && <span>{cuenta.pending} en espera</span>}
@@ -68,95 +127,66 @@ export default function RunBar({ run, error, ocupado, enMarcha, sinGuardar, onAr
 
         <div style={{ flex: 1 }} />
 
-        {enMarcha ? (
-          <button type="button" className="btn btn-sm btn-danger" onClick={onCortar} disabled={ocupado}>
-            ✕ Cortar
+        {!enMarcha && run && repetirDisponible && (
+          <button
+            type="button"
+            className="btn btn-sm"
+            onClick={repetir}
+            disabled={ocupado}
+            title={textoDeRepetir(parametros)}
+          >
+            {iniciando ? 'Iniciando…' : '↺ Repetir'}
           </button>
-        ) : (
-          <>
-            {run?.status === 'error' && (
-              <button type="button" className="btn btn-sm" onClick={onRetomar} disabled={ocupado}>
-                ↻ Retomar desde donde falló
-              </button>
-            )}
-            <button
-              type="button"
-              className="btn btn-sm btn-run"
-              onClick={() => setPidiendoDatos(true)}
-              disabled={ocupado || sinGuardar}
-              title={sinGuardar ? 'Guarda los cambios antes de ejecutar' : 'Ejecutar la orquestación'}
-            >
-              ▶ Ejecutar
-            </button>
-          </>
+        )}
+
+        {!enMarcha && run?.status === 'error' && (
+          <button
+            type="button"
+            className="btn btn-sm"
+            onClick={onRetomar}
+            disabled={ocupado}
+            title="Reanudar desde el primer nodo fallido, conservando los resultados ya completados"
+          >
+            {iniciando ? 'Iniciando…' : '⏭ Reanudar'}
+          </button>
+        )}
+
+        <button
+          type="button"
+          className="btn btn-sm btn-run"
+          onClick={iniciar}
+          disabled={enMarcha || sinNodos || ocupado || sinGuardar}
+          title={sinGuardar ? 'Guarda los cambios antes de ejecutar' : undefined}
+        >
+          {iniciando ? 'Iniciando…' : '▶ Iniciar'}
+        </button>
+
+        {enMarcha && (
+          <button type="button" className="btn btn-sm btn-danger" onClick={onCortar} disabled={ocupado}>
+            {cancelando ? 'Cancelando…' : '■ Cancelar'}
+          </button>
         )}
       </div>
+
+      {sueltas && (
+        <div className="ej-franja" role="alert">
+          <span>
+            ⚠ Los siguientes tasks deben estar dentro de un grupo para poder iniciar: <strong>{sueltas.join(', ')}</strong>
+          </span>
+          <button type="button" aria-label="Cerrar el aviso" onClick={() => setSueltas(null)}>×</button>
+        </div>
+      )}
 
       {error && <div className="notice notice-error lienzo-error">✕ {error}</div>}
 
       {pidiendoDatos && (
-        <Modal
-          title="Ejecutar la orquestación"
+        <RunModal
+          destino={destino}
+          grafo={grafo}
+          onConfirmar={arrancar}
           onClose={() => setPidiendoDatos(false)}
-          footer={(
-            <>
-              <div className="modal-foot-info" />
-              <button type="button" className="btn btn-sm" onClick={() => setPidiendoDatos(false)}>Cancelar</button>
-              <button type="button" className="btn btn-sm btn-primary" onClick={arrancar}>▶ Ejecutar</button>
-            </>
-          )}
-        >
-          <p className="page-hint">
-            Esto vale para todos los pasos que no tengan lo suyo configurado. Un paso con su propio
-            agente o sus propias variables conserva los suyos.
-          </p>
-
-          <div className="form-stack" style={{ marginTop: 14 }}>
-            <div className="field">
-              <label htmlFor="run-agente">Agente para todos (opcional)</label>
-              <input
-                id="run-agente"
-                className="input"
-                value={agente}
-                onChange={(evento) => setAgente(evento.target.value)}
-                placeholder="Dejar vacío para que lo decida CI-DS"
-              />
-            </div>
-
-            <div className="field">
-              <label htmlFor="run-variables">Variables para todos (opcional)</label>
-              <textarea
-                id="run-variables"
-                className="input mono"
-                rows={4}
-                value={variables}
-                onChange={(evento) => setVariables(evento.target.value)}
-                placeholder={'FECHA=20260804\nPAIS=CL'}
-              />
-              <span className="card-hint">Una por línea, con el formato NOMBRE=valor.</span>
-            </div>
-          </div>
-        </Modal>
+        />
       )}
     </>
   )
-}
-
-/**
- * Lee las variables escritas a mano, una por línea.
- *
- * Se parte en el PRIMER `=` y no en todos: un valor puede contener el signo —una consulta, una ruta—
- * y romperlo ahí lo cortaría a la mitad.
- */
-function leerVariables(texto) {
-  return String(texto ?? '')
-    .split('\n')
-    .map((linea) => linea.trim())
-    .filter(Boolean)
-    .map((linea) => {
-      const corte = linea.indexOf('=')
-      if (corte === -1) return null
-      return { name: linea.slice(0, corte).trim(), value: linea.slice(corte + 1).trim() }
-    })
-    .filter((variable) => variable?.name)
 }

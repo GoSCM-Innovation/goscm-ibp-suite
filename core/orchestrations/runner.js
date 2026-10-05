@@ -11,7 +11,7 @@
 // que además es lo que evita que se arreglen bugs en una copia y no en la otra.
 
 import { randomUUID } from 'node:crypto'
-import { getRedis, globalKey, tenantKey } from '../persistence/redis.js'
+import { getRedis, tenantKey } from '../persistence/redis.js'
 import { getConnectionTarget } from '../connections/index.js'
 import { adaptadorPara } from './adapters.js'
 import { getOrchestration } from './orchestrations.js'
@@ -24,16 +24,21 @@ import {
   resetForResume,
   runOutcome,
 } from './run-state.js'
+import {
+  RUN_STATE_SECONDS,
+  TERMINAL_RUN_STATUSES,
+  desmarcarActiva,
+  errorDeConflicto,
+  esTerminal,
+  getRun,
+  guardarRun,
+  listActiveRuns,
+} from './run-store.js'
 import { isRetryDue, isStepDone, nextStepState } from './step-outcome.js'
 
-/**
- * Cuánto vive el estado de una ejecución.
- *
- * Una semana: lo suficiente para mirar cómo fue la carga de anoche o la del fin de semana largo, y
- * lo bastante poco para que Redis no acumule ejecuciones de hace meses. v9 no le ponía límite y
- * crecían para siempre.
- */
-export const RUN_STATE_SECONDS = 7 * 24 * 3600
+// El estado guardado vive en `run-store.js`; se vuelve a exportar para que quien ya importaba de aquí
+// siga haciéndolo.
+export { RUN_STATE_SECONDS, TERMINAL_RUN_STATUSES, getRun, listActiveRuns }
 
 /**
  * Cuánto dura el cerrojo de una vuelta.
@@ -44,63 +49,14 @@ export const RUN_STATE_SECONDS = 7 * 24 * 3600
  */
 export const RUN_LOCK_SECONDS = 15
 
-const runKey = (clientId, orchestrationId) => tenantKey(clientId, 'orch-run', orchestrationId)
+/** Cuánto se espera entre un intento de cortar y el siguiente, si una vuelta tiene el cerrojo. */
+export const ESPERA_ENTRE_INTENTOS_DE_CORTAR_MS = 500
+
+const esperarMs = (ms) => new Promise((resolver) => { setTimeout(resolver, ms) })
+
 const lockKey = (clientId, orchestrationId) => tenantKey(clientId, 'orch-run-lock', orchestrationId)
 
-/**
- * Índice de las ejecuciones en marcha, para que el reloj sepa a cuáles avanzar.
- *
- * Es global a propósito —no es de ningún cliente— y por eso lleva el cliente dentro de cada entrada.
- * Es de lo que `globalKey` está pensado para guardar: estado de infraestructura, no dato de nadie.
- *
- * La alternativa era que el reloj recorriera todas las orquestaciones de la base y preguntara por
- * cada una si está corriendo, que es lo que hacía v9. Con este índice el trabajo es proporcional a
- * las que de verdad están en marcha, no a las que existen.
- */
-const ACTIVE_RUNS_KEY = globalKey('cids-active-runs')
-
-const entradaActiva = (clientId, orchestrationId) => `${clientId}|${orchestrationId}`
-
-async function marcarActiva(clientId, orchestrationId) {
-  await getRedis().sadd(ACTIVE_RUNS_KEY, entradaActiva(clientId, orchestrationId))
-}
-
-async function desmarcarActiva(clientId, orchestrationId) {
-  await getRedis().srem(ACTIVE_RUNS_KEY, entradaActiva(clientId, orchestrationId))
-}
-
-/** Qué ejecuciones hay en marcha, como `{ clientId, orchestrationId }`. Lo usa el reloj. */
-export async function listActiveRuns() {
-  const entradas = await getRedis().smembers(ACTIVE_RUNS_KEY)
-  return entradas
-    .map((entrada) => {
-      const [clientId, orchestrationId] = String(entrada).split('|')
-      return clientId && orchestrationId ? { clientId, orchestrationId } : null
-    })
-    .filter(Boolean)
-}
-
-/** Estados en los que una ejecución ya no avanza más. */
-export const TERMINAL_RUN_STATUSES = Object.freeze(['success', 'error', 'cancelled'])
-
-const esTerminal = (status) => TERMINAL_RUN_STATUSES.includes(status)
-
 const estadoDe = (run, nodeId) => run.nodes?.[nodeId]
-
-/** El estado de una ejecución, o `null` si no hay ninguna registrada. */
-export async function getRun(clientId, orchestrationId) {
-  const guardado = await getRedis().get(runKey(clientId, orchestrationId))
-  return guardado ?? null
-}
-
-async function guardarRun(clientId, orchestrationId, run) {
-  await getRedis().set(runKey(clientId, orchestrationId), run, { ex: RUN_STATE_SECONDS })
-  // El índice se mantiene aquí y no en cada sitio que cambia el estado: así no se puede olvidar en
-  // uno de ellos y dejar una ejecución que el reloj nunca vuelve a mirar.
-  if (esTerminal(run.status)) await desmarcarActiva(clientId, orchestrationId)
-  else await marcarActiva(clientId, orchestrationId)
-  return run
-}
 
 /**
  * Ejecuta `hacer` con el cerrojo puesto. Devuelve `null` si ya lo tenía otro.
@@ -321,6 +277,9 @@ export async function tickRun(clientId, orchestrationId, ahora = Date.now()) {
   return avanzado ?? getRun(clientId, orchestrationId)
 }
 
+/** El mensaje de v9 cuando ya hay una ejecución en marcha. */
+const YA_HAY_UNA_ACTIVA = 'Ya hay una ejecución activa'
+
 /**
  * Arranca una ejecución desde cero.
  *
@@ -332,18 +291,16 @@ export async function startRun(clientId, orchestrationId, { defaults = {} } = {}
   if (!orquestacion) throw new Error('La orquestación no existe para este cliente.')
 
   const primerNivel = orquestacion.nodes.filter((nodo) => !nodo.parentId)
-  if (primerNivel.length === 0) throw new Error('La orquestación no tiene ningún paso que ejecutar.')
+  if (primerNivel.length === 0) throw new Error('La orquestación no tiene nodos')
 
   const arrancado = await conCerrojo(clientId, orchestrationId, async () => {
     const anterior = await getRun(clientId, orchestrationId)
-    if (anterior && !esTerminal(anterior.status)) {
-      throw new Error('Ya hay una ejecución en curso de esta orquestación.')
-    }
+    if (anterior && !esTerminal(anterior.status)) throw errorDeConflicto(YA_HAY_UNA_ACTIVA)
     const run = { ...initRunState(orquestacion.nodes, new Date(ahora).toISOString()), defaults }
     return guardarRun(clientId, orchestrationId, run)
   })
 
-  if (!arrancado) throw new Error('Ya hay una ejecución en curso de esta orquestación.')
+  if (!arrancado) throw errorDeConflicto(YA_HAY_UNA_ACTIVA)
   return arrancado
 }
 
@@ -356,12 +313,12 @@ export async function resumeRun(clientId, orchestrationId) {
   const retomado = await conCerrojo(clientId, orchestrationId, async () => {
     const run = await getRun(clientId, orchestrationId)
     if (!run) throw new Error('Esta orquestación no tiene ninguna ejecución registrada.')
-    if (!esTerminal(run.status)) throw new Error('Ya hay una ejecución en curso de esta orquestación.')
-    if (run.status === 'success') throw new Error('La ejecución terminó bien: no hay nada que retomar.')
+    if (!esTerminal(run.status)) throw errorDeConflicto(YA_HAY_UNA_ACTIVA)
+    if (run.status === 'success') throw errorDeConflicto('La ejecución terminó bien: no hay nada que retomar.')
     return guardarRun(clientId, orchestrationId, resetForResume(run))
   })
 
-  if (!retomado) throw new Error('Ya hay una ejecución en curso de esta orquestación.')
+  if (!retomado) throw errorDeConflicto(YA_HAY_UNA_ACTIVA)
   return retomado
 }
 
@@ -372,28 +329,40 @@ export async function resumeRun(clientId, orchestrationId) {
  * deshace: cancelar detiene, no revierte. Un paso que no se pueda cancelar no impide cortar los
  * demás — quedarse a medias por uno sería lo peor de los dos mundos.
  *
+ * Con CI-DS, como en v9, los pasos que estaban corriendo quedan «cancelled» y los que todavía no
+ * habían empezado quedan «skipped»: a esos nadie los canceló, simplemente no llegaron a correr. Si
+ * una vuelta tiene el cerrojo, se reintenta 5 veces cada 500 ms antes de rendirse; la espera se
+ * inyecta (`esperar`) para poder probarlo sin esperar de verdad.
+ *
  * En IBP no se le pide nada a SAP (`cancelInSap: false` en su política): se corta solo la
- * orquestación, como en v8.
+ * orquestación, como en v8, y todo lo no terminado queda «cancelled» y a la primera.
  */
-export async function cancelRun(clientId, orchestrationId, ahora = Date.now()) {
+export async function cancelRun(
+  clientId,
+  orchestrationId,
+  ahora = Date.now(),
+  { esperar = esperarMs } = {},
+) {
   const orquestacion = await getOrchestration(clientId, orchestrationId)
   if (!orquestacion) throw new Error('La orquestación no existe para este cliente.')
 
-  const cortado = await conCerrojo(clientId, orchestrationId, async () => {
+  const destino = { clientId, connectionId: orquestacion.connectionId, production: orquestacion.production }
+
+  // No poder resolver el adaptador NO impide cancelar: el estado local se corta igual, que es lo
+  // que quien pulsó cancelar espera. Solo se pierde el aviso a SAP. Se resuelve antes del cerrojo
+  // porque su política dice cuántas veces se intenta tomarlo.
+  let adaptador = null
+  try {
+    adaptador = adaptadorPara((await getConnectionTarget(clientId, orquestacion.connectionId)).kind)
+  } catch {
+    adaptador = null
+  }
+  const politica = politicaDe(adaptador)
+
+  const cortar = async () => {
     const run = await getRun(clientId, orchestrationId)
     if (!run) throw new Error('Esta orquestación no tiene ninguna ejecución registrada.')
     if (esTerminal(run.status)) return run
-
-    const destino = { clientId, connectionId: orquestacion.connectionId, production: orquestacion.production }
-
-    // No poder resolver el adaptador NO impide cancelar: el estado local se corta igual, que es lo
-    // que quien pulsó cancelar espera. Solo se pierde el aviso a SAP.
-    let adaptador = null
-    try {
-      adaptador = adaptadorPara((await getConnectionTarget(clientId, orquestacion.connectionId)).kind)
-    } catch {
-      adaptador = null
-    }
 
     const enMarcha = []
     for (const paso of Object.values(run.nodes)) {
@@ -405,7 +374,7 @@ export async function cancelRun(clientId, orchestrationId, ahora = Date.now()) {
 
     // IBP no avisa a SAP: el orquestador de v8 solo dejaba de preguntar, y los trabajos lanzados
     // terminaban por su cuenta. Ver la política de su adaptador.
-    const avisarASap = adaptador && politicaDe(adaptador).cancelInSap
+    const avisarASap = adaptador && politica.cancelInSap
 
     await Promise.allSettled((avisarASap ? enMarcha : []).map(async (paso) => {
       try {
@@ -415,15 +384,21 @@ export async function cancelRun(clientId, orchestrationId, ahora = Date.now()) {
       }
     }))
 
+    const instante = new Date(ahora).toISOString()
     const cortarPaso = (paso) => {
       if (isStepDone(paso.status)) return paso
-      return { ...paso, status: 'cancelled', finishedAt: new Date(ahora).toISOString() }
+      // Lo que no llegó a arrancar no se «cancela»: se omite, como en v9. Con la política de IBP
+      // todo queda cancelado, como en v8.
+      if (paso.status === 'pending' && politica.cancelSkipsPending) {
+        return { ...paso, status: 'skipped', finishedAt: instante }
+      }
+      return { ...paso, status: 'cancelled', finishedAt: instante }
     }
 
     return guardarRun(clientId, orchestrationId, {
       ...run,
       status: 'cancelled',
-      finishedAt: new Date(ahora).toISOString(),
+      finishedAt: instante,
       nodes: Object.fromEntries(Object.entries(run.nodes).map(([id, paso]) => [id, {
         ...cortarPaso(paso),
         ...(paso.children
@@ -431,8 +406,16 @@ export async function cancelRun(clientId, orchestrationId, ahora = Date.now()) {
           : {}),
       }])),
     })
-  })
+  }
 
-  if (!cortado) throw new Error('La ejecución está avanzando en este momento; prueba de nuevo en unos segundos.')
-  return cortado
+  const intentos = Math.max(1, politica.cancelLockAttempts)
+  for (let intento = 1; intento <= intentos; intento += 1) {
+    const cortado = await conCerrojo(clientId, orchestrationId, cortar)
+    if (cortado) return cortado
+    if (intento < intentos) await esperar(ESPERA_ENTRE_INTENTOS_DE_CORTAR_MS)
+  }
+
+  // v9 aquí devolvía la ejecución SIN cortar, como si hubiera salido bien. Se dice que no se pudo:
+  // quien pulsó cancelar tiene que saber que la carga sigue corriendo.
+  throw new Error('La ejecución está avanzando en este momento; prueba de nuevo en unos segundos.')
 }

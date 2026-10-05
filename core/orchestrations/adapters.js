@@ -27,7 +27,7 @@ const ACUERDO_DE_TRABAJOS = 'SAP_COM_0326'
  */
 export const ESPERA_ANTES_DE_BUSCAR_MS = 2000
 
-const esperar = (ms) => new Promise((resolver) => { setTimeout(resolver, ms) })
+const esperarMs = (ms) => new Promise((resolver) => { setTimeout(resolver, ms) })
 
 /**
  * Las reglas de ejecución de los Application Jobs: las del orquestador de v8 (`useOrchRun.js`), en
@@ -38,8 +38,11 @@ const esperar = (ms) => new Promise((resolver) => { setTimeout(resolver, ms) })
  *     cancelado a su grupo.
  *   - Agotar los reintentos PARA la cadena, igual que «Detener si falla».
  *   - Un paso fallado con «Continuar si falla» no deja la ejecución en error: termina «Completado».
+ *   - Cortar deja TODO lo no terminado «Cancelado» (no hay «omitido») y no reintenta el cerrojo.
  */
 export const POLITICA_IBP = Object.freeze({
+  cancelSkipsPending: false,
+  cancelLockAttempts: 1,
   cancelInSap: false,
   cancelledBlocks: false,
   exhaustedRetryBlocks: true,
@@ -48,23 +51,69 @@ export const POLITICA_IBP = Object.freeze({
   cancelledCodes: Object.freeze([CODIGO_CANCELADO]),
 })
 
+/**
+ * Cuánto espera CI-DS antes del segundo intento de lanzar una tarea. Ver `lanzar` de CI-DS.
+ */
+export const ESPERA_ANTES_DE_RELANZAR_MS = 1500
+
+/**
+ * Las variables globales con que se lanza un paso: las del paso, con el valor de la ejecución encima.
+ *
+ * Como `mergeVariables` de v9: una variable que la ejecución trae SOLO se aplica a los pasos que ya la
+ * tienen declarada, y entonces su valor pisa al del paso. Las que el paso no declara NO se mandan:
+ * lanzar una tarea con una variable que no conoce es pedirle a CI-DS algo que no definió esa tarea.
+ * Sin variables de la ejecución, las del paso se mandan tal cual.
+ */
+export function mergeVariables(delPaso = [], deLaEjecucion = []) {
+  if (!deLaEjecucion || deLaEjecucion.length === 0) return delPaso
+
+  const porNombre = new Map()
+  for (const variable of delPaso) porNombre.set(variable?.name, variable)
+  // `deLaEjecucion` lo manda quien lanza, sin validar: una entrada rota no puede tumbar el lanzamiento.
+  for (const variable of deLaEjecucion) {
+    if (!variable || !porNombre.has(variable.name)) continue
+    porNombre.set(variable.name, { ...porNombre.get(variable.name), value: variable.value })
+  }
+  return [...porNombre.values()]
+}
+
 const adaptadorCids = {
-  /** Lanza una tarea en CI-DS y devuelve el identificador de la ejecución. */
-  async lanzar(destino, nodo, porOmision) {
+  /**
+   * Lanza una tarea en CI-DS y devuelve el identificador de la ejecución.
+   *
+   * Como v9: si CI-DS rechaza el lanzamiento con un error que NO es de sesión, se vuelve a intentar UNA
+   * vez tras 1,5 s. A veces rechaza la primera llamada de un arranque en frío y la segunda entra. Un
+   * error de sesión no se reintenta aquí: la misma sesión no se va a arreglar sola, y `runCidsOperation`
+   * ya se vuelve a identificar una vez por su cuenta.
+   *
+   * Solo se reintenta si la llamada FALLÓ. Una respuesta que llega sin identificador de ejecución no
+   * se reintenta (v9 sí lo hacía): CI-DS contestó, y puede haber arrancado la tarea. Volver a
+   * lanzarla duplicaría una carga.
+   *
+   * `esperar` se inyecta para probarlo sin esperar de verdad.
+   */
+  async lanzar(destino, nodo, porOmision, { esperar = esperarMs } = {}) {
     const datos = nodo.data ?? {}
-    const respuesta = await runCidsOperation({
-      ...destino,
-      operation: 'runTask',
-      params: {
-        taskName: datos.taskName,
-        ...(datos.agentName ?? porOmision.agentName ? { agentName: datos.agentName ?? porOmision.agentName } : {}),
-        ...(datos.profileName ?? porOmision.profileName
-          ? { profileName: datos.profileName ?? porOmision.profileName }
-          : {}),
-        // Las del paso pisan a las generales: lo específico manda sobre lo que se puso para todos.
-        globalVariables: [...(porOmision.globalVariables ?? []), ...(datos.globalVariables ?? [])],
-      },
-    })
+    const params = {
+      taskName: datos.taskName,
+      ...(datos.agentName ?? porOmision.agentName ? { agentName: datos.agentName ?? porOmision.agentName } : {}),
+      ...(datos.profileName ?? porOmision.profileName
+        ? { profileName: datos.profileName ?? porOmision.profileName }
+        : {}),
+      // Como v9: el valor de la ejecución pisa al del paso, y solo en los pasos que ya la declaran.
+      globalVariables: mergeVariables(datos.globalVariables ?? [], porOmision.globalVariables ?? []),
+    }
+
+    const lanzarUnaVez = () => runCidsOperation({ ...destino, operation: 'runTask', params })
+
+    let respuesta
+    try {
+      respuesta = await lanzarUnaVez()
+    } catch (fallo) {
+      if (/session/i.test(fallo?.message ?? '')) throw fallo
+      await esperar(ESPERA_ANTES_DE_RELANZAR_MS)
+      respuesta = await lanzarUnaVez()
+    }
 
     const runId = respuesta?.runId
     if (!runId) throw new Error(`CI-DS no devolvió el identificador de ejecución de "${datos.taskName}".`)
@@ -116,7 +165,7 @@ const adaptadorIbp = {
 
     if (salida?.jobName) return identificadorDeEjecucion(salida.jobName, salida.jobRunCount ?? '')
 
-    await esperar(ESPERA_ANTES_DE_BUSCAR_MS)
+    await esperarMs(ESPERA_ANTES_DE_BUSCAR_MS)
     const ultimo = await readLatestTemplateRun({ ...tenant, templateName: datos.templateName })
     if (!ultimo?.JobName) throw new Error(`No se encontró el job programado para ${datos.templateName}`)
     return identificadorDeEjecucion(ultimo.JobName, ultimo.JobRunCount ?? '')

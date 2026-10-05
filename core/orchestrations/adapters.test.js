@@ -12,7 +12,13 @@ const { getCredentials } = await import('../connections/index.js')
 const { runCidsOperation } = await import('../cids/operations.js')
 const { scheduleJob } = await import('../ibp/job-schedule.js')
 const { cancelJobRun, readJobRun, readLatestTemplateRun } = await import('../ibp/job-runs.js')
-const { ESPERA_ANTES_DE_BUSCAR_MS, POLITICA_IBP, adaptadorPara } = await import('./adapters.js')
+const {
+  ESPERA_ANTES_DE_BUSCAR_MS,
+  ESPERA_ANTES_DE_RELANZAR_MS,
+  POLITICA_IBP,
+  adaptadorPara,
+  mergeVariables,
+} = await import('./adapters.js')
 
 const destino = { clientId: 'c-1', connectionId: 'x-1', production: false }
 
@@ -49,6 +55,134 @@ describe('adaptador de CI-DS', () => {
   it('sin identificador de ejecución no se sigue', async () => {
     runCidsOperation.mockResolvedValue({})
     await expect(cids.lanzar(destino, { data: { taskName: 'T' } }, {})).rejects.toThrow(/no devolvió el identificador/)
+  })
+
+  // Si CI-DS contestó sin identificador pudo haber arrancado la tarea: volver a lanzarla duplicaría una
+  // carga. v9 reintentaba también aquí; esto es a propósito más prudente.
+  it('una respuesta sin identificador NO se reintenta', async () => {
+    runCidsOperation.mockResolvedValue({})
+    const esperar = vi.fn()
+    await expect(cids.lanzar(destino, { data: { taskName: 'T' } }, {}, { esperar })).rejects.toThrow()
+    expect(runCidsOperation).toHaveBeenCalledTimes(1)
+    expect(esperar).not.toHaveBeenCalled()
+  })
+
+  describe('variables globales de la ejecución', () => {
+    const lanzarCon = async (delPaso, deLaEjecucion) => {
+      runCidsOperation.mockResolvedValue({ runId: 'R-1' })
+      await cids.lanzar(
+        destino,
+        { data: { taskName: 'T', globalVariables: delPaso } },
+        { globalVariables: deLaEjecucion },
+      )
+      return runCidsOperation.mock.calls[0][0].params.globalVariables
+    }
+
+    // Como v9: la variable de la ejecución pisa el valor del paso.
+    it('pisan el valor de la variable que el paso ya tiene', async () => {
+      const mandadas = await lanzarCon(
+        [{ name: 'FECHA', value: 'del-paso' }],
+        [{ name: 'FECHA', value: 'de-la-ejecucion' }],
+      )
+      expect(mandadas).toEqual([{ name: 'FECHA', value: 'de-la-ejecucion' }])
+    })
+
+    // Mandarle a una tarea una variable que no declaró es pedirle algo que esa tarea no definió.
+    it('las que el paso no declara NO se mandan', async () => {
+      const mandadas = await lanzarCon(
+        [{ name: 'FECHA', value: 'x' }],
+        [{ name: 'OTRA', value: 'y' }],
+      )
+      expect(mandadas).toEqual([{ name: 'FECHA', value: 'x' }])
+    })
+
+    it('un paso sin variables no recibe ninguna de la ejecución', async () => {
+      expect(await lanzarCon([], [{ name: 'FECHA', value: 'y' }])).toEqual([])
+    })
+
+    it('sin variables de la ejecución, las del paso van tal cual', async () => {
+      expect(await lanzarCon([{ name: 'A', value: '1' }], undefined)).toEqual([{ name: 'A', value: '1' }])
+    })
+  })
+
+  // Como v9 (`launchTask`): CI-DS a veces rechaza la primera llamada en frío y la segunda entra.
+  describe('si CI-DS rechaza el lanzamiento', () => {
+    const paso = { data: { taskName: 'T' } }
+
+    it('reintenta UNA vez tras 1,5 s y, si entra, devuelve el identificador', async () => {
+      runCidsOperation
+        .mockRejectedValueOnce(new Error('SOAP error HTTP 500'))
+        .mockResolvedValueOnce({ runId: 'R-2' })
+      const esperar = vi.fn(async () => {})
+
+      await expect(cids.lanzar(destino, paso, {}, { esperar })).resolves.toBe('R-2')
+
+      expect(runCidsOperation).toHaveBeenCalledTimes(2)
+      expect(esperar).toHaveBeenCalledTimes(1)
+      expect(esperar).toHaveBeenCalledWith(ESPERA_ANTES_DE_RELANZAR_MS)
+      expect(ESPERA_ANTES_DE_RELANZAR_MS).toBe(1500)
+    })
+
+    it('el reintento lleva los mismos parámetros', async () => {
+      runCidsOperation
+        .mockRejectedValueOnce(new Error('boom'))
+        .mockResolvedValueOnce({ runId: 'R-2' })
+      await cids.lanzar(destino, { data: { taskName: 'T', agentName: 'AG' } }, {}, { esperar: async () => {} })
+      expect(runCidsOperation.mock.calls[1][0]).toEqual(runCidsOperation.mock.calls[0][0])
+    })
+
+    it('si falla dos veces, el error es el del segundo intento y no hay un tercero', async () => {
+      runCidsOperation
+        .mockRejectedValueOnce(new Error('primero'))
+        .mockRejectedValueOnce(new Error('segundo'))
+      await expect(cids.lanzar(destino, paso, {}, { esperar: async () => {} })).rejects.toThrow('segundo')
+      expect(runCidsOperation).toHaveBeenCalledTimes(2)
+    })
+
+    it('un error de sesión no se reintenta aquí', async () => {
+      runCidsOperation.mockRejectedValue(new Error('La sesión de CI-DS venció (invalid session)'))
+      const esperar = vi.fn()
+      await expect(cids.lanzar(destino, paso, {}, { esperar })).rejects.toThrow(/session/)
+      expect(runCidsOperation).toHaveBeenCalledTimes(1)
+      expect(esperar).not.toHaveBeenCalled()
+    })
+
+    it('espera de verdad 1,5 s si no se le inyecta la espera', async () => {
+      vi.useFakeTimers()
+      try {
+        runCidsOperation
+          .mockRejectedValueOnce(new Error('boom'))
+          .mockResolvedValueOnce({ runId: 'R-3' })
+        const lanzado = cids.lanzar(destino, paso, {})
+        await vi.advanceTimersByTimeAsync(ESPERA_ANTES_DE_RELANZAR_MS - 1)
+        expect(runCidsOperation).toHaveBeenCalledTimes(1)
+        await vi.advanceTimersByTimeAsync(1)
+        await expect(lanzado).resolves.toBe('R-3')
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+  })
+})
+
+describe('mergeVariables', () => {
+  it('sin variables de la ejecución devuelve las del paso sin tocarlas', () => {
+    const delPaso = [{ name: 'A', value: '1' }]
+    expect(mergeVariables(delPaso, [])).toBe(delPaso)
+    expect(mergeVariables(delPaso, undefined)).toBe(delPaso)
+  })
+
+  it('conserva el orden y los demás campos de la variable del paso', () => {
+    const resultado = mergeVariables(
+      [{ name: 'A', value: '1', tipo: 'texto' }, { name: 'B', value: '2' }],
+      [{ name: 'B', value: 'nuevo' }, { name: 'A', value: 'otro' }],
+    )
+    expect(resultado).toEqual([{ name: 'A', value: 'otro', tipo: 'texto' }, { name: 'B', value: 'nuevo' }])
+  })
+
+  it('una entrada rota de la ejecución no tumba el lanzamiento', () => {
+    expect(mergeVariables([{ name: 'A', value: '1' }], [null, {}, { name: 'A', value: '2' }]))
+      .toEqual([{ name: 'A', value: '2' }])
   })
 })
 
@@ -172,6 +306,9 @@ describe('adaptador de IBP', () => {
       exhaustedRetryBlocks: true,
       assumedFailureFailsRun: false,
       cancelledChildCancelsGroup: true,
+      // Cortar no distingue «omitido» y no reintenta el cerrojo: IBP sigue como estaba.
+      cancelSkipsPending: false,
+      cancelLockAttempts: 1,
     })
   })
 })
