@@ -155,8 +155,8 @@ const ENTIDADES = [
   },
 ]
 
-export default function TechReqDialog({ onClose }) {
-  const [pestana, setPestana] = useState('conexion')
+export default function TechReqDialog({ onClose, pestanaInicial = 'conexion' }) {
+  const [pestana, setPestana] = useState(pestanaInicial)
 
   return (
     <Modal title="Requisitos técnicos" onClose={onClose} wide>
@@ -318,30 +318,34 @@ export default function TechReqDialog({ onClose }) {
 
       {pestana === 'cids' && (
         <>
-          <Titulo>Requisitos Técnicos — CI-DS Tools</Titulo>
+          <Titulo>📋 Requisitos Técnicos — Conexión a SAP CI-DS</Titulo>
           {REQUISITOS_CIDS.map((uno) => (
             <Requisito key={uno.titulo} titulo={uno.titulo} detalle={uno.detalle} />
           ))}
         </>
       )}
 
-      <div style={{
-        borderTop: '1px solid var(--border)',
-        marginTop: 16,
-        paddingTop: 14,
-        display: 'flex',
-        justifyContent: 'flex-end',
-      }}
-      >
-        <a
-          className="btn btn-primary btn-sm"
-          href="/guia-communication-arrangements.png"
-          download="Guia-Communication-Arrangements-SAP-IBP.png"
-          style={{ textDecoration: 'none' }}
+      {/* La guía es la de los acuerdos de comunicación de IBP: no aplica a las pestañas de CI-DS ni a la
+          de IBP Tools, que explican otra cosa. */}
+      {pestana !== 'cids' && pestana !== 'ibp' && (
+        <div style={{
+          borderTop: '1px solid var(--border)',
+          marginTop: 16,
+          paddingTop: 14,
+          display: 'flex',
+          justifyContent: 'flex-end',
+        }}
         >
-          ⬇ Descargar guía de configuración
-        </a>
-      </div>
+          <a
+            className="btn btn-primary btn-sm"
+            href="/guia-communication-arrangements.png"
+            download="Guia-Communication-Arrangements-SAP-IBP.png"
+            style={{ textDecoration: 'none' }}
+          >
+            ⬇ Descargar guía de configuración
+          </a>
+        </div>
+      )}
     </Modal>
   )
 }

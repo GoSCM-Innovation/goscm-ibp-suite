@@ -22,6 +22,9 @@ import ConnectDialog from './data/ConnectDialog.jsx'
 import TechReqDialog from './data/TechReqDialog.jsx'
 import TechLogs from './ui/TechLogs.jsx'
 
+/** La pestaña de Requisitos técnicos que corresponde a cada módulo. Data Tools abre en «Conexión». */
+const PESTANA_DE_MODULO = { cids: 'cids', jobs: 'ibp' }
+
 export default function Shell({ user, modules, theme, onToggleTheme, onSignOut, route, onNavigate, children }) {
   const contratados = new Set(modules)
   const esAdmin = user.isAdmin || user.isPlatformAdmin
@@ -213,7 +216,10 @@ export default function Shell({ user, modules, theme, onToggleTheme, onSignOut, 
       </div>
 
       {abrirConexion && <ConnectDialog onClose={() => verAsistente(false)} />}
-      {abrirRequisitos && <TechReqDialog onClose={() => setAbrirRequisitos(false)} />}
+      {/* Abre en la pestaña del módulo en el que se está: desde CI-DS Tools, la de CI-DS. */}
+      {abrirRequisitos && (
+        <TechReqDialog pestanaInicial={PESTANA_DE_MODULO[moduleId]} onClose={() => setAbrirRequisitos(false)} />
+      )}
     </>
   )
 }

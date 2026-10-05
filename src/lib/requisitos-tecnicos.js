@@ -66,11 +66,12 @@ export const REQUISITOS_CIDS = Object.freeze([
   {
     titulo: '2. Usuario tipo WebService',
     detalle: 'El admin debe crearlo en Administrator → Users con permiso de WebServices. Un usuario '
-      + 'normal de UI no sirve. Su usuario y contraseña se usan al iniciar sesión.',
+      + 'normal de UI no sirve. Su usuario y contraseña los da de alta quien administra la cuenta en '
+      + 'Administración → Conexiones; quedan cifrados en el servidor y no llegan al navegador.',
   },
   {
     titulo: '3. Organización (orgName)',
-    detalle: 'Nombre técnico de la organización CI-DS, sensible a mayúsculas y minúsculas. Aparece en '
+    detalle: 'Nombre técnico de la organización CI-DS, sensible a mayúsculas/minúsculas. Aparece en '
       + 'la consola CI-DS, arriba a la derecha bajo tu usuario.',
   },
   {
@@ -81,18 +82,18 @@ export const REQUISITOS_CIDS = Object.freeze([
   },
   {
     titulo: '5. Autenticación por sesión',
-    detalle: 'La aplicación hace logon con usuario y contraseña y obtiene un SessionId temporal que usa '
-      + 'en cada operación; al cerrar la conexión hace logout. No usa Basic Auth ni OAuth, y la '
-      + 'contraseña no se almacena.',
+    detalle: 'La app hace logon con usuario y contraseña y obtiene un SessionId temporal que usa '
+      + 'en cada operación; lo renueva sola cuando CI-DS lo rechaza. No usa Basic Auth ni OAuth. La '
+      + 'contraseña vive cifrada en el servidor y solo el servidor la descifra.',
   },
   {
     titulo: '6. Repositorios Producción y Sandbox',
-    detalle: 'Cada alta crea automáticamente dos destinos sobre el mismo tenant: uno contra el '
-      + 'repositorio Productivo y otro contra el Sandbox.',
+    detalle: 'Cada alta crea automáticamente dos conexiones sobre el mismo tenant: una contra el '
+      + 'repositorio Productivo y otra contra el Sandbox.',
   },
   {
     titulo: '7. Conectividad de red',
     detalle: 'El endpoint SOAP debe ser alcanzable desde el backend de GoSCM, que actúa como pasarela '
-      + 'segura (token Bearer + protección anti-SSRF, sin seguir redirecciones).',
+      + 'segura (sesión por cookie httpOnly + protección anti-SSRF, sin seguir redirecciones).',
   },
 ])

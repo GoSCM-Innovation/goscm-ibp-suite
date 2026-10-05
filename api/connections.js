@@ -2,9 +2,9 @@
 //
 // Distinto de /api/admin/connections: ese es para configurar y exige ser administrador. Este es
 // para trabajar y lo usa cualquier usuario, así que devuelve **solo lo que hace falta para
-// elegir en un desplegable**: identificador, nombre y si es productivo. La dirección del tenant
-// y su organización no salen — no son secretos, pero tampoco tiene por qué conocerlas quien
-// solo va a mirar el monitor.
+// elegir y para decir contra qué sistema se está trabajando**: identificador, nombre, dirección,
+// organización y si es productivo. Ni la dirección ni la organización son secretos —son lo que la
+// cabecera del sistema de v9 enseñaba—; las credenciales sí lo son y no salen.
 
 import { contractedModules, requireSession } from '../core/auth/guards.js'
 import { listConnections } from '../core/connections/connections.js'
@@ -45,8 +45,10 @@ export default async function handler(req, res) {
       // reconoce— y sin ella la pantalla no puede decir contra QUÉ sistema está corriendo.
       // `etiquetaDeConexion` ya la esperaba y se quedaba muda sin ella. Las credenciales siguen sin
       // salir de aquí: viven cifradas y solo el servidor las descifra.
-      connections: connections.map(({ id, name, baseUrl, isProduction, agreements }) => (
-        { id, name, baseUrl, isProduction, agreements: agreements ?? [] }
+      // La organización (`orgName` de CI-DS) acompaña a la dirección por el mismo motivo: la cabecera
+      // de CI-DS Tools dice «dirección · organización · Producción|Sandbox», como la de v9.
+      connections: connections.map(({ id, name, baseUrl, organization, isProduction, agreements }) => (
+        { id, name, baseUrl, organization: organization ?? null, isProduction, agreements: agreements ?? [] }
       )),
     })
   } catch (error) {

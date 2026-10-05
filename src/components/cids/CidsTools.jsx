@@ -48,8 +48,9 @@ const HERRAMIENTAS = [
   { id: 'tareas', label: 'Projects & Tasks' },
   { id: 'monitor', label: 'Task Monitor' },
   { id: 'orquestaciones', label: 'Orquestaciones' },
-  { id: 'explorador', label: 'Integration Explorer' },
+  // El orden del menú lateral de v9: primero el Mapping Dataflow Generator y después el Integration Explorer.
   { id: 'documentador', label: 'Mapping Dataflow Generator' },
+  { id: 'explorador', label: 'Integration Explorer' },
 ]
 
 // El explorador y el documentador leen los ZIP del equipo: no consultan ningún repositorio, así que
@@ -62,6 +63,10 @@ export default function CidsTools() {
   const [elegido, setElegido] = useState('')
   const [error, setError] = useState('')
   const [herramienta, setHerramienta] = useState('resumen')
+  // El explorador y el documentador se montan la primera vez que se visitan y desde entonces solo se
+  // esconden, como hacía v9 con sus iframes: lo cargado (el ZIP, el análisis, lo generado) sobrevive
+  // a mirar otra pestaña, y un documento a medio generar no se interrumpe.
+  const [montadas, setMontadas] = useState({ explorador: false, documentador: false })
 
   // La búsqueda del monitor vive aquí arriba y no dentro del monitor. Es lo que permite que al
   // lanzar una tarea se salte al monitor ya filtrado por ella —lo que hacía v9— sin que el monitor
@@ -119,15 +124,20 @@ export default function CidsTools() {
   // expresión suelta tenía un caso que reventaba la pantalla entera en el primer pintado.
   const transportadasDelDestino = promotedForTarget(transportadas, destino)
 
-  /** Cambiar de destino suelta la búsqueda del monitor: era del repositorio que se dejó. */
+  /**
+   * Cambiar de destino suelta la búsqueda del monitor: era del repositorio que se dejó. Desde el
+   * tablero global, que no mira ninguno en particular, elegir una pestaña lleva a su Resumen.
+   */
   function elegirDestino(id) {
     setBusqueda('')
     setElegido(id)
+    if (herramienta === 'global') setHerramienta('resumen')
   }
 
   /** Salir del monitor también la suelta, como v9, donde vivía dentro del propio monitor. */
   function elegirHerramienta(id) {
     if (herramienta === 'monitor' && id !== 'monitor') setBusqueda('')
+    if (id in montadas && !montadas[id]) setMontadas((previas) => ({ ...previas, [id]: true }))
     setHerramienta(id)
   }
 
@@ -143,15 +153,13 @@ export default function CidsTools() {
 
   return (
     <div className="module-page">
-      {/* La tira de pestañas de v9: varios repositorios abiertos a la vez. No se enseña donde no
-          significa nada —el tablero global los mira todos y el explorador no mira ninguno—. */}
-      {!SIN_DESTINO.has(herramienta) && (
-        <ConnectionTabs
-          conexiones={comoPestanas}
-          activa={elegido}
-          onElegir={elegirDestino}
-        />
-      )}
+      {/* La tira de pestañas de v9: siempre a la vista, también sobre el tablero global y los dos
+          módulos que leen ZIP, como allí. */}
+      <ConnectionTabs
+        conexiones={comoPestanas}
+        activa={elegido}
+        onElegir={elegirDestino}
+      />
 
       {!SIN_DESTINO.has(herramienta) && <CabeceraDeCids destino={destino} />}
 
@@ -212,15 +220,21 @@ export default function CidsTools() {
           />
         </Suspense>
       )}
-      {herramienta === 'explorador' && (
-        <Suspense fallback={<div className="page-hint">Cargando el explorador…</div>}>
-          <IntegrationExplorer />
-        </Suspense>
+      {/* `display: contents` deja al envoltorio invisible para el diseño cuando se ve; escondido, no
+          pinta nada pero el componente sigue vivo con todo su estado. */}
+      {montadas.explorador && (
+        <div style={{ display: herramienta === 'explorador' ? 'contents' : 'none' }}>
+          <Suspense fallback={<div className="page-hint">Cargando el explorador…</div>}>
+            <IntegrationExplorer />
+          </Suspense>
+        </div>
       )}
-      {herramienta === 'documentador' && (
-        <Suspense fallback={<div className="page-hint">Cargando el documentador…</div>}>
-          <MappingDocumenter />
-        </Suspense>
+      {montadas.documentador && (
+        <div style={{ display: herramienta === 'documentador' ? 'contents' : 'none' }}>
+          <Suspense fallback={<div className="page-hint">Cargando el documentador…</div>}>
+            <MappingDocumenter />
+          </Suspense>
+        </div>
       )}
       {herramienta === 'tareas' && destino && (
         <TaskLauncher
