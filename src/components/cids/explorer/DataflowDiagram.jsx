@@ -5,42 +5,20 @@
 //
 // Se carga aparte del resto (`lazy`) porque pesa, y a este diagrama se entra solo cuando se abre su
 // sección dentro de una integración.
+//
+// Lo demás es de v9: la paleta y los iconos de los doce tipos de nodo, el tooltip de cada caja, la
+// etiqueta cortada de las flechas, el panel de detalle POR TIPO de nodo bajo el lienzo (con su
+// mensaje inicial) y la pantalla completa de verdad, con el panel a la derecha y un divisor que se
+// arrastra para cambiarle el ancho (`openDataflowFullscreen`).
 
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Background, Controls, Handle, Position, ReactFlow } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 
-import Modal from '../../ui/Modal.jsx'
 import { layoutDataflow } from '../../../lib/dataflow-layout.js'
-
-/**
- * El color y el icono de cada tipo de nodo. Paleta sobria, la de v9.
- *
- * Los lectores son azul (de dónde viene), las transformaciones gris oscuro (el trabajo) y los
- * escritores terracota (a dónde va).
- */
-const ESTILO_POR_TIPO = {
-  TableReader: { color: '#5b7a99', icono: '📋' },
-  FileReader: { color: '#6f7a8a', icono: '📄' },
-  TableLoader: { color: '#8a6450', icono: '🎯' },
-  FileLoader: { color: '#8a6450', icono: '💾' },
-  QueryTransform: { color: '#3d4a5c', icono: '🔧' },
-  XMLMapTransform: { color: '#3d4a5c', icono: '🧩' },
-  RowGenerationTransform: { color: '#6b6455', icono: '➕' },
-}
-
-const estiloDe = (tipo) => {
-  const encontrado = Object.entries(ESTILO_POR_TIPO).find(([nombre]) => tipo.includes(nombre))
-  return encontrado ? encontrado[1] : { color: '#4a5568', icono: '⬛' }
-}
-
-/** Lo que se ve debajo del nombre: la tabla, el archivo, o nada. */
-function subtitulo(nodo) {
-  if (nodo.tableName) return nodo.dsName ? `${nodo.dsName} · ${nodo.tableName}` : nodo.tableName
-  if (nodo.fileName) return nodo.fileName
-  if (nodo.rowCount) return `${nodo.rowCount} filas`
-  return ''
-}
+import { cortarEtiqueta, estiloDe, tooltipDelNodo } from '../../../lib/dataflow-style.js'
+import { COLOR_DE_TIPO } from '../../../lib/integration-view.js'
 
 /**
  * Una caja del diagrama.
@@ -50,13 +28,9 @@ function subtitulo(nodo) {
  */
 function NodoDelDataflow({ data }) {
   return (
-    <div className="exp-df-node" style={{ borderLeftColor: data.color }}>
+    <div className="exp-df-node" style={{ background: data.color, borderColor: data.color }} title={data.tooltip}>
       <Handle type="target" position={Position.Left} className="exp-handle" />
-      <div className="exp-df-node-title">
-        <span aria-hidden="true">{data.icono}</span> {data.displayName || data.xmiType}
-      </div>
-      <div className="exp-df-node-type">{data.xmiType}</div>
-      {data.subtitulo && <div className="exp-df-node-sub">{data.subtitulo}</div>}
+      <div className="exp-df-node-title">{data.icono}  {data.displayName || data.xmiType}</div>
       <Handle type="source" position={Position.Right} className="exp-handle" />
     </div>
   )
@@ -64,9 +38,114 @@ function NodoDelDataflow({ data }) {
 
 const nodeTypes = { paso: NodoDelDataflow }
 
-export default function DataflowDiagram({ diagrama, nombre = 'Dataflow' }) {
+const HINT = 'Click en un nodo del diagrama para ver sus detalles'
+
+/** Una línea «Etiqueta: **valor**» del panel de detalle. */
+const Dato = ({ etiqueta, valor }) => (
+  <div className="exp-df-kv">{etiqueta}: <b>{valor || '—'}</b></div>
+)
+
+/**
+ * El panel de detalle de un nodo, según su tipo (`renderDataflowNodeDetail` de v9):
+ * lectores y escritores de tabla o de archivo, el generador de filas, las consultas con sus entradas,
+ * uniones, WHERE y mappings, y «sin detalle» para el resto.
+ */
+export function DetalleDelNodo({ nodo }) {
+  if (!nodo) return <div className="exp-df-detail"><div className="exp-df-hint">{HINT}</div></div>
+
+  const tipo = nodo.xmiType || ''
+  const estilo = estiloDe(tipo)
+  let cuerpo
+
+  if (tipo.includes('TableReader') || tipo.includes('TableLoader')) {
+    cuerpo = (
+      <>
+        <Dato etiqueta="Datastore" valor={nodo.dsName} />
+        <Dato etiqueta="Tabla" valor={nodo.tableName} />
+      </>
+    )
+  } else if (tipo.includes('FileReader') || tipo.includes('FileLoader')) {
+    cuerpo = (
+      <>
+        <Dato etiqueta="Datastore" valor={nodo.dsName} />
+        <Dato etiqueta="Archivo" valor={nodo.fileName} />
+      </>
+    )
+  } else if (tipo.includes('RowGenerationTransform')) {
+    cuerpo = <Dato etiqueta="Filas" valor={nodo.rowCount} />
+  } else if (tipo.includes('QueryTransform') || tipo.includes('XMLMapTransform')) {
+    // Solo los campos con proyección, como la pestaña «Mappings» del detalle de la integración.
+    const mapeados = (nodo.fields ?? []).filter((uno) => (uno.projectionExpression || '').trim())
+    cuerpo = (
+      <>
+        {nodo.inputSchemas?.length > 0 && (
+          <div className="exp-df-inputs">
+            <span className="exp-df-seccion">Inputs:</span>
+            {nodo.inputSchemas.map((uno) => <span className="exp-df-chip" key={uno}>{uno}</span>)}
+          </div>
+        )}
+        {(nodo.joins ?? []).map((una, i) => (
+          <div className="exp-df-join" key={`join-${i}`}>
+            <div className="exp-df-join-titulo">{una.leftSchemaName} ⋈ {una.rightSchemaName}</div>
+            <pre className="exp-expr">{una.expression}</pre>
+          </div>
+        ))}
+        {nodo.filterExpression && (
+          <div className="exp-df-filtro">
+            <div className="exp-df-seccion">WHERE</div>
+            <pre className="exp-expr">{nodo.filterExpression}</pre>
+          </div>
+        )}
+        {mapeados.length > 0 && (
+          <>
+            <div className="exp-df-seccion">Mappings ({mapeados.length})</div>
+            <div className="table-scroll exp-df-fields">
+              <table className="table-dense">
+                <thead>
+                  <tr><th style={{ width: '30%' }}>Campo</th><th>Projection</th></tr>
+                </thead>
+                <tbody>
+                  {mapeados.map((uno, i) => (
+                    <tr key={`${uno.name}-${i}`}>
+                      <td>
+                        <b>{uno.name}</b>
+                        {uno.description && <div className="exp-sub">{uno.description}</div>}
+                      </td>
+                      <td><code className="exp-ops">{uno.projectionExpression}</code></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+      </>
+    )
+  } else {
+    cuerpo = <div className="exp-muted">Sin detalle adicional disponible para este tipo de nodo.</div>
+  }
+
+  return (
+    <div className="exp-df-detail">
+      <div className="exp-df-detail-head">
+        <span className="exp-df-tipo" style={{ background: estilo.color }}>{tipo}</span>
+        <b>{nodo.displayName || ''}</b>
+      </div>
+      {cuerpo}
+    </div>
+  )
+}
+
+/** Cuánto ancho puede tener el panel de la derecha en la pantalla completa: 240 px a 60 % de la ventana. */
+const ANCHO_DEL_PANEL = { minimo: 240, porOmision: 380 }
+const maximoDelPanel = () => Math.max(ANCHO_DEL_PANEL.minimo, Math.floor(window.innerWidth * 0.6))
+
+export default function DataflowDiagram({ diagrama, integracion = null, nombre = 'Dataflow' }) {
   const [elegido, setElegido] = useState(null)
   const [aPantallaCompleta, setAPantallaCompleta] = useState(false)
+  const [anchoDelPanel, setAnchoDelPanel] = useState(ANCHO_DEL_PANEL.porOmision)
+  const [arrastrando, setArrastrando] = useState(false)
+  const cuerpo = useRef(null)
 
   const { nodes, edges } = useMemo(() => {
     const posiciones = layoutDataflow(diagrama.nodes)
@@ -76,7 +155,7 @@ export default function DataflowDiagram({ diagrama, nombre = 'Dataflow' }) {
         id: String(uno.id),
         type: 'paso',
         position: posiciones[i],
-        data: { ...uno, ...estiloDe(uno.xmiType), subtitulo: subtitulo(uno) },
+        data: { ...uno, ...estiloDe(uno.xmiType), tooltip: tooltipDelNodo(uno) },
         // El diagrama es para leer, no para editar: mover una caja no cambia nada en CI-DS.
         draggable: false,
       })),
@@ -84,108 +163,138 @@ export default function DataflowDiagram({ diagrama, nombre = 'Dataflow' }) {
         id: `e-${i}`,
         source: String(una.from),
         target: String(una.to),
-        label: una.schemaName || '',
+        // El texto completo va en el `title`: la etiqueta se corta a 14 caracteres.
+        label: una.schemaName
+          ? <span title={una.schemaName}>{cortarEtiqueta(una.schemaName)}</span>
+          : '',
         animated: false,
+        style: { stroke: '#9db4d0' },
       })),
     }
   }, [diagrama])
 
-  const detalle = elegido === null ? null : diagrama.nodes.find((uno) => uno.id === elegido)
+  const detalle = elegido === null ? null : diagrama.nodes.find((uno) => uno.id === elegido) ?? null
 
   const lienzo = (
-    <div className="exp-df-canvas">
-      <ReactFlow
-        nodes={nodes}
-        edges={edges}
-        nodeTypes={nodeTypes}
-        fitView
-        nodesConnectable={false}
-        proOptions={{ hideAttribution: true }}
-        onNodeClick={(_, nodo) => setElegido(Number(nodo.id))}
-        onPaneClick={() => setElegido(null)}
-      >
-        <Background gap={20} />
-        <Controls showInteractive={false} />
-      </ReactFlow>
-    </div>
+    <ReactFlow
+      nodes={nodes}
+      edges={edges}
+      nodeTypes={nodeTypes}
+      fitView
+      nodesConnectable={false}
+      proOptions={{ hideAttribution: true }}
+      onNodeClick={(_, nodo) => setElegido(Number(nodo.id))}
+      onPaneClick={() => setElegido(null)}
+    >
+      <Background gap={20} />
+      <Controls showInteractive={false} />
+    </ReactFlow>
   )
 
-  // El detalle del nodo elegido. Se arma aparte porque va tanto en la sección como en el diálogo.
-  const detalleDelNodo = detalle && (
-    <div className="exp-df-detail">
-      <div className="exp-df-detail-head">
-        <b>{detalle.displayName || detalle.xmiType}</b>
-        <span className="exp-df-node-type">{detalle.xmiType}</span>
-      </div>
+  // Esc cierra la pantalla completa, y mientras está abierta la página de atrás no se desplaza.
+  useEffect(() => {
+    if (!aPantallaCompleta) return undefined
 
-      {detalle.inputSchemas?.length > 0 && (
-        <div className="exp-df-detail-row">
-          <span className="exp-k">Entradas</span> {detalle.inputSchemas.join(', ')}
-        </div>
-      )}
+    const escape = (evento) => { if (evento.key === 'Escape') setAPantallaCompleta(false) }
+    const desbordeAnterior = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    document.addEventListener('keydown', escape)
+    return () => {
+      document.body.style.overflow = desbordeAnterior
+      document.removeEventListener('keydown', escape)
+    }
+  }, [aPantallaCompleta])
 
-      {detalle.joins?.map((una, i) => (
-        <div className="exp-df-detail-row" key={`join-${i}`}>
-          <span className="exp-k">Unión</span> {una.leftSchemaName} ↔ {una.rightSchemaName}
-          <pre className="exp-expr">{una.expression}</pre>
-        </div>
-      ))}
+  // El divisor entre el lienzo y el panel: se arrastra con el ratón o con el dedo.
+  const mover = useCallback((clientX) => {
+    const caja = cuerpo.current?.getBoundingClientRect()
+    if (!caja) return
+    const ancho = caja.right - clientX
+    setAnchoDelPanel(Math.min(maximoDelPanel(), Math.max(ANCHO_DEL_PANEL.minimo, Math.round(ancho))))
+  }, [])
 
-      {detalle.filterExpression && (
-        <div className="exp-df-detail-row">
-          <span className="exp-k">Filtro</span>
-          <pre className="exp-expr">{detalle.filterExpression}</pre>
-        </div>
-      )}
+  useEffect(() => {
+    if (!arrastrando) return undefined
 
-      {detalle.fields?.length > 0 && (
-        <div className="table-scroll exp-df-fields">
-          <table className="table-dense">
-            <thead>
-              <tr><th>Campo</th><th>Expresión</th></tr>
-            </thead>
-            <tbody>
-              {detalle.fields.map((uno, i) => (
-                <tr key={`${uno.name}-${i}`}>
-                  <td>
-                    {uno.name}
-                    {uno.description && <div className="exp-sub">{uno.description}</div>}
-                  </td>
-                  <td><code>{uno.projectionExpression || '—'}</code></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
-  )
+    const alMover = (evento) => mover(evento.clientX)
+    const alSoltar = () => setArrastrando(false)
+    document.body.style.cursor = 'col-resize'
+    document.addEventListener('pointermove', alMover)
+    document.addEventListener('pointerup', alSoltar)
+    document.addEventListener('pointercancel', alSoltar)
+    return () => {
+      document.body.style.cursor = ''
+      document.removeEventListener('pointermove', alMover)
+      document.removeEventListener('pointerup', alSoltar)
+      document.removeEventListener('pointercancel', alSoltar)
+    }
+  }, [arrastrando, mover])
+
+  const tipo = integracion?.tipoIntegracion || 'MD'
 
   return (
     <>
       <div className="exp-df-wrap">
         <div className="exp-df-canvas-wrap">
-          {lienzo}
+          <div className="exp-df-canvas">{lienzo}</div>
           <button
             type="button"
             className="btn btn-sm exp-df-fs"
             onClick={() => setAPantallaCompleta(true)}
-            title="Ver en grande"
+            title="Pantalla completa"
           >
             ⛶
           </button>
         </div>
-        {detalleDelNodo}
+        <DetalleDelNodo nodo={detalle} />
       </div>
 
-      {/* El diálogo monta SU PROPIO lienzo, no mueve el de la sección: la librería mide el
-          contenedor al montarse, y arrastrar el mismo nodo del DOM a otro sitio lo deja sin medir
-          y sin dibujar ninguna flecha. */}
-      {aPantallaCompleta && (
-        <Modal title={nombre} subtitle={`${diagrama.nodes.length} pasos`} onClose={() => setAPantallaCompleta(false)} wide>
-          <div className="exp-df-grande">{lienzo}</div>
-          {detalleDelNodo}
-        </Modal>
+      {/* La pantalla completa monta SU PROPIO lienzo, no mueve el de la sección: la librería mide el
+          contenedor al montarse, y arrastrar el mismo nodo del DOM a otro sitio lo deja sin medir y
+          sin dibujar ninguna flecha. Va en un portal para quedar por encima de todo, como el modal
+          de v9 (`#ex-df-fs-modal`, que ocupaba la ventana entera). */}
+      {aPantallaCompleta && createPortal(
+        <div className="exp-df-fs-modal" role="dialog" aria-label={nombre}>
+          <div className="exp-df-fs-cabecera">
+            <span className="exp-df-fs-titulo">
+              {integracion
+                ? (
+                  <>
+                    <span className="exp-type" style={{ background: COLOR_DE_TIPO[tipo] || 'var(--text3)' }}>{tipo}</span>
+                    {' '}{integracion.jobName || ''}
+                    {integracion.dataflowName && integracion.dataflowName !== integracion.jobName && (
+                      <span className="exp-sub"> ↳ {integracion.dataflowName}</span>
+                    )}
+                  </>
+                )
+                : nombre}
+            </span>
+            <button
+              type="button"
+              className="btn btn-sm"
+              onClick={() => setAPantallaCompleta(false)}
+              title="Cerrar (Esc)"
+              aria-label="Cerrar (Esc)"
+            >
+              ✕
+            </button>
+          </div>
+
+          <div className="exp-df-fs-cuerpo" ref={cuerpo}>
+            <div className="exp-df-fs-lienzo">{lienzo}</div>
+            <div
+              className={`exp-df-fs-divisor${arrastrando ? ' arrastrando' : ''}`}
+              role="separator"
+              aria-orientation="vertical"
+              title="Arrastra para ajustar el ancho del panel"
+              onPointerDown={(evento) => { evento.preventDefault(); setArrastrando(true) }}
+            />
+            <div className="exp-df-fs-panel" style={{ width: anchoDelPanel }}>
+              <DetalleDelNodo nodo={detalle} />
+            </div>
+          </div>
+        </div>,
+        document.body,
       )}
     </>
   )
