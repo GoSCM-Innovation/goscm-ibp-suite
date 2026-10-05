@@ -592,7 +592,7 @@ export function parseDataflow(dataflow, porIndice, formatos, datastoreOrigenPorO
       dstDS: destino.targetDS,
       dstTable: destino.targetTable,
       dstField: campo.name,
-      dstDesc: campo.desc || DESCRIPCION_POR_OMISION[campo.name] || '',
+      dstDesc: campo.desc || DESCRIPCION_POR_OMISION[campo.name] || DESCRIPCION_POR_OMISION[(campo.name || '').toUpperCase()] || '',
       ops: origen.ops,
     })
   }

@@ -446,7 +446,7 @@ export {
 
 export { RES_CONS_TOP, readResourceStats, resourceRoot } from './resource-stats.js'
 
-export { formatIbpExample, readSampleRow } from './sample-row.js'
+export { formatIbpExample, readFieldExample, readSampleRow } from './sample-row.js'
 
 export { resolveTargetEntity, selectFieldsFor } from './target-entity.js'
 

@@ -106,7 +106,7 @@ const celda = (v, s) => ({ v: v ?? '', s })
 
 /** Las columnas de la hoja índice cambian según de dónde salió el documento. */
 const COLUMNAS_DEL_INDICE = {
-  jobs: ['Job de IBP', 'Paso', 'Tipo de paso', 'Grupo'],
+  jobs: ['Job IBP', 'Step', 'Tipo de paso', 'Grupo'],
   zip: ['Proceso', 'Grupo'],
 }
 
@@ -127,14 +127,14 @@ export function buildParamSheet(filas, modoJobs) {
   const columnas = modoJobs ? COLUMNAS_DEL_INDICE.jobs : COLUMNAS_DEL_INDICE.zip
 
   hoja.addRow([
-    celda('Dato', XF.PRM_HDR),
-    celda('Tipo de integración', XF.PRM_HDR),
+    celda('Dato - Click Aquí para más detalle', XF.PRM_HDR),
+    celda('Tipo de Integración', XF.PRM_HDR),
     ...columnas.map((una) => celda(una, XF.PRM_HDR)),
-    celda('Tarea CI-DS', XF.PRM_HDR),
-    celda('Descripción de la tarea', XF.PRM_HDR),
-    celda('Dataflow CI-DS', XF.PRM_HDR),
-    celda('Sistema origen', XF.PRM_HDR),
-    celda('Sistema destino', XF.PRM_HDR),
+    celda('Task CI-DS', XF.PRM_HDR),
+    celda('Descripción de la task', XF.PRM_HDR),
+    celda('Dataflow CIDS', XF.PRM_HDR),
+    celda('Sistema fuente', XF.PRM_HDR),
+    celda('Sistema Destino', XF.PRM_HDR),
   ], 18)
 
   filas.forEach((fila, i) => {
@@ -179,13 +179,13 @@ export function buildIntegrationSheet(integracion) {
   hoja.addRow([
     celda('<--', XF.BACK_BTN),
     celda(' #', XF.T1_HDR),
-    celda('Campo destino', XF.T1_HDR),
-    celda('Descripción', XF.T1_HDR),
-    celda('Tabla origen', XF.T1_HDR),
-    celda('Campo origen', XF.T1_HDR),
-    celda('Mapeo', XF.T1_HDR),
-    celda('Tipo de dato IBP', XF.T1_HDR),
-    celda('Ejemplo IBP', XF.T1_HDR),
+    celda('Campo Destino', XF.T1_HDR),
+    celda('Descripción Campo Destino', XF.T1_HDR),
+    celda('Tabla Origen', XF.T1_HDR),
+    celda('Campo Origen', XF.T1_HDR),
+    celda('Mapping', XF.T1_HDR),
+    celda('Tipo de dato (IBP)', XF.T1_HDR),
+    celda('Ejemplo (IBP)', XF.T1_HDR),
   ], 22)
 
   if (integracion.mappings.length === 0) {
@@ -239,7 +239,7 @@ export function buildIntegrationSheet(integracion) {
   }
 
   tabla(
-    ['Tabla', 'Filtro', 'Descripción'],
+    ['Tabla', 'Filtro', 'Descripción de filtro'],
     XF.T2_DATA,
     'Sin filtros',
     integracion.filters.map((uno) => [
@@ -250,14 +250,14 @@ export function buildIntegrationSheet(integracion) {
   )
 
   tabla(
-    ['Parámetro global', 'Valor'],
+    ['Parámetro Global', 'Valor'],
     XF.T34_DATA,
-    'Sin parámetros globales',
+    'Sin variables',
     (integracion.variables ?? []).map((uno) => [uno.name || '', uno.value || '']),
   )
 
   tabla(
-    ['Función de lookup', 'Transformación'],
+    ['Función Lookup', 'Transform'],
     XF.T34_DATA,
     'Sin lookups',
     integracion.lookups.map((uno) => [uno.func || '', uno.transform || '']),

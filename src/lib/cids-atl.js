@@ -152,7 +152,7 @@ export function parseATL(texto) {
     const plan = planes[nombre] ?? { displayName: '', parallel: false, dataflows: [] }
     return {
       name: nombre,
-      displayName: plan.displayName || `Grupo ${i + 1}`,
+      displayName: plan.displayName || `Group ${i + 1}`, // v9 lo escribe en inglés
       parallel: plan.parallel,
       dataflows: plan.dataflows,
     }
@@ -227,4 +227,36 @@ export function matchATLtoIntegrations(atl, integraciones) {
   }
 
   return { ordenadas, ambiguas }
+}
+
+/**
+ * Pone el proceso y el grupo del ATL en las integraciones SIN moverlas de sitio.
+ *
+ * Es lo que hace v9 en el modo de proyecto: el ATL solo rellena «Proceso» y «Grupo»; el orden de las
+ * filas y de las hojas sigue siendo el de lectura de los ZIP. Y con varios ATL se ACUMULA: un ATL
+ * posterior no borra lo que pusieron los anteriores. Lo que ningún ATL menciona queda con el grupo
+ * vacío —no con el texto «Sin grupo ATL»—.
+ *
+ * `matchATLtoIntegrations` en cambio reordena y marca lo no mencionado; eso lo necesita el modo de
+ * trabajos de IBP, donde el orden del ATL decide el de los pasos. Aquí solo se le toma el emparejado.
+ */
+export function aplicarAtlSinReordenar(atl, integraciones) {
+  const { ordenadas, ambiguas } = matchATLtoIntegrations(atl, integraciones)
+  const emparejadas = new Map(
+    ordenadas.filter((una) => una.atlGroup !== SIN_GRUPO).map((una) => [una.sheetName, una]),
+  )
+
+  const resultado = integraciones.map((una) => {
+    const puesta = emparejadas.get(una.sheetName)
+    if (!puesta) return una
+    return {
+      ...una,
+      atlGroup: puesta.atlGroup,
+      atlSession: puesta.atlSession,
+      atlParallel: puesta.atlParallel,
+      atlOrder: puesta.atlOrder,
+    }
+  })
+
+  return { integraciones: resultado, ambiguas }
 }

@@ -339,9 +339,15 @@ export async function analyzeZips(archivos) {
       const nombres = Object.keys(zip.files).filter((uno) => uno.endsWith('.xml') && !uno.includes('/'))
 
       for (const nombre of nombres) {
-        const xml = await zip.file(nombre).async('string')
-        for (const integracion of parseIntegration(xml, porArchivo[nombre])) {
-          integraciones.push({ ...integracion, _zipName: archivo.name, _idx: integraciones.length })
+        // Un XML malo se salta POR SÍ SOLO, como v9: los demás del mismo ZIP se leen igual. Antes un
+        // XML roto descartaba todo el ZIP.
+        try {
+          const xml = await zip.file(nombre).async('string')
+          for (const integracion of parseIntegration(xml, porArchivo[nombre])) {
+            integraciones.push({ ...integracion, _zipName: archivo.name, _idx: integraciones.length })
+          }
+        } catch (error) {
+          errores.push({ archivo: `${archivo.name} › ${nombre}`, mensaje: error?.message || String(error) })
         }
       }
     } catch (error) {

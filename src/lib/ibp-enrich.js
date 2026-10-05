@@ -33,16 +33,31 @@ export const nuevaCache = (descs = {}) => ({
   // Se siembra con las etiquetas del catálogo: son la mejor descripción que hay para un campo
   // que el export de CI-DS dejó sin describir.
   descripciones: new Map(Object.entries(descs).map(([campo, valor]) => [campo.toUpperCase(), valor])),
+  // Los campos a los que ya se les hizo la consulta dirigida: una sola vez por campo en toda la
+  // corrida, haya salido o no. Sin esto, un campo vacío en todo el tenant se pediría en cada tabla.
+  intentados: new Set(),
   avisos: [],
 })
+
+/** Los tamaños de muestra, en orden: 50 y, si aún faltan campos, 200. Los de v9. */
+const TAMANOS_DE_MUESTRA = [50, 200]
 
 /**
  * Completa los mapeos de una integración.
  *
  * Devuelve la integración con sus mapeos enriquecidos, sin tocar la original: quien la llame decide
  * si se queda con el resultado.
+ *
+ * El ejemplo de cada campo sale así (portado de `enrichMappingsFromIbp` de v9):
+ *   1. Una muestra de 50 filas de la entidad, de la que se toma por campo el primer valor no vacío.
+ *   2. Si aún faltan campos, la misma con 200 filas.
+ *   3. Solo en dato maestro, y solo para los campos de TEXTO que siguen vacíos: una consulta
+ *      dirigida con `CAMPO ne ''` que trae un valor no vacío de ese campo.
+ *   Lo que ninguno consigue queda en blanco.
  */
-export async function enrichIntegration(integracion, catalogo, cache, pedirFila, planAreaElegida = '') {
+export async function enrichIntegration(
+  integracion, catalogo, cache, pedirFila, planAreaElegida = '', pedirCampo = null,
+) {
   const destino = resolveTargetEntity(integracion, catalogo.entitySets, planAreaElegida)
   const campos = [...new Set(integracion.mappings.map((uno) => uno.dstField).filter(Boolean))]
 
@@ -55,25 +70,52 @@ export async function enrichIntegration(integracion, catalogo, cache, pedirFila,
     if (faltan.length > 0) {
       const selectFields = selectFieldsFor(destino, campos, catalogo.entityProps)
       const puedeConsultar = destino.service !== 'PLANNING_DATA_API_SRV' || selectFields.length > 0
-      const clave = `${destino.service}|${destino.entitySet}|${destino.planArea}|${selectFields.join(',')}`
 
       if (!puedeConsultar) {
         cache.avisos.push(`${integracion.jobName}: ${destino.entitySet} no tiene ninguno de estos campos.`)
-      } else if (!cache.porEntidad.has(clave)) {
-        const { row, detail } = await pedirFila({ ...destino, selectFields })
-        cache.porEntidad.set(clave, row)
+      } else {
+        // Los campos que esta entidad tiene que cubrir: en planning, solo los que ella tiene.
+        const necesarios = destino.service === 'PLANNING_DATA_API_SRV' ? selectFields : campos
 
-        if (row) {
-          for (const [campo, valor] of Object.entries(row)) {
-            const formateado = formatIbpExample(valor)
-            if (formateado !== '' && !cache.porCampo.has(campo)) cache.porCampo.set(campo, formateado)
+        for (const top of TAMANOS_DE_MUESTRA) {
+          const clave = `${destino.service}|${destino.entitySet}|${destino.planArea}|${selectFields.join(',')}|${top}`
+
+          if (!cache.porEntidad.has(clave)) {
+            const { row, detail } = await pedirFila({ ...destino, selectFields, top })
+            cache.porEntidad.set(clave, row)
+
+            if (row) {
+              for (const [campo, valor] of Object.entries(row)) {
+                const formateado = formatIbpExample(valor)
+                if (formateado !== '' && !cache.porCampo.has(campo)) cache.porCampo.set(campo, formateado)
+              }
+            } else {
+              cache.avisos.push(`${integracion.jobName}: ${destino.entitySet} — ${detail} (top ${top})`)
+            }
           }
-        } else {
-          cache.avisos.push(`${integracion.jobName}: ${destino.entitySet} — ${detail}`)
+
+          // Lo ya visto tiene prioridad: la muestra de 200 solo completa lo que la de 50 no tenía.
+          const muestra = cache.porEntidad.get(clave)
+          if (muestra) fila = { ...muestra, ...(fila ?? {}) }
+
+          // Si ya no falta ningún campo, no se escala.
+          if (necesarios.every((uno) => cache.porCampo.has(uno.toUpperCase()))) break
         }
       }
+    }
 
-      if (puedeConsultar) fila = cache.porEntidad.get(clave) ?? null
+    // El respaldo dirigido, solo en dato maestro y solo para campos de texto.
+    if (pedirCampo && destino.service === 'MASTER_DATA_API_SRV') {
+      for (const campo of campos) {
+        const clave = campo.toUpperCase()
+        if (cache.porCampo.has(clave) || cache.intentados.has(clave)) continue
+        if (!String(catalogo.types[clave] || '').startsWith('NVARCHAR')) continue
+
+        cache.intentados.add(clave)
+        const valor = await pedirCampo({ entitySet: destino.entitySet, planArea: destino.planArea, field: campo })
+        const formateado = formatIbpExample(valor)
+        if (formateado !== '') cache.porCampo.set(clave, formateado)
+      }
     }
   } else if ((integracion.tipoIntegracion || '').toUpperCase() !== 'FILE') {
     const area = planAreaElegida || integracion.planArea || '(ninguna)'
@@ -138,14 +180,14 @@ export function backfillFromCache(entradas, cache) {
  * Las consultas van una tras otra a propósito: cada una calienta el caché para la siguiente, y
  * lanzarlas a la vez haría que varias preguntaran por lo mismo antes de que ninguna respondiera.
  */
-export async function enrichAll(entradas, catalogo, pedirFila, planAreaElegida = '') {
+export async function enrichAll(entradas, catalogo, pedirFila, planAreaElegida = '', pedirCampo = null) {
   const cache = nuevaCache(catalogo.descs)
 
   const enriquecidas = []
   for (const entrada of entradas) {
     enriquecidas.push({
       ...entrada,
-      parsed: await enrichIntegration(entrada.parsed, catalogo, cache, pedirFila, planAreaElegida),
+      parsed: await enrichIntegration(entrada.parsed, catalogo, cache, pedirFila, planAreaElegida, pedirCampo),
     })
   }
 

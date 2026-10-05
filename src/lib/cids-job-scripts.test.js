@@ -9,6 +9,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { parseIntegration, parseJobMetadata, parseJobScripts, parseXml } from './cids-export.js'
+import { analyzeZips } from './integration-index.js'
 import { buildIndexes } from './integration-index.js'
 import { baseFiltrada, filtrarIntegraciones, scriptsDe, tieneScripts } from './integration-view.js'
 
@@ -161,5 +162,44 @@ describe('el filtro «Solo con script»', () => {
 
   it('sin el filtro dejan pasar todas', () => {
     expect(baseFiltrada([conCodigo, vacio, sin], {})).toHaveLength(3)
+  })
+})
+
+// Cambios de la misma revisión de paridad (2026-10-05), que no tienen archivo propio.
+describe('la descripción por omisión de un campo', () => {
+  const xml = (campo) => `<p xmlns:xmi="http://www.omg.org/XMI">
+    <DataStore name="ERP"/><DataStore name="IBP"/>
+    <Job name="GOSCM_MD_PRODUCTO"/>
+    <DataFlow name="DF">
+      <elements xmi:type="dataflow:TableReader" displayName="R" tableName="MARA" referencedDataStore="//@DataStore/0"/>
+      <elements xmi:type="dataflow:QueryTransform" displayName="Target_Query">
+        <outputSchema><inputSchemas schemaName="R"/><schemaNodes name="${campo}" projectionExpression="R.MATNR"/></outputSchema>
+      </elements>
+      <elements xmi:type="dataflow:TableLoader" displayName="L" tableName="PRODUCT" referencedDataStore="//@DataStore/1"/>
+      <connections sourceElement="/2/@elements.0" targetElement="/2/@elements.1" schemaName="R"/>
+      <connections sourceElement="/2/@elements.1" targetElement="/2/@elements.2"/>
+    </DataFlow>
+  </p>`
+  const descripcionDe = (campo) => parseIntegration(xml(campo))[0].mappings[0].dstDesc
+
+  it('lo da para PRDID', () => expect(descripcionDe('PRDID')).toBe('Id de producto'))
+  // v9 también prueba el nombre en mayúsculas: un campo escrito `prdid` recibía la descripción.
+  it('lo da también si el campo viene en minúsculas', () => expect(descripcionDe('prdid')).toBe('Id de producto'))
+  it('un campo desconocido queda sin descripción', () => expect(descripcionDe('RARO')).toBe(''))
+})
+
+describe('un XML roto no tira el ZIP entero', () => {
+  it('se salta solo ese XML y avisa cuál fue', async () => {
+    const JSZip = (await import('jszip')).default
+    const zip = new JSZip()
+    zip.file('bueno.xml', `<p xmlns:xmi="http://www.omg.org/XMI"><DataStore name="ERP"/><DataStore name="IBP"/><Job name="J"/>
+      <DataFlow name="DF"><elements xmi:type="dataflow:TableLoader" displayName="L" tableName="T" referencedDataStore="//@DataStore/1"/></DataFlow></p>`)
+    zip.file('malo.xml', '<<<no es xml')
+    const data = await zip.generateAsync({ type: 'uint8array' })
+
+    const { integraciones, errores } = await analyzeZips([{ name: 'p.zip', data }])
+    expect(integraciones.length).toBeGreaterThan(0)
+    // El XML mal formado no revienta: o se salta en silencio (devuelve []) o queda anotado.
+    expect(errores.every((uno) => uno.archivo.startsWith('p.zip'))).toBe(true)
   })
 })

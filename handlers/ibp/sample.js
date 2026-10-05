@@ -1,4 +1,7 @@
-// POST /api/ibp/sample — una fila real de una entidad, para el ejemplo de la documentación.
+// POST /api/ibp/sample — una muestra real de una entidad, para el ejemplo de la documentación.
+//
+// Con `field` es la CONSULTA DIRIGIDA de v9: un valor no vacío de ese campo de dato maestro.
+// Sin `field`, una muestra de `top` filas (50 por omisión, 200 como máximo) juntada en un compuesto.
 //
 // Va por POST y no por GET porque la lista de campos del `$select` puede ser larga y no tiene por
 // qué ir en la URL.
@@ -9,7 +12,7 @@
 import { requireModule } from '../../core/auth/guards.js'
 import { getAnyCredentials, getConnectionTarget } from '../../core/connections/index.js'
 import { explicarFallo } from '../../core/ibp/explicar-fallo.js'
-import { readSampleRow } from '../../core/ibp/index.js'
+import { readFieldExample, readSampleRow } from '../../core/ibp/index.js'
 
 /**
  * Los acuerdos que habilitan los servicios de datos, en orden de preferencia.
@@ -26,9 +29,9 @@ export default async function handler(req, res) {
   const session = await requireModule(req, res, 'cids')
   if (!session) return
 
-  const { connectionId, service, entitySet, planArea, selectFields = [] } = req.body ?? {}
+  const { connectionId, service, entitySet, planArea, selectFields = [], top, field } = req.body ?? {}
   if (!connectionId) return res.status(400).json({ error: 'Falta la conexión.' })
-  if (!service || !entitySet || !planArea) {
+  if (!entitySet || !planArea || (!field && !service)) {
     return res.status(400).json({ error: 'Falta el servicio, la entidad o el área de planificación.' })
   }
 
@@ -37,6 +40,14 @@ export default async function handler(req, res) {
     if (conexion.kind !== 'ibp') return res.status(400).json({ error: 'Esa conexión no es de IBP.' })
 
     const credentials = await getAnyCredentials(session.clientId, connectionId, ACUERDOS)
+
+    if (field) {
+      const { value } = await readFieldExample({
+        baseUrl: conexion.baseUrl, credentials, entitySet, planArea, field: String(field),
+      })
+      return res.status(200).json({ value })
+    }
+
     const { row, detail } = await readSampleRow({
       baseUrl: conexion.baseUrl,
       credentials,
@@ -44,6 +55,7 @@ export default async function handler(req, res) {
       entitySet,
       planArea,
       selectFields: Array.isArray(selectFields) ? selectFields : [],
+      top,
     })
 
     return res.status(200).json({ row, detail })

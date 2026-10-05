@@ -87,8 +87,22 @@ como un descuido.
 - **Editor móvil.** v9 tenía un asistente por pasos (5 archivos). Aquí es una lista en orden, y ante un
   grafo con ramas o grupos **se declara incapaz** en vez de aplanarlo. v9 lo aplanaba en silencio, que
   es como se pierde una rama.
-- **Documentador de mapeos: tres modos → dos.** v9 tenía «ZIP», «ZIP+Jobs» y «Jobs»; los dos últimos
-  hacían lo mismo y se diferenciaban solo en qué archivo pedían primero.
+- **Documentador de mapeos: tres modos → dos. ESTO ERA FALSO Y SE CORRIGE (2026-10-05).** El texto
+  decía que «ZIP+Jobs» y «Jobs» «hacían lo mismo». No es cierto: «ZIP+Jobs» no pide elegir ningún job ni
+  subir ATL; baja las plantillas y los `P_TSKID` de TODO el tenant y empareja cada tarea por `P_TSKID`.
+  El usuario pidió el 2026-10-05 que el documentador sea idéntico a v9, así que el tercer modo vuelve
+  (fase 4 de la revisión). Hasta entonces sigue habiendo dos.
+- **Clasificación KF/MD/FILE por tabla destino.** v9 la decide solo por el nombre del trabajo
+  (`_KF_`, `_MD_`/`_DM_`, `_FILE_`). Aquí se mira primero la tabla destino (`SOPDD_STAGING_KFTAB_*` → KF,
+  `SOPMD_STAG_*` → MD) y luego el nombre: un trabajo mal nombrado se clasifica bien. Cambia la columna
+  «Tipo de Integración» y a qué entidad de IBP se le pide el ejemplo. Mejora deliberada; está en
+  `cids-export.js` con su comentario.
+- **Trabajo de IBP de un solo paso.** v9 exigía el nombre de la secuencia para leer el `P_TSKID` y por
+  eso perdía las tareas de un trabajo sin secuencia. `core/ibp/app-jobs.js` (`readTaskIds`) las indexa
+  con la secuencia vacía.
+- **Paginación de los Application Jobs.** v9 pide `$top=50000` y cae a `$skip`; el servidor de aquí
+  sigue `__next` hasta 20 páginas. Misma lectura, otra forma; en un tenant con muchísimas secuencias
+  podría cortar antes.
 - **Importar orquestaciones: sin aviso de tenant cruzado.** v9 guardaba en el archivo de qué repositorio
   salió, y avisaba si no coincidía con el actual. Aquí el archivo **no lleva el origen ni los
   identificadores**, a propósito: así una exportación de pruebas no puede apuntar en silencio al

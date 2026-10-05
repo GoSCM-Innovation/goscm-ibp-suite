@@ -14,11 +14,13 @@
 
 import { useEffect, useMemo, useState } from 'react'
 
-import { matchATLtoIntegrations, parseATL } from '../../../lib/cids-atl.js'
+import { aplicarAtlSinReordenar, parseATL } from '../../../lib/cids-atl.js'
 import { buildWorkbook, scanForDocument } from '../../../lib/cids-doc.js'
 import { enrichAll } from '../../../lib/ibp-enrich.js'
 import { ordenarPorJobs } from '../../../lib/ibp-jobs-order.js'
-import { fetchCatalog, fetchJobSteps, fetchSampleRow, nombreDeJob, plantillaDe } from '../../../lib/ibp.js'
+import {
+  fetchCatalog, fetchFieldExample, fetchJobSteps, fetchSampleRow, nombreDeJob, plantillaDe,
+} from '../../../lib/ibp.js'
 import FileDropzone from '../../ui/FileDropzone.jsx'
 import IbpPanel from './IbpPanel.jsx'
 
@@ -34,8 +36,8 @@ function descargar(buffer, nombre) {
   URL.revokeObjectURL(url)
 }
 
-/** El nombre del archivo lleva la fecha: se generan varios y hay que poder distinguirlos. */
-const nombreDelArchivo = () => `Documentacion_integraciones_${new Date().toISOString().slice(0, 10)}.xlsx`
+/** El nombre de v9, con la fecha: se generan varios y hay que poder distinguirlos. */
+const nombreDelArchivo = () => `SAP_CIDS_Documentacion_${new Date().toISOString().slice(0, 10)}.xlsx`
 
 const MODOS = [
   { id: 'proyecto', label: '📦 Por proyecto' },
@@ -131,10 +133,11 @@ export default function MappingDocumenter() {
         resultado = filas
         nuevosAvisos.push(...propios)
       } else {
-        // El ATL solo agrega el proceso y el grupo; si no empareja con nada, el documento sale igual.
+        // El ATL solo agrega el proceso y el grupo, sin mover las filas, y varios se acumulan (como
+        // v9). Si no empareja con nada, el documento sale igual.
         for (const leido of atlsLeidos) {
-          const { ordenadas, ambiguas } = matchATLtoIntegrations(leido, resultado)
-          resultado = ordenadas
+          const { integraciones: conAtl, ambiguas } = aplicarAtlSinReordenar(leido, resultado)
+          resultado = conAtl
           for (const nombre of ambiguas) {
             nuevosAvisos.push(`El ATL nombra "${nombre}", que existe más de una vez en el proyecto: queda sin grupo.`)
           }
@@ -173,6 +176,7 @@ export default function MappingDocumenter() {
           catalogo,
           (destino) => fetchSampleRow(conexionId, destino),
           planArea,
+          (consulta) => fetchFieldExample(conexionId, consulta),
         )
 
         const porHoja = new Map(enriquecidas.map((una) => [una.sheetName, una]))

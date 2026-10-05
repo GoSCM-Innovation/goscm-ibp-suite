@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 
-import { SIN_GRUPO, matchATLtoIntegrations, parseATL } from './cids-atl.js'
+import { SIN_GRUPO, aplicarAtlSinReordenar, matchATLtoIntegrations, parseATL } from './cids-atl.js'
 
 /** Un ATL con dos planes: el primero en paralelo, el segundo secuencial. */
 const ATL = `CREATE PLAN PLAN_CARGA::'p1' (
@@ -106,7 +106,7 @@ CREATE SESSION S::'y' (
     CALL PLAN P::'x' ( );
   END
 )`)
-    expect(anonimo.groups[0].displayName).toBe('Grupo 1')
+    expect(anonimo.groups[0].displayName).toBe('Group 1') // v9 lo escribe en inglés
   })
 
   it('un archivo vacío no revienta', () => {
@@ -175,5 +175,48 @@ describe('matchATLtoIntegrations', () => {
   it('un ATL que no empareja con nada deja todo sin grupo', () => {
     const { ordenadas } = matchATLtoIntegrations({ sessionName: '', groups: [] }, integraciones)
     expect(ordenadas.map((una) => una.atlGroup)).toEqual([SIN_GRUPO, SIN_GRUPO, SIN_GRUPO])
+  })
+})
+
+// El modo de proyecto de v9: el ATL solo rellena Proceso y Grupo. No mueve filas, y con varios ATL se
+// acumula. Antes, el último ATL borraba los grupos de los anteriores.
+describe('aplicarAtlSinReordenar', () => {
+  const item = (sheetName, dataflowName, dataflowGuid) => ({ sheetName, parsed: { dataflowName, dataflowGuid } })
+  const atlDe = (sesion, grupo, guid) => ({
+    sessionName: sesion,
+    groups: [{ displayName: grupo, parallel: true, dataflows: [{ guid, displayName: '' }] }],
+  })
+  const lista = [item('A', 'DF_A', 'ga'), item('B', 'DF_B', 'gb'), item('C', 'DF_C', 'gc')]
+
+  it('pone el grupo y la sesión sin cambiar el orden de las filas', () => {
+    const { integraciones } = aplicarAtlSinReordenar(atlDe('S1', 'Cierre', 'gc'), lista)
+    expect(integraciones.map((una) => una.sheetName)).toEqual(['A', 'B', 'C'])
+    expect(integraciones[2]).toMatchObject({ atlGroup: 'Cierre', atlSession: 'S1', atlParallel: true })
+  })
+
+  it('lo que el ATL no menciona queda SIN tocar, no con «Sin grupo ATL»', () => {
+    const { integraciones } = aplicarAtlSinReordenar(atlDe('S1', 'Cierre', 'gc'), lista)
+    expect(integraciones[0].atlGroup).toBeUndefined()
+    expect(integraciones.some((una) => una.atlGroup === SIN_GRUPO)).toBe(false)
+  })
+
+  it('con varios ATL ACUMULA: el segundo no borra lo que puso el primero', () => {
+    const primero = aplicarAtlSinReordenar(atlDe('S1', 'Maestros', 'ga'), lista).integraciones
+    const { integraciones } = aplicarAtlSinReordenar(atlDe('S2', 'Cierre', 'gc'), primero)
+
+    expect(integraciones[0]).toMatchObject({ atlGroup: 'Maestros', atlSession: 'S1' })
+    expect(integraciones[2]).toMatchObject({ atlGroup: 'Cierre', atlSession: 'S2' })
+  })
+
+  it('devuelve los nombres ambiguos para avisar', () => {
+    const atl = { sessionName: 'S', groups: [{ displayName: 'G', parallel: false, dataflows: [{ guid: '', displayName: 'DF' }] }] }
+    const { ambiguas, integraciones } = aplicarAtlSinReordenar(atl, [item('X', 'DF', ''), item('Y', 'DF', '')])
+    expect(ambiguas).toEqual(['DF'])
+    expect(integraciones.map((una) => una.atlGroup)).toEqual([undefined, undefined])
+  })
+
+  it('no modifica la lista original', () => {
+    aplicarAtlSinReordenar(atlDe('S1', 'Cierre', 'gc'), lista)
+    expect(lista[2].atlGroup).toBeUndefined()
   })
 })

@@ -71,14 +71,14 @@ describe('buildParamSheet', () => {
   it('en modo ZIP tiene las columnas del proceso', () => {
     const hoja = buildParamSheet([paramRow()], false)
     expect(textoDeFila(hoja, 0)).toEqual([
-      'Dato', 'Tipo de integración', 'Proceso', 'Grupo',
-      'Tarea CI-DS', 'Descripción de la tarea', 'Dataflow CI-DS', 'Sistema origen', 'Sistema destino',
+      'Dato - Click Aquí para más detalle', 'Tipo de Integración', 'Proceso', 'Grupo',
+      'Task CI-DS', 'Descripción de la task', 'Dataflow CIDS', 'Sistema fuente', 'Sistema Destino',
     ])
   })
 
   it('en modo Jobs agrega las columnas del job de IBP', () => {
     const hoja = buildParamSheet([paramRow({ ibpJobName: 'J1', ibpStepName: 'S1', ibpStepType: 'DI' })], true)
-    expect(textoDeFila(hoja, 0)).toContain('Job de IBP')
+    expect(textoDeFila(hoja, 0)).toContain('Job IBP')
     expect(textoDeFila(hoja, 1)).toEqual([
       '1', 'MD', 'J1', 'S1', 'DI', '', 'GOSCM_MD_PRODUCTO', 'Carga de producto', 'DF_PRODUCTO', 'ECC', 'IBP',
     ])
@@ -140,7 +140,7 @@ describe('buildIntegrationSheet', () => {
 
     expect(todo).toContain('Sin mapeos')
     expect(todo).toContain('Sin filtros')
-    expect(todo).toContain('Sin parámetros globales')
+    expect(todo).toContain('Sin variables')
     expect(todo).toContain('Sin lookups')
   })
 

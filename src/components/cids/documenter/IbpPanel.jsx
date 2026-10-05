@@ -2,6 +2,12 @@
 //
 // La conexión es opcional: sin ella el documento sale igual, con las dos columnas de IBP vacías.
 // Lo que aporta es la etiqueta de cada campo, su tipo de dato y un valor de ejemplo real.
+//
+// DESVÍO DELIBERADO DE v9, POR SEGURIDAD. El panel de v9 pedía la URL de la API, el Communication User
+// y la contraseña, y los guardaba en el navegador. Aquí las credenciales de SAP viven cifradas en
+// Postgres y solo el servidor las descifra, así que el panel ELIGE entre las conexiones dadas de alta
+// en Administración → Conexiones y nunca ve una contraseña. Es la única diferencia de fondo; el resto
+// del panel debe ser el de v9.
 
 import { useEffect, useState } from 'react'
 

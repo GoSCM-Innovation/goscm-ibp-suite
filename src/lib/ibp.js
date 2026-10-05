@@ -34,9 +34,15 @@ export async function fetchCatalog(connectionId) {
   }
 }
 
-/** Una fila real de una entidad, para el ejemplo de la documentación. */
-export function fetchSampleRow(connectionId, { service, entitySet, planArea, selectFields }) {
-  return api.post('/api/ibp/sample', { connectionId, service, entitySet, planArea, selectFields })
+/** Una muestra de `top` filas de una entidad, juntada en una sola, para el ejemplo de la documentación. */
+export function fetchSampleRow(connectionId, { service, entitySet, planArea, selectFields, top }) {
+  return api.post('/api/ibp/sample', { connectionId, service, entitySet, planArea, selectFields, top })
+}
+
+/** La consulta dirigida de v9: un valor no vacío de un campo de dato maestro, o `null`. */
+export async function fetchFieldExample(connectionId, { entitySet, planArea, field }) {
+  const { value } = await api.post('/api/ibp/sample', { connectionId, entitySet, planArea, field })
+  return value ?? null
 }
 
 /** Las plantillas de Application Job del tenant. */
