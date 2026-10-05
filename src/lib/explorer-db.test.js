@@ -19,7 +19,7 @@ import {
   origenGuardado,
   porCursor,
   prepararPara,
-  reiniciarSiOtroOrigen,
+  reiniciarAlConectar,
   vaciar,
   vaciarTodo,
 } from './explorer-db.js'
@@ -304,38 +304,41 @@ describe('prepararPara', () => {
   })
 })
 
-describe('reiniciarSiOtroOrigen (al conectar)', () => {
+describe('reiniciarAlConectar (al conectar)', () => {
   it('con la base vacía solo anota el origen', async () => {
-    await expect(reiniciarSiOtroOrigen(ORIGEN)).resolves.toEqual({ seVacio: true })
+    await expect(reiniciarAlConectar(ORIGEN)).resolves.toEqual({ seVacio: true })
     await expect(origenGuardado()).resolves.toBe('c-1|PA|V1')
   })
 
-  it('con datos del mismo origen los conserva', async () => {
-    await reiniciarSiOtroOrigen(ORIGEN)
+  // El fallo que se vio el 2026-10-05: al reconectar al mismo tenant aparecía el buscador del
+  // Production Visualizer con lo bajado en una sesión anterior, antes de pulsar «Descargar».
+  it('con datos del MISMO origen también los borra: cada conexión arranca de cero, como en v7', async () => {
+    await reiniciarAlConectar(ORIGEN)
     await guardar('bom_psh', [{ SOURCEID: 'S1' }])
-    await expect(reiniciarSiOtroOrigen(ORIGEN)).resolves.toEqual({ seVacio: false })
-    await expect(contar('bom_psh')).resolves.toBe(1)
+    await reiniciarAlConectar(ORIGEN)
+    await expect(contar('bom_psh')).resolves.toBe(0)
+    await expect(origenGuardado()).resolves.toBe('c-1|PA|V1')
   })
 
-  // El fallo que se vio: el árbol aparecía con datos de otro tenant antes de confirmar el mapeo.
+  // El fallo anterior: el árbol aparecía con datos de otro tenant antes de confirmar el mapeo.
   it('con datos de otro tenant los borra, para que no se vean al conectar', async () => {
-    await reiniciarSiOtroOrigen(ORIGEN)
+    await reiniciarAlConectar(ORIGEN)
     await guardar('bom_psh', [{ SOURCEID: 'S1' }])
-    await reiniciarSiOtroOrigen({ ...ORIGEN, connectionId: 'c-2' })
+    await reiniciarAlConectar({ ...ORIGEN, connectionId: 'c-2' })
     await expect(contar('bom_psh')).resolves.toBe(0)
     await expect(origenGuardado()).resolves.toBe('c-2|PA|V1')
   })
 
-  it('con datos SIN marca de origen tampoco se fía: los borra', async () => {
+  it('con datos SIN marca de origen también los borra', async () => {
     await guardar('bom_psh', [{ SOURCEID: 'S1' }])
-    await reiniciarSiOtroOrigen(ORIGEN)
+    await reiniciarAlConectar(ORIGEN)
     await expect(contar('bom_psh')).resolves.toBe(0)
   })
 
   it('cambiar de versión del mismo tenant también borra', async () => {
-    await reiniciarSiOtroOrigen(ORIGEN)
+    await reiniciarAlConectar(ORIGEN)
     await guardar('bom_psh', [{ SOURCEID: 'S1' }])
-    await reiniciarSiOtroOrigen({ ...ORIGEN, versionId: 'V2' })
+    await reiniciarAlConectar({ ...ORIGEN, versionId: 'V2' })
     await expect(contar('bom_psh')).resolves.toBe(0)
   })
 })

@@ -30,7 +30,9 @@ actualiza al terminar cada sesión, y su orden es el de prioridad acordada.
   2. **Al conectar se borra lo guardado en el navegador de OTRO tenant/área/versión**
      (`reiniciarSiOtroOrigen`, el `resetAllModules()` de v7). Antes el árbol («Árbol 1») aparecía de
      inmediato con productos de otro sistema, porque la comprobación de origen solo corría al descargar.
-     Si es el mismo destino, lo guardado se conserva.
+     **Corregido el 2026-10-05:** ya NO se conserva ni siquiera lo del mismo destino —el usuario vio el
+     buscador del Production Visualizer al reconectar, antes de descargar—: conectar borra todo, como v7.
+     Navegar entre aplicaciones no borra nada; solo conectar o cambiar de tenant (`reiniciarAlConectar`).
   3. **El mapeo ya no parpadea.** El destino se recalculaba como objeto nuevo en cada dibujo y la
      relectura de sesión (al volver a la pestaña) hacía que el mapeo se vaciara y pidiera todo a SAP otra
      vez. Ahora `DataTools` lo memoriza por tenant/área/versión.

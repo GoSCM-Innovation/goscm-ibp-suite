@@ -22,7 +22,7 @@ const {
   conectar, desconectar, estaConectado, conexionActiva, verAsistente,
 } = await import('../../lib/conexion-activa.js')
 const { VERSION_BASE } = await import('../../lib/version-elegida.js')
-const { contar, guardar, olvidarBase, reiniciarSiOtroOrigen } = await import('../../lib/explorer-db.js')
+const { contar, guardar, olvidarBase, reiniciarAlConectar } = await import('../../lib/explorer-db.js')
 
 let raiz
 let contenedor
@@ -96,19 +96,22 @@ describe('terminar el asistente', () => {
   })
 
   it('lo guardado de OTRO tenant se borra al conectar', async () => {
-    await reiniciarSiOtroOrigen({ connectionId: 'c-1', planningArea: 'VIEJA', versionId: '' })
+    await reiniciarAlConectar({ connectionId: 'c-1', planningArea: 'VIEJA', versionId: '' })
     await guardar('bom_psh', [{ SOURCEID: 'S1' }])
 
     await recorrerAsistente()
     await expect(contar('bom_psh')).resolves.toBe(0)
   })
 
-  it('lo guardado de ESTE mismo destino se conserva', async () => {
-    await reiniciarSiOtroOrigen({ connectionId: 'c-2', planningArea: 'STARBRANDS', versionId: '' })
+  // Cambio del 2026-10-05: antes se conservaba, y al reconectar salía el buscador del Production
+  // Visualizer con lo bajado en una sesión anterior, antes de descargar. En v7 cada conexión
+  // arrancaba de cero (`resetAllModules`).
+  it('lo guardado de ESTE mismo destino TAMBIÉN se borra: se arranca desde el primer paso', async () => {
+    await reiniciarAlConectar({ connectionId: 'c-2', planningArea: 'STARBRANDS', versionId: '' })
     await guardar('bom_psh', [{ SOURCEID: 'S1' }])
 
     await recorrerAsistente()
-    await expect(contar('bom_psh')).resolves.toBe(1)
+    await expect(contar('bom_psh')).resolves.toBe(0)
   })
 })
 

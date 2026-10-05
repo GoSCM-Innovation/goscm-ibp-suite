@@ -146,7 +146,8 @@ async function cargarMaestros(indices, productos) {
  * Es lo que decide si el árbol EXISTE en pantalla. En v7 la tira de pestañas y el árbol estaban
  * ocultos hasta que la descarga terminaba y `initTableUI()` los mostraba, así que el mensaje «no hay
  * recetas descargadas» no podía verse: no había pantalla que lo dijera. Aquí se conserva eso, con la
- * diferencia de que lo bajado sobrevive a la sesión y por eso hay que preguntarlo en vez de saberlo.
+ * diferencia de que lo bajado sobrevive a navegar entre aplicaciones —se borra al conectar— y por eso
+ * hay que preguntarlo en vez de saberlo.
  *
  * Se pregunta por UNA fila y no por el total: para decidir si se dibuja el árbol da igual si hay una
  * o cien mil, y contar una tabla de cien mil filas para contestar «sí» es tiempo tirado.

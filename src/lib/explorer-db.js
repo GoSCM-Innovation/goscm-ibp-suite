@@ -327,20 +327,20 @@ export async function prepararPara(origen) {
 }
 
 /**
- * Al CONECTAR: lo guardado en este navegador que no sea de este tenant, área y versión se borra.
+ * Al CONECTAR: TODO lo guardado en este navegador se borra, sea de donde sea.
  *
- * Es el `resetAllModules()` que v7 llamaba al conectar. Sin esto, los datos de una sesión anterior
- * —de otro tenant— seguían a la vista: el árbol aparecía antes de confirmar el mapeo, con productos
- * que no eran de este sistema. `prepararPara` solo corría al DESCARGAR, y a esas alturas ya se había
- * enseñado lo ajeno.
+ * Es el `resetAllModules()` que v7 llamaba al conectar: cada conexión arranca desde el primer paso del
+ * mapeo, con la búsqueda y las tablas ocultas hasta que se pulsa «Descargar». Antes solo se borraba
+ * lo de OTRO tenant, área o versión, y lo del mismo destino sobrevivía: al reconectar aparecía el
+ * buscador del Production Visualizer con lo bajado en una sesión anterior, antes de descargar nada
+ * (visto por el usuario el 2026-10-05). Por eso ya no se compara el origen.
  *
- * Difiere de `prepararPara` en un caso: si hay datos y NO hay marca de origen (guardados antes de que
- * existiera la marca), no se sabe de dónde son, y se borran igual. Con los mismos origen se conservan:
- * son válidos para este destino.
+ * Solo corre al CONECTAR o cambiar de tenant, área o versión. Navegar entre las aplicaciones de Data
+ * Tools no pasa por aquí, así que lo descargado en la sesión sigue ahí al volver. Y `prepararPara`
+ * —la del momento de descargar— SÍ conserva lo del mismo origen: una segunda descarga de la sesión no
+ * tiene por qué tirar la primera.
  */
-export async function reiniciarSiOtroOrigen(origen) {
-  const guardada = await origenGuardado()
-  if (mismoOrigen(guardada, origen)) return { seVacio: false }
+export async function reiniciarAlConectar(origen) {
   await vaciarTodo()
   await anotarOrigen(origen)
   return { seVacio: true }
