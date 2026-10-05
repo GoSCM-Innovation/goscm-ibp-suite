@@ -7,6 +7,11 @@ actualiza al terminar cada sesión, y su orden es el de prioridad acordada.
 
 ## Dónde estamos
 
+- **Revisión de paridad del 2026-10-05** (v7 `e628db5`, v8 `ed718ed`, v9 `b078052`, ya sincronizados): v7 y
+  v8 sin pendientes. **v9 tiene tres huecos** (detalle en `PARIDAD-V9.md`): los scripts pre/post-load del
+  Integration Explorer, los `<messageLine>` de los logs de tarea, y el SSRF con IPv4 embebida en IPv6
+  hexadecimal. **Ninguno está hecho todavía.** El tercero, comprobado a mano, **no es explotable aquí** (los hosts
+  numéricos se rechazan antes): queda como defensa en profundidad, no como urgencia.
 - **Cambios de interfaz pedidos por el usuario el 2026-10-05** (pendientes de verlos en el sitio):
   1. **Las pestañas de conexión muestran TODAS las conexiones**, sin «+» ni ✕ (IBP Tools y CI-DS Tools), y
      la cabecera del tenant pone el nombre y «Abrir en SAP IBP ↗» en una sola fila.

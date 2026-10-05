@@ -7,6 +7,14 @@ local, que está anidado un nivel más abajo (`ibp-bom-v7/ibp-bom-v7`) y puede e
 ha cambiado—. Son **20 archivos** en `public/js/` que suman **20.643 líneas** de JavaScript sin build,
 más `server.js` y las plantillas de `public/`.
 
+**Revisión del 2026-10-05, contra `e628db5`** (v7 avanzó dos commits desde `6d027d2`, PR #92). Nada que
+portar: (1) `idbGetAll` por tramos, porque Chromium rechaza lecturas de ~246 MB —aquí no existe, los
+datasets se leen por cursor desde IndexedDB—; (2) quitar `__metadata` de cada fila antes de guardar
+—aquí lo quitan `core/ibp/planning-data.js` y `master-data-model.js` en el servidor, antes de que la fila
+llegue al navegador—; (3) el índice de orígenes por producto del Production Analyzer
+(`locSrcOrigByPrd`) —ya está en `core/ibp/production-analyzer.js`—; y (4) el nombre del error en el
+log del análisis, que es solo diagnóstico.
+
 La revisión del 2026-08-28 fue de **INTERFAZ**, no de funcionalidad, y de ahí salió lo más grande que
 quedaba: ver [La interfaz de v7, restaurada](#la-interfaz-de-v7-restaurada).
 

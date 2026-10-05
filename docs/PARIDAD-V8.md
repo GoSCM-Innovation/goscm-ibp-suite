@@ -7,6 +7,12 @@ atrasada—. Existe porque «¿ya está v8?» se contestó dos veces de memoria 
 Última revisión: 2026-08-11, contra `ed718ed` de v8. Son **61 archivos** en su `src/` (sin contar
 `assets/`, `.json` y `.css`), y este documento da cuenta de todos.
 
+**Revisión del 2026-10-05:** v8 sigue en `ed718ed`, sin commits nuevos desde la anterior. Se volvió a
+comprobar lo último que añadió (`bee1d40`): el pegado masivo de listas en los filtros, el aviso de «lista
+posiblemente incompleta» a partir de 5.000 valores y el mensaje preciso del key figure no cargable están
+en `ibp/FilterControls.jsx` y `ibp/KfMigration.jsx`. El dato maestro simple (sin versión, `93fc8d5` y
+`ed718ed`) está en `ibp/MasterDataViewer.jsx`. Sin pendientes nuevos.
+
 ## 2026-09-30: la tabla de abajo decía «portado» y no lo era
 
 El usuario puso lado a lado «Ver Dato Maestro» de v8 y de aquí, contra las mismas conexiones: la de

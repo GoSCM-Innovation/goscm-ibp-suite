@@ -7,6 +7,24 @@ atrasada—. Igual que el de v8, existe porque «¿ya está v9?» se contestó d
 `public/legacy/` (sin contar `assets/`, `.css`, `.json`, imágenes ni el armazón de configuración), y
 este documento da cuenta de todos.
 
+## Revisión del 2026-10-05, contra `b078052` (58 commits desde `82108cf`)
+
+Los commits nuevos son casi todos de **estructura sin cambio de comportamiento**: sistema de tokens de
+diseño, `useOrchestration` partido en cuatro hooks, ESLint, Vitest y CI. Eso no se porta. Lo que SÍ
+estaba pendiente, y se encontró al recorrer:
+
+| Qué | Dónde en v9 | Estado aquí |
+|---|---|---|
+| **Scripts pre/post-load del Job en el Integration Explorer**: se leen del export (`parseJobScripts`), se buscan por su texto, hay un interruptor «Solo con script» con contador, una insignia 📜 en la tarea y una sección en el detalle con el código y si es pre o post | `public/legacy/js/docs.js` + `explorer.js` (`85666bd`, **anterior** a la revisión del 2026-08-12 y no detectado) | **FALTA**. Nada en `cids-export.js` ni en `cids/explorer/` lee los scripts |
+| Los logs de tarea traen cada `<messageLine>` codificado por separado dentro de `<messageLines>` | `api/soap.js` (`a81ddf6`) | **FALTA**: `core/soap/operations.js` solo decodifica el texto de `<messageLines>` |
+| SSRF: IPv4 embebida en IPv6 una vez normalizada (`::ffff:7f00:1`) | `api/_ssrf.js` (`3a4eee3`) | **No es explotable aquí, pero el comprobador queda flojo.** `isPrivateAddress` de `core/transport/ssrf.js` solo reconoce la forma decimal y dice «pública» para `::ffff:7f00:1` (comprobado). Pero `validateSapHost` rechaza SIEMPRE cualquier host numérico antes de llamarlo, y solo lo usa con lo que devuelve DNS, que viene en forma decimal. v9 sí lo necesitaba porque aceptaba direcciones. Endurecerlo sería defensa en profundidad |
+
+Comprobados y ya portados: el aviso del navegador al terminar una orquestación (`aviso-de-corrida.js`),
+la regla del linaje sin espacios y los paréntesis al expandir (`cids-expression.js`), el token solo en
+llamadas `/api` del mismo origen (aquí no hay token en el cliente). Las dos páginas de `public/legacy/`
+(`integration-explorer.html`, `mapping-dataflow.html`) son los dos módulos ya portados; `i18n.js` queda
+para la fase de idioma.
+
 A diferencia de v8, en v9 la funcionalidad no está solo en `src/`: dos módulos enteros vivían en
 `public/legacy/` como JavaScript sin build, embebidos con iframe.
 
