@@ -104,18 +104,31 @@ describe('ordenarPorJobs', () => {
     expect(filas.map((una) => una.sheetName)).toEqual(['A', 'B', 'C'])
   })
 
-  // Una integración que ningún paso reclama sigue existiendo y hay que documentarla.
-  it('lo que ningún paso reclama queda al final', () => {
-    const { filas, avisos } = ordenarPorJobs({
+  // Como v9: solo se documentan las integraciones presentes en el job. Antes quedaban al final.
+  it('lo que ningún paso reclama NO se documenta (como v9)', () => {
+    const { filas, avisos, registro } = ordenarPorJobs({
       atls: [],
       entradas: [entrada('HUERFANA', 'NADIE')],
       jobs,
       pasosPorJob: [[]],
     })
 
+    expect(filas).toEqual([])
+    expect(avisos).toEqual([])
+    expect(registro.at(-1).texto).toBe('✔ 0 integraciones documentadas (solo las presentes en el job)')
+  })
+
+  it('con `conservarSinPaso` queda al final, sin job ni paso', () => {
+    const { filas } = ordenarPorJobs({
+      atls: [],
+      entradas: [entrada('HUERFANA', 'NADIE')],
+      jobs,
+      pasosPorJob: [[]],
+      conservarSinPaso: true,
+    })
+
     expect(filas.map((una) => una.sheetName)).toEqual(['HUERFANA'])
     expect(filas[0].ibpJobName).toBe('')
-    expect(avisos).toEqual([])
   })
 
   it('avisa del paso que no encontró su tarea en los ZIP', () => {
@@ -151,7 +164,8 @@ describe('ordenarPorJobs', () => {
   })
 
   it('sin nada que ordenar devuelve una lista vacía', () => {
-    expect(ordenarPorJobs({ atls: [], entradas: [], jobs: [], pasosPorJob: [] }))
-      .toEqual({ filas: [], avisos: [] })
+    const salida = ordenarPorJobs({ atls: [], entradas: [], jobs: [], pasosPorJob: [] })
+    expect(salida.filas).toEqual([])
+    expect(salida.avisos).toEqual([])
   })
 })

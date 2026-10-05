@@ -51,12 +51,18 @@ export function buscarPaso(pasosPorJob, sessionName) {
  * versión, algoritmos— van marcadas con `isNonDI`: aparecen en el índice para que el job se lea
  * completo, pero no tienen hoja de detalle porque no hay ningún dataflow que documentar.
  *
- * Una integración que ningún paso reclama NO se pierde: queda al final, sin job ni paso.
+ * Como en v9, SOLO se documentan las integraciones presentes en el job: una que ningún paso reclama
+ * no entra («N integraciones documentadas (solo las presentes en el job)»). Con `conservarSinPaso`
+ * quedaría al final, sin job ni paso; era la decisión anterior de esta suite y ya no se aplica por
+ * omisión.
+ *
+ * Además de `avisos` devuelve `registro`, las líneas de v9 para el log de procesamiento.
  */
-export function ordenarPorJobs({ atls, entradas, jobs, pasosPorJob }) {
+export function ordenarPorJobs({ atls, entradas, jobs, pasosPorJob, conservarSinPaso = false }) {
   const filas = []
   const yaPuestas = new Set()
   const avisos = []
+  const registro = []
 
   const nombreDeJob = (i) => jobs[i]?.nombre || ''
 
@@ -69,6 +75,11 @@ export function ordenarPorJobs({ atls, entradas, jobs, pasosPorJob }) {
     const jobIdx = encontrado?.jobIdx ?? Math.min(i, jobs.length - 1)
 
     if (!encontrado) avisos.push(`Ningún paso de IBP corresponde al proceso "${atl.sessionName}".`)
+    registro.push({
+      tipo: 'linea',
+      texto: `  📌 "${atl.sessionName}" → step: "${encontrado?.paso.text ?? atl.sessionName}" `
+        + `(pos ${encontrado?.paso.pos ?? Number.MAX_SAFE_INTEGER})`,
+    })
 
     const { ordenadas } = matchATLtoIntegrations(atl, entradas)
     for (const item of ordenadas) {
@@ -105,8 +116,14 @@ export function ordenarPorJobs({ atls, entradas, jobs, pasosPorJob }) {
 
       if (propias.length === 0) {
         avisos.push(`El paso "${paso.text}" no encontró su tarea en los ZIP cargados.`)
+        registro.push({ tipo: 'aviso', texto: `  ⚠ Step "${paso.text}" sin ATL y sin ZIP con jobName coincidente` })
         continue
       }
+
+      registro.push({
+        tipo: 'linea',
+        texto: `  📎 "${paso.text}" (tarea directa) → ${propias.length} integración${propias.length === 1 ? '' : 'es'}`,
+      })
 
       for (const item of propias) {
         yaPuestas.add(item.sheetName)
@@ -125,8 +142,10 @@ export function ordenarPorJobs({ atls, entradas, jobs, pasosPorJob }) {
     }
   }
 
-  // ── Lo que ningún paso reclamó. Sigue existiendo y hay que documentarlo.
-  for (const entrada of entradas) {
+  registro.push({ tipo: 'ok', texto: `✔ ${filas.length} integraciones documentadas (solo las presentes en el job)` })
+
+  // ── Lo que ningún paso reclamó. v9 lo descarta; solo se conserva si se pide.
+  for (const entrada of conservarSinPaso ? entradas : []) {
     if (yaPuestas.has(entrada.sheetName)) continue
     filas.push({
       ...entrada,
@@ -174,5 +193,5 @@ export function ordenarPorJobs({ atls, entradas, jobs, pasosPorJob }) {
     || (a.atlOrder ?? 0) - (b.atlOrder ?? 0)
   ))
 
-  return { filas, avisos }
+  return { filas, avisos, registro }
 }

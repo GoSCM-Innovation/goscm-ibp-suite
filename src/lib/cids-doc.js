@@ -274,25 +274,31 @@ export function buildIntegrationSheet(integracion) {
  * el archivo entero si dos hojas se llaman igual. Cuando una tarea tiene varios dataflows se le
  * agrega la tabla destino, que es lo que los distingue.
  */
-export async function scanForDocument(archivos) {
-  const { integraciones, errores } = await analyzeZips(archivos)
+export async function scanForDocument(archivos, opciones = {}) {
+  const { integraciones, errores } = await analyzeZips(archivos, opciones)
 
-  const cuantosPorTarea = new Map()
+  // La tabla destino se agrega al nombre cuando ESE XML trae varios dataflows (como v9: `multiDF` es
+  // por XML). Antes se contaba por tarea en todos los ZIP juntos, y una tarea repetida en dos ZIP
+  // cambiaba el nombre de su hoja respecto del de v9.
+  const cuantosPorXml = new Map()
+  const claveDelXml = (una) => `${una._zipName}|${una._xml}`
   for (const una of integraciones) {
-    cuantosPorTarea.set(una.jobName, (cuantosPorTarea.get(una.jobName) ?? 0) + 1)
+    cuantosPorXml.set(claveDelXml(una), (cuantosPorXml.get(claveDelXml(una)) ?? 0) + 1)
   }
 
   const usados = new Set()
 
   const entradas = integraciones.map((parsed) => {
-    const base = cuantosPorTarea.get(parsed.jobName) > 1
-      ? `${parsed.jobName}_${parsed.targetTable}`
-      : parsed.jobName
+    const nombreBase = parsed.jobName || String(parsed._xml || '').replace(/\.xml$/i, '')
+    const base = cuantosPorXml.get(claveDelXml(parsed)) > 1
+      ? `${nombreBase}_${parsed.targetTable}`
+      : nombreBase
 
     const sheetName = uniqueSheetName(base || parsed.dataflowName, usados)
 
     return {
       sheetName,
+      pkg: parsed._zipName,
       parsed,
       paramRow: {
         sheetName,

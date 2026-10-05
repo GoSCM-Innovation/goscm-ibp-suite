@@ -326,32 +326,52 @@ export function detectChains(integraciones) {
  * las cadenas. Un ZIP que no se puede leer se salta con su error anotado: un archivo corrupto entre
  * diez no puede dejar sin explorar a los otros nueve.
  */
-export async function analyzeZips(archivos) {
+/**
+ * `alRegistrar`, si viene, recibe lo que pasa mientras se lee —el documentador lo escribe en su log,
+ * como el de v9—: `{ tipo: 'zip' | 'batch' | 'xmls' | 'sinDataflows' | 'error', ... }`. Y
+ * `alAvanzar(0..1)` dice cuánto va. Ninguno es obligatorio: el explorador no los usa.
+ *
+ * Cada integración lleva además `_xml`, el nombre del XML del que salió: el documentador lo necesita
+ * para nombrar las hojas (una tarea con varios dataflows EN EL MISMO XML lleva la tabla destino).
+ */
+export async function analyzeZips(archivos, { alRegistrar = null, alAvanzar = null } = {}) {
   const integraciones = []
   const errores = []
+  const registrar = (evento) => { if (alRegistrar) alRegistrar(evento) }
 
-  for (const archivo of archivos) {
+  for (const [orden, archivo] of archivos.entries()) {
+    registrar({ tipo: 'zip', nombre: archivo.name })
     try {
       const zip = await JSZip.loadAsync(archivo.data)
       const porArchivo = await parseBatchCsv(zip)
+      registrar({ tipo: 'batch', cuantos: Object.keys(porArchivo).length })
 
       // Solo los XML de la raíz: los de subcarpetas son plantillas, no integraciones.
       const nombres = Object.keys(zip.files).filter((uno) => uno.endsWith('.xml') && !uno.includes('/'))
+      registrar({ tipo: 'xmls', cuantos: nombres.length })
 
-      for (const nombre of nombres) {
+      for (const [posicion, nombre] of nombres.entries()) {
+        if (alAvanzar) alAvanzar((orden + (posicion + 1) / nombres.length) / archivos.length)
+
         // Un XML malo se salta POR SÍ SOLO, como v9: los demás del mismo ZIP se leen igual. Antes un
         // XML roto descartaba todo el ZIP.
         try {
           const xml = await zip.file(nombre).async('string')
-          for (const integracion of parseIntegration(xml, porArchivo[nombre])) {
-            integraciones.push({ ...integracion, _zipName: archivo.name, _idx: integraciones.length })
+          const leidas = parseIntegration(xml, porArchivo[nombre])
+          if (leidas.length === 0) registrar({ tipo: 'sinDataflows', archivo: nombre })
+          for (const integracion of leidas) {
+            integraciones.push({ ...integracion, _zipName: archivo.name, _xml: nombre, _idx: integraciones.length })
           }
         } catch (error) {
-          errores.push({ archivo: `${archivo.name} › ${nombre}`, mensaje: error?.message || String(error) })
+          const mensaje = error?.message || String(error)
+          errores.push({ archivo: `${archivo.name} › ${nombre}`, mensaje })
+          registrar({ tipo: 'error', archivo: nombre, mensaje })
         }
       }
     } catch (error) {
-      errores.push({ archivo: archivo.name, mensaje: error?.message || String(error) })
+      const mensaje = error?.message || String(error)
+      errores.push({ archivo: archivo.name, mensaje })
+      registrar({ tipo: 'error', archivo: '', mensaje })
     }
   }
 

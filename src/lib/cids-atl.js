@@ -196,6 +196,8 @@ export function matchATLtoIntegrations(atl, integraciones) {
   const ordenadas = []
   const yaPuestas = new Set()
   const ambiguas = []
+  // Los dataflows que el ATL declara y que no emparejaron con ninguna integración; v9 los avisa.
+  const sinPareja = []
 
   for (const grupo of atl.groups) {
     for (const dataflow of grupo.dataflows) {
@@ -207,7 +209,8 @@ export function matchATLtoIntegrations(atl, integraciones) {
         else if (candidatas.length > 1) { ambiguas.push(dataflow.displayName); continue }
       }
 
-      if (!item || yaPuestas.has(item.sheetName)) continue
+      if (!item) { sinPareja.push({ displayName: dataflow.displayName || '', guid: dataflow.guid || '' }); continue }
+      if (yaPuestas.has(item.sheetName)) continue
 
       yaPuestas.add(item.sheetName)
       ordenadas.push({
@@ -226,7 +229,7 @@ export function matchATLtoIntegrations(atl, integraciones) {
     ordenadas.push({ ...item, atlGroup: SIN_GRUPO, atlSession: '', atlParallel: false, atlOrder: ordenadas.length + 1 })
   }
 
-  return { ordenadas, ambiguas }
+  return { ordenadas, ambiguas, sinPareja }
 }
 
 /**
@@ -241,7 +244,7 @@ export function matchATLtoIntegrations(atl, integraciones) {
  * trabajos de IBP, donde el orden del ATL decide el de los pasos. Aquí solo se le toma el emparejado.
  */
 export function aplicarAtlSinReordenar(atl, integraciones) {
-  const { ordenadas, ambiguas } = matchATLtoIntegrations(atl, integraciones)
+  const { ordenadas, ambiguas, sinPareja } = matchATLtoIntegrations(atl, integraciones)
   const emparejadas = new Map(
     ordenadas.filter((una) => una.atlGroup !== SIN_GRUPO).map((una) => [una.sheetName, una]),
   )
@@ -258,5 +261,5 @@ export function aplicarAtlSinReordenar(atl, integraciones) {
     }
   })
 
-  return { integraciones: resultado, ambiguas }
+  return { integraciones: resultado, ambiguas, sinPareja, hojas: [...emparejadas.keys()] }
 }

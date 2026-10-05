@@ -37,6 +37,9 @@ export const nuevaCache = (descs = {}) => ({
   // corrida, haya salido o no. Sin esto, un campo vacío en todo el tenant se pediría en cada tabla.
   intentados: new Set(),
   avisos: [],
+  // Lo que v9 escribe en su log durante el enriquecimiento: `{ texto, tipo }`, con `tipo` `ok`, `aviso`
+  // o `linea`. El documentador lo muestra en «Log de procesamiento».
+  registro: [],
 })
 
 /** Los tamaños de muestra, en orden: 50 y, si aún faltan campos, 200. Los de v9. */
@@ -71,8 +74,14 @@ export async function enrichIntegration(
       const selectFields = selectFieldsFor(destino, campos, catalogo.entityProps)
       const puedeConsultar = destino.service !== 'PLANNING_DATA_API_SRV' || selectFields.length > 0
 
+      const etiqueta = integracion.jobName || destino.entitySet
+
       if (!puedeConsultar) {
         cache.avisos.push(`${integracion.jobName}: ${destino.entitySet} no tiene ninguno de estos campos.`)
+        cache.registro.push({
+          tipo: 'aviso',
+          texto: `⚠ Ejemplo IBP [${etiqueta}]: ${destino.entitySet} sin campos válidos para $select`,
+        })
       } else {
         // Los campos que esta entidad tiene que cubrir: en planning, solo los que ella tiene.
         const necesarios = destino.service === 'PLANNING_DATA_API_SRV' ? selectFields : campos
@@ -85,12 +94,20 @@ export async function enrichIntegration(
             cache.porEntidad.set(clave, row)
 
             if (row) {
+              cache.registro.push({
+                tipo: 'ok',
+                texto: `✔ Ejemplo IBP [${etiqueta}]: ${destino.entitySet} (${Object.keys(row).length} campos, top ${top})`,
+              })
               for (const [campo, valor] of Object.entries(row)) {
                 const formateado = formatIbpExample(valor)
                 if (formateado !== '' && !cache.porCampo.has(campo)) cache.porCampo.set(campo, formateado)
               }
             } else {
               cache.avisos.push(`${integracion.jobName}: ${destino.entitySet} — ${detail} (top ${top})`)
+              cache.registro.push({
+                tipo: 'aviso',
+                texto: `⚠ Ejemplo IBP [${etiqueta}]: ${destino.entitySet} — ${detail} (top ${top})`,
+              })
             }
           }
 
@@ -114,7 +131,10 @@ export async function enrichIntegration(
         cache.intentados.add(clave)
         const valor = await pedirCampo({ entitySet: destino.entitySet, planArea: destino.planArea, field: campo })
         const formateado = formatIbpExample(valor)
-        if (formateado !== '') cache.porCampo.set(clave, formateado)
+        if (formateado !== '') {
+          cache.porCampo.set(clave, formateado)
+          cache.registro.push({ tipo: 'linea', texto: `   ↳ ejemplo dirigido ${campo} = ${formateado}` })
+        }
       }
     }
   } else if ((integracion.tipoIntegracion || '').toUpperCase() !== 'FILE') {
@@ -123,6 +143,11 @@ export async function enrichIntegration(
       `${integracion.jobName}: no se pudo resolver la entidad de IBP `
       + `(tabla ${integracion.targetTable || '?'}, área ${area}).`,
     )
+    cache.registro.push({
+      tipo: 'aviso',
+      texto: `⚠ Ejemplo IBP [${integracion.jobName || integracion.targetTable}]: sin entidad resuelta `
+        + `(tabla=${integracion.targetTable || '?'}, tipo=${integracion.tipoIntegracion || '?'}, PA=${area})`,
+    })
   }
 
   const mappings = integracion.mappings.map((mapeo) => {
@@ -192,5 +217,9 @@ export async function enrichAll(entradas, catalogo, pedirFila, planAreaElegida =
   }
 
   const relleno = backfillFromCache(enriquecidas, cache)
-  return { entradas: enriquecidas, avisos: cache.avisos, relleno }
+  cache.registro.push({
+    tipo: 'ok',
+    texto: `↺ Backfill desde cache: +${relleno.descripciones} descripciones, +${relleno.ejemplos} ejemplos`,
+  })
+  return { entradas: enriquecidas, avisos: cache.avisos, relleno, registro: cache.registro }
 }
