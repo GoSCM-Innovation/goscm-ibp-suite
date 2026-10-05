@@ -1433,6 +1433,81 @@ a { color: var(--cyan); }
   padding: 1px 6px;
 }
 .exp-promoted { color: var(--green); font-size: 11px; font-weight: 700; }
+
+/* Los scripts pre/post-load del job. Portado de `.ex-script-*` de v9. Verde porque corren fuera del
+   dataflow y no comparten color con los lookups (violeta) ni con los avisos del ATL (ámbar). */
+.exp-script-badge { font-size: 11px; margin-right: 4px; vertical-align: middle; }
+.exp-script-count {
+  border: 1px solid var(--green);
+  border-radius: 3px;
+  color: var(--green);
+  font-size: 10px;
+  font-weight: 700;
+  margin-left: 2px;
+  padding: 0 4px;
+}
+.exp-script-item {
+  background: var(--bg3);
+  border-left: 3px solid var(--green);
+  border-radius: 4px;
+  margin-bottom: 8px;
+  padding: 8px;
+}
+.exp-script-item:last-child { margin-bottom: 0; }
+.exp-script-item.is-empty { border-left-color: var(--text3); opacity: .75; }
+.exp-script-head { align-items: center; display: flex; gap: 6px; margin-bottom: 4px; }
+.exp-script-kind {
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text3);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  padding: 0 4px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.exp-script-kind.is-pre { border-color: var(--green); color: var(--green); }
+.exp-script-kind.is-post { border-color: var(--cyan); color: var(--cyan); }
+.exp-script-name { color: var(--text2); font-size: 10px; word-break: break-all; }
+.exp-script-desc { color: var(--text2); font-size: 11px; margin-bottom: 4px; }
+.exp-script-code {
+  color: var(--green);
+  font-family: Consolas, Monaco, monospace;
+  font-size: 11px;
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.exp-script-empty { color: var(--text3); font-size: 11px; font-style: italic; margin: 0; }
+
+/* El interruptor de pastilla de v9 (`.ex-toggle-switch`): texto a la izquierda, pastilla de 36×20 con
+   una perilla de 14×14 que se pone en el ámbar del acento al activarse. */
+.interruptor { align-items: center; cursor: pointer; display: inline-flex; gap: 8px; user-select: none; }
+.interruptor-texto { color: var(--text2); font-size: 12px; }
+.interruptor-input { height: 0; opacity: 0; position: absolute; width: 0; }
+.interruptor-pastilla {
+  background: var(--border);
+  border-radius: 10px;
+  flex-shrink: 0;
+  height: 20px;
+  position: relative;
+  transition: background .15s;
+  width: 36px;
+}
+.interruptor-pastilla.on { background: var(--accent); }
+.interruptor-perilla {
+  background: #fff;
+  border-radius: 50%;
+  height: 14px;
+  left: 3px;
+  position: absolute;
+  top: 3px;
+  transition: left .15s;
+  width: 14px;
+}
+.interruptor-pastilla.on .interruptor-perilla { left: 19px; }
+.interruptor-input:focus-visible + .interruptor-pastilla { outline: 2px solid var(--accent); outline-offset: 2px; }
 .exp-chain-marks { display: inline-flex; gap: 1px; font-size: 10px; }
 
 /* â”€â”€ El detalle â”€â”€ */

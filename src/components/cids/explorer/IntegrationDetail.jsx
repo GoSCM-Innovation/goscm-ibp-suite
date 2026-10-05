@@ -11,6 +11,7 @@ import {
   COLOR_DE_VIA,
   ICONO_DE_VIA,
   NOMBRE_DE_VIA,
+  scriptsDe,
   vecinos,
 } from '../../../lib/integration-view.js'
 import AtlSection from './AtlSection.jsx'
@@ -29,6 +30,30 @@ export function Seccion({ titulo, cantidad, abiertaPorOmision = false, children 
         <span className="exp-arrow">{abierta ? '▼' : '▶'}</span>
       </button>
       {abierta && <div className="exp-section-body">{children}</div>}
+    </div>
+  )
+}
+
+const ETIQUETA_DE_SCRIPT = { pre: 'Pre-load', post: 'Post-load' }
+
+/**
+ * Un script del job: si corre antes o después del dataflow, su nombre, su descripción y su código.
+ * Un slot sin contenido se muestra igual, atenuado: CI-DS lo crea al abrir el editor de scripts.
+ */
+function ScriptDelJob({ script }) {
+  const codigo = (script.expression || '').trim()
+  return (
+    <div className={`exp-script-item${codigo ? '' : ' is-empty'}`}>
+      <div className="exp-script-head">
+        <span className={`exp-script-kind${script.kind ? ` is-${script.kind}` : ''}`}>
+          {ETIQUETA_DE_SCRIPT[script.kind] ?? 'Script'}
+        </span>
+        <span className="exp-script-name">{script.name || '—'}</span>
+      </div>
+      {script.description && <div className="exp-script-desc">{script.description}</div>}
+      {codigo
+        ? <pre className="exp-script-code">{codigo}</pre>
+        : <p className="exp-script-empty">Slot de script definido pero sin contenido.</p>}
     </div>
   )
 }
@@ -198,6 +223,14 @@ export default function IntegrationDetail({
       {atl && <AtlSection idx={integracion._idx} atl={atl} integraciones={integraciones} />}
 
       {indiceDeJobs && <IbpJobsSection jobName={integracion.jobName} indice={indiceDeJobs} />}
+
+      {/* Los scripts pre/post-load van ARRIBA del diagrama, como en v9: corren fuera del dataflow y el
+          preload es lo primero que ejecuta la tarea. Solo si el job tiene alguno, vacío o no. */}
+      {scriptsDe(integracion).length > 0 && (
+        <Seccion titulo="📜 Scripts pre/post-load" cantidad={scriptsDe(integracion).length} abiertaPorOmision>
+          {scriptsDe(integracion).map((script, i) => <ScriptDelJob key={i} script={script} />)}
+        </Seccion>
+      )}
 
       {hayDiagrama && (
         <Seccion titulo="🗺️ Diagrama del dataflow" cantidad={integracion.diagram.nodes.length}>

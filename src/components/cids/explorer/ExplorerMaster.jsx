@@ -4,7 +4,9 @@
 // muestra como una fila: agrupar algo que no tiene hermanos solo agrega un clic.
 
 import { useState } from 'react'
-import { COLOR_DE_TIPO, COLOR_DE_VIA, NOMBRE_DE_VIA, agruparParaLista } from '../../../lib/integration-view.js'
+import {
+  COLOR_DE_TIPO, COLOR_DE_VIA, NOMBRE_DE_VIA, agruparParaLista, tieneScripts,
+} from '../../../lib/integration-view.js'
 
 /** La etiqueta de tipo (MD / KF / FILE) con su color. */
 function Tipo({ tipo }) {
@@ -48,6 +50,13 @@ function Cadenas({ cadenas, idxs }) {
   )
 }
 
+/** La insignia 📜: el job tiene un script pre/post-load con contenido. De v9 (`ex-script-badge`). */
+function InsigniaDeScript() {
+  return (
+    <span className="exp-script-badge" title="El job tiene un script pre/post-load con contenido">📜</span>
+  )
+}
+
 /** Una integración suelta, o un dataflow dentro de una tarea con varios. */
 function Fila({ integracion, activa, esHija, transportada, choca, cadenas, onElegir }) {
   const nombre = esHija ? (integracion.dataflowName || integracion.targetTable) : integracion.jobName
@@ -61,7 +70,8 @@ function Fila({ integracion, activa, esHija, transportada, choca, cadenas, onEle
       <span className="exp-item-name">
         {!esHija && <Tipo tipo={integracion.tipoIntegracion} />}
         {transportada && <span className="exp-promoted" title="Ya está en el repositorio productivo">✓</span>}
-        {choca && <span className="exp-warn" title="Choca con el orden real de ejecución">⚠</span>}
+        {tieneScripts(integracion) && <InsigniaDeScript />}
+        {choca &&<span className="exp-warn" title="Choca con el orden real de ejecución">⚠</span>}
         {esHija ? `↳ ${nombre}` : nombre}
         <Cadenas cadenas={cadenas} idxs={new Set([integracion._idx])} />
       </span>
@@ -103,6 +113,7 @@ function Tarea({ tarea, seleccion, transportadas, enConflicto, cadenas, onElegir
           {transportadas?.has((tarea.jobName || '').toUpperCase()) && (
             <span className="exp-promoted" title="Ya está en el repositorio productivo">✓</span>
           )}
+          {tarea.dataflows.some(tieneScripts) && <InsigniaDeScript />}
           {tarea.jobName}
           {tarea.dataflows.some((una) => enConflicto?.has(una._idx)) && (
             <span className="exp-warn" title="Alguno de sus dataflows choca con el orden real">⚠</span>

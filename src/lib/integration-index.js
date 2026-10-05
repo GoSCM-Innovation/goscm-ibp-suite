@@ -195,6 +195,9 @@ export function buildIndexes(integraciones) {
         ...integracion.variables.map((v) => v.name),
         ...tablasDeLookup,
         ...integracion.lookups.map((l) => l.func),
+        // El nombre y el código de los scripts pre/post-load, también de los slots vacíos: su
+        // nombre (`NAME_SCRIPT_PRELOAD`) se puede buscar. De v9.
+        ...(integracion.jobScripts ?? []).flatMap((s) => [s.name, s.expression]),
       ].filter(Boolean).join(' ').toLowerCase(),
     })
   }

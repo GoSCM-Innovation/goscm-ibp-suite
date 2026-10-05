@@ -49,16 +49,32 @@ export const datastoreOptions = (integraciones) => ({
  * Un conjunto vacío significa "todas", no "ninguna": es lo que espera quien no tocó el filtro.
  */
 export function baseFiltrada(integraciones, filtros = {}) {
-  const { planAreas, srcDS, dstDS, soloTransportadas, transportadas } = filtros
+  const { planAreas, srcDS, dstDS, soloTransportadas, transportadas, soloConScript } = filtros
 
   return integraciones.filter((una) => {
     if (planAreas?.size > 0 && !planAreas.has(una.planArea)) return false
     if (srcDS?.size > 0 && !srcDS.has(una.srcDSName)) return false
     if (dstDS?.size > 0 && !dstDS.has(una.dstDSName)) return false
     if (soloTransportadas && !transportadas?.has((una.jobName || '').toUpperCase())) return false
+    if (soloConScript && !tieneScripts(una)) return false
     return true
   })
 }
+
+/** Los scripts pre/post-load de la integración, o ninguno. De v9 (`_jobScripts`). */
+export const scriptsDe = (integracion) => (
+  Array.isArray(integracion?.jobScripts) ? integracion.jobScripts : []
+)
+
+/**
+ * Si la integración tiene algún script CON CONTENIDO. De v9 (`_hasScripts`).
+ *
+ * El filtro «Solo con script» y la insignia 📜 cuentan solo estos: un slot vacío existe pero no hace
+ * nada. El detalle, en cambio, lista también los vacíos.
+ */
+export const tieneScripts = (integracion) => (
+  scriptsDe(integracion).some((s) => (s.expression || '').trim().length > 0)
+)
 
 /**
  * Aplica además la búsqueda de texto, que mira el índice y no las integraciones.

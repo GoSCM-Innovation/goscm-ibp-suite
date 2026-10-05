@@ -20,6 +20,7 @@ import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react'
 
 import { usePantallaCompleta } from '../../../lib/usePantallaCompleta.js'
 import BotonPantallaCompleta from '../../ui/BotonPantallaCompleta.jsx'
+import Interruptor from '../../ui/Interruptor.jsx'
 
 import { conConflicto, enrichWithAtl } from '../../../lib/atl-enrich.js'
 import { parseATL } from '../../../lib/cids-atl.js'
@@ -34,6 +35,7 @@ import {
   entradasDeDimension,
   filtrarIntegraciones,
   planAreaOptions,
+  tieneScripts,
 } from '../../../lib/integration-view.js'
 import { useResizableColumn } from '../../../lib/useResizableColumn.js'
 import AtlProcessMaster from './AtlProcessMaster.jsx'
@@ -160,6 +162,7 @@ export default function IntegrationExplorer() {
   const [soloTransportadas, setSoloTransportadas] = useState(false)
   const [soloConflictos, setSoloConflictos] = useState(false)
   const [soloEnIbp, setSoloEnIbp] = useState(false)
+  const [soloConScript, setSoloConScript] = useState(false)
 
   // De dónde sale cada marca. Vacío = sin enriquecer.
   const [destinos, setDestinos] = useState([])
@@ -233,9 +236,18 @@ export default function IntegrationExplorer() {
   // Qué integraciones están metidas en un choque, para poder filtrar por ellas.
   const enConflicto = useMemo(() => (atl ? conConflicto(atl.conflictos) : null), [atl])
 
+  // Cuántas integraciones tienen un script pre/post-load con contenido. Cuenta dataflows y no tareas,
+  // como v9: todos los dataflows de un mismo job comparten sus scripts. Sin ninguna, el interruptor
+  // no se dibuja y el filtro no aplica aunque hubiera quedado encendido.
+  const conScript = useMemo(() => integraciones.filter(tieneScripts).length, [integraciones])
+  const filtrarPorScript = soloConScript && conScript > 0
+
   const filtros = useMemo(
-    () => ({ planAreas, srcDS, dstDS, soloTransportadas, transportadas: marcaTransportadas }),
-    [planAreas, srcDS, dstDS, soloTransportadas, marcaTransportadas],
+    () => ({
+      planAreas, srcDS, dstDS, soloTransportadas, transportadas: marcaTransportadas,
+      soloConScript: filtrarPorScript,
+    }),
+    [planAreas, srcDS, dstDS, soloTransportadas, marcaTransportadas, filtrarPorScript],
   )
 
   const visibles = useMemo(() => {
@@ -283,6 +295,7 @@ export default function IntegrationExplorer() {
     setSoloTransportadas(false)
     setSoloConflictos(false)
     setSoloEnIbp(false)
+    setSoloConScript(false)
 
     try {
       const resultado = await analyzeProject(archivos)
@@ -451,6 +464,16 @@ export default function IntegrationExplorer() {
           elegidas={dstDS}
           onAlternar={(valor) => setDstDS((previo) => alternar(previo, valor))}
         />
+
+        {conScript > 0 && (
+          <Interruptor
+            activo={soloConScript}
+            onCambiar={setSoloConScript}
+            titulo="Mostrar solo integraciones cuyo job tiene un script pre/post-load con contenido"
+          >
+            📜 Solo con script <span className="exp-script-count">{conScript}</span>
+          </Interruptor>
+        )}
 
         {marcaTransportadas && (
           <label className="exp-check">

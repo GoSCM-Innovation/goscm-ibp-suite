@@ -189,6 +189,62 @@ export function isFileTarget(datastoreDestino) {
 }
 
 /**
+ * Los scripts pre/post-load del trabajo.
+ *
+ * Portado de `parseJobScripts` de `docs.js` de v9 (`85666bd`). Viven en el `<Job>`, como
+ * `<elements xmi:type="workflow:Script" displayName=… expression=…>`, y NO dentro del dataflow: corren
+ * antes o después de él. Por eso todos los dataflows de un mismo XML comparten la misma lista.
+ *
+ * Pre o post se decide por lo primero que se cumpla: una conexión del script hacia un dataflow (pre) o
+ * de un dataflow hacia él (post); si no hay conexiones, el nombre (`POST`/`PRE`); y si el nombre
+ * tampoco dice, su posición respecto del dataflow. Si nada resuelve, queda `''`.
+ *
+ * Los slots VACÍOS se conservan: CI-DS crea el slot al abrir el editor de scripts aunque no se
+ * escriba nada, y quien explora tiene que poder ver que existe.
+ */
+export function parseJobScripts(job) {
+  const elementos = []
+  for (const hijo of job.children) {
+    if (hijo.localName === 'elements') elementos.push({ tipo: xmiType(hijo), el: hijo })
+  }
+
+  const posicionesDeDataflow = []
+  elementos.forEach((uno, i) => { if (uno.tipo.includes('DataFlowReference')) posicionesDeDataflow.push(i) })
+
+  // <connections sourceElement="/3/@elements.0" targetElement="/3/@elements.1"/>
+  const aristas = []
+  for (const hijo of job.children) {
+    if (hijo.localName !== 'connections') continue
+    const origen = (hijo.getAttribute('sourceElement') || '').match(/elements\.(\d+)/)
+    const destino = (hijo.getAttribute('targetElement') || '').match(/elements\.(\d+)/)
+    if (origen && destino) aristas.push({ from: +origen[1], to: +destino[1] })
+  }
+  const esDataflow = (i) => posicionesDeDataflow.includes(i)
+
+  const scripts = []
+  elementos.forEach((uno, i) => {
+    if (!uno.tipo.includes('Script')) return
+
+    const name = uno.el.getAttribute('displayName') || ''
+    let kind = ''
+    if (aristas.some((a) => a.from === i && esDataflow(a.to))) kind = 'pre'
+    else if (aristas.some((a) => a.to === i && esDataflow(a.from))) kind = 'post'
+    else if (/POST/i.test(name)) kind = 'post'
+    else if (/PRE/i.test(name)) kind = 'pre'
+    else if (posicionesDeDataflow.some((d) => d > i)) kind = 'pre'
+    else if (posicionesDeDataflow.some((d) => d < i)) kind = 'post'
+
+    scripts.push({
+      name,
+      kind,
+      description: uno.el.getAttribute('description') || '',
+      expression: (uno.el.getAttribute('expression') || '').replace(/&#xA;/g, '\n'),
+    })
+  })
+  return scripts
+}
+
+/**
  * Los datos del trabajo: su nombre, su descripción, sus variables globales y el área de planificación.
  *
  * El área sale de `$G_PLAN_AREA`, que viene entrecomillada en el XMI y hay que desnudar.
@@ -214,6 +270,7 @@ export function parseJobMetadata(raiz) {
     jobDesc: getProp(job, 'Description') || job.getAttribute('description') || '',
     variables,
     planArea: area ? area.value.replace(/^'|'$/g, '') : '',
+    jobScripts: parseJobScripts(job),
   }
 }
 
@@ -591,6 +648,7 @@ export function parseIntegration(xmlTexto, entradaDeBatch = null) {
       jobDesc: trabajo.jobDesc,
       planArea: trabajo.planArea,
       variables: trabajo.variables,
+      jobScripts: trabajo.jobScripts,
       srcDSName,
       dstDSName: dstFinal,
       tipoIntegracion: integrationType(trabajo.jobName, isFileTarget(dstFinal), resultado.targetTable),
