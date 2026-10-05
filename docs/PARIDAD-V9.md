@@ -167,6 +167,69 @@ lleva a la pantalla de acceso en vez de repetir el mismo error cada 30 s.
 - **El tiempo máximo de la función `api/cids`** ante un rango de 90 días o un log muy grande (`vercel.json`
   no fija `maxDuration`, igual que v9).
 
+## Orquestaciones, como v9 (2026-10-05)
+
+Revisadas control por control contra `Orchestrations/` de v9 y `api/orchestrate.js`. v9 **no tiene
+programación por cron ni historial de corridas** (solo guarda la última): no son huecos nuestros.
+
+**Lista.** Los `title` y textos de v9 (importar, exportar, favoritos, «Duplicar orquestación», «Eliminar»,
+«Sin orquestaciones.» + «Crear una»), panel que se contrae a 28 px, favoritas primero en el orden del
+servidor y con su borde. «+» pide el nombre con `prompt` y borrar usa `confirm`, como v9 (antes había un
+formulario en línea y un modal propios: se quitaron). **Importar**: píldoras «N en archivo / nuevas / ya
+existen / inválidas», «Entradas omitidas (N)» con el motivo de cada una, «Importar N», aviso final; una
+entrada sin `nodes` ya no entra vacía; exportar avisa «N orquestación(es) exportada(s)».
+**Paleta**: «Task Palette», contraer, ancho arrastrable (160–520), proyectos fijados con 📌, «+ Nuevo grupo»
+al pie, tipo con color, `PRD` y descripción en el `title`; arrastrar y soltar además del clic.
+**Lienzo**: renombrar con clic en el nombre; **autoguardado a los 600 ms** (sin botón «Guardar»), «⚡ Auto»,
+«⊞ Auto Layout», minimapa, grupo redimensionable con insignia de modo y «N/M completadas», aristas
+animadas, `isValidConnection`, aviso «⚠ Ciclo detectado», lienzo bloqueado con su banner mientras corre,
+nodos como los de v9 (210 de ancho, icono de estado, agente/perfil/variables, «error: …», `#id` de SAP,
+entradas a la izquierda y salidas a la derecha), tecla Delete. **Errores de v9 que sí se arreglan**: los
+pasos dentro de un grupo ahora se pintan según su estado; quitar un grupo borra a sus hijos (antes quedaban
+huérfanos y el guardado fallaba).
+**Panel del nodo**: cabecera, rama de grupo, «En caso de error», «Máx reintentos», variables como
+desplegable con las reales de SAP (`getTaskInfo`). **Barra de ejecución**: «▶ Iniciar», «■ Cancelar»,
+«⏭ Reanudar», «↺ Repetir», «hechos/total», guarda de tasks fuera de grupo, modal «Iniciar orquestación»
+con **ejecución rápida (presets)**, agentes y configuración de sistema en desplegable (la configuración no
+se podía enviar antes) y variables descubiertas, y «Ejecutar solo este task» desde el ▶ del nodo.
+**Detalle de la corrida**: cabecera con hora y duración, `#id`, «Logs SAP».
+**Motor**: la variable global de la corrida **pisa** el valor del nodo y solo va a los nodos que la declaran
+(estaba al revés); un fallo al lanzar se **reintenta una vez** tras 1,5 s (salvo errores de sesión);
+cancelar deja los pendientes en `skipped` y reintenta el cerrojo 5×500 ms; **no se puede borrar** una
+orquestación con una corrida activa (409); los ciclos se validan también dentro de cada grupo; palabras de
+estado y «(intento n/m)» de v9. Todo ello solo para CI-DS: IBP conserva su política.
+**Editor móvil**: ejecuta, corta y muestra el resultado (antes no tenía la barra de ejecución y su texto
+decía lo contrario); y se corrigió un error propio: «Agregar paso» guardaba el paso en el servidor pero el
+editor no lo mostraba, y un «Guardar» posterior lo borraba.
+
+### Lo que sigue siendo distinto en Orquestaciones, y por qué
+
+| Qué | v9 | Aquí | Motivo |
+|---|---|---|---|
+| Importar con nombre repetido | REEMPLAZAR | RENOMBRAR (número detrás); nada se pisa | Una orquestación se configura una vez y sobrescribirla no se deshace |
+| Aviso de «Tenant SAP distinto» | sí | no; se muestra «origen» solo si el archivo lo trae | El archivo no lleva identificadores a propósito (una exportación de pruebas no puede apuntar en silencio a producción) |
+| Duplicar | `(copia)` siempre | `(copia 2)`… | Evita nombres repetidos |
+| Cancelar sin conseguir el cerrojo | devuelve la corrida como si hubiera cortado | falla tras 5 intentos con un mensaje | No afirmar que se cortó lo que no se cortó |
+| Reintentar el lanzamiento sin `runId` | reintenta | no reintenta | CI-DS pudo haber arrancado la tarea: reintentar duplicaría una carga |
+| Variables vacías en «task individual» | las manda | no las manda | No pisar el valor por omisión de CI-DS (igual que «Projects & Tasks») |
+| Marca de agente desconectado | `includes('CONNECTED')` (nunca marca a «DISCONNECTED») | sí lo marca | Error de v9 |
+| Detalle de la corrida | modal «Log de ejecución» | panel plegable «Detalle por paso» con la cabecera de v9 | Hay que poder mirar el dibujo mientras corre |
+| Agente y configuración en el panel del nodo | no existen | existen | El motor los usa; quitarlos sería perder funcionalidad |
+| Pantalla completa | overlay propio | la del navegador | Decidido antes |
+| Arranque de los hijos de un grupo | en el mismo tick | en el siguiente (≈5 s por grupo) | Documentado en el motor |
+| Editor móvil | asistente por pasos con grupos, paralelos y deshacer | lista en orden que se declara incapaz ante ramas | No aplanar en silencio |
+| Vida del estado de una corrida | 48 h | 7 días | Mejora declarada |
+
+### Lo que NO se pudo comprobar en Orquestaciones
+
+- **Contra un tenant real**: ninguna orquestación se ejecutó contra SAP; el motor, los reintentos y la
+  cancelación están probados con respuestas simuladas.
+- **A la vista**: los componentes se probaron en jsdom; el dibujo del lienzo (`@xyflow`) no se miró en el
+  navegador (en el panel de vista previa no dibuja las aristas, ver la memoria del proyecto).
+- **Qué hace SAP CI-DS** ante una variable global no declarada por la tarea o repetida en el XML (por eso se
+  portó la regla de v9 de mandarla solo a quien la declara).
+- Quedan reglas de CSS sin uso en `src/index.css` (`.nodo-tarea*`, `.nodo-grupo*`, `.orq-nueva`, …).
+
 ## Portado
 
 | v9 | Aquí | Notas |
