@@ -166,58 +166,183 @@ function filasDeLaHoja(hoja) {
   return filas
 }
 
-/** El XML de una hoja y, si sus encabezados llevan nota, el de los comentarios y el dibujo VML. */
-export function xmlDeHoja(hoja) {
-  const filas = filasDeLaHoja(hoja)
+/** Cuántas filas de datos caben en una hoja antes de partirla en «Hoja (2)», «Hoja (3)»… (`ROW_LIMIT` de v7). */
+export const LIMITE_DE_FILAS = 900000
 
-  // Ancho de columna: el texto más largo + 2, entre 10 y 60 (`_toXml` de v7).
-  const largos = []
-  let columnas = 0
-  for (const fila of filas) {
-    fila.celdas.forEach((v, ci) => {
-      const l = v !== null && v !== undefined ? String(v).length : 0
-      if (ci >= columnas) columnas = ci + 1
-      if (l > (largos[ci] || 0)) largos[ci] = l
-    })
+/** `<row>` de una fila ya descrita, y las notas de sus celdas. `f` es la posición (desde 0) dentro de la hoja. */
+function filaXml(fila, f) {
+  const partes = [`<row r="${f + 1}"${fila.alto ? ` ht="${fila.alto}" customHeight="1"` : ''}>`]
+  fila.celdas.forEach((v, ci) => {
+    const xf = fila.xfs && fila.xfs[ci] != null ? fila.xfs[ci] : fila.xfFila
+    partes.push(celdaXml(v, cellRef(f, ci), xf))
+  })
+  partes.push('</row>')
+  const notas = []
+  if (fila.notas) {
+    for (const [ci, texto] of Object.entries(fila.notas)) notas.push({ fila: f, columna: Number(ci), texto })
   }
+  return { xml: partes.join(''), notas }
+}
 
+/** Lo que va ANTES de las filas: raíz, color de pestaña, dimensión, fila congelada y anchos. */
+function cabeceraDeLaHoja({ color, nFilas, columnas, largos }) {
   const partes = [
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
     + '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"'
     + ' xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">',
   ]
-  if (hoja.color) partes.push(`<sheetPr><tabColor rgb="${hoja.color}"/></sheetPr>`)
-  if (filas.length > 0 && columnas > 0) partes.push(`<dimension ref="A1:${cellRef(filas.length - 1, columnas - 1)}"/>`)
+  if (color) partes.push(`<sheetPr><tabColor rgb="${color}"/></sheetPr>`)
+  if (nFilas > 0 && columnas > 0) partes.push(`<dimension ref="A1:${cellRef(nFilas - 1, columnas - 1)}"/>`)
   partes.push('<sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>')
   partes.push('<sheetFormatPr defaultRowHeight="15"/>')
   if (columnas > 0) {
     partes.push('<cols>')
     for (let ci = 0; ci < columnas; ci++) {
+      // Ancho de columna: el texto más largo + 2, entre 10 y 60 (`_toXml` de v7).
       const w = Math.min(Math.max((largos[ci] || 10) + 2, 10), 60)
       partes.push(`<col min="${ci + 1}" max="${ci + 1}" width="${w}" customWidth="1"/>`)
     }
     partes.push('</cols>')
   }
-
   partes.push('<sheetData>')
+  return partes.join('')
+}
+
+/** Lo que va DESPUÉS de las filas. */
+const pieDeLaHoja = (conNotas) => `</sheetData>${conNotas ? '<legacyDrawing r:id="rId2"/>' : ''}</worksheet>`
+
+/** El largo del texto de cada celda, para el ancho de las columnas. */
+function medir(celdas, largos) {
+  let columnas = 0
+  celdas.forEach((v, ci) => {
+    const l = v !== null && v !== undefined ? String(v).length : 0
+    if (ci >= columnas) columnas = ci + 1
+    if (l > (largos[ci] || 0)) largos[ci] = l
+  })
+  return columnas
+}
+
+/** El XML de una hoja y, si sus encabezados llevan nota, el de los comentarios y el dibujo VML. */
+export function xmlDeHoja(hoja) {
+  const filas = filasDeLaHoja(hoja)
+
+  const largos = []
+  let columnas = 0
+  for (const fila of filas) columnas = Math.max(columnas, medir(fila.celdas, largos))
+
+  const partes = [cabeceraDeLaHoja({ color: hoja.color, nFilas: filas.length, columnas, largos })]
   const notas = []
   filas.forEach((fila, f) => {
-    const rn = f + 1
-    partes.push(`<row r="${rn}"${fila.alto ? ` ht="${fila.alto}" customHeight="1"` : ''}>`)
-    fila.celdas.forEach((v, ci) => {
-      const xf = fila.xfs && fila.xfs[ci] != null ? fila.xfs[ci] : fila.xfFila
-      partes.push(celdaXml(v, cellRef(f, ci), xf))
-    })
-    partes.push('</row>')
-    if (fila.notas) {
-      for (const [ci, texto] of Object.entries(fila.notas)) notas.push({ fila: f, columna: Number(ci), texto })
-    }
+    const r = filaXml(fila, f)
+    partes.push(r.xml)
+    notas.push(...r.notas)
   })
-  partes.push('</sheetData>')
-  if (notas.length > 0) partes.push('<legacyDrawing r:id="rId2"/>')
-  partes.push('</worksheet>')
+  partes.push(pieDeLaHoja(notas.length > 0))
 
   return { xml: partes.join(''), notas }
+}
+
+/** Junta pedazos de XML en uno solo; en el navegador, un `Blob` (que el navegador guarda fuera del montón). */
+const juntar = (pedazos) => (typeof Blob !== 'undefined' ? new Blob(pedazos) : pedazos.join(''))
+
+/** El nombre de la parte número `n` (desde 1) de una hoja partida: «Hoja», «Hoja (2)»… */
+export const nombreDeParte = (base, n) => (n === 1 ? base : `${base} (${n})`)
+
+/**
+ * Escribe una hoja de tabla fila a fila SIN retener las filas (el `makeGroup` / `_Sheet` de v7).
+ *
+ * Es lo que permite el Excel de una red con cientos de miles de arcos: cada fila se vuelve XML en cuanto
+ * llega y, cada `lote` filas, el XML acumulado pasa a un `Blob` que el navegador guarda fuera del montón de
+ * JavaScript. Cuando una parte llega a `limite` filas de datos se abre otra, con su propio encabezado,
+ * como `newSheet()` de v7.
+ *
+ *   escritor.agregar(celdas, sev)   celdas ya limpias; `sev` es 'red' | 'yel' | 'ok'
+ *   escritor.cerrar()               [{ xml, notas }], una por parte, en orden
+ */
+export function crearEscritorDeTabla({
+  color, encabezados, notas = [], grupos = [], limite = LIMITE_DE_FILAS, lote = 20000, unir = juntar,
+}) {
+  const filaDeEncabezado = {
+    celdas: encabezados,
+    xfs: encabezados.map((_, i) => {
+      const grupo = grupos[i]
+      const argb = grupo ? (COLORES.GRUPO[grupo] || COLORES.GOLD) : COLORES.GOLD
+      return XF_DE_ENCABEZADO[argb] ?? XF_ENCABEZADO
+    }),
+    xfFila: XF_ENCABEZADO,
+    alto: 22,
+    notas: Object.fromEntries(encabezados.map((_, i) => [i, notas[i]]).filter(([, nota]) => nota)),
+  }
+
+  const partes = []
+  let actual = null
+
+  function abrir() {
+    const encabezado = filaXml(filaDeEncabezado, 0)
+    actual = { cuerpo: [], pendiente: [encabezado.xml], filas: 1, datos: 0, largos: [], columnas: 0, notas: encabezado.notas }
+    actual.columnas = medir(encabezados, actual.largos)
+    partes.push(actual)
+  }
+
+  function vaciar() {
+    if (actual.pendiente.length > 0) actual.cuerpo.push(unir(actual.pendiente))
+    actual.pendiente = []
+  }
+
+  abrir()
+
+  return {
+    agregar(celdas, sev) {
+      if (actual.datos >= limite) { vaciar(); abrir() }
+      const relleno = rellenoDeSeveridad(sev)
+      const xfs = celdas.map((v) => (v === NA_DASH ? XF_NA : (relleno ? XF_DE_DATOS[relleno] : XF_NORMAL)))
+      actual.pendiente.push(filaXml({ celdas, xfs, xfFila: XF_NORMAL, alto: 0, notas: null }, actual.filas).xml)
+      actual.columnas = Math.max(actual.columnas, medir(celdas, actual.largos))
+      actual.filas += 1
+      actual.datos += 1
+      if (actual.pendiente.length >= lote) vaciar()
+    },
+    cerrar() {
+      return partes.map((parte) => {
+        actual = parte
+        vaciar()
+        const cabecera = cabeceraDeLaHoja({ color, nFilas: parte.filas, columnas: parte.columnas, largos: parte.largos })
+        const xml = unir([cabecera, ...parte.cuerpo, pieDeLaHoja(parte.notas.length > 0)])
+        parte.cuerpo = []
+        return { xml, notas: parte.notas }
+      })
+    },
+  }
+}
+
+/**
+ * Las hojas del libro, ya partidas: una entrada por hoja de Excel `{ nombre, generar() }`. El XML se
+ * arma al llamar a `generar()`, de a una hoja, para no tenerlas todas en memoria a la vez.
+ *
+ * Una hoja con más de `LIMITE_DE_FILAS` filas de datos se parte en «Hoja», «Hoja (2)»…, como
+ * `analyzeAndStreamExcel` de v7. Una hoja que ya viene escrita por partes (`hoja.partes`, de
+ * `crearEscritorDeTabla`) se usa tal cual.
+ */
+export function hojasDelLibro(informe, limite = LIMITE_DE_FILAS) {
+  const salida = []
+  for (const hoja of informe.hojas) {
+    if (hoja.partes) {
+      hoja.partes.forEach((parte, i) => salida.push({
+        nombre: nombreDeParte(hoja.nombre, i + 1),
+        generar: () => ({ xml: parte.xml, notas: parte.notas }),
+      }))
+    } else if (hoja.tipo === 'tabla' && hoja.filas.length > limite) {
+      for (let desde = 0, n = 1; desde < hoja.filas.length; desde += limite, n += 1) {
+        salida.push({
+          nombre: nombreDeParte(hoja.nombre, n),
+          generar: () => xmlDeHoja({ ...hoja, filas: hoja.filas.slice(desde, desde + limite), extras: [] }),
+        })
+      }
+    } else {
+      salida.push({ nombre: hoja.nombre, generar: () => xmlDeHoja(hoja) })
+    }
+  }
+  return salida
 }
 
 /** `xl/commentsN.xml`: el texto de cada nota. */
@@ -279,13 +404,13 @@ function vmlXml(notas) {
  * como para que la pantalla se congele si no se le devuelve el hilo (v7 hacía lo mismo).
  */
 export async function partesDelLibro(informe, { ceder = () => Promise.resolve() } = {}) {
-  const hojas = informe.hojas
+  const hojas = hojasDelLibro(informe)
   const n = hojas.length
   const partes = {}
 
   const conNotas = new Array(n).fill(false)
   for (let i = 0; i < n; i++) {
-    const { xml, notas } = xmlDeHoja(hojas[i])
+    const { xml, notas } = hojas[i].generar()
     partes[`xl/worksheets/sheet${i + 1}.xml`] = xml
     if (notas.length > 0) {
       conNotas[i] = true

@@ -1,7 +1,15 @@
 import JSZip from 'jszip'
 import { describe, expect, it } from 'vitest'
 
-import { armarLibroDeAnalisis, partesDelLibro, xmlDeHoja } from './xlsx-analisis.js'
+import {
+  LIMITE_DE_FILAS,
+  armarLibroDeAnalisis,
+  crearEscritorDeTabla,
+  hojasDelLibro,
+  nombreDeParte,
+  partesDelLibro,
+  xmlDeHoja,
+} from './xlsx-analisis.js'
 
 const tabla = () => ({
   tipo: 'tabla',
@@ -141,5 +149,90 @@ describe('armarLibroDeAnalisis', () => {
     let cedidas = 0
     await partesDelLibro(informe(), { ceder: () => { cedidas += 1; return Promise.resolve() } })
     expect(cedidas).toBe(2)
+  })
+})
+
+describe('hojas partidas (analyzeAndStreamExcel de v7: ROW_LIMIT)', () => {
+  const conFilas = (n) => ({
+    ...tabla(),
+    filas: Array.from({ length: n }, (_, i) => ({ c: ['✅ OK', `obs ${i}`, `A${i}`, i], s: 'ok' })),
+  })
+
+  it('una hoja con más filas que el límite se parte en «Hoja», «Hoja (2)»…, cada una con su encabezado', () => {
+    const libro = hojasDelLibro({ hojas: [conFilas(7)] }, 3)
+    expect(libro.map((h) => h.nombre)).toEqual(['Product', 'Product (2)', 'Product (3)'])
+    const [uno, dos, tres] = libro.map((h) => h.generar())
+    // Tres, tres y una fila de datos, más la fila 1 de encabezados en cada parte.
+    expect(uno.xml).toContain('<dimension ref="A1:D4"/>')
+    expect(dos.xml).toContain('<dimension ref="A1:D4"/>')
+    expect(tres.xml).toContain('<dimension ref="A1:D2"/>')
+    expect(dos.xml).toContain('<t>PRDID</t>')
+    expect(dos.xml).toContain('<t>A3</t>')
+    expect(dos.xml).not.toContain('<t>A2</t>')
+    expect(tres.notas).toHaveLength(3) // los comentarios de los encabezados se repiten en cada parte
+  })
+
+  it('una hoja que cabe no se parte', async () => {
+    expect(hojasDelLibro({ hojas: [conFilas(3)] }, 3).map((h) => h.nombre)).toEqual(['Product'])
+    const partes = await partesDelLibro({ hojas: [conFilas(5)] })
+    expect(Object.keys(partes)).toContain('xl/worksheets/sheet1.xml')
+    expect(partes['xl/workbook.xml']).not.toContain('Product (2)') // 5 < 900.000
+  })
+
+  it('el límite de v7 es 900.000 filas de datos', () => {
+    expect(LIMITE_DE_FILAS).toBe(900000)
+    expect(nombreDeParte('Location Source', 1)).toBe('Location Source')
+    expect(nombreDeParte('Location Source', 2)).toBe('Location Source (2)')
+  })
+})
+
+describe('crearEscritorDeTabla — la hoja que no se retiene en memoria', () => {
+  const base = tabla()
+  const escribir = (limite, lote, filas = base.filas) => {
+    const e = crearEscritorDeTabla({
+      color: base.color, encabezados: base.encabezados, notas: base.notas, grupos: base.grupos,
+      limite, lote, unir: (pedazos) => pedazos.join(''),
+    })
+    for (const f of filas) e.agregar(f.c, f.s)
+    return e.cerrar()
+  }
+
+  it('escribe EXACTAMENTE el mismo XML que la hoja en memoria', () => {
+    const [parte] = escribir(900000, 20000)
+    expect(parte.xml).toBe(xmlDeHoja(base).xml)
+    expect(parte.notas).toEqual(xmlDeHoja(base).notas)
+  })
+
+  it('da lo mismo vaciar el lote cada fila que al final', () => {
+    expect(escribir(900000, 1)[0].xml).toBe(escribir(900000, 20000)[0].xml)
+  })
+
+  it('abre otra parte, con su encabezado, al llegar al límite', () => {
+    const partes = escribir(3, 2)
+    // Cuatro filas de datos con límite 3: tres y una.
+    expect(partes).toHaveLength(2)
+    expect(partes[0].xml).toContain('<dimension ref="A1:D4"/>')
+    expect(partes[1].xml).toContain('<dimension ref="A1:D2"/>')
+    expect(partes[1].xml).toContain('<t>PRDID</t>')
+    expect(partes[1].xml).toContain('<c r="C2" t="inlineStr"><is><t>A4</t></is></c>')
+    expect(partes[1].notas).toHaveLength(3)
+  })
+
+  it('sin filas queda la hoja con su encabezado, como en v7', () => {
+    const [parte] = escribir(900000, 20000, [])
+    expect(parte.xml).toContain('<dimension ref="A1:D1"/>')
+    expect(parte.xml).toContain('<t>Estado</t>')
+  })
+
+  it('en el navegador junta el XML en un Blob y el libro lo lleva tal cual a sus partes', async () => {
+    // (JSZip de pruebas no lee el Blob de jsdom, pero sí el del navegador: v7 hacía lo mismo.)
+    const e = crearEscritorDeTabla({ color: base.color, encabezados: base.encabezados, notas: base.notas, grupos: base.grupos, lote: 2 })
+    for (const f of base.filas) e.agregar(f.c, f.s)
+    const partes = e.cerrar()
+    expect(partes[0].xml).toBeInstanceOf(Blob)
+    const libro = await partesDelLibro({ hojas: [{ ...base, filas: [], partes }] })
+    expect(libro['xl/worksheets/sheet1.xml']).toBe(partes[0].xml)
+    expect(libro['xl/comments1.xml']).toContain('Detalle &amp; más')
+    expect(await new Response(partes[0].xml).text()).toBe(xmlDeHoja(base).xml)
   })
 })
