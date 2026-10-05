@@ -60,7 +60,7 @@ export default function DimensionDetail({
 
         const cabecera = (
           <span className="exp-dim-title">
-            <span className="exp-type" style={{ background: COLOR_DE_TIPO[tipo] || 'var(--text3)' }}>{tipo}</span>
+            <span className="exp-type" style={{ '--tipo': COLOR_DE_TIPO[tipo] || 'var(--text3)' }}>{tipo}</span>
             {integracion.jobName}
             {dataflow && <span className="exp-sub">↳ {dataflow}</span>}
             <span className="exp-muted">{integracion._zipName}</span>

@@ -1417,12 +1417,14 @@ a { color: var(--cyan); }
 .exp-arrow { color: var(--text3); font-size: 9px; }
 
 .exp-type {
+  background: color-mix(in srgb, var(--tipo, var(--text3)) 16%, transparent);
+  border: 1px solid var(--tipo, var(--text3));
   border-radius: 4px;
-  color: #000;
+  color: var(--tipo, var(--text3));
   font-size: 9.5px;
   font-weight: 700;
   letter-spacing: .04em;
-  padding: 2px 5px;
+  padding: 1px 5px;
 }
 .exp-count {
   background: var(--surface-glass-strong);
@@ -1886,7 +1888,6 @@ a { color: var(--cyan); }
 .exp-navbar { display: flex; gap: 6px; }
 .exp-header-card {
   background: var(--surface-glass-soft);
-  border-left: 3px solid var(--accent);
   border-radius: 8px;
   display: flex;
   flex-direction: column;
@@ -1937,7 +1938,7 @@ a { color: var(--cyan); }
 
 .exp-dst-field { font-weight: 600; }
 .exp-src { color: var(--text2); font-size: 11.5px; }
-.exp-ops { color: var(--accent); font-size: 11px; word-break: break-word; }
+.exp-ops { color: var(--green); font-size: 11px; word-break: break-word; }
 
 .exp-expr {
   background: var(--bg2);
@@ -1951,6 +1952,10 @@ a { color: var(--cyan); }
   word-break: break-word;
 }
 .exp-filter, .exp-lookup { display: flex; flex-direction: column; gap: 3px; }
+/* Como en v9: la expresión de un filtro va en amarillo; un lookup, en violeta y con su borde. */
+.exp-filter .exp-expr { background: var(--bg3); color: var(--accent); }
+.exp-lookup { border-left: 3px solid var(--purple); padding-left: 8px; }
+.exp-lookup .exp-expr { background: var(--bg3); color: var(--purple); }
 .exp-filter-table { color: var(--text3); font-size: 11px; }
 
 .exp-var { align-items: baseline; display: flex; gap: 8px; }
@@ -2083,7 +2088,8 @@ a { color: var(--cyan); }
 
 /* Los conectores existen para que la librería sepa por dónde tirar la flecha, pero aquí nadie
    conecta nada a mano: se dejan invisibles. */
-.exp-handle { background: transparent; border: none; height: 1px; min-height: 0; min-width: 0; width: 1px; }
+.exp-handle,
+.react-flow__handle.exp-handle { background: transparent; border: none; height: 1px; min-height: 0; min-width: 0; width: 1px; }
 
 /* ── Documentador de mapeos ── */
 .exp-dropzone-block { display: flex; flex-direction: column; gap: 10px; }

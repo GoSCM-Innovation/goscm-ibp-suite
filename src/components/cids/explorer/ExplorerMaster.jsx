@@ -20,7 +20,7 @@ const TITULO_DEL_CONFLICTO =
 function Tipo({ tipo }) {
   const valor = tipo || 'MD'
   return (
-    <span className="exp-type" style={{ background: COLOR_DE_TIPO[valor] || 'var(--text3)' }}>{valor}</span>
+    <span className="exp-type" style={{ '--tipo': COLOR_DE_TIPO[valor] || 'var(--text3)' }}>{valor}</span>
   )
 }
 

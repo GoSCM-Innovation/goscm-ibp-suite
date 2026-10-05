@@ -7,6 +7,11 @@ actualiza al terminar cada sesión, y su orden es el de prioridad acordada.
 
 ## Dónde estamos
 
+- **Integration Explorer y Mapping Dataflow Generator iguales a v9 (2026-10-05)**: ver la sección con ese
+  nombre en `PARIDAD-V9.md`, con la tabla de lo que sigue siendo distinto y por qué. Pendiente de verlos
+  en el sitio y de generar un Excel real de los dos lados para cotejarlo celda a celda. **Falta revisar
+  del mismo modo las otras cinco pestañas de CI-DS Tools** (Resumen Global, Resumen, Projects & Tasks,
+  Task Monitor, Orquestaciones): esta revisión cubrió solo los dos módulos que v9 tenía como `legacy`.
 - **Revisión de paridad del 2026-10-05** (v7 `e628db5`, v8 `ed718ed`, v9 `b078052`, ya sincronizados): v7 y
   v8 sin pendientes. **v9 tenía tres huecos** (detalle en `PARIDAD-V9.md`): los `<messageLine>` de los logs de tarea
   (**hecho**), los scripts pre/post-load del Integration Explorer (**hecho**), y el SSRF

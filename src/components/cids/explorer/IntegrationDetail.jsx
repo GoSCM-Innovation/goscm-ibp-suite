@@ -182,7 +182,7 @@ export default function IntegrationDetail({
 
       <div className="exp-header-card">
         <div className="exp-h-title">
-          <span className="exp-type" style={{ background: COLOR_DE_TIPO[tipo] || 'var(--text3)' }}>{tipo}</span>
+          <span className="exp-type" style={{ '--tipo': COLOR_DE_TIPO[tipo] || 'var(--text3)' }}>{tipo}</span>
           {integracion.jobName}
         </div>
         {integracion.dataflowName && integracion.dataflowName !== integracion.jobName && (

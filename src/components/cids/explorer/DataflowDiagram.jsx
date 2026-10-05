@@ -260,7 +260,7 @@ export default function DataflowDiagram({ diagrama, integracion = null, nombre =
               {integracion
                 ? (
                   <>
-                    <span className="exp-type" style={{ background: COLOR_DE_TIPO[tipo] || 'var(--text3)' }}>{tipo}</span>
+                    <span className="exp-type" style={{ '--tipo': COLOR_DE_TIPO[tipo] || 'var(--text3)' }}>{tipo}</span>
                     {' '}{integracion.jobName || ''}
                     {integracion.dataflowName && integracion.dataflowName !== integracion.jobName && (
                       <span className="exp-sub"> ↳ {integracion.dataflowName}</span>
@@ -289,7 +289,7 @@ export default function DataflowDiagram({ diagrama, integracion = null, nombre =
               title="Arrastra para ajustar el ancho del panel"
               onPointerDown={(evento) => { evento.preventDefault(); setArrastrando(true) }}
             />
-            <div className="exp-df-fs-panel" style={{ width: anchoDelPanel }}>
+            <div className="exp-df-fs-panel" style={{ width: anchoDelPanel, maxWidth: '60vw' }}>
               <DetalleDelNodo nodo={detalle} />
             </div>
           </div>

@@ -28,6 +28,59 @@ para la fase de idioma.
 A diferencia de v8, en v9 la funcionalidad no está solo en `src/`: dos módulos enteros vivían en
 `public/legacy/` como JavaScript sin build, embebidos con iframe.
 
+## Integration Explorer y Mapping Dataflow Generator, idénticos a v9 (2026-10-05)
+
+Pedido del usuario: las dos pantallas que v9 tenía como módulos `legacy` tienen que verse y comportarse
+como las de v9. Se recorrieron **control por control** (`integration-explorer.html`, `explorer.js`,
+`mapping-dataflow.html`, `docs.js` y los textos de `es.json`) y se igualaron. Tema de color: el de la
+suite (claro/oscuro); lo que se copia es la estructura, el orden, los textos y el comportamiento.
+
+**Integration Explorer.** Banner «🔎 Explora visualmente…»; panel de carga plegable que SIGUE a la vista
+al explorar (los ATL se pueden añadir después y el cruce se rehace); «Conectar SAP CI-DS / IBP» con su
+pastilla, «Desconectar» y el «?» con la ayuda de v9; dimensiones rectangulares; Lista/Grafo en
+segmentos; búsqueda por varias palabras (AND); el texto ya no se aplica dos veces en las dimensiones;
+interruptores en lugar de casillas; filtros «PA:», «Origen:», «Destino:» con «Sin PA» y «(sin DS)»; barra
+de estado del ATL con su pastilla y «Solo conflictos»; «Solo con script» con contador; cabecera
+«Tareas (N)» con «⧉ Copiar» y aviso flotante; insignias ✓, IBP y 📜 en el orden de v9; proyectos plegados
+con «nombre (N)»; subtítulos de dos renglones en las dimensiones; detalle con las secciones abiertas por
+omisión, los títulos de v9 («Mappings», «Filtros», «Target:», «ZIP:», «Atrás», «Alimentado por»…) y el
+detalle de dimensión con «N campos» y el «Ver»; copiado con las cabeceras de v9; diagrama con sus doce
+tipos de nodo, tooltip, detalle por tipo, pantalla completa de verdad con divisor arrastrable; grafo con
+la leyenda de v9.
+
+**Mapping Dataflow Generator.** Banner; conexión a IBP arriba con «Planning Area (para los ejemplos de
+datos)»; los **tres modos** («📦 Desde archivos ZIP», «🔄 Desde Application Jobs», «🔗 ZIP + Jobs»); avance
+por pasos; «Pro tip»; paneles que siguen visibles al analizar; selección con sus textos y contadores;
+«⚙️ Generar Excel» separado de «⬇️ Descargar Excel»; panel «📊 Resultado»; log de procesamiento con los
+mensajes de v9; ayuda «?» con la imagen de exportación; guía del Communication Arrangement. Excel con
+las cabeceras, los textos vacíos y el nombre de archivo de v9; el ATL se aplica al generar, sin reordenar,
+y varios se acumulan; ejemplos de IBP con muestra de 50 filas, escalado a 200 y consulta dirigida.
+
+### Lo que sigue siendo distinto, y por qué
+
+| Qué | v9 | Aquí | Motivo |
+|---|---|---|---|
+| Conectar a CI-DS / IBP | modal con URL, usuario y contraseña | se ELIGE una conexión dada de alta | Las credenciales viven cifradas en el servidor y no llegan al navegador (regla de seguridad) |
+| «Qué configurar» del «?» y paso 6 de la guía | «escribe la URL…» / «usa las mismas credenciales en el panel» | «las da de alta quien administra la cuenta en Administración → Conexiones» | Misma regla; es el único texto portado que se reescribe |
+| Duplicados al soltar un archivo | ignora el nuevo | reemplaza por el nuevo | Volver a soltar un archivo es querer la versión nueva |
+| Filtros de Datastore y las dimensiones | no afectan a las dimensiones | sí afectan | Más coherente; v9 lo hacía por descuido |
+| Selección de plantilla de job | por nombre | por nombre y versión | Con varias versiones, v9 marcaba todas |
+| Tipo KF/MD/FILE | solo por el nombre del trabajo | primero por la tabla destino | Mejora ya documentada arriba |
+| Un paso repetido en el índice de IBP | el primero que devuelve la API | el de menor posición | El índice del servidor viene ordenado |
+| Pantalla completa del explorador | no existía | botón del módulo | Se conserva de antes |
+| Ancho de la lista | 340 px, sin memoria | 340 px, y se recuerda | Se conserva de antes |
+| Aviso de pasos duplicados de un job | no | sí | Ahorra una búsqueda |
+
+### Lo que NO se pudo comprobar
+
+- **Contra un tenant real**: nada. Las lecturas de IBP (muestra de 50/200 filas, consulta dirigida,
+  índice de tareas) están probadas con respuestas simuladas.
+- **Con un Excel real de los dos lados**: no se generó un `.xlsx` de v9 y otro de aquí para compararlos
+  celda a celda. Los estilos y los anchos son idénticos (comprobado ejecutando) y las cabeceras son las
+  de `es.json`; el resto se compara por lectura.
+- **Con los ojos**: se miraron las dos pantallas en el navegador con datos de muestra (andamio temporal,
+  ya borrado), en un panel angosto. No se compararon píxeles ni tipografías contra v9.
+
 ## Portado
 
 | v9 | Aquí | Notas |
