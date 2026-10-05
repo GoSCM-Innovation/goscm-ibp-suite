@@ -69,7 +69,7 @@ export async function indexarLaRed(hechos) {
  *
  * `clasificacion` es la que guarda la pantalla (`{ tipo: { excluido, categorias, productos } }`); aquí se
  * convierte a la forma de v7. A diferencia del Production Analyzer, el de la red NO la pone al día con el
- * maestro recién bajado: v7 solo llamaba a `mattyeInit` al confirmar el mapeo, no al analizar.
+ * maestro que acaba de bajar: v7 solo llamaba a `mattyeInit` al confirmar el mapeo, no al analizar.
  *
  * `web` dice si se pidió la vista web: sin ella las dos hojas de arcos solo se escriben al Excel.
  */

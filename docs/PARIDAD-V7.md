@@ -25,7 +25,7 @@ con el motivo escrito en [Los informes por entidad](#los-informes-por-entidad).
 | Production Visualizer | `bom.js` | 1.594 | **Portado** — `core/ibp/bom-tree.js` + `src/lib/bom-load.js` + `data/BomTree.jsx` |
 | Production Analyzer | `prodAnalyzer.js` + `snWebView.js` + `mattype-config.js` + `extraFields.js` + `statsSheet.js` + `runSummary.js` | 2.789 + | **Portado idéntico (2026-10-01)** — `core/ibp/production-analyzer.js` + `mattype-config.js` + `analisis-hojas.js` + `src/lib/produccion-analizar.js` + `xlsx-analisis.js` + `data/AnalizadorProduccion.jsx` + `VistaWebAnalisis.jsx`. Ver `PARIDAD-DATA-TOOLS.md` |
 | Network Visualizer | `visualizer.js` | 1.448 | **Portado** — `core/ibp/supply-network.js` + `src/lib/network-load-sap.js` + `data/NetworkVisualizer.jsx` (ver `PARIDAD-DATA-TOOLS.md`) |
-| Network Analyzer | `analyzer.js` + `snWebView.js` | 3.531 | **Portado** — `core/ibp/network-analysis.js` + `src/lib/network-analyze.js` |
+| Network Analyzer | `analyzer.js` + `snWebView.js` + `statsSheet.js` + `runSummary.js` | 3.531 + | **Portado idéntico (2026-10-05)** — `core/ibp/network-analyzer.js` + `network-analyzer-hojas.js` + `src/lib/red-analizar.js` + `registro-sn.js` + `hoja-en-disco.js` + `xlsx-analisis.js` + `data/NetworkAnalyzer.jsx` + `VistaWebAnalisis.jsx`. El algoritmo se cotejó contra la salida real de v7. Ver `PARIDAD-DATA-TOOLS.md` |
 | Glosario Analyzers | `glosario.js` | 1.409 | **Portado tal cual** — `data/Glosario.jsx` + `src/lib/glosario-v7.js` (el texto de v7) + `glosario-pdf.js` |
 | Planning Area Documenter | `paDoc.js` | 1.055 | **Portado** — `core/ibp/pa-doc-model.js` + `src/lib/docx.js` + `pa-doc.js` + `data/PlanningAreaDoc.jsx` |
 | Mapping Dataflow Generator | `docs.js` | 2.527 | **Portado** (llegó por v9) — `cids/documenter/*` |
@@ -195,7 +195,8 @@ Queda pendiente la misma revisión de alcance y filtros en **v8 y v9**.
 > tabla de calidad propia (Error / Aviso / Nota / Bien) y tres pestañas. Esa lógica se eliminó: el
 > Production Analyzer usa ahora el algoritmo de v7, idéntico (`core/ibp/production-analyzer.js`), con sus
 > hojas, su vista web y su Excel. Se deja el texto como historia de las decisiones; lo vigente está en
-> `docs/PARIDAD-DATA-TOOLS.md`. El analizador de la red sigue como aquí se describe hasta que se migre.
+> `docs/PARIDAD-DATA-TOOLS.md`. El analizador de la red se retiró igual el 2026-10-05: la sección «El analizador de la red»
+> de abajo es historia (su lógica era `network-analysis.js`, ya eliminado).
 
 
 Lo que hace es contestar, producto a producto: **¿está listo para que SAP planifique con él?** Y la
@@ -485,7 +486,7 @@ rehacer la forma convierte una migración en un producto nuevo que nadie pidió.
 | Las seis aplicaciones en el menú, con sus nombres e iconos | `src/lib/modules.js` → `APPS_EXPLORER` |
 | Candado 🔒 y pantalla de «Módulo restringido» por aplicación | `Shell.jsx` y `DataTools.jsx` |
 | Cinta de presentación de cada aplicación | `DataTools.jsx` |
-| Acordeón numerado ① a ⑤ dentro de los analizadores | `AnalizadorV7.jsx` + `PasoPlegable.jsx` |
+| Acordeón numerado ① a ⑤ dentro de los analizadores | `AnalizadorProduccion.jsx` / `NetworkAnalyzer.jsx` + `PasoPlegable.jsx` |
 | Panel «MAPEO DE ENTIDADES» como paso ① de cada aplicación | `PanelMapeo.jsx` |
 | Pestañas de producto del árbol, con ✕ y + | `ProductionVisualizer.jsx` |
 | Grafo interactivo de la red, con `vis-network` | `LienzoDeRed.jsx` |
@@ -518,7 +519,7 @@ como portados porque el árbol y la red sí lo estaban.
 |---|---|---|
 | Exportar la jerarquía de UNA lista de materiales a un solo Excel | `bomBatchRun` | `src/lib/bom-export.js` + el diálogo de `ProductionVisualizer.jsx` |
 | Exportar a Excel el árbol que se está mirando | `bomExportExcel` | `src/lib/bom-export.js` + el botón de `BomTree.jsx` |
-| Paso ④, campos adicionales de datos maestros | `extraFields.js` | `AnalizadorV7.jsx` + `extras` en `planificarExtraccion` |
+| Paso ④, campos adicionales de datos maestros | `extraFields.js` | `CamposAdicionales.jsx` + `extras` en `planificarExtraccion` |
 | Árbol invertido: **dónde se usa** cada insumo | `bomToggleInvert` | `invertirArbol` en `core/ibp/bom-tree.js` |
 | Panel de rutas: si lo que sale de cada planta llega a alguien | `vizFindAllRoutes` | `rutasDeLaRed` en `core/ibp/supply-network.js` + `PanelDeRutas.jsx` |
 

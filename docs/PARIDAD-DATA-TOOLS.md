@@ -14,7 +14,7 @@ Este documento es la lista de trabajo. Se tacha lo que se termina; no se contest
 | Production Visualizer | ✅ Árbol, textos de descarga y pestañas como v7 (2026-10-01). Falta mirarlo en el tenant |
 | Production Analyzer | ✅ Algoritmos, vista web, Excel, modal y pasos ②–⑤ como v7 (2026-10-01). Falta mirarlo en el tenant |
 | Network Visualizer | ✅ Igualado a v7 (2026-10-01), con las diferencias dichas abajo. Falta mirarlo en el tenant |
-| Network Analyzer | ❌ Pendiente — ver abajo |
+| Network Analyzer | ✅ Algoritmos, vista web (con las hojas de arcos paginadas desde IndexedDB), Excel partido a 900.000 filas, modal y pasos ②–⑤ como v7 (2026-10-05). Falta mirarlo en el tenant |
 | Planning Area Documenter | ✅ Hecho (2026-10-01) — ver abajo |
 
 ## Production Visualizer — hecho
@@ -69,8 +69,8 @@ control por control contra `prodAnalyzer.js`, `snWebView.js`, `mattype-config.js
    `[GET] <entidad>` en vez de la URL: el navegador nunca conoce la dirección del tenant (vive cifrada en
    el servidor). Regla de seguridad de la plataforma.
 2. **La vista web tiene todas las filas en memoria**; v7 mandaba las hojas grandes a IndexedDB. Para las
-   ocho hojas del Production Analyzer sobra (decenas de miles de filas); para las de arcos de la red
-   puede no sobrar (ver abajo).
+   ocho hojas del Production Analyzer sobra (decenas de miles de filas). Las de arcos de la red sí van a
+   IndexedDB: ver «Network Analyzer — hecho».
 3. **La clasificación de tipos se guarda con el formato de la suite** (`mattype_<área>`:
    `{ tipo: { excluido, categorias } }`), no con el `mattype_cfg_<pa>` de v7, para seguir compartida con el
    Network Analyzer mientras este no se migre. Los campos adicionales sí usan las claves de v7
@@ -88,8 +88,8 @@ control por control contra `prodAnalyzer.js`, `snWebView.js`, `mattype-config.js
    «no tener receta» se contradicen). No se corrigió: la regla es paridad.
 8. **«Resumen» no es una pestaña de la vista web**, es el renglón de tarjetas: así está en el código de
    v7 (`name !== _PA_SUMMARY_NAME`). Sí es la primera hoja del Excel.
-9. Quedan en el esquema de IndexedDB las tablas `pa_*` del analizador anterior, sin uso. No se
-   tocaron para no subir la versión del esquema; se quitan cuando se migre la red.
+9. ~~Quedan en el esquema de IndexedDB las tablas `pa_*` del analizador anterior, sin uso.~~ Se quitaron al
+   migrar la red (esquema versión 4, con migración que las borra).
 
 ### Sin confirmar (hay que verlo en el tenant de pruebas)
 
@@ -172,21 +172,113 @@ rendimiento del diálogo de filtros con miles de ubicaciones o clientes (v7 los 
 **No portado**: el selector de idioma (fase i18n al final). `locProd` / `custProd` (Location Product y
 Customer Product) no se leen: v7 los pedía y los guardaba en `VIZ_DATA`, pero ninguna pantalla los usaba.
 
-## Network Analyzer — pendiente
+## Network Analyzer — hecho (2026-10-05)
 
-Comparte con Production Analyzer: modal de modo de salida, mapeo/tipos/categorías/campos adicionales,
-textos de progreso, banner final, panel «Interpretación de resultados».
+Se reemplazó el analizador anterior de la suite (tabla de calidad propia: Error / Aviso / Nota / Bien, chips
+🔴🟡🔵🟢, «Descargar CSV», lógica en `network-analysis.js`) por el de v7, con **los mismos algoritmos**. Se mira
+contra `analyzer.js`, `snWebView.js`, `statsSheet.js` (`buildSN`), `runSummary.js`, `mattype-config.js`,
+`extraFields.js`, `index.html` (`tab-network`) y `es.json` de `origin/master` de v7.
 
-Específico: **Excel `SupplyNetworkAnalysis_<fecha>.xlsx`** (hojas Resumen, Product, Location, Customer,
-Location Source, Customer Source, Estadísticas); **vista web** con cinco hojas + Estadísticas; columnas de
-v7 (`# Plantas`, `# DCs`, `# Clientes`, `# Rutas completas`, `Ruta más larga`, `# Ghost Nodes`,
-`# Dead Ends`, **`Health Score`**, `Categoría de salud`, `Desglose del score`, `Multi-sourced?`, lead
-times); etiquetas «⛔ Alerta / ⚠ Advertencia / ✅ OK» (la suite añade «Nota», que v7 no tiene).
+**Cómo se comprobó que el algoritmo es el mismo.** No solo con fixtures calculadas a mano: se ejecutó el
+`analyzeAndStreamExcel` REAL de v7 (cargando `analyzer.js`, `statsSheet.js`, `runSummary.js`,
+`mattype-config.js` y `extraFields.js` en un contexto de Node con IndexedDB simulado) sobre las mismas
+entradas y se cotejaron, hoja por hoja, encabezados, notas, celdas, colores, hoja Resumen, hoja Estadísticas y
+totales. Dos fixtures fijas (`core/ibp/fixtures-red-v7.json`, con la salida que escribió v7) están en las
+pruebas; además se corrió el cotejo contra **300 redes generadas al azar** (identificadores numéricos y
+alfanuméricos, ciclos, ghost nodes, plazos vacíos / en cero / no numéricos, tipos excluidos, las cuatro
+categorías de material, campos adicionales) con **cero diferencias**. El generador y el arnés no se
+guardaron en el repo (viven en el espacio de trabajo de la sesión); la prueba fija es la del repo.
 
-⚠ **Decisión de producto previa**: la suite reemplazó el Excel de seis hojas por una tabla de calidad con
-otras columnas y otra lógica en `core/ibp/network-analysis.js`. Igualar v7 implica portar la lógica de
-v7 (Health Score incluido) y decidir qué pasa con la actual. El banner de `modules.js` ya promete un
-Excel que la pantalla no entrega.
+Lo que quedó idéntico, mirado control por control:
+
+- **El algoritmo** (`core/ibp/network-analyzer.js`, `network-analyzer-hojas.js`): port literal de las fases 2 a
+  8 de `analyzeAndStreamExcel` y de las funciones `sn*` (grafo por producto, rutas con tope de 50.000,
+  fantasmas, callejones, plantas aisladas, ciclos, plazos faltantes, resiliencia, **Health Score** y su
+  desglose). Las cinco hojas con sus columnas, notas de encabezado, grupos de color y observaciones; estados
+  «⛔ Alerta / ⚠ Advertencia / ✅ OK» (sin «Nota»); hoja Resumen con los cinco KPIs de v7; hoja Estadísticas
+  (`buildSN`). Los encabezados salen de `es.json`: **«Estado de la Red»** (con R mayúscula),
+  `# Plantas`, `# DCs`, `# Clientes`, `# Rutas completas`, `Ruta más larga`, `# Ghost Nodes`,
+  `# Dead Ends`, `Health Score`, `Categoría de salud`, **`Detalle cálculo Health Score`** (no «Desglose del
+  score»), `Multi-sourced?`, `TLT promedio (días)`, `CLT promedio (días)`, `# Plantas aisladas`…
+- **Reglas de v7 que se conservan aunque parezcan rarezas**: un producto sin `MATTYPEID` no se analiza pero
+  SÍ cuenta en el total que divide el Health Score promedio; los diccionarios son objetos corrientes, así que
+  «Orígenes (códigos)» lista primero los códigos numéricos de menor a mayor (`3, 20, 100, B, A`); la rama
+  final de las observaciones OK («Red completa sin anomalias | …») es también la de una materia prima, que no
+  tiene la suya; el redondeo de `fmtDuration` (59,6 s sale «60 s»).
+- **El Excel** `SupplyNetworkAnalysis_<fecha>.xlsx`: hojas en el orden de v7 (Resumen, Estadísticas, Product,
+  Location, Customer, Location Source, Customer Source). **Una hoja con más de 900.000 filas de datos se parte
+  en «Hoja», «Hoja (2)»…**, cada parte con su encabezado, nota y color (`analyzeAndStreamExcel` de v7).
+- **La vista web** (`VistaWebAnalisis.jsx`, la misma del Production Analyzer): cinco hojas + Estadísticas, las
+  cinco tarjetas, modal «¿Cómo quieres ver el análisis?» y banner «¡Análisis completado!». **Las hojas Location
+  Source y Customer Source se paginan desde IndexedDB** (`sn_loc_web` / `sn_cust_web`, con índice por
+  severidad) sin tener las filas en memoria: la página se pide con `advance` (la 1.800 de 90.000 filas tarda
+  ~50 ms), la búsqueda recorre por cursor con los topes de v7 (2.000 coincidencias, 300.000 revisadas) y dice
+  cuando se cortó, y si la base falla cae al respaldo en memoria (las primeras 20.000 filas) y lo dice. Los
+  avisos del pie son los de v7.
+- **El Excel de las hojas grandes no se retiene en memoria**: cada fila de arcos se convierte en XML al llegar
+  y, cada 20.000, pasa a un `Blob` (`crearEscritorDeTabla`); las filas de la vista web se guardan en lotes de
+  8.000, con la misma contrapresión que v7 (más de 12 lotes sin terminar → vista parcial y aviso).
+- **Pasos ②–⑤** (`NetworkAnalyzer.jsx`, el mismo recorrido de `AnalizadorProduccion` con los datos de la red):
+  banner, «Interpretación de resultados», ① «MAPEO DE ENTIDADES» (variante `na`, sin tocar), ② Excluir tipos,
+  ③ Categorizar, ④ Campos adicionales (las cinco entidades de `EF_ENTITY_META.sn`, con `EF_MAND_VISIBLE.sn` /
+  `EF_MAND_HIDDEN.sn`), ⑤ Ejecutar: resumen de una línea con el texto de la red («…análisis estándar para todos
+  los tipos»), «▶ Ejecutar análisis» sin cambiar de texto y sin «Cancelar». Los tipos de material se leen de SAP
+  al confirmar ① («⏳ Cargando tipos de material desde SAP IBP…»), del maestro elegido en la tarjeta «Product».
+- **La descarga** baja las nueve tablas de v7, **en su orden** (Location Source, Customer Source, Product, Header,
+  Item, Location, Location Product, Customer, Customer Product) y **pidiendo a SAP exactamente los campos de v7**
+  (`solo` en `planificarExtraccion`: el maestro de productos del árbol trae además `UOMID` y `UOMDESCR`, que la
+  red no usa y que en un tenant sin ellos habrían dado un aviso falso). Textos de v7: `Descargando X → IDB...`,
+  `Indexando X (lookup en memoria)...`, `[GET] <entidad>`, `Location Source: N reg → IDB (M productos)`,
+  `Índices listos. N productos en la red. Iniciando análisis...`, `Analizando red (N productos)...`,
+  `Analizando d/n productos...`, `Hoja X lista...`, `Análisis completado. N productos analizados · {Excel
+  descargado / vista web generada / Excel descargado + vista web} · {duración}.`, `✓ Análisis completado — Excel
+  descargado | N productos · {dur}`, y el aviso `⚠️ X (entidad): 0 registros. Verifica…` sin voseo. La barra
+  sube por los números de v7 (0, 8, 17, 25, 28, 33, 38, 42, 46 por tabla, 50 al terminar la descarga, 57, 85,
+  88, 91, 94, 96, 97, 100).
+- **Las ocho entidades de red son imprescindibles** (`required: true` en `validateEntityFields`; el maestro de
+  productos no). Sin las tres de arcos/recetas dice «Configura al menos una entidad de red antes de analizar».
+- Una tabla que no se bajó en esta corrida se lee VACÍA aunque la base guarde restos del árbol o de otra
+  corrida: v7 no los tenía.
+- El banner de `modules.js` ya decía lo que `banner.network` de v7 y ahora la pantalla lo entrega.
+
+### Diferencias que quedan, y por qué
+
+1. **El Resumen no trae la «API Base URL»** (dice «—») y la línea del registro dice `[GET] <entidad>` en vez de la
+   URL; tampoco hay las líneas `↳ URL: …` por página. El navegador nunca conoce la dirección del tenant (vive
+   cifrada en el servidor). Regla de seguridad de la plataforma.
+2. **Las hojas Product, Location y Customer de la vista web están en memoria**; v7 las guardaba también en
+   IndexedDB (`sn_product_web`, `sn_location_web`, `sn_customer_web`) y dejaba 2.000 filas de respaldo. Son una
+   fila por producto / ubicación / cliente y no se midió el peso con un catálogo de cientos de miles de
+   productos (en el banco de pruebas: 3.000 productos × 33 columnas sin problema). Si hiciera falta, la
+   hoja con `origen` ya lo admite: es guardarlas con `crearFabricaDeHojasGrandes` y agregar su tabla de vista.
+3. **El registro se escribe al terminar la descarga**, no tabla por tabla (`ExplorerExtract` avisa por página,
+   no por tabla). Las líneas y las horas son las de cada tabla.
+4. **La clasificación de tipos se guarda con el formato de la suite** (`mattype_<área>`), compartida con el
+   Production Analyzer; los campos adicionales sí usan las claves de v7 (`ef_sel_sn_<entidad>_<área>`).
+5. **El diálogo de campos adicionales describe solo los campos que la suite conoce** (igual que en el
+   Production Analyzer, punto 4 de arriba).
+6. **Sin panel de corrección de campos** (`validateEntityFields` + `fmShowCorrectionPanel`): si un campo no
+   existe en este tenant, la descarga lo omite y lo avisa en el registro; v7 paraba con «correcciones pendientes».
+   Brecha común a todas las aplicaciones.
+7. **Solo español** (fase de idioma al final).
+8. En la vista web «Resumen» no es una pestaña sino el renglón de tarjetas, como en v7 y en el Production
+   Analyzer.
+9. Al fallar el análisis la barra vuelve a 0 en vez de esconderse (v7 la escondía); se ve igual.
+10. Las tablas de IndexedDB de los analizadores anteriores (`pa_*`, `pa_*_web`, `sn_product_web`,
+    `sn_location_web`, `sn_customer_web`) se **borran** al abrir la base (esquema versión 4). Solo esas, por su
+    nombre: una tabla que el código no conoce no se toca.
+
+### Sin confirmar (hay que verlo en el tenant de pruebas)
+
+- Que las nueve tablas se resuelvan por sus campos en el tenant y que `PLEADTIME` / `PRATIO` existan en la
+  cabecera (si no, se omiten y se avisa).
+- El Excel abierto en Excel de verdad (se verificó que el zip se reabre y que las partes tienen las filas; no se
+  abrió en Excel), y el partido a 900.000 filas con una red real (está probado con límite chico).
+- El tiempo con un tenant grande: el análisis lee tres veces la base por producto, como v7. Medido en el
+  navegador de pruebas con datos sintéticos: 3.000 productos y 90.000 arcos, ~20 s; **6.000 productos y 600.000
+  arcos** (una red densa, con 228.000 rutas), ~125 s de análisis con el montón de JavaScript entre 140 y 370 MB,
+  y un Excel de 46,8 MB armado en 22 s; la vista web paginó sin problema (la página 1.800 de 90.000 filas, 50 ms).
+  100.000 productos serían del orden de varios minutos, igual que en v7.
 
 ## Planning Area Documenter — hecho
 
@@ -258,9 +350,8 @@ y `descargarLibro(buffer, informe.archivo)` de `bom-export.js`. No hay que tocar
 **3. La vista web y el modal** — `VistaWebAnalisis.jsx` (`datos`, `descargarExcel`, `excelDescargado`;
 `datos` se arma como `datosWeb` en `AnalizadorProduccion.jsx`) y `ModalModoDeSalida.jsx`
 (`onElegir('web'|'excel'|'both'|null)`). Cambiar de análisis = montar con otra `key`. **Decisión
-pendiente para la red:** la vista tiene las filas en memoria; las hojas Location Source / Customer Source
-de v7 pueden tener cientos de miles de filas y v7 las paginaba desde IndexedDB. O se capa y se avisa, o
-se hace una variante paginada.
+resuelta para la red (2026-10-05):** una hoja de `datos.hojas` puede traer `origen` (`pagina` y `buscar`) y
+entonces la vista la pide por páginas a la base local; ver `hoja-en-disco.js` y «Network Analyzer — hecho».
 
 **4. Los pasos ②–④** — `TablaExcluirTipos`, `MatrizDeCategorias`, `CamposAdicionales` (props en el
 encabezado de cada archivo) dentro de `PasoPlegable`. `core/ibp/mattype-config.js` trae las categorías,
@@ -282,10 +373,10 @@ escribir su `registro-sn.js` (textos de la fase 1 de `analyzer.js`), su lector y
 **6. Cómo probar** — el patrón de `production-analyzer.test.js` (fixture pequeña con respuestas
 calculadas a mano contra v7) y el de `AnalizadorProduccion.test.js` (dobles de descarga, análisis y Excel).
 
-**7. Qué se puede retirar cuando la red se migre** — `AnalizadorV7.jsx`, `InformeDeCalidad.jsx`,
-`production-rules.js`, `production-analysis.js` (solo conserva `texto`), `production-analyze.js` (solo
-conserva `tiposDeMaterial`), `network-analysis.js`, `network-analyze.js`, `network-load-sap.js` y las
-tablas `pa_*` / `sn_*_web` de IndexedDB.
+**7. Retirado al migrar la red (2026-10-05)** — `AnalizadorV7.jsx`, `InformeDeCalidad.jsx`, `production-rules.js`,
+`production-analysis.js`, `production-analyze.js`, `network-analysis.js`, `network-analyze.js` (con sus pruebas) y
+las tablas `pa_*` / `pa_*_web` / `sn_product_web` / `sn_location_web` / `sn_customer_web` de IndexedDB.
+`network-load-sap.js` se queda: lo usa el Network Visualizer.
 
 ## Decisiones del usuario (2026-10-01)
 

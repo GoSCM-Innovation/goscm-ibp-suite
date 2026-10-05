@@ -317,7 +317,7 @@ export function crearEscritorDeTabla({
 
 /**
  * Las hojas del libro, ya partidas: una entrada por hoja de Excel `{ nombre, generar() }`. El XML se
- * arma al llamar a `generar()`, de a una hoja, para no tenerlas todas en memoria a la vez.
+ * arma al llamar a `generar()`, una hoja por vez, para no tenerlas todas en memoria a la vez.
  *
  * Una hoja con más de `LIMITE_DE_FILAS` filas de datos se parte en «Hoja», «Hoja (2)»…, como
  * `analyzeAndStreamExcel` de v7. Una hoja que ya viene escrita por partes (`hoja.partes`, de

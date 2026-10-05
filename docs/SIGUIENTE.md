@@ -3,15 +3,17 @@
 Este archivo es el punto de entrada cuando la instrucción es **«continuemos»**. Se lee primero, se
 actualiza al terminar cada sesión, y su orden es el de prioridad acordada.
 
-Última actualización: **2026-10-01**.
+Última actualización: **2026-10-05**.
 
 ## Dónde estamos
 
 - **Decisión del usuario, 2026-10-01: Data Tools tiene que ser IDÉNTICO a v7.** La auditoría completa
-  está en [`docs/PARIDAD-DATA-TOOLS.md`](PARIDAD-DATA-TOOLS.md) con el orden propuesto. Hecho: Glosario y
-  Production Visualizer (árbol con la forma de v7, textos de descarga sin contador de filas). **Pendiente
-  y grande**: Production Analyzer, Network Visualizer, Network Analyzer y Planning Area Documenter —los
-  analizadores no tienen la vista web ni el Excel de v7—. Empezar por el mapeo ① compartido.
+  está en [`docs/PARIDAD-DATA-TOOLS.md`](PARIDAD-DATA-TOOLS.md). **Hecho el 2026-10-05**: las seis
+  aplicaciones de Data Tools están igualadas a v7 en código —Glosario, Production Visualizer, Production
+  Analyzer, Network Visualizer, **Network Analyzer** (algoritmo cotejado contra la salida real de v7, vista
+  web con las hojas de arcos paginadas desde IndexedDB y Excel partido a 900.000 filas) y Planning Area
+  Documenter—. **Lo que falta es mirarlas contra un tenant real** (cada sección de ese documento tiene su
+  «Sin confirmar») y abrir el Excel de los dos analizadores en Excel de verdad.
 - **Tres correcciones más del 2026-10-01 al conectar un tenant** (pendientes de verlas en el sitio):
   1. El asistente **se cierra** al terminar el paso ③, como `closeConnectDialog` de v7. Ya no hay cuadro
      «Conexión activa» con «Cerrar» (ese panel solo sale al abrir el diálogo estando ya conectado).
