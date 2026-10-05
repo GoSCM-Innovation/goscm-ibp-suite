@@ -3,18 +3,23 @@
 // Portado de `src/components/Resumen/Resumen.jsx` de v9. Lo que cambia:
 //
 //   - Los colores y las etiquetas de estado salen de `core/cids/task-status.js`. En v9 este archivo
-//     tenía SU PROPIA copia de las dos tablas, con las etiquetas en inglés: era la cuarta copia que
-//     el levantamiento mandaba eliminar.
+//     tenía SU PROPIA copia de las dos tablas: era la cuarta copia que el levantamiento mandaba
+//     eliminar. La tabla única lleva las etiquetas de v9, en inglés.
 //   - Los grupos con los que se cuenta (en cola, avisos, falladas) también salen de la capa
 //     transversal. En v9 estaban a mano y no coincidían ni consigo mismos: el indicador de
 //     "Fallidas" contaba solo ERROR mientras el gráfico por día y la lista de últimas fallidas
 //     contaban también la cancelación fallida. Ahora las tres cuentas dan lo mismo.
 //   - El rango de fechas es el gancho compartido, con el tope de 90 días y el rango completo
 //     obligatorio. v9 no tenía ninguna de las dos cosas aquí: se podía pedir un año, y un campo a
-//     medio escribir mandaba una consulta sin rango.
+//     medio escribir mandaba una consulta sin rango. El extremo «hasta» llega a los 59,999 s del
+//     minuto elegido (v9 lo mandaba a los :00): una corrida de las 12:30:40 queda dentro de un rango
+//     que acaba a las 12:30. Y la zona horaria no reconsulta: son los mismos instantes.
+//   - Sin servidor de SAP en el navegador no hay «Iniciar sesión» ni banner de sesión vencida.
+//   - «Fallidas» cuenta también la cancelación fallida, como el Global de v9 y como el gráfico por día.
+//   - «Warnings» lista las más recientes primero (v9 las dejaba en el orden en que llegaban de SAP).
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { isFailed, isQueued, isWarning, statusMeta, successRate } from '../../../core/cids/task-status.js'
+import { isFailed, isQueued, statusMeta, successRate } from '../../../core/cids/task-status.js'
 import { cidsCall } from '../../lib/cids.js'
 import {
   colorDeTasa, latestFailed, latestWarnings, perDayBreakdown, statusBreakdown, topTasks,
@@ -79,15 +84,24 @@ export default function Summary({ destino }) {
 
   const resumen = useMemo(() => calcular(ejecuciones, zona), [ejecuciones, zona])
 
+  // Como v9: mientras llega la PRIMERA consulta no se pinta el tablero. Con todo en cero afirmaría
+  // «Sin fallos» y «Sin warnings» sobre algo que todavía no se ha leído.
+  if (cargando && ejecuciones.length === 0 && !error && ultimoRefresco === null) {
+    return (
+      <div className="monitor">
+        <div className="progress-line on" />
+        <div className="page-hint">Cargando resumen de {destino.label}…</div>
+      </div>
+    )
+  }
+
   return (
     <div className="monitor">
       <div className={`progress-line${cargando ? ' on' : ''}`} />
 
       <div className="monitor-head">
         <div className="monitor-meta">
-          {cargando && ejecuciones.length === 0
-            ? 'Cargando…'
-            : `${resumen.total} ejecuciones en el período`}
+          {destino.label} · {`${resumen.total} ejecuciones en el período`}
           {ultimoRefresco && !cargando && (
             <span><span className="sep">·</span>{ultimoRefresco.toLocaleTimeString()}</span>
           )}
@@ -104,9 +118,7 @@ export default function Summary({ destino }) {
           <button type="button" className="btn btn-sm" onClick={cargar} disabled={cargando || !rangoValido}>
             ↺ Refresh
           </button>
-          <span className="tag tag-muted" title={`Se actualiza solo cada ${REFRESH_MS / 60000} minutos`}>
-            Auto-refresh {REFRESH_MS / 60000} min
-          </span>
+          <span className="tag tag-muted">Auto-refresh {REFRESH_MS / 60000} min</span>
         </div>
       </div>
 
@@ -118,27 +130,26 @@ export default function Summary({ destino }) {
       )}
       {rangoExcedido && (
         <div className="notice notice-error">
-          El rango no puede pasar de {MAX_DAYS} días: es el límite de SAP CI-DS. Acortá las fechas.
+          El rango no puede pasar de {MAX_DAYS} días: es el límite de SAP CI-DS. Acorta las fechas.
         </div>
       )}
       {error && <div className="notice notice-error">✕ {error}</div>}
 
       <div className="tablero">
-        <div className="grid-kpi">
+        <div className="v9-grid-kpi">
           <Kpi label="Total ejecuciones" valor={resumen.total} />
           <Kpi label="En ejecución" valor={resumen.enEjecucion} color="var(--cyan)" />
           <Kpi label="En cola" valor={resumen.enCola} color="var(--purple)" />
-          <Kpi label="Correctas" valor={resumen.correctas} color="var(--green)" />
-          <Kpi label="Falladas" valor={resumen.falladas} color="var(--red)" />
+          <Kpi label="Exitosas" valor={resumen.correctas} color="var(--green)" />
+          <Kpi label="Fallidas" valor={resumen.falladas} color="var(--red)" />
           <Kpi
             label="Tasa de éxito"
             valor={resumen.tasaExito === null ? '—' : `${resumen.tasaExito}%`}
             color={colorDeTasa(resumen.tasaExito)}
-            nota={resumen.conAvisosTotal > 0 ? 'cuenta también las que terminaron con avisos' : ''}
           />
         </div>
 
-        <div className="grid-charts">
+        <div className="v9-grid-charts">
           <div className="card">
             <div className="card-label">Distribución por estado</div>
             <StatusDonut porEstado={resumen.porEstado} />
@@ -150,7 +161,7 @@ export default function Summary({ destino }) {
           </div>
         </div>
 
-        <div className="grid-stats">
+        <div className="v9-grid-stats">
           <div className="card">
             <div className="card-label">Top tasks ejecutadas</div>
             {resumen.masEjecutadas.length === 0 ? <SinDatos /> : resumen.masEjecutadas.map((tarea, i) => (
@@ -173,7 +184,7 @@ export default function Summary({ destino }) {
                   <div className="lista-nombre" style={{ color: 'var(--red)' }} title={fila.taskName || ''}>
                     {fila.taskName || '—'}
                   </div>
-                  <div className="lista-detalle mono">RunID {fila.runId}</div>
+                  <div className="lista-detalle mono">RunID: {fila.runId}</div>
                 </div>
               ))}
           </div>
@@ -196,13 +207,15 @@ export default function Summary({ destino }) {
           <div className="card">
             <div className="card-label">Warnings</div>
             {resumen.conAvisos.length === 0
-              ? <div className="todo-bien">✓ Sin avisos en el período</div>
+              ? <div className="todo-bien">✓ Sin warnings en el período</div>
               : resumen.conAvisos.map((fila) => (
                 <div className="lista-fila" key={fila.runId}>
                   <div className="lista-nombre" style={{ color: 'var(--accent)' }} title={fila.taskName || ''}>
                     {fila.taskName || '—'}
                   </div>
-                  <div className="lista-detalle">{statusMeta(fila.statusCode).label}</div>
+                  <div className="lista-detalle">
+                    {fila.statusCode === 'SUCCESS_WITH_ERRORS_E' ? 'Éxito con errores (críticos)' : 'Éxito con errores (ignorados)'}
+                  </div>
                 </div>
               ))}
           </div>
@@ -225,7 +238,6 @@ function calcular(ejecuciones, zona) {
     enCola: ejecuciones.filter((fila) => isQueued(fila.statusCode)).length,
     correctas: ejecuciones.filter((fila) => fila.statusCode === 'SUCCESS').length,
     falladas: ejecuciones.filter((fila) => isFailed(fila.statusCode)).length,
-    conAvisosTotal: ejecuciones.filter((fila) => isWarning(fila.statusCode)).length,
     tasaExito: successRate(ejecuciones.map((fila) => fila.statusCode)),
     porEstado: statusBreakdown(ejecuciones, statusMeta),
     porDia: perDayBreakdown(ejecuciones, zona),
@@ -235,14 +247,11 @@ function calcular(ejecuciones, zona) {
   }
 }
 
-function Kpi({ label, valor, color = 'var(--text)', nota = '' }) {
+function Kpi({ label, valor, color = 'var(--text)' }) {
   return (
     <div className="kpi">
       <div className="kpi-label">{label}</div>
       <div className="kpi-valor" style={{ color }}>{valor}</div>
-      {/* La nota existe por la tasa de éxito: cuenta más cosas que la tarjeta de «Correctas», y sin
-          decirlo los dos números no cuadran a la vista. */}
-      {nota && <div className="kpi-nota">{nota}</div>}
     </div>
   )
 }

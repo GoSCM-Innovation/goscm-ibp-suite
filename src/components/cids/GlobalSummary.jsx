@@ -18,7 +18,7 @@
 // arriba está justamente para acotar cuando no quieres verlos todos.
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { isFailed, isQueued, isWarning, statusMeta, successRate } from '../../../core/cids/task-status.js'
+import { isFailed, isQueued, statusMeta, successRate } from '../../../core/cids/task-status.js'
 import { cidsCall } from '../../lib/cids.js'
 import {
   colorDeTasa, latestFailed, perDayBreakdown, statusBreakdown, topTasks,
@@ -39,7 +39,7 @@ export default function GlobalSummary({ destinos }) {
   const fechas = useDateRange({ maxDays: MAX_DAYS })
   const { zona, rangoIncompleto, rangoExcedido, rangoValido, startDateFrom, startDateTo } = fechas
 
-  // Por destino: { estado: 'cargando' | 'ok' | 'error', ejecuciones, agentes, error }
+  // Por destino: { estado: 'cargando' | 'ok' | 'error', ejecuciones, error }
   const [porDestino, setPorDestino] = useState({})
   const [cargando, setCargando] = useState(true)
   const [ultimoRefresco, setUltimoRefresco] = useState(null)
@@ -59,26 +59,23 @@ export default function GlobalSummary({ destinos }) {
       setPorDestino((previo) => ({
         ...previo,
         // Se conserva lo que ya había mientras se recarga: si no, la tabla parpadearía en vacío.
-        [destino.id]: { ...(previo[destino.id] ?? { ejecuciones: [], agentes: [] }), estado: 'cargando', error: null },
+        [destino.id]: { ...(previo[destino.id] ?? { ejecuciones: [] }), estado: 'cargando', error: null },
       }))
       try {
-        const [tareas, grupos] = await Promise.all([
-          cidsCall(destino, 'getAllExecutedTasks2', { startDateFrom, startDateTo }),
-          cidsCall(destino, 'getAgents', { activeOnly: false }),
-        ])
+        // Solo las ejecuciones: v9 pedía además los agentes por conexión y nunca los usaba en el global.
+        const tareas = await cidsCall(destino, 'getAllExecutedTasks2', { startDateFrom, startDateTo })
         setPorDestino((previo) => ({
           ...previo,
           [destino.id]: {
             estado: 'ok',
             ejecuciones: Array.isArray(tareas) ? tareas : [],
-            agentes: (Array.isArray(grupos) ? grupos : []).flatMap((grupo) => grupo.agents ?? []),
             error: null,
           },
         }))
       } catch (fallo) {
         setPorDestino((previo) => ({
           ...previo,
-          [destino.id]: { estado: 'error', ejecuciones: [], agentes: [], error: fallo.message },
+          [destino.id]: { estado: 'error', ejecuciones: [], error: fallo.message },
         }))
       }
     }
@@ -125,7 +122,6 @@ export default function GlobalSummary({ destinos }) {
       enCola: todas.filter((fila) => isQueued(fila.statusCode)).length,
       correctas: todas.filter((fila) => fila.statusCode === 'SUCCESS').length,
       falladas: todas.filter((fila) => isFailed(fila.statusCode)).length,
-      conAvisosTotal: todas.filter((fila) => isWarning(fila.statusCode)).length,
       tasaExito: successRate(todas.map((fila) => fila.statusCode)),
       masEjecutadas: topTasks(todas, { claveExtra: (fila) => fila.destino.id }),
       ultimasFalladas: latestFailed(todas),
@@ -147,8 +143,13 @@ export default function GlobalSummary({ destinos }) {
       <div className="monitor-head">
         <div className="monitor-meta">
           {hayFiltro
-            ? `${filtrados.size} de ${destinos.length} repositorios · filtro activo · ${global.total} ejecuciones`
-            : `${destinos.length} repositorios · ${global.total} ejecuciones`}
+            ? (
+              <>
+                {filtrados.size} de {destinos.length} repositorios ·{' '}
+                <strong style={{ color: 'var(--accent)' }}>filtro activo</strong> · {global.total} ejecuciones
+              </>
+            )
+            : `${destinos.length} repositorios · ${global.total} ejecuciones totales`}
           {ultimoRefresco && !cargando && (
             <span><span className="sep">·</span>{ultimoRefresco.toLocaleTimeString()}</span>
           )}
@@ -171,7 +172,7 @@ export default function GlobalSummary({ destinos }) {
 
       {destinos.length > 1 && (
         <div className="filtro-conexiones">
-          <span className="filtro-titulo">Filtrar</span>
+          <span className="filtro-titulo">Filtrar por cliente</span>
           <div className="chips">
             {destinos.map((uno) => {
               const activo = !hayFiltro || filtrados.has(uno.id)
@@ -182,6 +183,7 @@ export default function GlobalSummary({ destinos }) {
                   className={`chip chip-conexion${activo ? ' active' : ''}`}
                   onClick={() => alternarFiltro(uno.id)}
                   aria-pressed={activo}
+                  title={`${activo && hayFiltro ? 'Quitar' : 'Agregar'} ${uno.label} ${activo && hayFiltro ? 'del' : 'al'} filtro`}
                 >
                   <ConnectionAvatar name={uno.name} size={16} />
                   {uno.name}
@@ -206,7 +208,7 @@ export default function GlobalSummary({ destinos }) {
       )}
       {rangoExcedido && (
         <div className="notice notice-error">
-          El rango no puede pasar de {MAX_DAYS} días: es el límite de SAP CI-DS. Acortá las fechas.
+          El rango no puede pasar de {MAX_DAYS} días: es el límite de SAP CI-DS. Acorta las fechas.
         </div>
       )}
       {conError > 0 && !cargando && (
@@ -217,26 +219,26 @@ export default function GlobalSummary({ destinos }) {
       )}
 
       <div className="tablero">
-        <div className="grid-kpi">
+        <div className="v9-grid-kpi">
           <Kpi label="Total ejecuciones" valor={global.total} />
           <Kpi label="En ejecución" valor={global.enEjecucion} color="var(--cyan)" />
           <Kpi label="En cola" valor={global.enCola} color="var(--purple)" />
-          <Kpi label="Correctas" valor={global.correctas} color="var(--green)" />
-          <Kpi label="Falladas" valor={global.falladas} color="var(--red)" />
+          <Kpi label="Exitosas" valor={global.correctas} color="var(--green)" />
+          <Kpi label="Fallidas" valor={global.falladas} color="var(--red)" />
           <Kpi
             label="Tasa de éxito"
             valor={global.tasaExito === null ? '—' : `${global.tasaExito}%`}
             color={colorDeTasa(global.tasaExito)}
-            nota={global.conAvisosTotal > 0 ? 'cuenta también las que terminaron con avisos' : ''}
           />
         </div>
 
         <div className="card">
           <div className="card-label">
-            Estado por repositorio{hayFiltro ? ' · filtrado' : ''}
+            Estado por repositorio
+            {hayFiltro && <span style={{ color: 'var(--accent)', textTransform: 'none' }}> · filtrado</span>}
           </div>
           {visibles.length === 0 ? (
-            <div className="sin-datos">Ningún repositorio en el filtro.</div>
+            <div className="sin-datos">Sin repositorios en el filtro</div>
           ) : visibles.map((uno) => (
             <FilaDestino
               key={uno.id}
@@ -294,12 +296,28 @@ export default function GlobalSummary({ destinos }) {
               </button>
             </div>
 
+            {/* La línea de contexto de v9: qué se está viendo y cuántas ejecuciones, y a la derecha en
+                qué lámina se está. */}
+            <div className="lamina-contexto">
+              <span>
+                {lamina === 0
+                  ? 'Todas las conexiones'
+                  : (
+                    <>
+                      <ConnectionAvatar name={conDatos[lamina - 1].name} size={14} />{' '}
+                      {conDatos[lamina - 1].name}
+                    </>
+                  )}
+                {' · '}<strong>{deLaLamina.length}</strong> ejecuciones
+                {lamina > 0 && ` · ${conDatos[lamina - 1].production ? 'Producción' : 'Sandbox'}`}
+              </span>
+              <span className="lamina-contador">{lamina + 1} / {conDatos.length + 1}</span>
+            </div>
+
             {/* La clave hace que recharts vuelva a animar al cambiar de lámina. Detalle de v9. */}
-            <div className="grid-charts" key={lamina}>
+            <div className="v9-grid-charts" key={lamina}>
               <div className="card">
-                <div className="card-label">
-                  Distribución por estado · {lamina === 0 ? 'todos' : conDatos[lamina - 1].label}
-                </div>
+                <div className="card-label">Distribución por estado</div>
                 <StatusDonut porEstado={statusBreakdown(deLaLamina, statusMeta)} />
               </div>
               <div className="card">
@@ -308,7 +326,7 @@ export default function GlobalSummary({ destinos }) {
               </div>
             </div>
 
-            <div className="grid-stats">
+            <div className="v9-grid-stats">
               <div className="card">
                 <div className="card-label">Top tasks ejecutadas</div>
                 {global.masEjecutadas.length === 0 ? <SinDatos /> : global.masEjecutadas.map((tarea, i) => (
@@ -361,7 +379,6 @@ function FilaDestino({ destino, estado }) {
   const tasa = estado.estado === 'ok' ? successRate(suyas.map((fila) => fila.statusCode)) : null
   const enEjecucion = suyas.filter((fila) => fila.statusCode === 'RUNNING').length
   const falladas = suyas.filter((fila) => isFailed(fila.statusCode)).length
-  const avisos = suyas.filter((fila) => isWarning(fila.statusCode)).length
 
   return (
     <div className="lista-fila fila-conexion">
@@ -379,9 +396,8 @@ function FilaDestino({ destino, estado }) {
       {estado.estado === 'ok' && (
         <div className="mini-stats">
           <span className="mini-total">{suyas.length}</span>
-          {enEjecucion > 0 && <span style={{ color: 'var(--cyan)' }}>{enEjecucion} corriendo</span>}
-          {avisos > 0 && <span style={{ color: 'var(--accent)' }}>{avisos} con avisos</span>}
-          {falladas > 0 && <span style={{ color: 'var(--red)' }}>{falladas} falladas</span>}
+          {enEjecucion > 0 && <span style={{ color: 'var(--cyan)' }}>{enEjecucion} run</span>}
+          {falladas > 0 && <span style={{ color: 'var(--red)' }}>{falladas} err</span>}
           {tasa !== null && <span style={{ color: colorDeTasa(tasa), fontWeight: 700 }}>{tasa}%</span>}
         </div>
       )}
@@ -394,7 +410,7 @@ function EstadoConexion({ estado }) {
     return (
       <span className="estado-conexion" style={{ color: 'var(--green)' }}>
         <span className="punto" style={{ background: 'var(--green)' }} />
-        Bien
+        OK
       </span>
     )
   }
@@ -414,14 +430,11 @@ function EstadoConexion({ estado }) {
   )
 }
 
-function Kpi({ label, valor, color = 'var(--text)', nota = '' }) {
+function Kpi({ label, valor, color = 'var(--text)' }) {
   return (
     <div className="kpi">
       <div className="kpi-label">{label}</div>
       <div className="kpi-valor" style={{ color }}>{valor}</div>
-      {/* La nota existe por la tasa de éxito: cuenta más cosas que la tarjeta de «Correctas», y sin
-          decirlo los dos números no cuadran a la vista. */}
-      {nota && <div className="kpi-nota">{nota}</div>}
     </div>
   )
 }

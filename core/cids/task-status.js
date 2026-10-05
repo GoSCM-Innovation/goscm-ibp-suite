@@ -5,22 +5,30 @@
 // SAP añadiera un estado para que apareciera bien en una pantalla y como "desconocido" en las
 // otras. Aquí está una vez.
 //
-// Los códigos y los colores se portan tal cual de v9: son los que SAP devuelve (ya sin el
-// prefijo "TASK:", que quita el cliente SOAP) y los colores con los que tus usuarios llevan
-// tiempo leyendo estas pantallas.
+// Los códigos, los colores Y LAS ETIQUETAS se portan tal cual de v9 (`constants/status.js`): son los
+// que SAP devuelve (ya sin el prefijo "TASK:", que quita el cliente SOAP) y los que los usuarios
+// llevan tiempo leyendo en estas pantallas. Las etiquetas están en inglés porque así las muestra v9 en
+// el monitor, en los filtros y en la leyenda de la torta; el texto portado manda sobre el idioma.
+// (Hasta el 2026-10-05 estaban traducidas, y `TERMINATION_FAILED` tenía el mismo naranja que
+// `SUCCESS_WITH_ERRORS_E`, con lo que en la torta eran indistinguibles.)
+//
+// - `label`: el texto completo, para insignias y filtros.
+// - `chartLabel`: la versión corta, para la leyenda de la torta.
+
+const estado = (color, label, chartLabel = label) => ({ color, label, chartLabel })
 
 export const TASK_STATUS = Object.freeze({
-  RUNNING: { label: 'En ejecución', color: '#3b82f6' },
-  SUCCESS: { label: 'Correcta', color: '#34d399' },
-  SUCCESS_WITH_ERRORS_D: { label: 'Correcta con errores D', color: '#fbbf24' },
-  SUCCESS_WITH_ERRORS_E: { label: 'Correcta con errores E', color: '#f97316' },
-  ERROR: { label: 'Error', color: '#ff6b6b' },
-  QUEUEING: { label: 'En cola', color: '#8b5cf6' },
-  IMPORTED: { label: 'Importada', color: '#06b6d4' },
-  FETCHED: { label: 'Recuperada', color: '#22d3ee' },
-  TERMINATED: { label: 'Cancelada', color: '#9ca3af' },
-  TERMINATION_FAILED: { label: 'Cancelación fallida', color: '#f97316' },
-  UNKNOWN: { label: 'Desconocido', color: '#6b7280' },
+  RUNNING: estado('#3b82f6', 'Running'),
+  SUCCESS: estado('#34d399', 'Success'),
+  SUCCESS_WITH_ERRORS_D: estado('#fbbf24', 'Success w/ errors D', 'Success w/err D'),
+  SUCCESS_WITH_ERRORS_E: estado('#f97316', 'Success w/ errors E', 'Success w/err E'),
+  ERROR: estado('#ff6b6b', 'Error'),
+  QUEUEING: estado('#8b5cf6', 'Queueing'),
+  IMPORTED: estado('#06b6d4', 'Imported'),
+  FETCHED: estado('#22d3ee', 'Fetched'),
+  TERMINATED: estado('#9ca3af', 'Terminated'),
+  TERMINATION_FAILED: estado('#ef4444', 'Termination failed'),
+  UNKNOWN: estado('#6b7280', 'Unknown'),
 })
 
 /**
@@ -96,9 +104,16 @@ export function isCancelable(statusCode) {
   return CANCELABLE_STATUSES.includes(statusCode)
 }
 
-/** Etiqueta y color de un estado. Uno que no conozcamos cae en "desconocido", no revienta. */
+/**
+ * Etiqueta y color de un estado. Uno que no conozcamos cae en "desconocido" PERO conserva su texto
+ * original, como `taskStatus` de v9: dos códigos nuevos distintos no tienen que verse como dos
+ * porciones iguales de «Unknown».
+ */
 export function statusMeta(statusCode) {
-  return TASK_STATUS[statusCode] ?? TASK_STATUS.UNKNOWN
+  const conocido = TASK_STATUS[statusCode]
+  if (conocido) return conocido
+  const texto = statusCode ? String(statusCode) : TASK_STATUS.UNKNOWN.label
+  return { ...TASK_STATUS.UNKNOWN, label: texto, chartLabel: texto }
 }
 
 /**

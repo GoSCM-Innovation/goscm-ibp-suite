@@ -8,7 +8,9 @@ import { TZ_OPTIONS } from '../../lib/dates.js'
 /** Zonas que se ofrecen. La del equipo queda fuera del selector, igual que en v9. */
 const ZONAS = TZ_OPTIONS.filter((opcion) => opcion.value !== 'local')
 
-export default function DateRangeBar({ rango, zona, dias, onZona, onRango }) {
+export default function DateRangeBar({ rango, zona, dias, onZona, onRango, conDias = false, excedido = false, maxDias }) {
+  // Como v9: con el tope pasado, los dos campos se marcan en rojo.
+  const borde = excedido ? { borderColor: 'var(--red)' } : undefined
   return (
     <>
       <div className="seg" role="group" aria-label="Zona horaria">
@@ -29,6 +31,7 @@ export default function DateRangeBar({ rango, zona, dias, onZona, onRango }) {
         type="datetime-local"
         className="input input-sm"
         value={rango.desde}
+        style={borde}
         onChange={(evento) => onRango('desde', evento.target.value)}
         aria-label="Desde"
       />
@@ -37,10 +40,16 @@ export default function DateRangeBar({ rango, zona, dias, onZona, onRango }) {
         type="datetime-local"
         className="input input-sm"
         value={rango.hasta}
+        style={borde}
         onChange={(evento) => onRango('hasta', evento.target.value)}
         aria-label="Hasta"
       />
-      {dias !== null && <span className="tag tag-muted">{dias} d</span>}
+      {/* El contador de días es del monitor: los dos resúmenes de v9 no lo traen. */}
+      {conDias && dias !== null && (
+        excedido
+          ? <span className="tag tag-muted" style={{ color: 'var(--red)', fontWeight: 700 }}>⚠ máx {maxDias}d</span>
+          : <span className="tag tag-muted">{dias}d</span>
+      )}
     </>
   )
 }

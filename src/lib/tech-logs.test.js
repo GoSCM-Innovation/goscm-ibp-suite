@@ -74,9 +74,13 @@ describe('agrupar', () => {
     expect(grupos[1].veces).toBe(1)
   })
 
-  // La primera de la tanda es la vieja; la interesante es la última.
+  // `llamadas()` entrega la más reciente primero, y es la que se enseña del grupo.
   it('de un grupo conserva la más reciente', () => {
-    const grupos = agrupar([llamada({ ms: 10 }), llamada({ ms: 999 })])
+    anotarLlamada(llamada({ ms: 10 }))
+    anotarLlamada(llamada({ ms: 999 }))
+    const grupos = agrupar(llamadas())
+    expect(grupos).toHaveLength(1)
+    expect(grupos[0].veces).toBe(2)
     expect(grupos[0].llamada.ms).toBe(999)
   })
 

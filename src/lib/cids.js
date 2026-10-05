@@ -49,13 +49,18 @@ export function cidsTargets(conexiones) {
       connectionId: conexion.id,
       production: false,
       name: conexion.name,
-      label: `${conexion.name} · Pruebas`,
+      baseUrl: conexion.baseUrl,
+      organization: conexion.organization,
+      // «Sandbox» y no «Pruebas»: es la palabra de v9 para el repositorio no productivo.
+      label: `${conexion.name} · Sandbox`,
     },
     {
       id: `${conexion.id}:production`,
       connectionId: conexion.id,
       production: true,
       name: conexion.name,
+      baseUrl: conexion.baseUrl,
+      organization: conexion.organization,
       label: `${conexion.name} · Productivo`,
     },
   ])

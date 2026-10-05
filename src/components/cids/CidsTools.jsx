@@ -14,6 +14,7 @@ import TaskMonitor from './TaskMonitor.jsx'
 import TaskLauncher from './TaskLauncher.jsx'
 import { lectorDeCids } from '../../lib/run-logs.js'
 import ConnectionTabs from '../ui/ConnectionTabs.jsx'
+import CabeceraDeCids from './CabeceraDeCids.jsx'
 
 // Los tableros se cargan aparte, solo al abrir su pestaña. Son los únicos que usan la librería de
 // gráficos, y esa librería pesa más que todo el resto de la aplicación junta: dejarla en el paquete
@@ -118,6 +119,18 @@ export default function CidsTools() {
   // expresión suelta tenía un caso que reventaba la pantalla entera en el primer pintado.
   const transportadasDelDestino = promotedForTarget(transportadas, destino)
 
+  /** Cambiar de destino suelta la búsqueda del monitor: era del repositorio que se dejó. */
+  function elegirDestino(id) {
+    setBusqueda('')
+    setElegido(id)
+  }
+
+  /** Salir del monitor también la suelta, como v9, donde vivía dentro del propio monitor. */
+  function elegirHerramienta(id) {
+    if (herramienta === 'monitor' && id !== 'monitor') setBusqueda('')
+    setHerramienta(id)
+  }
+
   function verEnMonitor(taskName) {
     setBusqueda(taskName)
     setHerramienta('monitor')
@@ -125,7 +138,7 @@ export default function CidsTools() {
 
   /** Los destinos con la forma que espera la tira: es un repositorio por pestaña, no una conexión. */
   const comoPestanas = destinos.map((uno) => (
-    { id: uno.id, name: uno.label, isProduction: uno.production }
+    { id: uno.id, name: uno.label, avatar: uno.name, isProduction: uno.production }
   ))
 
   return (
@@ -136,19 +149,16 @@ export default function CidsTools() {
         <ConnectionTabs
           conexiones={comoPestanas}
           activa={elegido}
-          onElegir={setElegido}
+          onElegir={elegirDestino}
         />
       )}
+
+      {!SIN_DESTINO.has(herramienta) && <CabeceraDeCids destino={destino} />}
 
       <div className="module-head">
         <div>
           <div className="page-title">
             {HERRAMIENTAS.find((una) => una.id === herramienta)?.label ?? 'CI-DS Tools'}
-          </div>
-          <div className="page-hint">
-            {herramienta === 'global' && 'Todos los repositorios de CI-DS a la vez.'}
-            {/* El explorador y el documentador traen su propio banner, como en v9: no llevan subtítulo. */}
-            {!SIN_DESTINO.has(herramienta) && 'Ejecuciones, tareas y orquestaciones del repositorio elegido.'}
           </div>
         </div>
 
@@ -160,7 +170,7 @@ export default function CidsTools() {
             key={una.id}
             type="button"
             className={`tab${herramienta === una.id ? ' active' : ''}`}
-            onClick={() => setHerramienta(una.id)}
+            onClick={() => elegirHerramienta(una.id)}
             aria-pressed={herramienta === una.id}
           >
             {una.label}

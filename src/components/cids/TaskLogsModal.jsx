@@ -54,8 +54,8 @@ export default function TaskLogsModal({ destino, run, onClose }) {
   return (
     <Modal
       wide
-      title="Registros de la ejecución"
-      subtitle={`${run.taskName ?? '—'} · RunID ${run.runId}`}
+      title="Logs de ejecución"
+      subtitle={`RunID: ${run.runId}`}
       onClose={onClose}
       footer={
         <>
@@ -85,9 +85,9 @@ export default function TaskLogsModal({ destino, run, onClose }) {
       {error ? (
         <div className="notice notice-error">✕ {error}</div>
       ) : registros === null ? (
-        <div className="page-hint">Cargando registros…</div>
+        <div className="page-hint">Cargando logs…</div>
       ) : lineas.length === 0 ? (
-        <div className="page-hint">Este registro vino vacío.</div>
+        <div className="page-hint">Sin contenido en este log</div>
       ) : (
         <pre className="log-pre">{texto}</pre>
       )}

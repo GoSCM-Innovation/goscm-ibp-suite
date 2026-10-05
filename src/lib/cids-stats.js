@@ -21,12 +21,13 @@ export function statusBreakdown(ejecuciones, statusMeta) {
     cuenta.set(fila.statusCode, (cuenta.get(fila.statusCode) ?? 0) + 1)
   }
   return [...cuenta.entries()]
-    .map(([code, value]) => ({ code, value, name: statusMeta(code).label, color: statusMeta(code).color }))
+    // La leyenda de la torta usa la etiqueta corta, `chartLabel`, como v9.
+    .map(([code, value]) => ({ code, value, name: statusMeta(code).chartLabel, color: statusMeta(code).color }))
     .sort((a, b) => b.value - a.value)
 }
 
 /**
- * Ejecuciones por día, en tres pilas: correctas, falladas y el resto.
+ * Ejecuciones por día, en tres pilas: «Exitosas», «Fallidas» y «Otras» (los nombres de v9).
  *
  * El día se calcula en la zona elegida, no en UTC: una carga de las 2 de la mañana en UTC es del día
  * anterior si miras en UTC-4, y el gráfico tiene que coincidir con lo que dice la tabla.
@@ -36,9 +37,9 @@ export function perDayBreakdown(ejecuciones, zona) {
 
   for (const fila of ejecuciones) {
     const dia = dayLabelEpochMs(fila.startDate, zona)
-    const delDia = porDia.get(dia) ?? { dia, Correctas: 0, Falladas: 0, Otras: 0 }
-    if (fila.statusCode === 'SUCCESS') delDia.Correctas += 1
-    else if (isFailed(fila.statusCode)) delDia.Falladas += 1
+    const delDia = porDia.get(dia) ?? { dia, Exitosas: 0, Fallidas: 0, Otras: 0 }
+    if (fila.statusCode === 'SUCCESS') delDia.Exitosas += 1
+    else if (isFailed(fila.statusCode)) delDia.Fallidas += 1
     else delDia.Otras += 1
     porDia.set(dia, delDia)
   }

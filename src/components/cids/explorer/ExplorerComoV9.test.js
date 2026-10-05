@@ -12,7 +12,7 @@ const CONEXIONES_IBP = [{ id: 'i1', name: 'IBP CLARO QA', isProduction: false }]
 
 vi.mock('../../../lib/cids.js', () => ({
   cidsTargets: (lista) => lista.flatMap((una) => [
-    { id: `${una.id}:sandbox`, connectionId: una.id, production: false, name: una.name, label: `${una.name} · Pruebas` },
+    { id: `${una.id}:sandbox`, connectionId: una.id, production: false, name: una.name, label: `${una.name} · Sandbox` },
     { id: `${una.id}:production`, connectionId: una.id, production: true, name: una.name, label: `${una.name} · Productivo` },
   ]),
   listCidsConnections: vi.fn(async () => CONEXIONES_CIDS),

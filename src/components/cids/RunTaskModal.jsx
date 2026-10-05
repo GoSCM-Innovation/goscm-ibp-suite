@@ -79,17 +79,17 @@ export default function RunTaskModal({ destino, task, onClose, onLanzada }) {
   }
 
   return (
-    <Modal title="Ejecutar tarea" subtitle={task.taskName} onClose={onClose} footer={pie()}>
-      {paso === 'cargando' && <div className="page-hint">Cargando la configuración de la tarea…</div>}
-      {paso === 'enviando' && <div className="page-hint">Enviando la solicitud a CI-DS…</div>}
+    <Modal title="▶ Ejecutar task" subtitle={task.taskName} onClose={onClose} footer={pie()}>
+      {paso === 'cargando' && <div className="page-hint">Cargando configuración…</div>}
+      {paso === 'enviando' && <div className="page-hint">Enviando solicitud…</div>}
 
       {paso === 'error' && <div className="notice notice-error">✕ {error}</div>}
 
       {paso === 'listo' && (
         <>
-          <div className="notice notice-ok">✓ La tarea se envió a CI-DS.</div>
+          <div className="notice notice-ok">✓ Task enviada</div>
           <p style={{ marginTop: 12 }}>
-            RunID <span className="mono">{runId ?? '—'}</span>
+            RunID: <span className="mono">{runId ?? '—'}</span>
           </p>
         </>
       )}
@@ -99,7 +99,7 @@ export default function RunTaskModal({ destino, task, onClose, onLanzada }) {
           <div className="field">
             <label htmlFor="agente">Agente (opcional)</label>
             <select id="agente" className="select" value={agente} onChange={(e) => setAgente(e.target.value)}>
-              <option value="">— Que lo decida CI-DS —</option>
+              <option value="">— Sin especificar —</option>
               {agentes.map((uno) => (
                 <option key={uno.guid ?? uno.name} value={uno.name}>
                   {uno.name}{uno.agentStatus ? ` (${estadoAgente(uno.agentStatus)})` : ''}
@@ -116,7 +116,7 @@ export default function RunTaskModal({ destino, task, onClose, onLanzada }) {
               value={configuracion}
               onChange={(e) => setConfiguracion(e.target.value)}
             >
-              <option value="">— Que lo decida CI-DS —</option>
+              <option value="">— Sin especificar —</option>
               {configuraciones.map((una) => (
                 <option key={una.guid ?? una.name} value={una.name}>{una.name}</option>
               ))}
@@ -167,7 +167,7 @@ export default function RunTaskModal({ destino, task, onClose, onLanzada }) {
           <div className="modal-foot-info" />
           <button type="button" className="btn btn-sm" onClick={onClose}>Cerrar</button>
           <button type="button" className="btn btn-sm btn-primary" onClick={() => onLanzada(task.taskName)}>
-            Verla en el monitor →
+            ▶ Ver en Task Monitor →
           </button>
         </>
       )

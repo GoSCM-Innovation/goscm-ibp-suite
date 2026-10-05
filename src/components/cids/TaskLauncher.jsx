@@ -130,7 +130,7 @@ export default function TaskLauncher({ destino, onTaskLanzada, transportadas }) 
 
       <div className="monitor-head">
         <div className="monitor-meta">
-          {cargando ? 'Cargando proyectos…' : `${visibles.length} de ${proyectos.length} proyectos`}
+          {cargando ? 'Cargando…' : `${proyectos.length} proyectos · ${destino.label}`}
         </div>
 
         <div className="monitor-bar">
@@ -148,12 +148,12 @@ export default function TaskLauncher({ destino, onTaskLanzada, transportadas }) 
             className={`btn btn-sm${soloFijados ? ' btn-primary' : ''}`}
             onClick={() => setSoloFijados((activo) => !activo)}
             disabled={fijados.size === 0 && !soloFijados}
-            title={fijados.size === 0 ? 'Todavía no fijaste ningún proyecto' : 'Mostrar solo los fijados'}
+            title={fijados.size === 0 ? 'Aún no hay proyectos fijados' : (soloFijados ? 'Mostrar todos los proyectos' : 'Mostrar solo los fijados')}
           >
             {soloFijados ? '★' : '☆'} Solo fijados{fijados.size > 0 ? ` (${fijados.size})` : ''}
           </button>
           {fijados.size > 0 && (
-            <button type="button" className="btn btn-ghost btn-sm" onClick={limpiarFijados}>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={limpiarFijados} title="Quitar todos los fijados">
               Limpiar
             </button>
           )}
@@ -167,10 +167,10 @@ export default function TaskLauncher({ destino, onTaskLanzada, transportadas }) 
         {visibles.length === 0 && !cargando ? (
           <div className="table-empty">
             {busqueda
-              ? `Nada que coincida con "${busqueda}".`
+              ? `Sin resultados para "${busqueda}"`
               : soloFijados
-                ? 'Ningún proyecto fijado coincide.'
-                : 'Este tenant no tiene proyectos.'}
+                ? 'No hay proyectos fijados que coincidan'
+                : 'Sin proyectos'}
           </div>
         ) : visibles.map((proyecto) => (
           <Proyecto
@@ -215,7 +215,7 @@ function Proyecto({ proyecto, abierto, cargando, tareas, fijado, busqueda, trans
           type="button"
           className={`tree-pin${fijado ? ' on' : ''}`}
           onClick={onFijar}
-          title={fijado ? 'Quitar de fijados' : 'Fijar este proyecto'}
+          title={fijado ? 'Quitar de fijados' : 'Fijar proyecto'}
           aria-pressed={fijado}
         >
           {fijado ? '★' : '☆'}
@@ -226,7 +226,7 @@ function Proyecto({ proyecto, abierto, cargando, tareas, fijado, busqueda, trans
           <span className="tree-name">{proyecto.name || '—'}</span>
           {proyecto.description && <span className="tree-desc">— {proyecto.description}</span>}
           {abierto && suyas.length > 0 && (
-            <span className="tree-count">{suyas.length} tareas</span>
+            <span className="tree-count">{suyas.length} tasks</span>
           )}
         </button>
       </div>
@@ -235,7 +235,7 @@ function Proyecto({ proyecto, abierto, cargando, tareas, fijado, busqueda, trans
         <div className="tree-tasks">
           {mostradas.length === 0 && !cargando ? (
             <div className="tree-hueco">
-              {suyas.length === 0 ? 'Este proyecto no tiene tareas.' : 'Ninguna tarea coincide con la búsqueda.'}
+              Sin tasks en este proyecto
             </div>
           ) : mostradas.map((tarea, indice) => (
             <div className="tree-task" key={tarea.taskGuid || indice}>

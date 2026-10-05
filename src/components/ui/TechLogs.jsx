@@ -28,13 +28,16 @@ export default function TechLogs() {
   // no solo estando abierto: el contador del botón tiene que subir aunque el panel esté plegado.
   useEffect(() => suscribir(() => setRegistro(llamadas())), [])
 
+  // Sin llamadas no hay nada que enseñar: como en v9, el botón no aparece hasta que hay una.
+  if (registro.length === 0) return null
+
   const grupos = agrupar(registro)
   const fallidas = registro.filter((una) => una.estado === 0 || una.estado >= 400).length
 
   return (
     <div className="tech-logs">
       <button type="button" className="btn btn-sm" onClick={() => setAbierto((previo) => !previo)}>
-        {abierto ? '▾' : '▸'} Llamadas técnicas
+        {abierto ? '▲' : '▼'} Ver logs técnicos
         {registro.length > 0 && <span className="exp-count">{registro.length}</span>}
         {fallidas > 0 && <span className="exp-count" style={{ color: 'var(--red)' }}>{fallidas} con fallo</span>}
       </button>

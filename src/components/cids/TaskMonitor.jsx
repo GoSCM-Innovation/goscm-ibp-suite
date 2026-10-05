@@ -22,11 +22,11 @@ import { cidsCall, fetchTaskDetails, isTaskPromoted } from '../../lib/cids.js'
 import PromotedBadge from './PromotedBadge.jsx'
 import { copyText } from '../../lib/clipboard.js'
 import { toTsv } from '../../lib/tsv.js'
-import Modal from '../ui/Modal.jsx'
 import TaskLogsModal from './TaskLogsModal.jsx'
 import { formatEpochMs, formatSapTimestamp } from '../../lib/dates.js'
 import { useDateRange } from '../../lib/useDateRange.js'
 import DateRangeBar from '../ui/DateRangeBar.jsx'
+import { anchoArrastrado } from '../../lib/ancho-de-columna.js'
 
 /** Cada cuánto se vuelve a pedir la lista. De v9. */
 const REFRESH_MS = 30_000
@@ -39,6 +39,21 @@ const PAGE_SIZE = 50
  * Pedir más devuelve un error del servicio, así que se impide antes de salir.
  */
 const MAX_DAYS = 90
+
+/** Las columnas de la tabla y su ancho de partida (px), de v9. */
+const COLUMNAS = [
+  ['estado', 'Estado'],
+  ['task', 'Task'],
+  ['inicio', 'Inicio'],
+  ['fin', 'Fin'],
+  ['duracion', 'Duración'],
+  ['runId', 'RunID'],
+  ['jobId', 'JobID'],
+]
+const ANCHOS = { estado: 200, task: 280, inicio: 180, fin: 180, duracion: 110, runId: 120, jobId: 150 }
+
+/** El azul del chip «Todos», como en v9: el resto toma el color de su estado. */
+const COLOR_TODOS = '#3b82f6'
 
 /**
  * La búsqueda llega de arriba (`busqueda` / `onBuscar`) en vez de vivir aquí. Es lo que permite que
@@ -69,10 +84,11 @@ export default function TaskMonitor({ destino, busqueda, onBuscar, transportadas
   // registro de error largo lleva su tiempo y el diálogo no debe cerrarse solo porque la lista se
   // refrescó por detrás.
   const [registrosDe, setRegistrosDe] = useState(null)
-  const [confirmarCancelar, setConfirmarCancelar] = useState(false)
   const [cancelando, setCancelando] = useState(false)
   const [avisoCancelar, setAvisoCancelar] = useState(null)
   const [copiado, setCopiado] = useState(null)
+  // Anchos que la persona ajustó arrastrando el borde de la cabecera; el resto parte de ANCHOS.
+  const [anchos, setAnchos] = useState({})
 
   // Lo ya consultado se lee DENTRO del efecto que consulta, no al pintar, así que va por
   // referencia y no como dependencia. Si fuera dependencia, cada respuesta volvería a disparar
@@ -170,7 +186,9 @@ export default function TaskMonitor({ destino, busqueda, onBuscar, transportadas
       })
       .finally(() => { if (!abandonado) setCargandoDetalles(false) })
 
-    return () => { abandonado = true }
+    // Al abandonar también se apaga el aviso: si la página nueva ya estaba en caché el efecto
+    // sale sin pedir nada, y el aviso de la anterior se quedaría encendido para siempre.
+    return () => { abandonado = true; setCargandoDetalles(false) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clavePagina, destino, ultimoRefresco])
 
@@ -183,15 +201,18 @@ export default function TaskMonitor({ destino, busqueda, onBuscar, transportadas
   }
 
   async function cancelar() {
-    setConfirmarCancelar(false)
+    // La confirmación es la de v9: un `confirm` del navegador con el nombre y el RunID.
+    if (!window.confirm(`¿Cancelar la ejecución de "${elegida.taskName}"?
+
+RunID: ${elegida.runId}`)) return
     setCancelando(true)
     setAvisoCancelar(null)
     try {
-      const respuesta = await cidsCall(destino, 'cancelTask', { runId: elegida.runId })
-      // Se muestra lo que contestó SAP si contestó algo: es más útil que un mensaje nuestro, y no
-      // afirma nada sobre cuándo se detiene de verdad, que eso lo decide el tenant.
-      setAvisoCancelar({ ok: true, texto: respuesta?.message || 'Cancelación enviada.' })
+      await cidsCall(destino, 'cancelTask', { runId: elegida.runId })
+      setAvisoCancelar({ ok: true, texto: 'Cancelación enviada' })
       await cargar()
+      // A los 2,5 s la barra se suelta sola, como en v9.
+      setTimeout(() => { setRunElegido(null); setAvisoCancelar(null) }, 2500)
     } catch (fallo) {
       setAvisoCancelar({ ok: false, texto: fallo.message })
     } finally {
@@ -199,9 +220,26 @@ export default function TaskMonitor({ destino, busqueda, onBuscar, transportadas
     }
   }
 
+  // Arrastrar el borde derecho de una cabecera. Mínimo de 60 px, como en v9.
+  function empezarArrastre(clave, evento) {
+    evento.preventDefault()
+    evento.stopPropagation()
+    const inicioX = evento.clientX
+    const anchoInicial = anchos[clave] ?? ANCHOS[clave]
+    function mover(movimiento) {
+      setAnchos((previos) => ({ ...previos, [clave]: anchoArrastrado(anchoInicial, movimiento.clientX - inicioX) }))
+    }
+    function soltar() {
+      window.removeEventListener('mousemove', mover)
+      window.removeEventListener('mouseup', soltar)
+    }
+    window.addEventListener('mousemove', mover)
+    window.addEventListener('mouseup', soltar)
+  }
+
   async function copiarPagina() {
     const filas = [
-      ['Estado', 'Tarea', 'Inicio', 'Fin', 'Duración', 'RunID', 'JobID'],
+      ['Estado', 'Task', 'Inicio', 'Fin', 'Duración', 'RunID', 'JobID'],
       ...enPagina.map((fila) => {
         const detalle = detalles[fila.runId]
         return [
@@ -222,14 +260,14 @@ export default function TaskMonitor({ destino, busqueda, onBuscar, transportadas
 
   return (
     <div className="monitor">
-      <div className={`progress-line${cargando || cargandoDetalles ? ' on' : ''}`} />
+      <div className={`progress-line${cargando || cancelando || cargandoDetalles ? ' on' : ''}`} />
 
       <div className="monitor-head">
         <div className="monitor-meta">
-          {cargando && ejecuciones.length === 0
+          {cargando
             ? 'Cargando…'
-            : `${filtradas.length} de ${ejecuciones.length} ejecuciones · página ${paginaVisible} de ${totalPaginas}`}
-          {cargandoDetalles && <span className="live"><span className="sep">·</span>cargando fin y duración…</span>}
+            : `${filtradas.length} de ${ejecuciones.length} ejecuciones · pág ${paginaVisible}/${totalPaginas}`}
+          {cargandoDetalles && !cargando && <span className="live"><span className="sep">·</span>cargando fin/duración…</span>}
           {ultimoRefresco && !cargando && !cargandoDetalles && (
             <span><span className="sep">·</span>{ultimoRefresco.toLocaleTimeString()}</span>
           )}
@@ -240,6 +278,9 @@ export default function TaskMonitor({ destino, busqueda, onBuscar, transportadas
             rango={fechas.rango}
             zona={zona}
             dias={fechas.dias}
+            conDias
+            excedido={rangoExcedido}
+            maxDias={MAX_DAYS}
             onZona={fechas.cambiarZona}
             onRango={(punta, valor) => { setPagina(1); fechas.cambiarRango(punta, valor) }}
           />
@@ -260,9 +301,9 @@ export default function TaskMonitor({ destino, busqueda, onBuscar, transportadas
             className="btn btn-sm"
             onClick={copiarPagina}
             disabled={enPagina.length === 0 || cargandoDetalles}
-            title={cargandoDetalles ? 'Espera a que terminen de cargar el fin y la duración' : 'Copiar esta página para pegarla en Excel'}
+            title={cargandoDetalles ? 'Espera a que termine de cargar la página' : 'Copiar la página actual (formato tabla, pegable en Excel)'}
           >
-            {copiado === 'ok' ? '✓ Copiado' : copiado === 'error' ? '✕ No se pudo' : '⧉ Copiar'}
+            {copiado === 'ok' ? '✓ Copiado' : copiado === 'error' ? '✕ Error' : '⧉ Copiar'}
           </button>
           <button type="button" className="btn btn-sm" onClick={cargar} disabled={cargando || !rangoValido}>
             ↺ Refresh
@@ -278,6 +319,7 @@ export default function TaskMonitor({ destino, busqueda, onBuscar, transportadas
           activo={estadoActivo === 'TODOS'}
           onClick={() => { setEstadoActivo('TODOS'); setPagina(1) }}
           etiqueta="Todos"
+          color={COLOR_TODOS}
           cuenta={buscadas.length}
         />
         {porEstado.map(([codigo, cuenta]) => (
@@ -300,54 +342,57 @@ export default function TaskMonitor({ destino, busqueda, onBuscar, transportadas
       )}
       {rangoExcedido && (
         <div className="notice notice-error">
-          El rango no puede pasar de {MAX_DAYS} días: es el límite de SAP CI-DS. Acortá las fechas.
+          El rango no puede pasar de {MAX_DAYS} días: es el límite de SAP CI-DS. Acorta las fechas.
         </div>
       )}
       {error && <div className="notice notice-error">✕ {error}</div>}
 
-      <div className="table-scroll">
-        <table className="table-dense">
-          <colgroup>
-            <col style={{ width: 190 }} />
-            <col style={{ width: 280 }} />
-            <col style={{ width: 170 }} />
-            <col style={{ width: 170 }} />
-            <col style={{ width: 105 }} />
-            <col style={{ width: 120 }} />
-            <col style={{ width: 150 }} />
-          </colgroup>
-          <thead>
-            <tr>
-              <th>Estado</th>
-              <th>Tarea</th>
-              <th>Inicio</th>
-              <th>Fin</th>
-              <th>Duración</th>
-              <th>RunID</th>
-              <th>JobID</th>
-            </tr>
-          </thead>
-          <tbody>
-            {cargando && ejecuciones.length === 0 ? (
-              <tr><td className="table-empty" colSpan={7}>Cargando…</td></tr>
-            ) : enPagina.length === 0 ? (
-              <tr><td className="table-empty" colSpan={7}>Ninguna ejecución en este rango.</td></tr>
-            ) : enPagina.map((fila, indice) => (
-              <Fila
-                key={fila.runId || indice}
-                fila={fila}
-                detalle={detalles[fila.runId]}
-                zona={zona}
-                transportada={isTaskPromoted(transportadas, fila.taskName)}
-                elegida={fila.runId === runElegido}
-                onElegir={() => elegir(fila)}
-              />
-            ))}
-          </tbody>
-        </table>
-      </div>
+      {/* Con error no se pinta la tabla ni la paginación, como en v9: unas filas viejas debajo del
+          aviso se leerían como si fueran el resultado de esta consulta. */}
+      {!error && (
+        <div className="table-scroll">
+          <table className="table-dense">
+            <colgroup>
+              {COLUMNAS.map(([clave]) => <col key={clave} style={{ width: anchos[clave] ?? ANCHOS[clave] }} />)}
+            </colgroup>
+            <thead>
+              <tr>
+                {COLUMNAS.map(([clave, titulo]) => (
+                  <th key={clave} style={{ position: 'relative' }}>
+                    {titulo}
+                    <span
+                      className="th-tirador"
+                      role="separator"
+                      aria-label={`Ancho de ${titulo}`}
+                      onMouseDown={(evento) => empezarArrastre(clave, evento)}
+                      onClick={(evento) => evento.stopPropagation()}
+                    />
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {cargando && ejecuciones.length === 0 ? (
+                <tr><td className="table-empty" colSpan={COLUMNAS.length}>Cargando…</td></tr>
+              ) : enPagina.length === 0 ? (
+                <tr><td className="table-empty" colSpan={COLUMNAS.length}>Sin resultados</td></tr>
+              ) : enPagina.map((fila, indice) => (
+                <Fila
+                  key={fila.runId || indice}
+                  fila={fila}
+                  detalle={detalles[fila.runId]}
+                  zona={zona}
+                  transportada={isTaskPromoted(transportadas, fila.taskName)}
+                  elegida={fila.runId === runElegido}
+                  onElegir={() => elegir(fila)}
+                />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
-      {totalPaginas > 1 && (
+      {!error && totalPaginas > 1 && (
         <div className="pager">
           <button type="button" className="btn btn-sm" disabled={paginaVisible === 1} onClick={() => setPagina(1)}>« Primera</button>
           <button type="button" className="btn btn-sm" disabled={paginaVisible === 1} onClick={() => setPagina(paginaVisible - 1)}>‹ Anterior</button>
@@ -363,7 +408,7 @@ export default function TaskMonitor({ destino, busqueda, onBuscar, transportadas
             <div className="action-bar-label">Ejecución seleccionada</div>
             <div className="action-bar-name">
               {elegida.taskName ?? '—'}
-              <span className="mono action-bar-run">RunID {elegida.runId}</span>
+              <span className="mono action-bar-run">RunID: {elegida.runId}</span>
             </div>
           </div>
 
@@ -375,16 +420,16 @@ export default function TaskMonitor({ destino, busqueda, onBuscar, transportadas
 
           <div className="action-bar-buttons">
             <button type="button" className="btn btn-sm" onClick={() => setRegistrosDe(elegida)}>
-              📋 Ver registros
+              📋 Ver logs
             </button>
             <button
               type="button"
               className="btn btn-sm btn-danger"
-              onClick={() => setConfirmarCancelar(true)}
+              onClick={cancelar}
               disabled={!sePuedeCancelar || cancelando}
               title={sePuedeCancelar
-                ? 'Pedirle a CI-DS que detenga esta ejecución'
-                : `Una ejecución en estado "${statusMeta(elegida.statusCode).label}" ya no se puede cancelar`}
+                ? ''
+                : 'Solo se pueden cancelar tasks en ejecución/cola'}
             >
               {cancelando ? 'Cancelando…' : '✕ Cancelar'}
             </button>
@@ -399,29 +444,6 @@ export default function TaskMonitor({ destino, busqueda, onBuscar, transportadas
         <TaskLogsModal destino={destino} run={registrosDe} onClose={() => setRegistrosDe(null)} />
       )}
 
-      {confirmarCancelar && elegida && (
-        <Modal
-          title="Cancelar la ejecución"
-          subtitle={`RunID ${elegida.runId}`}
-          onClose={() => setConfirmarCancelar(false)}
-          footer={
-            <>
-              <div className="modal-foot-info" />
-              <button type="button" className="btn btn-sm" onClick={() => setConfirmarCancelar(false)}>No, dejarla</button>
-              <button type="button" className="btn btn-sm btn-primary" onClick={cancelar}>Sí, cancelar</button>
-            </>
-          }
-        >
-          <p>
-            Se le va a pedir a CI-DS que detenga <b>{elegida.taskName ?? 'esta tarea'}</b>, que ahora
-            está en estado <b>{statusMeta(elegida.statusCode).label}</b>.
-          </p>
-          <p className="page-hint" style={{ marginTop: 10 }}>
-            Lo que ya haya cargado en el sistema de destino no se deshace: cancelar detiene la
-            ejecución, no revierte lo hecho.
-          </p>
-        </Modal>
-      )}
     </div>
   )
 }
@@ -442,27 +464,33 @@ function Fila({ fila, detalle, zona, transportada, elegida, onElegir }) {
     <tr
       className={elegida ? 'selected' : undefined}
       onClick={onElegir}
-      // Con el teclado la fila se elige igual: es lo que habilita ver registros y cancelar.
+      // Con el teclado la fila se elige igual: es lo que habilita ver logs y cancelar.
       tabIndex={0}
       onKeyDown={(evento) => {
         if (evento.key === 'Enter' || evento.key === ' ') { evento.preventDefault(); onElegir() }
       }}
       aria-selected={elegida}
     >
-      <td><StatusBadge codigo={fila.statusCode} /></td>
-      <td title={fila.taskName || ''}>
+      {/* Cada celda lleva como `title` el valor crudo que mandó SAP, como v9. */}
+      <td title={fila.statusCode ?? ''}><StatusBadge codigo={fila.statusCode} /></td>
+      <td title={fila.taskName ?? ''}>
         <span className="task-cell">
-          <span className="task-cell-name">{fila.taskName || '—'}</span>
+          <span className="task-cell-name">{fila.taskName ?? '—'}</span>
           {transportada && <PromotedBadge />}
         </span>
       </td>
-      <td>{formatEpochMs(fila.startDate, zona)}</td>
-      <td><Fin detalle={detalle} zona={zona} /></td>
-      <td>{detalle ? formatDuration(detalle.durationSeconds) : <span className="muted">…</span>}</td>
-      <td className="mono">{fila.runId || '—'}</td>
-      <td className="mono">{fila.jobId || '—'}</td>
+      <td title={fila.startDate ?? ''}>{formatEpochMs(fila.startDate, zona)}</td>
+      <td title={fila.endDate ?? ''}><Fin detalle={detalle} zona={zona} /></td>
+      <td><Duracion detalle={detalle} /></td>
+      <td className="mono" title={fila.runId ?? ''}>{fila.runId || '—'}</td>
+      <td className="mono" title={fila.jobId ?? ''}>{fila.jobId || '—'}</td>
     </tr>
   )
+}
+
+function Duracion({ detalle }) {
+  if (!detalle) return <span className="muted">…</span>
+  return formatDuration(detalle.durationSeconds)
 }
 
 /**

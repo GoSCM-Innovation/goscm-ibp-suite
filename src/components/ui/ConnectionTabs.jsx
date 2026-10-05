@@ -66,7 +66,9 @@ export default function ConnectionTabs({ conexiones, activa, onElegir, inicio = 
               }}
               title={`${conexion.name} — ${queEs(conexion)}`}
             >
-              <ConnectionAvatar name={conexion.name} size={20} />
+              {/* El avatar sale del nombre de la conexión, no del texto de la pestaña: con «CLARO · Sandbox»
+                  las iniciales eran «C·». */}
+              <ConnectionAvatar name={conexion.avatar ?? conexion.name} size={20} />
               <span className="conn-tab-nombre">{conexion.name}</span>
               <span
                 className={`conn-tab-punto${conexion.isProduction ? ' productivo' : ''}`}

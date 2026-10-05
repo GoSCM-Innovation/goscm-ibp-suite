@@ -536,6 +536,17 @@ a { color: var(--cyan); }
 .kpi-valor { font-size: 23px; font-weight: 700; line-height: 1.15; }
 .kpi-nota { color: var(--text2); font-size: 10px; line-height: 1.3; margin-top: 4px; }
 
+/* La línea de contexto de las láminas del Global (v9): qué se mira y en qué lámina se está. */
+.lamina-contexto {
+  align-items: center;
+  color: var(--text2);
+  display: flex;
+  font-size: 12px;
+  justify-content: space-between;
+}
+.lamina-contexto strong { color: var(--text); }
+.lamina-contador { color: var(--text3); font-size: 11px; }
+
 .leyenda { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 8px; }
 .leyenda-item { align-items: center; color: var(--text2); display: flex; font-size: 10px; gap: 5px; }
 .leyenda-color { border-radius: 2px; flex-shrink: 0; height: 8px; width: 8px; }
@@ -1001,15 +1012,17 @@ a { color: var(--cyan); }
 /* "Esta tarea ya existe en el tenant productivo." Se distingue del estado de una ejecución a
    propósito: es información sobre la tarea, no sobre lo que pasó al ejecutarla. */
 .promoted-badge {
-  background: color-mix(in srgb, var(--accent) 15%, transparent);
-  border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
-  border-radius: 999px;
-  color: var(--accent);
+  background: color-mix(in srgb, var(--green) 15%, transparent);
+  border: 1px solid color-mix(in srgb, var(--green) 35%, transparent);
+  border-radius: 8px;
+  color: var(--green);
   flex-shrink: 0;
+  font-family: var(--mono);
   font-size: 9px;
   font-weight: 700;
   letter-spacing: .04em;
-  padding: 1px 6px;
+  line-height: 1.4;
+  padding: 1px 4px;
   white-space: nowrap;
 }
 
@@ -3218,18 +3231,21 @@ a { color: var(--cyan); }
    `index.css`), con sus cortes tal cual: seis cifras que pasan a 3, 2 y 1 columnas a 900, 640 y
    400 px; los gráficos en 1fr 2fr; las tarjetas de abajo de dos en dos. Llevan el prefijo `v8-`
    porque la suite ya tiene clases con esos nombres, con otra forma, y las usa CI-DS. */
-.v8-grid-kpi    { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; margin-bottom: 24px; }
-.v8-grid-charts { display: grid; grid-template-columns: 1fr 2fr;        gap: 16px; margin-bottom: 24px; }
-.v8-grid-stats  { display: grid; grid-template-columns: 1fr 1fr;        gap: 16px; }
+/* Las mismas medidas en v8 y v9: 6 columnas, gráficos 1fr 2fr y cuadros 1fr 1fr. */
+.v8-grid-kpi, .v9-grid-kpi { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; }
+.v8-grid-charts, .v9-grid-charts { display: grid; grid-template-columns: 1fr 2fr; gap: 16px; }
+.v8-grid-stats, .v9-grid-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+/* Solo v8 deja un margen debajo: el tablero de CI-DS ya separa sus bloques con un `gap`. */
+.v8-grid-kpi, .v8-grid-charts { margin-bottom: 24px; }
 
 @media (max-width: 900px) {
-  .v8-grid-kpi    { grid-template-columns: repeat(3, 1fr); }
-  .v8-grid-charts { grid-template-columns: 1fr; }
+  .v8-grid-kpi, .v9-grid-kpi { grid-template-columns: repeat(3, 1fr); }
+  .v8-grid-charts, .v9-grid-charts { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 640px) {
-  .v8-grid-kpi   { grid-template-columns: repeat(2, 1fr); }
-  .v8-grid-stats { grid-template-columns: 1fr; }
+  .v8-grid-kpi, .v9-grid-kpi { grid-template-columns: repeat(2, 1fr); }
+  .v8-grid-stats, .v9-grid-stats { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 400px) {
@@ -4589,3 +4605,41 @@ a { color: var(--cyan); }
 .snwv-card:focus-visible,.snwv-tab:focus-visible,.snwv-chip:focus-visible,.snwv-opt:focus-visible,.snwv-btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 
 
+
+/* ─── Cabecera del sistema de CI-DS Tools (v9) ───────────────
+   Avatar de 34, nombre y la línea `dirección · organización · ambiente` en mono. */
+.cids-cabecera {
+  align-items: center;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: flex;
+  gap: 14px;
+  padding: 10px 16px;
+}
+.cids-cabecera.contraida { background: none; border: none; padding: 0; }
+.cids-cabecera-texto { flex: 1; min-width: 0; }
+.cids-cabecera-nombre { color: var(--text); font-size: 14px; font-weight: 700; }
+.cids-cabecera-detalle {
+  color: var(--text2);
+  font-size: 10px;
+  margin-top: 1px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cids-cabecera-cerrar, .cids-cabecera-abrir {
+  align-items: center;
+  background: none;
+  border: none;
+  border-radius: 4px;
+  color: var(--text3);
+  cursor: pointer;
+  display: inline-flex;
+  flex-shrink: 0;
+  font-size: 14px;
+  gap: 6px;
+  line-height: 1;
+  padding: 2px 4px;
+}
+.cids-cabecera-cerrar:hover, .cids-cabecera-abrir:hover { color: var(--text); }

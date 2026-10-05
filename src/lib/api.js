@@ -23,6 +23,9 @@ export class ApiError extends Error {
 async function request(path, { method = 'GET', body, params, signal } = {}) {
   const query = params ? `?${new URLSearchParams(params)}` : ''
   const arranque = Date.now()
+  // Las operaciones de CI-DS y de IBP viajan todas por la misma ruta con la operación en el cuerpo.
+  // Sin ella en el panel, `getProjects`, `runTask` y `getTaskLogs` serían la misma línea.
+  const etiqueta = typeof body?.operation === 'string' ? `${path} · ${body.operation}` : path
 
   let response
   try {
@@ -41,7 +44,7 @@ async function request(path, { method = 'GET', body, params, signal } = {}) {
     const cancelada = fallo.name === 'AbortError'
     anotarLlamada({
       metodo: method,
-      ruta: path,
+      ruta: etiqueta,
       estado: 0,
       ms: Date.now() - arranque,
       detalle: cancelada ? 'cancelada' : fallo.message,
@@ -51,7 +54,7 @@ async function request(path, { method = 'GET', body, params, signal } = {}) {
 
   const text = await response.text()
   const anotar = (detalle) => anotarLlamada({
-    metodo: method, ruta: path, estado: response.status, ms: Date.now() - arranque, detalle,
+    metodo: method, ruta: etiqueta, estado: response.status, ms: Date.now() - arranque, detalle,
   })
 
   let data = {}

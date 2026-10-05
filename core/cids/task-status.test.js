@@ -40,12 +40,36 @@ describe('la tabla de estados', () => {
 })
 
 describe('statusMeta', () => {
-  it('devuelve la etiqueta del estado', () => {
-    expect(statusMeta('SUCCESS').label).toBe('Correcta')
+  // Las etiquetas son las de v9, en inglés (`constants/status.js`).
+  it('devuelve la etiqueta del estado, la de v9', () => {
+    expect(statusMeta('SUCCESS').label).toBe('Success')
+    expect(statusMeta('RUNNING').label).toBe('Running')
+    expect(statusMeta('SUCCESS_WITH_ERRORS_D').label).toBe('Success w/ errors D')
+    expect(statusMeta('TERMINATION_FAILED').label).toBe('Termination failed')
   })
 
-  it.each([undefined, null, '', 'INVENTADO'])('un estado que no conoce (%s) cae en desconocido', (code) => {
-    expect(statusMeta(code)).toBe(TASK_STATUS.UNKNOWN)
+  it('la torta usa la etiqueta corta (`chartLabel`)', () => {
+    expect(statusMeta('SUCCESS_WITH_ERRORS_D').chartLabel).toBe('Success w/err D')
+    expect(statusMeta('SUCCESS_WITH_ERRORS_E').chartLabel).toBe('Success w/err E')
+    expect(statusMeta('ERROR').chartLabel).toBe('Error')
+  })
+
+  it('la cancelación fallida ya no comparte color con «con errores E»', () => {
+    expect(statusMeta('TERMINATION_FAILED').color).toBe('#ef4444')
+    expect(statusMeta('TERMINATION_FAILED').color).not.toBe(statusMeta('SUCCESS_WITH_ERRORS_E').color)
+  })
+
+  it.each([undefined, null, ''])('un estado vacío (%s) cae en «Unknown»', (code) => {
+    expect(statusMeta(code)).toEqual(TASK_STATUS.UNKNOWN)
+    expect(statusMeta(code).label).toBe('Unknown')
+  })
+
+  // Dos códigos nuevos distintos no tienen que verse como dos porciones iguales de «Unknown».
+  it('un código que no conoce conserva su texto original, con el color de desconocido', () => {
+    const nuevo = statusMeta('INVENTADO')
+    expect(nuevo.label).toBe('INVENTADO')
+    expect(nuevo.chartLabel).toBe('INVENTADO')
+    expect(nuevo.color).toBe(TASK_STATUS.UNKNOWN.color)
   })
 })
 

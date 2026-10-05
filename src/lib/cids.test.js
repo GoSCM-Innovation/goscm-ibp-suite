@@ -25,8 +25,14 @@ describe('cidsTargets', () => {
 
   it('la etiqueta dice de qué repositorio se trata', () => {
     const [pruebas, productivo] = cidsTargets([CONEXION])
-    expect(pruebas.label).toBe('Grupo Consenso · Pruebas')
+    expect(pruebas.label).toBe('Grupo Consenso · Sandbox')
     expect(productivo.label).toBe('Grupo Consenso · Productivo')
+  })
+
+  it('lleva la dirección y la organización para la cabecera del sistema', () => {
+    const [pruebas, productivo] = cidsTargets([{ ...CONEXION, baseUrl: 'https://x.hana.ondemand.com/', organization: 'ORG1' }])
+    expect(pruebas).toMatchObject({ baseUrl: 'https://x.hana.ondemand.com/', organization: 'ORG1' })
+    expect(productivo).toMatchObject({ baseUrl: 'https://x.hana.ondemand.com/', organization: 'ORG1' })
   })
 
   it('con varias conexiones sale el doble de destinos', () => {

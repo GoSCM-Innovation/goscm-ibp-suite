@@ -24,10 +24,10 @@ export function agrupar(llamadas) {
     const ultimo = grupos[grupos.length - 1]
 
     if (ultimo?.clave === clave) {
+      // Las llamadas llegan de la más reciente a la más antigua, así que la que abrió el grupo YA
+      // es la más reciente y las siguientes solo se cuentan. Con un refresco cada treinta segundos
+      // lo interesante es la última vez, no la primera.
       ultimo.veces += 1
-      // Se conserva la MÁS RECIENTE: con un refresco cada treinta segundos, la primera de la tanda
-      // es la vieja y la interesante es la última.
-      ultimo.llamada = llamada
     } else {
       grupos.push({ clave, llamada, veces: 1 })
     }

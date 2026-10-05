@@ -59,9 +59,9 @@ export function PerDayBars({ porDia }) {
         <XAxis dataKey="dia" tick={EJE} />
         <YAxis tick={EJE} allowDecimals={false} />
         <Tooltip contentStyle={TOOLTIP} />
-        <Legend wrapperStyle={{ fontSize: 11 }} />
-        <Bar dataKey="Correctas" stackId="a" fill="var(--green)" />
-        <Bar dataKey="Falladas" stackId="a" fill="var(--red)" />
+        <Legend wrapperStyle={{ fontSize: 11, color: 'var(--text2)' }} />
+        <Bar dataKey="Exitosas" stackId="a" fill="var(--green)" />
+        <Bar dataKey="Fallidas" stackId="a" fill="var(--red)" />
         <Bar dataKey="Otras" stackId="a" fill="var(--text3)" radius={[3, 3, 0, 0]} />
       </BarChart>
     </ResponsiveContainer>

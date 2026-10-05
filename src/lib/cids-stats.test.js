@@ -51,21 +51,21 @@ describe('perDayBreakdown', () => {
     ]
 
     expect(perDayBreakdown(filas, 'utc')).toEqual([
-      { dia: '04/08', Correctas: 2, Falladas: 1, Otras: 0 },
-      { dia: '05/08', Correctas: 0, Falladas: 0, Otras: 1 },
+      { dia: '04/08', Exitosas: 2, Fallidas: 1, Otras: 0 },
+      { dia: '05/08', Exitosas: 0, Fallidas: 0, Otras: 1 },
     ])
   })
 
   // La cancelación fallida es un fallo, igual que en el resto de la aplicación.
   it('la cancelación fallida cuenta como fallada', () => {
     const [dia] = perDayBreakdown([ejecucion('TERMINATION_FAILED')], 'utc')
-    expect(dia.Falladas).toBe(1)
+    expect(dia.Fallidas).toBe(1)
   })
 
   it('lo que no es ni correcta ni fallada va a "Otras"', () => {
     const filas = [ejecucion('RUNNING'), ejecucion('QUEUEING'), ejecucion('TERMINATED')]
     const [dia] = perDayBreakdown(filas, 'utc')
-    expect(dia).toMatchObject({ Correctas: 0, Falladas: 0, Otras: 3 })
+    expect(dia).toMatchObject({ Exitosas: 0, Fallidas: 0, Otras: 3 })
   })
 
   // El gráfico tiene que coincidir con lo que dice la tabla, y la tabla muestra la zona elegida.
