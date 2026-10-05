@@ -19,6 +19,7 @@
 import { useState } from 'react'
 
 import Modal from '../ui/Modal.jsx'
+import { APPS_EXPLORER } from '../../lib/modules.js'
 import { REQUISITOS_CIDS, REQUISITOS_IBP } from '../../lib/requisitos-tecnicos.js'
 
 const PESTANAS = [
@@ -113,6 +114,9 @@ const SIN_CONEXION = (
   </div>
 )
 
+// Lo que está oculto en el menú tampoco se enseña aquí: ver `oculta` en `lib/modules.js`.
+const PADOC_OCULTO = Boolean(APPS_EXPLORER.find((una) => una.id === 'padoc')?.oculta)
+
 /** Las entidades que consume cada aplicación, tal como las lista v7. */
 const ENTIDADES = [
   {
@@ -144,6 +148,7 @@ const ENTIDADES = [
   },
   {
     titulo: '📑 Planning Area Documenter',
+    oculta: PADOC_OCULTO,
     items: ['Generación — sin conexión: solo los CSV del Download Configuration File',
       'Enriquecimiento (si hay conexión): Master Data Types del área (volumetría)',
       'JobTemplateSet', 'JobTemplateSequenceSet'],
@@ -254,7 +259,7 @@ export default function TechReqDialog({ onClose }) {
               <Escenario codigo="SAP_COM_0720" descripcion="Acceso a datos de producción y maestros IBP" />
             </Tarjeta>
             <Tarjeta titulo="📖 Glosario Analyzers">{SIN_CONEXION}</Tarjeta>
-            <Tarjeta titulo="📑 Planning Area Documenter">
+            {!PADOC_OCULTO && <Tarjeta titulo="📑 Planning Area Documenter">
               <div>
                 <div style={{ color: 'var(--text3)', fontStyle: 'italic', fontSize: 10, marginBottom: 3 }}>
                   Generación (sin conexión)
@@ -269,7 +274,7 @@ export default function TechReqDialog({ onClose }) {
                 <div style={{ height: 4 }} />
                 <Escenario codigo="SAP_COM_0326" descripcion="Acceso a los Application Jobs de IBP" color="var(--purple)" />
               </div>
-            </Tarjeta>
+            </Tarjeta>}
           </div>
 
           <div style={{ borderTop: '1px solid var(--border)', paddingTop: 12 }}>
@@ -290,7 +295,7 @@ export default function TechReqDialog({ onClose }) {
         <>
           <Titulo>Entidades OData consumidas por aplicación</Titulo>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, fontSize: 11 }}>
-            {ENTIDADES.map((una) => (
+            {ENTIDADES.filter((una) => !una.oculta).map((una) => (
               <div key={una.titulo}>
                 <div style={{ color: 'var(--cyan)', fontWeight: 600, marginBottom: 6 }}>{una.titulo}</div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4, color: 'var(--text2)' }}>

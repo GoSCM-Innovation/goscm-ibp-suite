@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { APPS_EXPLORER, MODULES, appById, moduleById, partirRuta } from './modules.js'
+import { APPS_EXPLORER, APPS_VISIBLES, MODULES, appById, moduleById, partirRuta } from './modules.js'
 
 describe('las seis aplicaciones de v7', () => {
   it('están las seis, con los nombres de v7 y en su orden', () => {
@@ -37,8 +37,22 @@ describe('las seis aplicaciones de v7', () => {
   })
 
   it('cuelgan de Data Tools y de ningún otro módulo', () => {
-    expect(moduleById('explorer').apps).toBe(APPS_EXPLORER)
+    expect(moduleById('explorer').apps).toBe(APPS_VISIBLES)
     expect(MODULES.filter((uno) => uno.apps)).toHaveLength(1)
+  })
+})
+
+// Pedido por el usuario el 2026-10-05: «de momento» no se ofrece. Sigue en `APPS_EXPLORER` —con su
+// código y sus pruebas—, así que volver a mostrarlo es quitar la marca `oculta`.
+describe('Planning Area Documenter, oculto de momento', () => {
+  it('no está entre las que se ofrecen, pero sigue definido', () => {
+    expect(APPS_VISIBLES.map((una) => una.id)).toEqual(['bom', 'pa', 'visualizer', 'network', 'glosario'])
+    expect(APPS_EXPLORER.find((una) => una.id === 'padoc')?.oculta).toBe(true)
+  })
+
+  it('una dirección que apunta a él cae en la primera aplicación, no en pantalla en blanco', () => {
+    expect(appById('explorer', 'padoc')).toBeNull()
+    expect(partirRuta('explorer/padoc')).toEqual({ moduleId: 'explorer', appId: 'bom' })
   })
 })
 

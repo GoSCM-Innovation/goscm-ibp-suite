@@ -17,9 +17,16 @@ vi.mock('./ProductionVisualizer.jsx', () => ({
   },
 }))
 vi.mock('./BarraDeTenant.jsx', () => ({ default: () => null }))
+const CONEXIONES = [
+  { id: 'c-1', name: 'TENANT UNO', isProduction: false, baseUrl: 'https://uno' },
+  { id: 'c-2', name: 'TENANT DOS', isProduction: true, baseUrl: 'https://dos' },
+]
+vi.mock('../../lib/ibp.js', () => ({ listIbpConnections: vi.fn(async () => CONEXIONES) }))
+const fijar = vi.fn(async () => {})
+vi.mock('../../lib/fijar-destino.js', () => ({ fijarDestino: (...args) => fijar(...args) }))
 
 const { default: DataTools } = await import('./DataTools.jsx')
-const { conectar, desconectar } = await import('../../lib/conexion-activa.js')
+const { conectar, desconectar, conexionPreseleccionada, verAsistente } = await import('../../lib/conexion-activa.js')
 
 let raiz
 let contenedor
@@ -29,6 +36,8 @@ const dibujar = (props = {}) => act(async () => {
 })
 
 beforeEach(async () => {
+  fijar.mockClear()
+  verAsistente(false)
   vistos.length = 0
   desconectar()
   conectar({ connectionId: 'c-1', nombre: 'T', planningArea: 'PA', version: 'V1' })
@@ -57,5 +66,43 @@ describe('el destino que reciben las aplicaciones', () => {
     })
     expect(new Set(vistos).size).toBe(2)
     expect(vistos.at(-1).versionId).toBe('V2')
+  })
+})
+
+describe('las pestañas de tenants', () => {
+  const pestanas = () => [...contenedor.querySelectorAll('.conn-tab')]
+  const nombres = () => pestanas().map((una) => una.querySelector('.conn-tab-nombre').textContent)
+  const pulsar = (nodo) => act(async () => {
+    nodo.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+  })
+
+  it('están todas las conexiones, con la del destino activo marcada', () => {
+    expect(nombres()).toEqual(['TENANT UNO', 'TENANT DOS'])
+    const activas = contenedor.querySelectorAll('.conn-tab.active .conn-tab-nombre')
+    expect([...activas].map((una) => una.textContent)).toEqual(['TENANT UNO'])
+  })
+
+  it('pulsar un tenant al que no se le eligió área abre el asistente con ese tenant', async () => {
+    await pulsar(pestanas()[1])
+    expect(conexionPreseleccionada()).toBe('c-2')
+    expect(fijar).not.toHaveBeenCalled()
+  })
+
+  it('pulsar uno ya elegido antes vuelve a su área y versión sin preguntar', async () => {
+    await act(async () => {
+      conectar({ connectionId: 'c-2', nombre: 'TENANT DOS', planningArea: 'PA2', version: 'V9' })
+      conectar({ connectionId: 'c-1', nombre: 'T', planningArea: 'PA', version: 'V1' })
+    })
+    await pulsar(pestanas()[1])
+
+    expect(fijar).toHaveBeenCalledWith(expect.objectContaining({
+      connectionId: 'c-2', nombre: 'TENANT DOS', planningArea: 'PA2', version: 'V9', esProduccion: true,
+    }))
+  })
+
+  it('pulsar el tenant activo no hace nada', async () => {
+    await pulsar(pestanas()[0])
+    expect(fijar).not.toHaveBeenCalled()
+    expect(conexionPreseleccionada()).toBe('')
   })
 })

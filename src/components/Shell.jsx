@@ -55,6 +55,32 @@ export default function Shell({ user, modules, theme, onToggleTheme, onSignOut, 
     })
   }
 
+  // Las aplicaciones de un módulo se pliegan como un árbol (pedido el 2026-10-05). Se recuerda qué
+  // módulos están plegados, por la misma razón que el menú minimizado. Con el menú minimizado se
+  // ignora: ahí las aplicaciones son los únicos iconos con los que llegar a ellas.
+  const [plegados, setPlegados] = useState(() => {
+    try {
+      const guardado = JSON.parse(localStorage.getItem('menu_plegados') ?? '[]')
+      return new Set(Array.isArray(guardado) ? guardado : [])
+    } catch {
+      return new Set()
+    }
+  })
+
+  function ponerPlegado(id, plegar) {
+    setPlegados((previo) => {
+      const siguiente = new Set(previo)
+      if (plegar) siguiente.add(id)
+      else siguiente.delete(id)
+      try {
+        localStorage.setItem('menu_plegados', JSON.stringify([...siguiente]))
+      } catch {
+        // Sin espacio o en modo privado: se pliega igual, solo no se recuerda.
+      }
+      return siguiente
+    })
+  }
+
   return (
     <>
       <header className="header">
@@ -98,21 +124,41 @@ export default function Shell({ user, modules, theme, onToggleTheme, onSignOut, 
             {MODULES.map((module) => {
               const bloqueado = !contratados.has(module.id)
               const abierto = moduleId === module.id && !bloqueado
+              const plegable = Boolean(module.apps?.length) && !bloqueado
+              const plegado = plegable && plegados.has(module.id) && !minimizado
               return (
                 <Fragment key={module.id}>
-                  <button
-                    className={`nav-item${moduleId === module.id ? ' active' : ''}${bloqueado ? ' locked' : ''}`}
-                    onClick={() => onNavigate(module.id)}
-                  >
-                    <span className="nav-icon">{module.icon}</span>
-                    <span className="nav-label">{module.name}</span>
-                    {bloqueado && <span className="nav-lock" title="No contratado">🔒</span>}
-                  </button>
+                  <div className={plegable ? 'nav-rama' : undefined}>
+                    <button
+                      className={`nav-item${moduleId === module.id ? ' active' : ''}${bloqueado ? ' locked' : ''}`}
+                      onClick={() => {
+                        // Pulsar el módulo lo abre; si estaba plegado, además lo despliega.
+                        if (plegable) ponerPlegado(module.id, false)
+                        onNavigate(module.id)
+                      }}
+                    >
+                      <span className="nav-icon">{module.icon}</span>
+                      <span className="nav-label">{module.name}</span>
+                      {bloqueado && <span className="nav-lock" title="No contratado">🔒</span>}
+                    </button>
+                    {plegable && (
+                      <button
+                        type="button"
+                        className="nav-plegar"
+                        onClick={() => ponerPlegado(module.id, !plegado)}
+                        title={plegado ? 'Desplegar' : 'Plegar'}
+                        aria-label={`${plegado ? 'Desplegar' : 'Plegar'} ${module.name}`}
+                        aria-expanded={!plegado}
+                      >
+                        {plegado ? '▸' : '▾'}
+                      </button>
+                    )}
+                  </div>
 
                   {/* Las aplicaciones del módulo abierto. El candado de cada una NO dice «no
                       contratada» —el módulo entero ya lo está— sino «hace falta conectarse»: es el
                       `req-conn` de v7. */}
-                  {abierto && module.apps?.map((app) => {
+                  {abierto && !plegado && module.apps?.map((app) => {
                     const sinConexion = app.requiereConexion && !conectado
                     return (
                       <button

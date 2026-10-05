@@ -27,7 +27,7 @@ con el motivo escrito en [Los informes por entidad](#los-informes-por-entidad).
 | Network Visualizer | `visualizer.js` | 1.448 | **Portado** — `core/ibp/supply-network.js` + `src/lib/network-load-sap.js` + `data/NetworkVisualizer.jsx` (ver `PARIDAD-DATA-TOOLS.md`) |
 | Network Analyzer | `analyzer.js` + `snWebView.js` + `statsSheet.js` + `runSummary.js` | 3.531 + | **Portado idéntico (2026-10-05)** — `core/ibp/network-analyzer.js` + `network-analyzer-hojas.js` + `src/lib/red-analizar.js` + `registro-sn.js` + `hoja-en-disco.js` + `xlsx-analisis.js` + `data/NetworkAnalyzer.jsx` + `VistaWebAnalisis.jsx`. El algoritmo se cotejó contra la salida real de v7. Ver `PARIDAD-DATA-TOOLS.md` |
 | Glosario Analyzers | `glosario.js` | 1.409 | **Portado tal cual** — `data/Glosario.jsx` + `src/lib/glosario-v7.js` (el texto de v7) + `glosario-pdf.js` |
-| Planning Area Documenter | `paDoc.js` | 1.055 | **Portado** — `core/ibp/pa-doc-model.js` + `src/lib/docx.js` + `pa-doc.js` + `data/PlanningAreaDoc.jsx` |
+| Planning Area Documenter | `paDoc.js` | 1.055 | **Portado**, pero **oculto de momento** (decisión del usuario, 2026-10-05: `oculta` en `lib/modules.js`; sale del menú y de «Requisitos técnicos», el código y sus pruebas siguen) — `core/ibp/pa-doc-model.js` + `src/lib/docx.js` + `pa-doc.js` + `data/PlanningAreaDoc.jsx` |
 | Mapping Dataflow Generator | `docs.js` | 2.527 | **Portado** (llegó por v9) — `cids/documenter/*` |
 | Integration Explorer | `explorer.js` | 1.724 | **Portado** (llegó por v9) — `cids/explorer/*` |
 

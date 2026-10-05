@@ -18,7 +18,9 @@ vi.mock('../../lib/ibp-master-data.js', () => ({
 }))
 
 const { default: ConnectDialog } = await import('./ConnectDialog.jsx')
-const { conectar, desconectar, estaConectado, conexionActiva } = await import('../../lib/conexion-activa.js')
+const {
+  conectar, desconectar, estaConectado, conexionActiva, verAsistente,
+} = await import('../../lib/conexion-activa.js')
 const { VERSION_BASE } = await import('../../lib/version-elegida.js')
 const { contar, guardar, olvidarBase, reiniciarSiOtroOrigen } = await import('../../lib/explorer-db.js')
 
@@ -63,6 +65,7 @@ beforeEach(() => {
   globalThis.indexedDB = new IDBFactory()
   olvidarBase()
   desconectar()
+  verAsistente(false)
   alCerrar.mockReset()
 })
 
@@ -114,5 +117,27 @@ describe('abrirlo estando conectado', () => {
     conectar({ connectionId: 'c-2', nombre: 'STARBRANDS QAS', planningArea: 'STARBRANDS', version: VERSION_BASE })
     await montar()
     expect(document.body.textContent).toContain('Conexión activa')
+  })
+})
+
+// Pulsar la pestaña de un tenant (ver `DataTools.jsx`) abre el asistente con ESE tenant ya elegido y
+// salta directo a sus áreas, en vez de volver a pedir la conexión.
+describe('abrirlo desde la pestaña de un tenant', () => {
+  it('arranca en el área del tenant elegido, sin pasar por el paso de la conexión', async () => {
+    verAsistente(true, { conexionId: 'c-2' })
+    await montar()
+
+    await vi.waitFor(() => { if (!document.getElementById('paSel')) throw new Error('falta #paSel') })
+    expect(document.getElementById('connSel')).toBeNull()
+  })
+
+  it('no arrastra el área ni la versión del tenant que estaba activo', async () => {
+    conectar({ connectionId: 'c-1', nombre: 'OTRO', planningArea: 'DEL_OTRO', version: 'V1' })
+    verAsistente(true, { conexionId: 'c-2' })
+    await montar()
+
+    await vi.waitFor(() => { if (!document.getElementById('paSel')) throw new Error('falta #paSel') })
+    // Hay una sola área en el catálogo del tenant nuevo, así que se elige sola; la del otro no.
+    expect(document.getElementById('paSel').value).toBe('STARBRANDS')
   })
 })

@@ -7,6 +7,16 @@ actualiza al terminar cada sesión, y su orden es el de prioridad acordada.
 
 ## Dónde estamos
 
+- **Cambios de interfaz pedidos por el usuario el 2026-10-05** (pendientes de verlos en el sitio):
+  1. **Las pestañas de conexión muestran TODAS las conexiones**, sin «+» ni ✕ (IBP Tools y CI-DS Tools), y
+     la cabecera del tenant pone el nombre y «Abrir en SAP IBP ↗» en una sola fila.
+  2. **Data Tools lleva la misma tira de tenants.** Sigue habiendo un solo destino activo (como v7): la
+     pestaña es un atajo al asistente. Si ya se eligió área y versión en ese tenant en la sesión, vuelve
+     a ellas; si no, abre el asistente directo en el área (`verAsistente(true, { conexionId })`). Cambiar
+     de pestaña empieza de cero las aplicaciones, como «Cambiar tenant». **Decisión tomada: opción A**; la
+     B (cada tenant conserva sus aplicaciones vivas en segundo plano) queda por si hace falta.
+  3. **El menú de Data Tools se pliega como árbol** (flecha ▾/▸, recordada en `menu_plegados`).
+  4. **Planning Area Documenter, oculto de momento** (`oculta` en `lib/modules.js`).
 - **Decisión del usuario, 2026-10-01: Data Tools tiene que ser IDÉNTICO a v7.** La auditoría completa
   está en [`docs/PARIDAD-DATA-TOOLS.md`](PARIDAD-DATA-TOOLS.md). **Hecho el 2026-10-05**: las seis
   aplicaciones de Data Tools están igualadas a v7 en código —Glosario, Production Visualizer, Production

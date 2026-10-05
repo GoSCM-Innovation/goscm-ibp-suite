@@ -15,15 +15,15 @@
 // navegador —v8 las guardaba en `localStorage` en texto plano y ese es justamente el error que esta
 // plataforma existe para no repetir—.
 
-import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import Modal from '../ui/Modal.jsx'
-import { conectar, estaConectado, useConexionActiva } from '../../lib/conexion-activa.js'
+import { conexionPreseleccionada, estaConectado, useConexionActiva } from '../../lib/conexion-activa.js'
+import { fijarDestino } from '../../lib/fijar-destino.js'
 import { listIbpConnections } from '../../lib/ibp.js'
 import { etiquetaDeConexion } from '../../lib/nombre-de-conexion.js'
 import { fetchMasterCatalog } from '../../lib/ibp-master-data.js'
-import { reiniciarSiOtroOrigen } from '../../lib/explorer-db.js'
-import { VERSION_BASE, versionEfectiva, versionParaSap } from '../../lib/version-elegida.js'
+import { VERSION_BASE, versionEfectiva } from '../../lib/version-elegida.js'
 
 /** Los tres pasos, con el nombre que llevan en el indicador de progreso. */
 const PASOS = [
@@ -57,19 +57,25 @@ function Stepper({ paso }) {
 export default function ConnectDialog({ onClose }) {
   const activa = useConexionActiva()
 
+  // Si se abrió desde la pestaña de un tenant (ver `DataTools.jsx`), ese tenant ya viene elegido y el
+  // asistente salta a leer sus áreas. Lo que `activa` trae de OTRO tenant no se arrastra: sería
+  // ofrecer su área y su versión en un sistema que no es el suyo.
+  const [preseleccion] = useState(conexionPreseleccionada)
+  const delMismoTenant = !preseleccion || preseleccion === activa.connectionId
+
   // Paso 0 = panel de conexión activa; 1, 2 y 3 = los del asistente. Igual que `showConnStep` de v7:
   // quien ya está conectado ve lo que tiene, no un formulario en blanco.
-  const [paso, setPaso] = useState(() => (estaConectado(activa) ? 0 : 1))
+  const [paso, setPaso] = useState(() => (!preseleccion && estaConectado(activa) ? 0 : 1))
 
   const [conexiones, setConexiones] = useState(null)
   const [error, setError] = useState('')
   const [estado, setEstado] = useState('')
 
-  const [conexionId, setConexionId] = useState(activa.connectionId)
+  const [conexionId, setConexionId] = useState(preseleccion || activa.connectionId)
   const [catalogo, setCatalogo] = useState(null)
   const [leyendo, setLeyendo] = useState(false)
-  const [area, setArea] = useState(activa.planningArea)
-  const [versionId, setVersionId] = useState(activa.version)
+  const [area, setArea] = useState(delMismoTenant ? activa.planningArea : '')
+  const [versionId, setVersionId] = useState(delMismoTenant ? activa.version : '')
 
   useEffect(() => {
     let abandonado = false
@@ -117,6 +123,14 @@ export default function ConnectDialog({ onClose }) {
       .finally(() => setLeyendo(false))
   }, [conexionId])
 
+  // Con un tenant preseleccionado se arranca ya en la lectura de sus áreas. Una sola vez.
+  const arrancado = useRef(false)
+  useEffect(() => {
+    if (!preseleccion || arrancado.current) return
+    arrancado.current = true
+    doPaso1()
+  }, [preseleccion, doPaso1])
+
   /**
    * Paso ③: queda fijado el destino y el diálogo SE CIERRA.
    *
@@ -128,24 +142,19 @@ export default function ConnectDialog({ onClose }) {
   async function doPaso3() {
     setError('')
     try {
-      await reiniciarSiOtroOrigen({
+      await fijarDestino({
         connectionId: conexionId,
+        nombre: conexion?.name ?? '',
+        baseUrl: conexion?.baseUrl ?? '',
         planningArea: area,
-        versionId: versionParaSap(version),
+        version,
+        esProduccion: Boolean(conexion?.isProduction),
       })
     } catch (fallo) {
       // Sin poder limpiar no se conecta: se seguiría viendo lo de la sesión anterior.
       setError(`No se pudo preparar la base local de este navegador: ${fallo.message}`)
       return
     }
-    conectar({
-      connectionId: conexionId,
-      nombre: conexion?.name ?? '',
-      baseUrl: conexion?.baseUrl ?? '',
-      planningArea: area,
-      version,
-      esProduccion: Boolean(conexion?.isProduction),
-    })
     setEstado('')
     onClose()
   }

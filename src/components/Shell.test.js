@@ -51,6 +51,7 @@ const itemDelMenu = (texto) => [...contenedor.querySelectorAll('.sidebar .nav-it
   .find((uno) => uno.querySelector('.nav-label')?.textContent.trim() === texto)
 
 beforeEach(() => {
+  localStorage.clear()
   api.get.mockReset()
   api.get.mockResolvedValue({ connections: [] })
   desconectar()
@@ -63,15 +64,20 @@ afterEach(async () => {
 })
 
 describe('el menú lateral', () => {
-  it('despliega las seis aplicaciones de v7 bajo Data Tools', async () => {
+  it('despliega bajo Data Tools las aplicaciones de v7 que se ofrecen', async () => {
     await montar()
     const nombres = enElMenu()
 
     expect(nombres).toContain('Data Tools')
     for (const app of ['Production Visualizer', 'Production Analyzer', 'Network Visualizer',
-      'Network Analyzer', 'Glosario Analyzers', 'Planning Area Documenter']) {
+      'Network Analyzer', 'Glosario Analyzers']) {
       expect(nombres, app).toContain(app)
     }
+  })
+
+  it('Planning Area Documenter está oculto de momento', async () => {
+    await montar()
+    expect(enElMenu()).not.toContain('Planning Area Documenter')
   })
 
   it('las aplicaciones van DEBAJO de su módulo, no sueltas', async () => {
@@ -101,10 +107,9 @@ describe('el candado de las aplicaciones', () => {
     }
   })
 
-  it('el glosario y el documentador NUNCA llevan candado: no dependen del tenant', async () => {
+  it('el glosario NUNCA lleva candado: no depende del tenant', async () => {
     await montar()
     expect(itemDelMenu('Glosario Analyzers').querySelector('.nav-lock-badge')).toBeNull()
-    expect(itemDelMenu('Planning Area Documenter').querySelector('.nav-lock-badge')).toBeNull()
   })
 
   it('con conexión activa se caen los cuatro candados', async () => {
@@ -150,5 +155,63 @@ describe('el estado de la conexión NO está en el menú', () => {
     await montar()
     expect(contenedor.querySelector('.sidebar-conn')).toBeNull()
     expect(contenedor.querySelector('.status-dot')).toBeNull()
+  })
+})
+
+describe('el árbol de Data Tools se pliega', () => {
+  const flecha = () => contenedor.querySelector('.nav-plegar')
+
+  const pulsar = (nodo) => act(async () => {
+    nodo.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+  })
+
+  it('arranca desplegado y la flecha lo pliega, dejando solo el módulo', async () => {
+    await montar()
+    expect(enElMenu()).toContain('Production Visualizer')
+
+    await pulsar(flecha())
+    expect(enElMenu()).toContain('Data Tools')
+    expect(enElMenu()).not.toContain('Production Visualizer')
+    expect(flecha().getAttribute('aria-expanded')).toBe('false')
+  })
+
+  it('la misma flecha lo vuelve a desplegar', async () => {
+    await montar()
+    await pulsar(flecha())
+    await pulsar(flecha())
+    expect(enElMenu()).toContain('Production Visualizer')
+  })
+
+  it('se recuerda: al volver a montar el menú sigue plegado', async () => {
+    await montar()
+    await pulsar(flecha())
+    await act(async () => { raiz.unmount() })
+    contenedor.remove()
+
+    await montar()
+    expect(enElMenu()).not.toContain('Production Visualizer')
+  })
+
+  it('pulsar el módulo estando plegado lo despliega y navega a él', async () => {
+    const ir = vi.fn()
+    contenedor = document.createElement('div')
+    document.body.appendChild(contenedor)
+    await act(async () => {
+      raiz = createRoot(contenedor)
+      raiz.render(createElement(Shell, {
+        user: USUARIO, modules: ['explorer'], theme: 'dark', onToggleTheme: () => {},
+        onSignOut: () => {}, route: 'explorer', onNavigate: ir,
+      }))
+    })
+    await pulsar(flecha())
+    await pulsar(itemDelMenu('Data Tools'))
+
+    expect(ir).toHaveBeenCalledWith('explorer')
+    expect(enElMenu()).toContain('Production Visualizer')
+  })
+
+  it('los módulos sin aplicaciones no llevan flecha', async () => {
+    await montar({ modules: ['explorer', 'cids'], route: 'cids' })
+    expect(contenedor.querySelectorAll('.nav-plegar')).toHaveLength(1)
   })
 })

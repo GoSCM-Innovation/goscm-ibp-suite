@@ -387,6 +387,10 @@ a { color: var(--cyan); }
    de la conexión y la barra de pestañas tocan los bordes y no hay aire entre ellas. Por eso deshace
    el relleno de `.content`. Cada pantalla de dentro lleva su propio relleno, como en v8. */
 .ibp-tools { gap: 0; height: calc(100% + 44px); margin: -22px; }
+/* Data Tools: la tira de tenants arriba, de lado a lado como en IBP Tools, y el cuerpo con el
+   relleno de `.content` que esta página deshace. El cuerpo es el que hace scroll. */
+.data-tools-pagina { display: flex; flex-direction: column; height: calc(100% + 44px); margin: -22px; min-height: 0; }
+.data-tools-cuerpo { flex: 1; height: auto; overflow-y: auto; padding: 22px; }
 .tab-bar { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
 .tab-bar::-webkit-scrollbar { display: none; }
 
@@ -1172,6 +1176,8 @@ a { color: var(--cyan); }
   .nav-label { flex: none; }
   .content { padding: 16px 14px; }
   .ibp-tools { height: calc(100% + 32px); margin: -16px -14px; }
+  .data-tools-pagina { height: calc(100% + 32px); margin: -16px -14px; }
+  .data-tools-cuerpo { padding: 16px 14px; }
 }
 
 /* ─── Barra de ejecución de una orquestación ──────────────── */
@@ -2390,6 +2396,26 @@ a { color: var(--cyan); }
 
 /* Las apps de un módulo cuelgan de él, sangradas: es el mismo menú de v7, con un nivel más porque
    aquí conviven tres productos donde v7 era uno solo. */
+/* La rama plegable de Data Tools: el botón del módulo y, a su derecha, la flecha que pliega o
+   despliega sus aplicaciones. Son dos botones hermanos —uno dentro del otro no es HTML válido—. */
+.nav-rama { position: relative; }
+.nav-rama .nav-item { padding-right: 32px; }
+.nav-plegar {
+  background: none;
+  border: none;
+  border-radius: 4px;
+  color: var(--text3);
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  padding: 6px;
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+.nav-plegar:hover { background: var(--surface-glass); color: var(--text); }
+.sidebar.minimizado .nav-plegar { display: none; }
 .nav-item.nav-app { font-size: 12px; gap: 8px; padding: 7px 8px 7px 24px; }
 .nav-item.nav-app .nav-icon { font-size: 13px; width: 16px; }
 .nav-item.nav-app .nav-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

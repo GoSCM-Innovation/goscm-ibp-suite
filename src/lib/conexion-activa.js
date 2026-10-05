@@ -33,6 +33,13 @@ const VACIO = Object.freeze({
 let estado = VACIO
 const suscritos = new Set()
 
+/**
+ * Qué área y versión se eligieron la última vez en cada conexión, durante esta sesión. Es lo que
+ * deja volver a una pestaña de tenant sin repetir el asistente: ver `DataTools.jsx`. Vive solo en
+ * memoria, como el resto de este archivo: al recargar se vuelve a elegir.
+ */
+const recordadas = new Map()
+
 function avisar() {
   for (const cual of suscritos) cual()
 }
@@ -54,12 +61,19 @@ export function conectar({ connectionId, nombre, baseUrl, planningArea, version,
     version: String(version ?? ''),
     esProduccion: Boolean(esProduccion),
   })
+  if (estaConectado(estado)) {
+    recordadas.set(estado.connectionId, { planningArea: estado.planningArea, version: estado.version })
+  }
   avisar()
 }
+
+/** El área y la versión que se eligieron en esa conexión en esta sesión, o `null` si ninguna. */
+export const recordadaDe = (connectionId) => recordadas.get(connectionId) ?? null
 
 /** Vuelve a «desconectado». Lo llama la salida de la sesión. */
 export function desconectar() {
   estado = VACIO
+  recordadas.clear()
   avisar()
 }
 
@@ -92,6 +106,7 @@ export function useConexionActiva() {
 // llamaban a `openConnectDialog()`, que era global; aquí el equivalente es este par.
 
 let abierto = false
+let preseleccionada = ''
 const mirando = new Set()
 
 const suscribirAsistente = (alCambiar) => {
@@ -101,11 +116,20 @@ const suscribirAsistente = (alCambiar) => {
 
 const leerAsistente = () => abierto
 
-/** Abre o cierra el asistente de conexión. */
-export function verAsistente(quiero) {
+/**
+ * Abre o cierra el asistente de conexión.
+ *
+ * Con `conexionId` el asistente arranca con ESA conexión ya elegida y salta directo a leer sus
+ * áreas: es lo que hace pulsar la pestaña de un tenant al que todavía no se le ha elegido área.
+ */
+export function verAsistente(quiero, { conexionId = '' } = {}) {
   abierto = Boolean(quiero)
+  preseleccionada = abierto ? String(conexionId) : ''
   for (const cual of mirando) cual()
 }
+
+/** La conexión con la que se pidió abrir el asistente, o cadena vacía si se abrió sin ninguna. */
+export const conexionPreseleccionada = () => preseleccionada
 
 /** Si el asistente está abierto. Lo pinta quien lo tenga montado. */
 export function useAsistenteAbierto() {

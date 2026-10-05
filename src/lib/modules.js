@@ -78,11 +78,17 @@ export const APPS_EXPLORER = [
     name: 'Planning Area Documenter',
     icon: '📑',
     requiereConexion: false,
+    // Oculto «de momento» por decisión del usuario (2026-10-05). No se borra nada: el código y sus
+    // pruebas siguen aquí, y volver a mostrarlo es quitar esta línea.
+    oculta: true,
     // El texto de v7. Lo que va entre ** se pinta en negrita (ver `DataTools.jsx`).
     banner: 'Genera la documentación Word (.docx) de un Planning Area a partir de los archivos del '
       + '**Download Configuration File** de SAP IBP.',
   },
 ]
+
+/** Las que se ofrecen en el menú y en el despacho. Las `oculta` siguen en `APPS_EXPLORER`. */
+export const APPS_VISIBLES = APPS_EXPLORER.filter((una) => !una.oculta)
 
 export const MODULES = [
   {
@@ -90,7 +96,7 @@ export const MODULES = [
     name: 'Data Tools',
     icon: '📦',
     summary: 'Jerarquía de producción, red logística y analizadores de calidad de datos.',
-    apps: APPS_EXPLORER,
+    apps: APPS_VISIBLES,
   },
   {
     id: 'jobs',

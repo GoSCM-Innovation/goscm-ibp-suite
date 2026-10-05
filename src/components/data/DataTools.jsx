@@ -7,13 +7,26 @@
 //
 // Cada aplicación lleva su barra de tenant (`BarraDeTenant`), salvo el glosario, que no usa ninguno.
 //
-// Lo que queda es el despacho: la cinta que presenta cada aplicación, el candado de las que no pueden
-// hacer nada sin conexión, y montar la que toque. El menú lateral es de `Shell.jsx`.
+// Lo que queda es el despacho: la tira de pestañas de tenants, la cinta que presenta cada aplicación,
+// el candado de las que no pueden hacer nada sin conexión, y montar la que toque. El menú lateral es
+// de `Shell.jsx`.
+//
+// LA TIRA DE TENANTS (pedida por el usuario el 2026-10-05) es la misma de IBP Tools: todas las
+// conexiones a la vista, una pestaña por cada una. Aquí una pestaña NO es una vista abierta a la
+// vez —sigue habiendo un solo destino activo, como en v7— sino un atajo al primer paso del
+// asistente: si ya se había elegido área y versión en ese tenant, pulsarla vuelve a ellas; si no,
+// abre el asistente directo en el área. Cambiar de pestaña EMPIEZA DE CERO las aplicaciones, igual
+// que «Cambiar tenant»: sus datos descargados son de un tenant, un área y una versión.
 
-import { lazy, Suspense, useMemo } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 
-import { APPS_EXPLORER } from '../../lib/modules.js'
-import { destinoDe, estaConectado, useConexionActiva, verAsistente } from '../../lib/conexion-activa.js'
+import { APPS_VISIBLES } from '../../lib/modules.js'
+import {
+  destinoDe, estaConectado, recordadaDe, useConexionActiva, verAsistente,
+} from '../../lib/conexion-activa.js'
+import { fijarDestino } from '../../lib/fijar-destino.js'
+import { listIbpConnections } from '../../lib/ibp.js'
+import ConnectionTabs from '../ui/ConnectionTabs.jsx'
 import BarraDeTenant from './BarraDeTenant.jsx'
 
 const ProductionVisualizer = lazy(() => import('./ProductionVisualizer.jsx'))
@@ -37,7 +50,39 @@ export default function DataTools({ appId }) {
     [connectionId, planningArea, version],
   )
 
-  const app = APPS_EXPLORER.find((una) => una.id === appId) ?? APPS_EXPLORER[0]
+  const app = APPS_VISIBLES.find((una) => una.id === appId) ?? APPS_VISIBLES[0]
+
+  const [conexiones, setConexiones] = useState([])
+  const [errorDePestana, setErrorDePestana] = useState('')
+  useEffect(() => {
+    let abandonado = false
+    // Que falle no rompe nada: sin lista no hay pestañas, y el botón «Cambiar tenant» sigue ahí.
+    listIbpConnections()
+      .then((lista) => { if (!abandonado) setConexiones(lista) })
+      .catch(() => {})
+    return () => { abandonado = true }
+  }, [])
+
+  function elegirTenant(id) {
+    if (id === connectionId) return
+    setErrorDePestana('')
+    const una = conexiones.find((otra) => otra.id === id)
+    const recordada = recordadaDe(id)
+    if (!una || !recordada) {
+      verAsistente(true, { conexionId: id })
+      return
+    }
+    fijarDestino({
+      connectionId: id,
+      nombre: una.name,
+      baseUrl: una.baseUrl,
+      planningArea: recordada.planningArea,
+      version: recordada.version,
+      esProduccion: Boolean(una.isProduction),
+    }).catch((fallo) => {
+      setErrorDePestana(`No se pudo preparar la base local de este navegador: ${fallo.message}`)
+    })
+  }
 
   // La clave fuerza a empezar de cero al cambiar de destino: lo detectado, lo descargado y lo
   // corregido son de ESE tenant, esa área y esa versión.
@@ -97,25 +142,34 @@ export default function DataTools({ appId }) {
   }
 
   return (
-    <div className="module-page">
-      {/* La cinta de presentación de cada aplicación, como en v7. */}
-      <div className="tab-info-banner">
-        <span className="tab-info-icon">{app.icon}</span>
-        <div className="tab-info-content">
-          <div className="page-title" style={{ fontSize: 15, marginBottom: 4 }}>{app.name}</div>
-          <div className="tab-info-desc">
-            {app.banner.split('**').map((trozo, i) => (
-              // Lo que va entre ** es negrita: los pares impares son los trozos marcados.
-              i % 2 === 1 ? <b key={i}>{trozo}</b> : trozo
-            ))}
+    <div className="data-tools-pagina">
+      {/* Las pestañas solo donde hay un tenant detrás: el glosario no usa ninguno. */}
+      {app.requiereConexion && (
+        <ConnectionTabs conexiones={conexiones} activa={connectionId} onElegir={elegirTenant} />
+      )}
+
+      <div className="module-page data-tools-cuerpo">
+        {errorDePestana && <div className="notice notice-error">✕ {errorDePestana}</div>}
+
+        {/* La cinta de presentación de cada aplicación, como en v7. */}
+        <div className="tab-info-banner">
+          <span className="tab-info-icon">{app.icon}</span>
+          <div className="tab-info-content">
+            <div className="page-title" style={{ fontSize: 15, marginBottom: 4 }}>{app.name}</div>
+            <div className="tab-info-desc">
+              {app.banner.split('**').map((trozo, i) => (
+                // Lo que va entre ** es negrita: los pares impares son los trozos marcados.
+                i % 2 === 1 ? <b key={i}>{trozo}</b> : trozo
+              ))}
+            </div>
           </div>
         </div>
+
+        {/* Contra qué tenant se ejecuta esta aplicación, y el cambio de tenant. */}
+        <BarraDeTenant />
+
+        <Suspense fallback={<div className="page-hint">Cargando…</div>}>{contenido()}</Suspense>
       </div>
-
-      {/* Contra qué tenant se ejecuta esta aplicación, y el cambio de tenant. */}
-      <BarraDeTenant />
-
-      <Suspense fallback={<div className="page-hint">Cargando…</div>}>{contenido()}</Suspense>
     </div>
   )
 }
