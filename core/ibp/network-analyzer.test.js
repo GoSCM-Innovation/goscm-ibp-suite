@@ -289,7 +289,7 @@ describe('snComputeHealthScore — las cuatro fórmulas, a mano', () => {
 describe('analizarRed — hojas grandes y avisos', () => {
   const base = casos.casos[0].entrada
 
-  it('pide las dos hojas de arcos a crearHojaGrande y espera su cierre', async () => {
+  it('pide las cinco hojas de análisis a crearHojaGrande y espera su cierre', async () => {
     const pedidas = []
     const cerradas = []
     const crearHojaGrande = (cfg) => {
@@ -309,8 +309,9 @@ describe('analizarRed — hojas grandes y avisos', () => {
       return hoja
     }
     const informe = await correr(base, { crearHojaGrande })
-    expect(pedidas).toEqual(['Location Source', 'Customer Source'])
-    expect(cerradas).toEqual(['Location Source', 'Customer Source'])
+    const cinco = ['Product', 'Location', 'Customer', 'Location Source', 'Customer Source']
+    expect(pedidas).toEqual(cinco)
+    expect(cerradas).toEqual(cinco)
     // Los totales de la hoja grande llegan al Resumen igual que los de una hoja en memoria.
     const resumen = informe.resumen.find((r) => r.nombre === 'Location Source')
     expect(resumen.total).toBe(informe.hojasWeb['Location Source'].total)

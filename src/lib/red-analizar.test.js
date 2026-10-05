@@ -104,9 +104,12 @@ describe('fuenteDeLaRed', () => {
 describe('analizarRedDescargada', () => {
   it('da el mismo informe que v7 (hoja Product y totales)', async () => {
     const hechos = await descargaSimulada()
-    const informe = await analizarRedDescargada(opciones(hechos))
+    // Con vista web: las hojas se guardan en disco y en memoria quedan las primeras filas de respaldo.
+    const informe = await analizarRedDescargada(opciones(hechos, { web: true }))
     const esperado = base.esperado.hojas.Product.slice(1)
-    expect(informe.hojasWeb.Product.filas.map((f) => f.c)).toEqual(esperado.map((f) => f.c))
+    // La vista guarda texto (como v7: `String(cleanXml(v))`), así que se compara el texto de cada celda.
+    const texto = (celdas) => celdas.map((v) => (v == null ? '' : String(v)))
+    expect(informe.hojasWeb.Product.filas.map((f) => f.c)).toEqual(esperado.map((f) => texto(f.c)))
     expect(informe.totales).toEqual(base.esperado.totales)
     expect(informe.archivo).toBe('SupplyNetworkAnalysis_2026-10-02.xlsx')
   })

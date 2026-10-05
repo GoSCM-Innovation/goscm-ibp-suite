@@ -403,3 +403,7 @@ las tablas `pa_*` / `pa_*_web` / `sn_product_web` / `sn_location_web` / `sn_cust
 4. Planning Area Documenter: hecho.
 
 Antes de cada una: recorrer los controles de v7 uno a uno y mirar la pantalla en el tenant de pruebas.
+
+## Network Analyzer: las cinco hojas paginan desde IndexedDB (2026-10-05)
+
+Decidido por el usuario: Product, Location y Customer también se guardan ya armadas en IndexedDB y se paginan desde el disco, como v7 (`sn_product_web`, `sn_location_web`, `sn_customer_web`), igual que las dos de arcos. Pasan por la misma fábrica (`hoja-en-disco.js`), de modo que ninguna de las cinco se retiene entera en memoria ni para el Excel ni para la vista web. El esquema de la base local sube a la versión 5: las tres tablas existían antes con otra forma y se recrean vacías al abrir. Sin confirmar con un tenant grande (cientos de miles de productos).

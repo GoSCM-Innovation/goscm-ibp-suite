@@ -1,8 +1,10 @@
-// Las dos hojas de arcos de la red (Location Source y Customer Source), que no caben en memoria.
+// Las hojas de la red que se guardan en disco: las dos de arcos (Location Source y Customer Source), que no
+// caben en memoria, y las tres acotadas (Product, Location y Customer), que v7 también paginaba desde el
+// disco (`sn_product_web`, `sn_location_web`, `sn_customer_web`).
 //
 // Portado del manejo de las hojas «grandes» de `analyzeAndStreamExcel` de v7 (`_lsWebBuf`,
 // `_lsWebWrites`, `WEB_IDB_BATCH`, `WEB_IDB_MAX_LOTS`, `WEB_CAP_BIG`). Una red real tiene cientos de miles
-// de arcos, así que esas dos hojas NUNCA se retienen enteras:
+// de arcos y decenas de miles de productos, así que esas hojas NUNCA se retienen enteras:
 //
 //   - para el Excel, cada fila se vuelve XML en cuanto llega y se guarda por partes (`crearEscritorDeTabla`
 //     de `xlsx-analisis.js`), partiendo la hoja a las 900.000 filas;
@@ -37,6 +39,9 @@ export const FILAS_DE_RESPALDO = 20000
 export const TABLA_DE_VISTA_DE = Object.freeze({
   'Location Source': 'sn_loc_web',
   'Customer Source': 'sn_cust_web',
+  Product: 'sn_product_web',
+  Location: 'sn_location_web',
+  Customer: 'sn_customer_web',
 })
 
 /**

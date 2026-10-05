@@ -213,10 +213,30 @@ describe('migración del esquema', () => {
     const nombres = [...base.objectStoreNames]
     expect(nombres).not.toContain('pa_psh')
     expect(nombres).not.toContain('pa_psi_web')
-    expect(nombres).not.toContain('sn_product_web')
     expect(nombres).toContain('bom_psh')
     expect(nombres).toContain('sn_loc_web')
     expect(nombres).toContain('otra_tabla') // no es del esquema ni está en la lista de obsoletas
+  })
+
+  // Las tres tablas de vista de la red existían en la versión 3 con otra forma (sin índice de severidad,
+  // con datos de otro análisis). Al subir a la 5 se recrean vacías y con su índice.
+  it('las tablas de vista de la red de versiones anteriores se recrean vacías y con índice', async () => {
+    await new Promise((resolver, rechazar) => {
+      const peticion = indexedDB.open('goscm_explorer', 3)
+      peticion.onupgradeneeded = () => {
+        const base = peticion.result
+        const viejo = base.createObjectStore('sn_product_web', { autoIncrement: true })
+        viejo.add({ c: ['dato viejo'] })
+      }
+      peticion.onsuccess = () => { peticion.result.close(); resolver() }
+      peticion.onerror = () => rechazar(peticion.error)
+    })
+
+    const base = await abrirBase()
+    expect([...base.objectStoreNames]).toContain('sn_product_web')
+    await expect(contar('sn_product_web')).resolves.toBe(0)
+    const almacen = base.transaction('sn_product_web').objectStore('sn_product_web')
+    expect([...almacen.indexNames]).toContain('by_severity')
   })
 })
 

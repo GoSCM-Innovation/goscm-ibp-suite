@@ -67,8 +67,10 @@ describe('todasLasTablas', () => {
     for (const nombre of TABLAS_OBSOLETAS) expect(existeLaTabla(nombre)).toBe(false)
   })
 
-  it('solo las dos hojas de arcos de la red tienen tabla de vista', () => {
-    expect(TABLAS_DE_VISTA).toEqual(['sn_loc_web', 'sn_cust_web'])
+  it('las cinco hojas de análisis de la red tienen tabla de vista', () => {
+    expect(TABLAS_DE_VISTA).toEqual([
+      'sn_loc_web', 'sn_cust_web', 'sn_product_web', 'sn_location_web', 'sn_customer_web',
+    ])
   })
 })
 

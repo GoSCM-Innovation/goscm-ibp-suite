@@ -824,10 +824,12 @@ export async function analizarRed(entrada) {
       nombre: NOMBRES_DE_HOJA_RED[clave], color, encabezados, notas, grupos,
     }, creador)
   }
-  const gPrd = definir('product', 'FF29ABE2', 4)
-  const gLoc = definir('location', 'FF06B6D4', 4)
-  const gCust = definir('customer', 'FF10B981', 3)
+  // Las cinco hojas de análisis van por la fábrica de hojas en disco cuando hay una (v7 las guardaba las
+  // cinco en IndexedDB para paginarlas): sin ella (las pruebas), en memoria.
   const grande = crearHojaGrande ?? hojaEnMemoria
+  const gPrd = definir('product', 'FF29ABE2', 4, grande)
+  const gLoc = definir('location', 'FF06B6D4', 4, grande)
+  const gCust = definir('customer', 'FF10B981', 3, grande)
   const gLS = definir('locationSource', 'FFF7A800', 9, grande)
   const gCS = definir('customerSource', 'FFE8622A', 9, grande)
 
@@ -1373,6 +1375,11 @@ export async function analizarRed(entrada) {
     gCust.agregar(_custRow, cFill)
   })
   custStats = null; custStatsSrc = null
+  // Las tres hojas acotadas ya tienen todas sus filas: se cierran para que la fábrica de hojas en disco
+  // termine de escribir (v7: `finalizeWeb`). En memoria (pruebas) `cerrar` no existe y no pasa nada.
+  await gPrd.cerrar?.()
+  await gLoc.cerrar?.()
+  await gCust.cerrar?.()
   onProgress(91)
   await ceder()
 

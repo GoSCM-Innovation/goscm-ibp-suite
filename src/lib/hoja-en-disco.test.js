@@ -43,7 +43,13 @@ describe('los valores de v7', () => {
     expect(FILAS_POR_LOTE_WEB).toBe(8000)
     expect(LOTES_EN_VUELO).toBe(12)
     expect(FILAS_DE_RESPALDO).toBe(20000)
-    expect(TABLA_DE_VISTA_DE).toEqual({ 'Location Source': 'sn_loc_web', 'Customer Source': 'sn_cust_web' })
+    expect(TABLA_DE_VISTA_DE).toEqual({
+      'Location Source': 'sn_loc_web',
+      'Customer Source': 'sn_cust_web',
+      Product: 'sn_product_web',
+      Location: 'sn_location_web',
+      Customer: 'sn_customer_web',
+    })
   })
 })
 

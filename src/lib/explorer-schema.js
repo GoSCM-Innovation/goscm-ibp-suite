@@ -16,9 +16,15 @@
  *
  * 4: se quitaron las tablas de los analizadores anteriores (ver `TABLAS_OBSOLETAS`). Los analizadores
  * ahora usan las tablas de datos de la descarga (`bom_` y `sn_`) y solo guardan aparte las filas
- * ya armadas de las dos hojas de arcos de la red.
+ * ya armadas de las hojas de la red.
+ * 5: las tres hojas acotadas de la red (Product, Location y Customer) también se guardan ya armadas, para
+ * paginarlas desde el disco como v7 (`sn_product_web`, `sn_location_web`, `sn_customer_web`). Esas tres
+ * existían en versiones anteriores con otra forma: al subir a 5 se borran y se vuelven a crear.
  */
-export const VERSION_DEL_ESQUEMA = 4
+export const VERSION_DEL_ESQUEMA = 5
+
+/** Las tablas de vista que nacieron en una versión anterior con otra forma y hay que recrear al subir a 5. */
+export const TABLAS_DE_VISTA_A_RECREAR = Object.freeze(['sn_product_web', 'sn_location_web', 'sn_customer_web'])
 
 /** Cómo se llama la base local. Una sola, con marca de a qué tenant pertenece lo que hay dentro. */
 export const NOMBRE_DE_LA_BASE = 'goscm_explorer'
@@ -78,12 +84,12 @@ export const TABLAS_OBSOLETAS = Object.freeze([
   'pa_psh', 'pa_psi', 'pa_psisub', 'pa_psr', 'pa_loc_prod', 'pa_loc_src',
   'pa_psi_web', 'pa_product_web', 'pa_location_web', 'pa_resource_web',
   'pa_resloc_web', 'pa_psh_web', 'pa_psr_web',
-  'sn_product_web', 'sn_location_web', 'sn_customer_web',
 ])
 
 /**
- * Las tablas de FILAS YA ARMADAS para mostrar, con su severidad: las dos hojas de arcos de la red
- * (Location Source y Customer Source), que son las que pueden tener cientos de miles de filas.
+ * Las tablas de FILAS YA ARMADAS para mostrar, con su severidad: las cinco hojas de análisis de la red
+ * (Product, Location, Customer, Location Source y Customer Source). Las dos de arcos son las que pueden
+ * tener cientos de miles de filas, pero v7 guardaba las cinco.
  *
  * Guardar la fila calculada y no solo el dato crudo es lo que permite paginar un informe de cien mil
  * filas desde el disco sin retenerlo en memoria: la pantalla pide un tramo y lo dibuja. El campo `s`
@@ -93,7 +99,9 @@ export const TABLAS_OBSOLETAS = Object.freeze([
  * Cada registro es `{ c: [celdas], s: 'red' | 'yel' | 'ok' }`. Los nombres cortos no son descuido:
  * se repiten en cada una de esas cien mil filas.
  */
-export const TABLAS_DE_VISTA = Object.freeze(['sn_loc_web', 'sn_cust_web'])
+export const TABLAS_DE_VISTA = Object.freeze([
+  'sn_loc_web', 'sn_cust_web', 'sn_product_web', 'sn_location_web', 'sn_customer_web',
+])
 
 /** El campo de severidad de una tabla de vista. */
 export const CAMPO_DE_SEVERIDAD = 's'

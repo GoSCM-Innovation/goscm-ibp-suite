@@ -19,6 +19,7 @@
 import {
   NOMBRE_DE_LA_BASE,
   TABLA_DE_ORIGEN,
+  TABLAS_DE_VISTA_A_RECREAR,
   TABLAS_OBSOLETAS,
   VERSION_DEL_ESQUEMA,
   existeLaTabla,
@@ -54,8 +55,15 @@ export function abrirBase() {
   return new Promise((resolver, rechazar) => {
     const peticion = indexedDB.open(NOMBRE_DE_LA_BASE, VERSION_DEL_ESQUEMA)
 
-    peticion.onupgradeneeded = () => {
+    peticion.onupgradeneeded = (evento) => {
       const base = peticion.result
+      // Las tres tablas de vista de la red existían antes (versión 3) con otra forma. Al subir a 5 se
+      // recrean: con datos de vistas viejas, un análisis nuevo se mezclaría con lo anterior.
+      if ((evento.oldVersion ?? 0) > 0 && (evento.oldVersion ?? 0) < 5) {
+        for (const nombre of TABLAS_DE_VISTA_A_RECREAR) {
+          if (base.objectStoreNames.contains(nombre)) base.deleteObjectStore(nombre)
+        }
+      }
       // Migración: fuera las tablas de versiones anteriores que ya nadie lee. Solo las que se conocen por
       // su nombre; cualquier otra se deja como está.
       for (const nombre of TABLAS_OBSOLETAS) {
