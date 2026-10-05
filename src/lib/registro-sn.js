@@ -57,10 +57,14 @@ export const TABLAS_REQUERIDAS_RED = Object.freeze(TABLAS_QUE_BAJA_RED.filter((t
  * Los campos que v7 pedía de cada tabla (`efGetSelect` y los `select` fijos de `fetchAndIndex`), para que a
  * SAP se le pida EXACTAMENTE lo que pedía v7 y nada más. Las listas de campos obligatorios y ocultos de
  * cada entidad son `EF_MAND_VISIBLE.sn` y `EF_MAND_HIDDEN.sn`; los campos adicionales del paso ④ se suman.
+ *
+ * Es el MISMO CONJUNTO de campos que pedía v7, no el mismo orden en dos tablas: en `sn_loc` y `sn_cust` van
+ * en el orden de `EXTRACCIONES`, porque de los dos primeros campos sale el `$orderby` con que se pagina y es
+ * el que ya usan las demás descargas de la suite (SAP no distingue el orden del `$select`).
  */
 export const CAMPOS_DE_RED = Object.freeze({
-  sn_loc: ['PRDID', 'LOCFR', 'LOCID', 'TLEADTIME', 'TINVALID'],
-  sn_cust: ['PRDID', 'LOCID', 'CUSTID', 'CLEADTIME', 'CINVALID'],
+  sn_loc: ['LOCID', 'LOCFR', 'PRDID', 'TLEADTIME', 'TINVALID'],
+  sn_cust: ['LOCID', 'PRDID', 'CUSTID', 'CLEADTIME', 'CINVALID'],
   bom_prd: ['PRDID', 'PRDDESCR', 'MATTYPEID'],
   sn_plant: ['SOURCEID', 'PRDID', 'LOCID', 'PLEADTIME', 'PRATIO', 'PINVALID'],
   sn_psi: ['SOURCEID', 'PRDID', 'COMPONENTCOEFFICIENT'],

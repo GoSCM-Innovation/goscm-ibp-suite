@@ -67,8 +67,8 @@ describe('lo que falta', () => {
 
 describe('qué se le pide a SAP', () => {
   it('los campos de cada tabla son los de v7 (efGetSelect y los select fijos)', () => {
-    expect(CAMPOS_DE_RED.sn_loc).toEqual(['PRDID', 'LOCFR', 'LOCID', 'TLEADTIME', 'TINVALID'])
-    expect(CAMPOS_DE_RED.sn_cust).toEqual(['PRDID', 'LOCID', 'CUSTID', 'CLEADTIME', 'CINVALID'])
+    expect([...CAMPOS_DE_RED.sn_loc].sort()).toEqual(['LOCFR', 'LOCID', 'PRDID', 'TINVALID', 'TLEADTIME'])
+    expect([...CAMPOS_DE_RED.sn_cust].sort()).toEqual(['CINVALID', 'CLEADTIME', 'CUSTID', 'LOCID', 'PRDID'])
     expect(CAMPOS_DE_RED.bom_prd).toEqual(['PRDID', 'PRDDESCR', 'MATTYPEID'])
     expect(CAMPOS_DE_RED.sn_plant).toEqual(['SOURCEID', 'PRDID', 'LOCID', 'PLEADTIME', 'PRATIO', 'PINVALID'])
     expect(CAMPOS_DE_RED.sn_psi).toEqual(['SOURCEID', 'PRDID', 'COMPONENTCOEFFICIENT'])
