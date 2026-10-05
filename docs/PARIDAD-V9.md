@@ -71,13 +71,31 @@ y varios se acumulan; ejemplos de IBP con muestra de 50 filas, escalado a 200 y 
 | Ancho de la lista | 340 px, sin memoria | 340 px, y se recuerda | Se conserva de antes |
 | Aviso de pasos duplicados de un job | no | sí | Ahorra una búsqueda |
 
+### Cotejo ejecutado contra el código real de v9 (2026-10-05)
+
+Se ejecutó el `docs.js` REAL de v9 en jsdom con las mismas entradas que nuestro código —tres XML de
+muestra: una carga con unión, filtro, lookup, división sin espacios y campo en minúsculas; una salida a
+archivo y a una tabla de key figures en el mismo XML; y un job con scripts pre/post-load— y se compararon
+los resultados:
+
+- **El Excel completo**: las cuatro hojas (`sheet1` a `sheet4`), sus enlaces y los estilos son
+  **idénticos byte a byte**. El resto del paquete (`workbook.xml`, `[Content_Types].xml`, relaciones)
+  difiere solo en espacios y comentarios del XML. La comparación encontró **una diferencia real**, ya
+  corregida: las tres tablas de abajo de cada hoja de detalle llevaban dos celdas vacías de más (nueve
+  en vez de siete).
+- **El análisis de cada integración** (`parseIntegration`): idéntico campo por campo —mapeos, filtros,
+  lookups, variables, diagrama y scripts del job— salvo dos campos que aquí se añaden y que v9 no trae:
+  `targetDS` y un `fileName` vacío en los nodos de archivo.
+
+No es una prueba permanente (necesita el repo de v9 al lado); el método está en esta sección para
+repetirlo cuando v9 cambie.
+
 ### Lo que NO se pudo comprobar
 
 - **Contra un tenant real**: nada. Las lecturas de IBP (muestra de 50/200 filas, consulta dirigida,
   índice de tareas) están probadas con respuestas simuladas.
-- **Con un Excel real de los dos lados**: no se generó un `.xlsx` de v9 y otro de aquí para compararlos
-  celda a celda. Los estilos y los anchos son idénticos (comprobado ejecutando) y las cabeceras son las
-  de `es.json`; el resto se compara por lectura.
+- **El contenido enriquecido con IBP** (descripciones, tipos y ejemplos): el cotejo de arriba fue sin
+  conexión a IBP.
 - **Con los ojos**: se miraron las dos pantallas en el navegador con datos de muestra (andamio temporal,
   ya borrado), en un panel angosto. No se compararon píxeles ni tipografías contra v9.
 

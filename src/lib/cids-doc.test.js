@@ -144,8 +144,12 @@ describe('buildIntegrationSheet', () => {
     expect(todo).toContain('Sin lookups')
   })
 
-  it('todas las filas tienen el mismo ancho', () => {
-    expect(new Set(hoja.rows.map((una) => una.length))).toEqual(new Set([9]))
+  // Cotejado ejecutando el `docs.js` real de v9 con los mismos XML (2026-10-05): la tabla de mapeos
+  // ocupa nueve celdas por fila y las tres de abajo (filtros, parámetros y lookups) siete.
+  it('la tabla de mapeos ocupa nueve celdas por fila y las de abajo siete, como v9', () => {
+    const anchos = hoja.rows.map((una) => una.length)
+    expect(new Set(anchos)).toEqual(new Set([9, 7]))
+    expect(anchos.slice(0, 3)).toEqual([9, 9, 9])
   })
 })
 

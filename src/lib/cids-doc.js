@@ -165,6 +165,9 @@ export function buildParamSheet(filas, modoJobs) {
 /** Cuántas columnas ocupa una hoja de detalle: A a I. */
 const COLUMNAS_DEL_DETALLE = 9
 
+/** Las tablas de filtros, parámetros y lookups de abajo ocupan solo de la A a la G. */
+const COLUMNAS_DE_LAS_TABLAS = 7
+
 /**
  * La hoja de un dataflow: los mapeos arriba y tres tablas debajo.
  *
@@ -217,7 +220,8 @@ export function buildIntegrationSheet(integracion) {
   /** Las tres tablas de abajo tienen la misma forma: cabecera, y filas de dos o tres columnas. */
   const tabla = (cabeceras, estiloDeDatos, textoSiVacia, filas) => {
     vacia()
-    const relleno = Array(COLUMNAS_DEL_DETALLE - 1 - cabeceras.length).fill(celda('', XF.DEFAULT))
+    // Las filas de las tres tablas de abajo ocupan siete celdas (A a G), como en v9; las de arriba, nueve.
+    const relleno = Array(COLUMNAS_DE_LAS_TABLAS - 1 - cabeceras.length).fill(celda('', XF.DEFAULT))
 
     hoja.addRow([
       celda('', XF.DEFAULT),
