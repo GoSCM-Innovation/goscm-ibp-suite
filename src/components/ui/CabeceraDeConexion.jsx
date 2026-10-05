@@ -80,18 +80,23 @@ export default function CabeceraDeConexion({ conexion }) {
   return (
     <div style={{
       background: 'var(--bg2)', borderBottom: '1px solid var(--border)',
-      padding: isMobile ? '10px 12px' : '12px 24px',
-      display: 'flex', alignItems: 'center', gap: 14, flexShrink: 0,
+      padding: isMobile ? '8px 12px' : '8px 24px',
+      display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0,
     }}>
-      <AvatarV8 name={nombre} size={34} />
-      <div style={{ flex: 1, minWidth: 0 }}>
+      <AvatarV8 name={nombre} size={28} />
+      {/* Nombre y enlace en UNA fila para ocupar menos alto (pedido del usuario, 2026-10-05; v8 los
+          ponía uno debajo del otro). Con poco ancho el enlace baja solo: `flex-wrap`. */}
+      <div style={{
+        flex: 1, minWidth: 0, display: 'flex', alignItems: 'baseline',
+        flexWrap: 'wrap', columnGap: 14, rowGap: 2,
+      }}>
         <div style={{ fontWeight: 700, color: 'var(--text)', fontSize: 14 }}>{nombre}</div>
         {enlace && (
           <a
             href={enlace}
             target="_blank"
             rel="noopener noreferrer"
-            style={{ fontSize: 10, color: 'var(--accent)', marginTop: 2, display: 'inline-block', textDecoration: 'none' }}
+            style={{ fontSize: 11, color: 'var(--accent)', textDecoration: 'none', whiteSpace: 'nowrap' }}
             onMouseEnter={e => { e.currentTarget.style.textDecoration = 'underline' }}
             onMouseLeave={e => { e.currentTarget.style.textDecoration = 'none' }}
           >

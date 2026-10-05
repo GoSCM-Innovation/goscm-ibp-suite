@@ -25,7 +25,6 @@ import { lazy, Suspense, useEffect, useState } from 'react'
 
 import { puedeSalir } from '../../lib/guarda-de-salida.js'
 import { listIbpConnections } from '../../lib/ibp.js'
-import { abrir, abrirLasGuardadas, cerrar, guardarAbiertas } from '../../lib/pestanas-de-conexion.js'
 import { useIsMobile } from '../../lib/useIsMobile.js'
 import ConnectionTabs from '../ui/ConnectionTabs.jsx'
 import CabeceraDeConexion from '../ui/CabeceraDeConexion.jsx'
@@ -153,7 +152,6 @@ function SystemView({ connection }) {
 
 export default function IbpTools() {
   const [conexiones, setConexiones] = useState(null)
-  const [abiertas, setAbiertas] = useState([])
   const [elegida, setElegida] = useState('')
   const [global, setGlobal] = useState(false)
   const [error, setError] = useState('')
@@ -164,9 +162,7 @@ export default function IbpTools() {
       .then((lista) => {
         if (abandonado) return
         setConexiones(lista)
-        const iniciales = abrirLasGuardadas('ibp', lista)
-        setAbiertas(iniciales)
-        setElegida(iniciales[0] ?? '')
+        setElegida(lista[0]?.id ?? '')
       })
       .catch((fallo) => {
         if (abandonado) return
@@ -177,22 +173,10 @@ export default function IbpTools() {
   }, [])
 
   function elegir(id) {
+    if (id === elegida && !global) return
     if (!puedeSalir()) return
-    setAbiertas((previas) => {
-      const siguientes = abrir(previas, id)
-      guardarAbiertas('ibp', siguientes)
-      return siguientes
-    })
     setElegida(id)
     setGlobal(false)
-  }
-
-  function cerrarPestana(id) {
-    if (!puedeSalir()) return
-    const salida = cerrar(abiertas, elegida, id)
-    guardarAbiertas('ibp', salida.abiertas)
-    setAbiertas(salida.abiertas)
-    setElegida(salida.activa)
   }
 
   function verResumenGlobal() {
@@ -218,10 +202,8 @@ export default function IbpTools() {
     <div className="module-page ibp-tools">
       <ConnectionTabs
         conexiones={conexiones}
-        abiertas={abiertas}
         activa={elegida}
         onElegir={elegir}
-        onCerrar={cerrarPestana}
         inicio={{ icono: '📊', nombre: 'Resumen', activa: global, onElegir: verResumenGlobal }}
       />
 

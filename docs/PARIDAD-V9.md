@@ -161,13 +161,21 @@ pestañas y se marcan sin destino.
 
 | Qué | En v9 | Aquí |
 |---|---|---|
-| Tira de pestañas de conexiones abiertas | `ConnectionTabs.jsx` | `ui/ConnectionTabs.jsx` + `lib/pestanas-de-conexion.js` |
+| Tira de pestañas de conexiones | `ConnectionTabs.jsx` | `ui/ConnectionTabs.jsx` |
 | Panel de «Requisitos Técnicos» propio | `Header.jsx` | `lib/requisitos-tecnicos.js` |
 | Menú lateral minimizable | `Sidebar.jsx` | `Shell.jsx` |
 
 **La tira de pestañas** se usa en los DOS módulos, no solo en CI-DS: es la respuesta a que en v8 los
 tenants colgaran del menú lateral y aquí ese menú liste los tres módulos de la suite. Varios destinos
-abiertos a la vez, con avatar y cierre, y recordados entre sesiones.
+a la vista, con avatar.
+
+> **Cambio del 2026-10-05, pedido por el usuario:** la tira dibuja **todas** las conexiones, siempre,
+> y pulsar una la activa. Ya no hay «abrir» ni «cerrar», así que se retiraron el «+», su desplegable,
+> la ✕ y `lib/pestanas-de-conexion.js` (lo que recordaba las abiertas). Si no caben en una línea pasan
+> a la siguiente (`flex-wrap`), sin scroll horizontal. La sección de abajo sobre el «+» queda como
+> historia de por qué existió; el problema que resolvía —no poder cambiar de conexión— no puede
+> volver a darse, porque no hay conexión escondida. Además, la cabecera de la conexión pone el nombre
+> y «Abrir en SAP IBP ↗» en una sola fila (v8 los apilaba) para ocupar menos alto.
 
 Una diferencia con v9, escrita al lado del código: su punto verde decía si la conexión tenía sesión
 abierta contra SAP, porque allí la sesión la abría el navegador. Aquí vive en el servidor y se renueva

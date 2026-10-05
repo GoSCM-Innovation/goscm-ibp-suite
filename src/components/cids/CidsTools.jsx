@@ -14,7 +14,6 @@ import TaskMonitor from './TaskMonitor.jsx'
 import TaskLauncher from './TaskLauncher.jsx'
 import { lectorDeCids } from '../../lib/run-logs.js'
 import ConnectionTabs from '../ui/ConnectionTabs.jsx'
-import { abrir, abrirLasGuardadas, cerrar, guardarAbiertas } from '../../lib/pestanas-de-conexion.js'
 
 // Los tableros se cargan aparte, solo al abrir su pestaña. Son los únicos que usan la librería de
 // gráficos, y esa librería pesa más que todo el resto de la aplicación junta: dejarla en el paquete
@@ -60,7 +59,6 @@ const SIN_DESTINO = new Set(['global', 'explorador', 'documentador'])
 export default function CidsTools() {
   const [conexiones, setConexiones] = useState(null)
   const [elegido, setElegido] = useState('')
-  const [abiertas, setAbiertas] = useState([])
   const [error, setError] = useState('')
   const [herramienta, setHerramienta] = useState('resumen')
 
@@ -83,10 +81,7 @@ export default function CidsTools() {
         setConexiones(lista)
         // El primer destino es el repositorio de pruebas de la primera conexión: es donde se trabaja,
         // y entrar por producción sin haberlo pedido sería la peor opción por omisión posible.
-        const todos = cidsTargets(lista)
-        const iniciales = abrirLasGuardadas('cids', todos)
-        setAbiertas(iniciales)
-        setElegido(iniciales[0] ?? (lista.length > 0 ? `${lista[0].id}:sandbox` : ''))
+        setElegido(lista.length > 0 ? `${lista[0].id}:sandbox` : '')
       })
       .catch((fallo) => { setError(fallo.message); setConexiones([]) })
   }, [])
@@ -133,22 +128,6 @@ export default function CidsTools() {
     { id: uno.id, name: uno.label, isProduction: uno.production }
   ))
 
-  function elegir(id) {
-    setAbiertas((previas) => {
-      const siguientes = abrir(previas, id)
-      guardarAbiertas('cids', siguientes)
-      return siguientes
-    })
-    setElegido(id)
-  }
-
-  function cerrarPestana(id) {
-    const salida = cerrar(abiertas, elegido, id)
-    guardarAbiertas('cids', salida.abiertas)
-    setAbiertas(salida.abiertas)
-    setElegido(salida.activa)
-  }
-
   return (
     <div className="module-page">
       {/* La tira de pestañas de v9: varios repositorios abiertos a la vez. No se enseña donde no
@@ -156,10 +135,8 @@ export default function CidsTools() {
       {!SIN_DESTINO.has(herramienta) && (
         <ConnectionTabs
           conexiones={comoPestanas}
-          abiertas={abiertas}
           activa={elegido}
-          onElegir={elegir}
-          onCerrar={cerrarPestana}
+          onElegir={setElegido}
         />
       )}
 
