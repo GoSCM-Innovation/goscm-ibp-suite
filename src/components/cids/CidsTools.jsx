@@ -152,7 +152,9 @@ export default function CidsTools() {
   ))
 
   return (
-    <div className="module-page">
+    // El monitor necesita un alto fijo para que su tabla se desplace sola y la barra de «📋 Ver logs»
+    // quede a la vista, como en v9. Ver `.module-page-a-pantalla` en index.css.
+    <div className={`module-page${herramienta === 'monitor' ? ' module-page-a-pantalla' : ''}`}>
       {/* La tira de pestañas de v9: siempre a la vista, también sobre el tablero global y los dos
           módulos que leen ZIP, como allí. */}
       <ConnectionTabs
