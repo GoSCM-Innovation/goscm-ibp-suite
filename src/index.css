@@ -40,7 +40,7 @@
   --font:   'DM Sans', sans-serif;
   --mono:   'JetBrains Mono', monospace;
   --sidebar-w: 252px;
-  --header-h:  44px;
+  --header-h:  52px;
   --radius:    10px;
 }
 
@@ -244,9 +244,11 @@ a { color: var(--cyan); }
   z-index: 50;
 }
 .header-brand { align-items: center; display: flex; font-weight: 700; gap: 12px; letter-spacing: -.01em; }
-.header-logo { flex-shrink: 0; height: 26px; object-fit: contain; width: auto; }
+.header-logo { flex-shrink: 0; height: 30px; object-fit: contain; width: auto; }
 .login-logo { display: block; height: 40px; object-fit: contain; width: auto; }
 .header-sep { background: var(--divider); height: 20px; width: 1px; }
+/* La cabecera solo existe en móvil; en pantallas anchas la marca está en el menú lateral. */
+.header-movil { display: none; }
 
 /* ─── Barra lateral ───────────────────────────────────────── */
 
@@ -1183,6 +1185,8 @@ a { color: var(--cyan); }
     width: 100%;
     z-index: 60;
   }
+  .header-movil { display: flex; }
+  .sidebar-cabecera { display: none; }
   .sidebar-label, .sidebar-divider { display: none; }
   .nav-item { flex-direction: column; font-size: 10px; gap: 3px; min-width: 76px; padding: 6px 4px; }
   .nav-label { flex: none; }
@@ -3014,6 +3018,16 @@ a { color: var(--cyan); }
    abajo. */
 .sidebar-nav { display: flex; flex-direction: column; gap: 3px; min-height: 0; overflow-y: auto; }
 .sidebar-footer { display: flex; flex-direction: column; gap: 3px; margin-top: auto; padding-top: 8px; border-top: 1px solid var(--border); }
+/* La marca arriba del menú, con el botón de minimizar a su derecha. Minimizado solo cabe el «GO» del
+   logo (el 39 % izquierdo de la imagen), recortado. */
+.sidebar-cabecera { align-items: center; display: flex; justify-content: space-between; gap: 8px; padding: 0 2px 6px; }
+.sidebar-cabecera .sidebar-minimizar { align-self: center; flex-shrink: 0; }
+.sidebar-marca .header-logo { height: 26px; }
+.sidebar-marca .header-sep { height: 16px; }
+.sidebar.minimizado .sidebar-cabecera { flex-direction: column; gap: 10px; }
+.sidebar.minimizado .sidebar-marca .header-sep,
+.sidebar.minimizado .sidebar-marca .marca-texto { display: none; }
+.sidebar.minimizado .sidebar-marca .header-logo { height: 22px; object-fit: cover; object-position: 0 center; width: 34px; }
 /* Quién tiene la sesión abierta. Minimizado y en móvil solo quedan los iconos de tema y salir. */
 .sidebar-usuario { align-items: center; color: var(--text2); display: flex; flex-wrap: wrap; font-size: 12px; gap: 6px; margin-top: 6px; padding: 6px 10px 2px; }
 .sidebar-usuario-nombre { overflow-wrap: anywhere; }

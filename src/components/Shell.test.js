@@ -120,11 +120,29 @@ describe('el menú lateral', () => {
 })
 
 describe('la sesión está en el menú, no en la cabecera', () => {
-  it('la cabecera lleva solo la marca', async () => {
+  it('la marca va arriba del menú, y la cabecera (solo móvil) lleva únicamente la marca', async () => {
     await montar()
+    expect(contenedor.querySelector('.sidebar .sidebar-marca').textContent.trim()).toBe('Suite')
     const cabecera = contenedor.querySelector('.header')
     expect(cabecera.textContent.trim()).toBe('Suite')
     expect(cabecera.querySelector('button')).toBeNull()
+  })
+
+  it('va a continuación de Gestión, antes de los requisitos técnicos', async () => {
+    const admin = { ...USUARIO, isAdmin: true }
+    contenedor = document.createElement('div')
+    document.body.appendChild(contenedor)
+    await act(async () => {
+      raiz = createRoot(contenedor)
+      raiz.render(createElement(Shell, {
+        user: admin, modules: ['explorer'], theme: 'dark', onToggleTheme: () => {},
+        onSignOut: () => {}, route: 'explorer', onNavigate: () => {},
+      }))
+    })
+    const nombres = enElMenu()
+    const orden = ['Administración', 'Tema claro', 'Salir', 'Requisitos técnicos'].map((n) => nombres.indexOf(n))
+    expect(orden.every((i) => i >= 0)).toBe(true)
+    expect([...orden].sort((a, b) => a - b)).toEqual(orden)
   })
 
   it('el menú muestra quién es, el cambio de tema y «Salir»', async () => {

@@ -25,6 +25,17 @@ import TechLogs from './ui/TechLogs.jsx'
 /** La pestaña de Requisitos técnicos que corresponde a cada módulo. Data Tools abre en «Conexión». */
 const PESTANA_DE_MODULO = { cids: 'cids', jobs: 'ibp' }
 
+/** Logo y «Suite»: el patrón de la cabecera de v8. El logo ya dice GoSCM, así que al lado va solo «Suite». */
+function Marca({ className = '' }) {
+  return (
+    <div className={`header-brand ${className}`.trim()}>
+      <img src="/logo-goscm.png" alt="GoSCM" className="header-logo" />
+      <div className="header-sep" />
+      <span className="marca-texto">Suite</span>
+    </div>
+  )
+}
+
 export default function Shell({ user, modules, theme, onToggleTheme, onSignOut, route, onNavigate, children }) {
   const contratados = new Set(modules)
   const esAdmin = user.isAdmin || user.isPlatformAdmin
@@ -86,27 +97,27 @@ export default function Shell({ user, modules, theme, onToggleTheme, onSignOut, 
 
   return (
     <>
-      <header className="header">
-        {/* Logo, separador y título: el mismo patrón de la cabecera de v8. */}
-        <div className="header-brand">
-          <img src="/logo-goscm.png" alt="GoSCM" className="header-logo" />
-          <div className="header-sep" />
-          {/* El logo ya dice GoSCM, así que al lado va solo "Suite": junto se lee GoSCM Suite. */}
-          <span>Suite</span>
-        </div>
+      {/* En pantallas anchas la marca vive arriba del menú lateral y el contenido sube hasta el borde
+          (pedido el 2026-10-06: la barra entera gastaba altura para dos palabras). Solo en móvil, donde
+          el menú pasa abajo, la marca sigue arriba. */}
+      <header className="header header-movil">
+        <Marca />
       </header>
 
       <div className="layout">
         <nav className={`sidebar${minimizado ? ' minimizado' : ''}`}>
-          <button
-            type="button"
-            className="sidebar-minimizar"
-            onClick={alternarMenu}
-            title={minimizado ? 'Expandir' : 'Minimizar'}
-            aria-label={minimizado ? 'Expandir el menú' : 'Minimizar el menú'}
-          >
-            {minimizado ? '»' : '«'}
-          </button>
+          <div className="sidebar-cabecera">
+            <Marca className="sidebar-marca" />
+            <button
+              type="button"
+              className="sidebar-minimizar"
+              onClick={alternarMenu}
+              title={minimizado ? 'Expandir' : 'Minimizar'}
+              aria-label={minimizado ? 'Expandir el menú' : 'Minimizar el menú'}
+            >
+              {minimizado ? '»' : '«'}
+            </button>
+          </div>
 
           <div className="sidebar-nav">
             <span className="sidebar-label">Módulos</span>
@@ -184,19 +195,9 @@ export default function Shell({ user, modules, theme, onToggleTheme, onSignOut, 
                 </button>
               </>
             )}
-          </div>
 
-          {/* ── El pie del menú, con los requisitos técnicos ────────────────────────────────
-              Está siempre, no solo con Data Tools: los tres proyectos tenían su panel y ahora los
-              tres están dentro, cada uno en su pestaña. */}
-          <div className="sidebar-footer">
-            <button className="nav-item" onClick={() => setAbrirRequisitos(true)}>
-              <span className="nav-icon">⚙</span>
-              <span className="nav-label">Requisitos técnicos</span>
-            </button>
-
-            {/* La sesión vive aquí y no en la cabecera (pedido el 2026-10-06): la barra de arriba
-                se quedó solo con la marca para no gastar altura. */}
+            {/* La sesión va a continuación de Gestión y no en la cabecera (pedido el 2026-10-06). */}
+            <div className="sidebar-divider" />
             <div className="sidebar-usuario">
               <span className="sidebar-usuario-nombre">{user.name || user.email}</span>
               {user.isPlatformAdmin && <span className="tag tag-accent">Plataforma</span>}
@@ -212,6 +213,16 @@ export default function Shell({ user, modules, theme, onToggleTheme, onSignOut, 
             <button className="nav-item" onClick={onSignOut} title="Cerrar sesión">
               <span className="nav-icon">🚪</span>
               <span className="nav-label">Salir</span>
+            </button>
+          </div>
+
+          {/* ── El pie del menú, con los requisitos técnicos ────────────────────────────────
+              Está siempre, no solo con Data Tools: los tres proyectos tenían su panel y ahora los
+              tres están dentro, cada uno en su pestaña. */}
+          <div className="sidebar-footer">
+            <button className="nav-item" onClick={() => setAbrirRequisitos(true)}>
+              <span className="nav-icon">⚙</span>
+              <span className="nav-label">Requisitos técnicos</span>
             </button>
           </div>
         </nav>

@@ -9,10 +9,11 @@ actualiza al terminar cada sesión, y su orden es el de prioridad acordada.
 
 - **Armazón (2026-10-06, a petición del usuario)**: (1) la flecha de Data Tools pliega y despliega sus
   aplicaciones desde cualquier pantalla, antes solo funcionaba estando dentro del módulo (minimizado
-  se mantiene: solo las del módulo abierto). (2) La cabecera lleva solo logo + «Suite» y baja de 52 a
-  44 px; nombre, etiqueta «Plataforma», tema y «Salir» pasaron al pie del menú lateral (en móvil y
-  minimizado el nombre se oculta). **Pendiente: verlo en el sitio.**
-
+  se mantiene: solo las del módulo abierto). (2) **Ya no hay barra superior en pantallas anchas**: logo +
+  «Suite» van arriba del menú lateral (minimizado, solo el «GO» del logo recortado) y el contenido sube
+  hasta el borde; la cabecera solo existe en móvil. Nombre, etiqueta «Plataforma», tema y «Salir» van a
+  continuación de Gestión, antes de «Requisitos técnicos» (pie). **Pendiente: verlo en el sitio**, sobre
+  todo el recorte del logo con el menú minimizado.
 - **Administración → Conexiones, alta de acuerdos (2026-10-06, a petición del usuario)**: «Acuerdo» pasó de
   cuadro de texto con sugerencias a **desplegable** con el nombre de cada acuerdo, una línea «Activa: …»,
   marca «(ya configurado)» y opción «Otro (escribir el código)…». La tabla de acuerdos guardados muestra
