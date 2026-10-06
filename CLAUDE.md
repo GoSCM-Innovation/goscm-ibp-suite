@@ -1,5 +1,16 @@
 # Reglas del proyecto `goscm-ibp-suite` (GoSCM Suite)
 
+## Approach
+- Yo hablo en español, pero puedes pensar en el idioma que prefieras.
+- Read existing files before writing. Don't re-read unless changed.
+- Thorough in reasoning, concise in output.
+- Skip files over 100KB unless required.
+- No sycophantic openers or closing fluff.
+- No emojis or em-dashes.
+- Do not guess APIs, versions, flags, commit SHAs, or package names. Verify by reading code or docs before asserting.
+- Do not add any changes to the solution until you are at least 90% certain.
+- You can ask as many questions as you need until you reach the desired level of certainty.
+
 ## Regla fundamental
 **No inventar información nunca.** Si se necesita un dato específico (endpoints SAP IBP, escenarios de comunicación, roles, configuraciones) y no está en el código, en `docs/` o en lo que el usuario ha proporcionado, **preguntar antes de escribir cualquier cosa**.
 
