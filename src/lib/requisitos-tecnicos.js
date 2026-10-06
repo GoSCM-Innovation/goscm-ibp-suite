@@ -11,6 +11,51 @@
 // v8: `header.req0title`…`header.req4detail` de su `es.json`.
 // v9: `REQUIREMENTS` de su `components/Header.jsx`.
 
+/**
+ * Los acuerdos de comunicación de IBP, con el nombre con que v8 los presenta y lo que activa cada
+ * uno. Es la única fuente: el panel de «Requisitos Técnicos» y el desplegable de Administración →
+ * Conexiones salen de aquí, para que no se desincronicen. El texto es el de v8, sin traducir.
+ */
+export const ACUERDOS_IBP = Object.freeze([
+  {
+    codigo: 'SAP_COM_0326',
+    nombre: 'Administración de Application Jobs',
+    cuerpo: 'Escenario «Programador externo - Integración de administración de jobs de aplicación». '
+      + 'Otorga acceso completo al servicio BC_EXT_APPJOB_MANAGEMENT: programar jobs para cualquier '
+      + 'usuario de negocio, cancelar, reiniciar y supervisar jobs creados por cualquier usuario.',
+    activa: 'Resumen · Job Templates · Job Monitor · Orquestador',
+  },
+  {
+    codigo: 'SAP_COM_0068',
+    nombre: 'Supervisión de integración',
+    cuerpo: 'Escenario «Planificación: Supervisión de integración». Expone consumo de recursos '
+      + '(/IBP/RES_CONS_STATS_API_SRV) con CPU y memoria del tenant en % con timestamps UTC a nivel de '
+      + 'minuto, y supervisión de tareas de sistema (/IBP/TASKMON_EXT_SRV) con datos de los últimos 90 '
+      + 'días.',
+    activa: 'Resource Stats',
+  },
+  {
+    codigo: 'SAP_COM_0924',
+    nombre: 'Integración de datos de telemetría',
+    cuerpo: 'Escenario «Planning – Telemetry Data Integration». Expone la Telemetry Read API con '
+      + 'datos de los últimos 90 días: uso del Excel Add-In (logons, planning views, key figures), '
+      + 'Dashboards, Analytics Stories, Alert Monitor y apps Fiori por usuario y Planning Area. '
+      + 'Procesa datos personales.',
+    activa: 'Telemetría',
+  },
+  {
+    codigo: 'SAP_COM_0720',
+    nombre: 'Integración de datos maestros y transaccionales',
+    cuerpo: 'Expone MASTER_DATA_API_SRV y PLANNING_DATA_API_SRV. Un área debe habilitarse por '
+      + 'separado EN CADA SERVICIO del escenario: tenerla en uno no la habilita en los demás, y ese es '
+      + 'el fallo que más veces se confunde con un problema de permisos.',
+    activa: 'Migración · Ver Dato Maestro · Ver Dato Transaccional',
+  },
+])
+
+/** El acuerdo con ese código, o `undefined` si no es uno de los cuatro conocidos. */
+export const acuerdoIbp = (codigo) => ACUERDOS_IBP.find((a) => a.codigo === codigo)
+
 /** Los de v8, que gobiernan las pestañas de IBP Tools. */
 export const REQUISITOS_IBP = Object.freeze([
   {
@@ -20,34 +65,10 @@ export const REQUISITOS_IBP = Object.freeze([
       + 'escenario correspondiente. La URL del endpoint se obtiene de cada Communication Arrangement '
       + 'una vez creado.',
   },
-  {
-    titulo: 'SAP_COM_0326 — Administración de Application Jobs',
-    detalle: 'Escenario «Programador externo - Integración de administración de jobs de aplicación». '
-      + 'Otorga acceso completo al servicio BC_EXT_APPJOB_MANAGEMENT: programar jobs para cualquier '
-      + 'usuario de negocio, cancelar, reiniciar y supervisar jobs creados por cualquier usuario. '
-      + 'Activa: Resumen · Job Templates · Job Monitor · Orquestador.',
-  },
-  {
-    titulo: 'SAP_COM_0068 — Supervisión de integración',
-    detalle: 'Escenario «Planificación: Supervisión de integración». Expone consumo de recursos '
-      + '(/IBP/RES_CONS_STATS_API_SRV) con CPU y memoria del tenant en % con timestamps UTC a nivel de '
-      + 'minuto, y supervisión de tareas de sistema (/IBP/TASKMON_EXT_SRV) con datos de los últimos 90 '
-      + 'días. Activa: Resource Stats.',
-  },
-  {
-    titulo: 'SAP_COM_0924 — Integración de datos de telemetría',
-    detalle: 'Escenario «Planning – Telemetry Data Integration». Expone la Telemetry Read API con '
-      + 'datos de los últimos 90 días: uso del Excel Add-In (logons, planning views, key figures), '
-      + 'Dashboards, Analytics Stories, Alert Monitor y apps Fiori por usuario y Planning Area. '
-      + 'Procesa datos personales. Activa: Telemetría.',
-  },
-  {
-    titulo: 'SAP_COM_0720 — Integración de datos maestros y transaccionales',
-    detalle: 'Expone MASTER_DATA_API_SRV y PLANNING_DATA_API_SRV. Un área debe habilitarse por '
-      + 'separado EN CADA SERVICIO del escenario: tenerla en uno no la habilita en los demás, y ese es '
-      + 'el fallo que más veces se confunde con un problema de permisos. Activa: Migración · Ver Dato '
-      + 'Maestro · Ver Dato Transaccional.',
-  },
+  ...ACUERDOS_IBP.map((a) => ({
+    titulo: `${a.codigo} — ${a.nombre}`,
+    detalle: `${a.cuerpo} Activa: ${a.activa}.`,
+  })),
   {
     titulo: 'Autenticación — todos los acuerdos',
     detalle: 'HTTP Basic Authentication con el usuario y contraseña del Communication User de cada '

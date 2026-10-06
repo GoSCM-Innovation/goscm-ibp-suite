@@ -7,6 +7,12 @@ actualiza al terminar cada sesión, y su orden es el de prioridad acordada.
 
 ## Dónde estamos
 
+- **Administración → Conexiones, alta de acuerdos (2026-10-06, a petición del usuario)**: «Acuerdo» pasó de
+  cuadro de texto con sugerencias a **desplegable** con el nombre de cada acuerdo, una línea «Activa: …»,
+  marca «(ya configurado)» y opción «Otro (escribir el código)…». La tabla de acuerdos guardados muestra
+  el nombre bajo el código. Los nombres salen de `ACUERDOS_IBP` en `src/lib/requisitos-tecnicos.js`, la
+  misma fuente del panel de Requisitos Técnicos. **Pendiente: verlo en el sitio** (el inicio de sesión es
+  por código al correo y no se pudo abrir en local).
 - **Production Analyzer cotejado celda a celda contra v7 (2026-10-06)**, mismo tenant y parámetros. Dos
   hallazgos. (1) **Defecto corregido**: la descarga paginaba por los dos primeros campos del `$select`, y
   en Location Source (`LOCID, LOCFR`, sin `PRDID`) miles de filas quedaban empatadas: SAP las desempataba

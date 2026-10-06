@@ -6,8 +6,11 @@
 
 import { useEffect, useState } from 'react'
 import { api } from '../../lib/api.js'
+import { ACUERDOS_IBP, acuerdoIbp } from '../../lib/requisitos-tecnicos.js'
 
-const ACUERDOS_CONOCIDOS = ['SAP_COM_0326', 'SAP_COM_0068', 'SAP_COM_0720', 'SAP_COM_0924']
+// Valor del desplegable para un acuerdo que no está en la lista: SAP publica acuerdos nuevos y
+// `core/connections` no restringe el código, así que se puede escribir.
+const OTRO = '__otro__'
 
 // CI-DS no tiene acuerdos de comunicación: es un usuario y una contraseña por endpoint. Se
 // guardan con este nombre fijo, que coincide con el de `core/connections`, y la pantalla no
@@ -26,7 +29,11 @@ export default function ConnectionsTab({ clientId }) {
   const [renombrando, setRenombrando] = useState(null)
 
   const [nueva, setNueva] = useState({ kind: 'ibp', name: '', baseUrl: '', organization: '', isProduction: false })
-  const [acuerdo, setAcuerdo] = useState({ agreement: 'SAP_COM_0326', sapUser: '', password: '' })
+  const [acuerdo, setAcuerdo] = useState({ agreement: '', sapUser: '', password: '' })
+  // Lo que se eligió en el desplegable. Mientras no se toque (`null`) se propone el primer acuerdo
+  // que la conexión todavía no tiene, así que el valor se recalcula solo al abrir otra conexión o
+  // al guardar.
+  const [elegido, setElegido] = useState(null)
 
   const params = clientId ? { clientId } : undefined
 
@@ -57,6 +64,8 @@ export default function ConnectionsTab({ clientId }) {
   const open = (connection) => run(async () => {
     const data = await api.get('/api/admin/connections', { ...(params ?? {}), id: connection.id })
     setDetail(data.connection)
+    setElegido(null)
+    setAcuerdo({ agreement: '', sapUser: '', password: '' })
   })
 
   const createConnection = (event) => {
@@ -98,11 +107,12 @@ export default function ConnectionsTab({ clientId }) {
       await api.post('/api/admin/connections', {
         clientId,
         connectionId: detail.id,
-        agreement: detail.kind === 'cids' ? ACUERDO_CIDS : acuerdo.agreement,
+        agreement: detail.kind === 'cids' ? ACUERDO_CIDS : codigoAcuerdo,
         sapUser: acuerdo.sapUser,
         password: acuerdo.password,
       })
-      setAcuerdo({ agreement: 'SAP_COM_0326', sapUser: '', password: '' })
+      setElegido(null)
+      setAcuerdo({ agreement: '', sapUser: '', password: '' })
       const data = await api.get('/api/admin/connections', { ...(params ?? {}), id: detail.id })
       setDetail(data.connection)
       recargar()
@@ -115,6 +125,13 @@ export default function ConnectionsTab({ clientId }) {
     setDetail(data.connection)
     recargar()
   })
+
+  const yaConfigurados = new Set(detail?.agreements.map((a) => a.agreement) ?? [])
+  const seleccion = elegido
+    ?? ACUERDOS_IBP.find((a) => !yaConfigurados.has(a.codigo))?.codigo
+    ?? ACUERDOS_IBP[0].codigo
+  const codigoAcuerdo = seleccion === OTRO ? acuerdo.agreement : seleccion
+  const infoAcuerdo = acuerdoIbp(seleccion)
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
@@ -238,7 +255,14 @@ export default function ConnectionsTab({ clientId }) {
                 )}
                 {detail.agreements.map((a) => (
                   <tr key={a.id}>
-                    {detail.kind !== 'cids' && <td className="mono">{a.agreement}</td>}
+                    {detail.kind !== 'cids' && (
+                      <td>
+                        <div className="mono">{a.agreement}</div>
+                        {acuerdoIbp(a.agreement) && (
+                          <div style={{ color: 'var(--text2)', fontSize: 12 }}>{acuerdoIbp(a.agreement).nombre}</div>
+                        )}
+                      </td>
+                    )}
                     <td>{a.sapUser}</td>
                     <td style={{ color: 'var(--text2)' }}>{new Date(a.updatedAt).toLocaleString()}</td>
                     <td style={{ textAlign: 'right' }}>
@@ -252,48 +276,71 @@ export default function ConnectionsTab({ clientId }) {
             </table>
           </div>
 
-          <form onSubmit={saveAgreement} style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 16 }}>
-            {detail.kind !== 'cids' && (
-              <div className="field" style={{ flex: '1 1 180px' }}>
-                <label htmlFor="agreement">Acuerdo</label>
+          <form onSubmit={saveAgreement} style={{ marginTop: 16 }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+              {detail.kind !== 'cids' && (
+                <div className="field" style={{ flex: '2 1 280px' }}>
+                  <label htmlFor="agreement">Acuerdo</label>
+                  <select
+                    id="agreement"
+                    className="select"
+                    value={seleccion}
+                    onChange={(e) => setElegido(e.target.value)}
+                  >
+                    {ACUERDOS_IBP.map((a) => (
+                      <option key={a.codigo} value={a.codigo}>
+                        {a.codigo} · {a.nombre}{yaConfigurados.has(a.codigo) ? ' (ya configurado)' : ''}
+                      </option>
+                    ))}
+                    <option value={OTRO}>Otro (escribir el código)…</option>
+                  </select>
+                </div>
+              )}
+              {detail.kind !== 'cids' && seleccion === OTRO && (
+                <div className="field" style={{ flex: '1 1 180px' }}>
+                  <label htmlFor="agreementOtro">Código del acuerdo</label>
+                  <input
+                    id="agreementOtro"
+                    className="input mono"
+                    required
+                    placeholder="SAP_COM_0000"
+                    value={acuerdo.agreement}
+                    onChange={(e) => setAcuerdo({ ...acuerdo, agreement: e.target.value.toUpperCase() })}
+                  />
+                </div>
+              )}
+              <div className="field" style={{ flex: '1 1 160px' }}>
+                <label htmlFor="sapUser">Usuario</label>
                 <input
-                  id="agreement"
-                  className="input mono"
-                  list="acuerdos-conocidos"
+                  id="sapUser"
+                  className="input"
                   required
-                  value={acuerdo.agreement}
-                  onChange={(e) => setAcuerdo({ ...acuerdo, agreement: e.target.value.toUpperCase() })}
+                  value={acuerdo.sapUser}
+                  onChange={(e) => setAcuerdo({ ...acuerdo, sapUser: e.target.value })}
                 />
-                <datalist id="acuerdos-conocidos">
-                  {ACUERDOS_CONOCIDOS.map((a) => <option key={a} value={a} />)}
-                </datalist>
               </div>
+              <div className="field" style={{ flex: '1 1 160px' }}>
+                <label htmlFor="sapPassword">Contraseña</label>
+                <input
+                  id="sapPassword"
+                  className="input"
+                  type="password"
+                  autoComplete="new-password"
+                  required
+                  value={acuerdo.password}
+                  onChange={(e) => setAcuerdo({ ...acuerdo, password: e.target.value })}
+                />
+              </div>
+              <button className="btn btn-primary" type="submit" disabled={busy} style={{ alignSelf: 'flex-end' }}>
+                {detail.kind === 'cids' ? 'Guardar credenciales' : 'Guardar acuerdo'}
+              </button>
+            </div>
+            {detail.kind !== 'cids' && infoAcuerdo && (
+              <p className="card-hint" style={{ marginTop: 10 }}>
+                <strong>Activa:</strong> {infoAcuerdo.activa}.
+                {yaConfigurados.has(infoAcuerdo.codigo) && ' Ya está configurado: guardar de nuevo reemplaza el usuario y la contraseña.'}
+              </p>
             )}
-            <div className="field" style={{ flex: '1 1 160px' }}>
-              <label htmlFor="sapUser">Usuario</label>
-              <input
-                id="sapUser"
-                className="input"
-                required
-                value={acuerdo.sapUser}
-                onChange={(e) => setAcuerdo({ ...acuerdo, sapUser: e.target.value })}
-              />
-            </div>
-            <div className="field" style={{ flex: '1 1 160px' }}>
-              <label htmlFor="sapPassword">Contraseña</label>
-              <input
-                id="sapPassword"
-                className="input"
-                type="password"
-                autoComplete="new-password"
-                required
-                value={acuerdo.password}
-                onChange={(e) => setAcuerdo({ ...acuerdo, password: e.target.value })}
-              />
-            </div>
-            <button className="btn btn-primary" type="submit" disabled={busy} style={{ alignSelf: 'flex-end' }}>
-              {detail.kind === 'cids' ? 'Guardar credenciales' : 'Guardar acuerdo'}
-            </button>
           </form>
         </div>
       )}
