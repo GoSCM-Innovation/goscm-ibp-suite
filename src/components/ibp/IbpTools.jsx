@@ -27,7 +27,8 @@ import { puedeSalir } from '../../lib/guarda-de-salida.js'
 import { listIbpConnections } from '../../lib/ibp.js'
 import { useIsMobile } from '../../lib/useIsMobile.js'
 import ConnectionTabs from '../ui/ConnectionTabs.jsx'
-import CabeceraDeConexion from '../ui/CabeceraDeConexion.jsx'
+import { nombreConAmbiente } from '../../lib/nombre-de-conexion.js'
+import { urlDeSap } from '../../lib/url-de-sap.js'
 
 const GlobalSummary = lazy(() => import('./GlobalSummary.jsx'))
 const Resumen = lazy(() => import('./Resumen.jsx'))
@@ -59,7 +60,20 @@ const cargando = texto => (
   <div style={{ padding: 48, textAlign: 'center', color: 'var(--text2)', fontSize: 13 }}>{texto}</div>
 )
 
-/** La vista de UNA conexión: su cabecera, sus pestañas y lo que hay en cada una. */
+/**
+ * Lo que lleva la pestaña activa de la tira: el nombre con su ambiente (v8 lo pintaba en una franja
+ * propia), la dirección y el enlace «Abrir en SAP IBP ↗» al launchpad del tenant.
+ */
+function detalleDeIbp(conexion) {
+  const url = urlDeSap(conexion.baseUrl)
+  return {
+    titulo: nombreConAmbiente(conexion),
+    filas: [['Dirección', conexion.baseUrl]].filter(([, valor]) => valor),
+    enlace: url ? { url, texto: 'Abrir en SAP IBP ↗' } : null,
+  }
+}
+
+/** La vista de UNA conexión: sus pestañas y lo que hay en cada una. */
 function SystemView({ connection }) {
   const isMobile = useIsMobile()
   const acuerdos = new Set(connection.agreements ?? [])
@@ -79,8 +93,6 @@ function SystemView({ connection }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
-      <CabeceraDeConexion conexion={connection} />
-
       {apps.length > 0 && (
         <div className="tab-bar" style={{
           display: 'flex', gap: 0, borderBottom: '1px solid var(--border)',
@@ -204,6 +216,7 @@ export default function IbpTools() {
         conexiones={conexiones}
         activa={elegida}
         onElegir={elegir}
+        detalleDe={detalleDeIbp}
         inicio={{ icono: '📊', nombre: 'Resumen', activa: global, onElegir: verResumenGlobal }}
       />
 

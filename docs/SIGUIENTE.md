@@ -7,6 +7,11 @@ actualiza al terminar cada sesión, y su orden es el de prioridad acordada.
 
 ## Dónde estamos
 
+- **Tira de conexiones con el detalle dentro (2026-10-06, a petición del usuario)**: desaparecen las
+  franjas de IBP Tools (`CabeceraDeConexion`) y CI-DS Tools (`CabeceraDeCids`). La pestaña activa se
+  ensancha y lleva «↗» (enlace a SAP IBP, solo IBP) y «ⓘ» con el detalle; el tooltip de cada pestaña
+  lleva la dirección. Detalle y decisión en `PARIDAD-V8.md` / `PARIDAD-V9.md`. **Pendiente: verlo en
+  el sitio** (cuadro de detalle, ancho de la pestaña activa, móvil).
 - **Armazón (2026-10-06, a petición del usuario)**: (1) la flecha de Data Tools pliega y despliega sus
   aplicaciones desde cualquier pantalla, antes solo funcionaba estando dentro del módulo (minimizado
   se mantiene: solo las del módulo abierto). (2) **Ya no hay barra superior en pantallas anchas**: logo +

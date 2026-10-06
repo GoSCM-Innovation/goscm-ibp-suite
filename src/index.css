@@ -3090,29 +3090,45 @@ a { color: var(--cyan); }
 }
 .conn-tab-punto.productivo { background: var(--accent); box-shadow: 0 0 6px rgba(247, 168, 0, .7); }
 
-/* ── La cabecera de la conexión activa ─────────────────────────────────────────────────────────
-   Portada de la cabecera de `SystemView.jsx` de v8: avatar de 34px, nombre en negrita y el enlace
-   al launchpad debajo, en pequeño y del color del acento. */
-.conn-cabecera {
+/* Los controles de la pestaña activa y el cuadro de detalle de la conexión (2026-10-06). La pestaña
+   activa se ensancha para que su nombre se lea; el cuadro cuelga de ella. */
+.conn-tab { position: relative; }
+.conn-tab.active { max-width: 320px; }
+.conn-tab-icono {
   align-items: center;
-  background: var(--bg2);
-  border: 1px solid var(--border);
-  border-radius: var(--r-lg);
-  display: flex;
+  background: none;
+  border: none;
+  border-radius: 4px;
+  color: var(--text3);
+  cursor: pointer;
+  display: inline-flex;
   flex-shrink: 0;
-  gap: 14px;
-  padding: 12px 18px;
-}
-.conn-cabecera-texto { flex: 1; min-width: 0; }
-.conn-cabecera-nombre { color: var(--text); font-size: 14px; font-weight: 700; }
-.conn-cabecera-enlace {
-  color: var(--accent);
-  display: inline-block;
-  font-size: 10px;
-  margin-top: 2px;
+  font-size: 13px;
+  line-height: 1;
+  padding: 3px 4px;
   text-decoration: none;
 }
-.conn-cabecera-enlace:hover { text-decoration: underline; }
+.conn-tab-icono:hover, .conn-tab-icono[aria-expanded="true"] { background: var(--surface-glass); color: var(--accent); }
+.conn-detalle {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .35);
+  cursor: default;
+  left: 0;
+  max-width: min(420px, 90vw);
+  min-width: 260px;
+  padding: 12px 14px;
+  position: absolute;
+  top: calc(100% + 4px);
+  z-index: 40;
+}
+.conn-detalle-titulo { color: var(--text); font-size: 13px; font-weight: 700; margin-bottom: 8px; }
+.conn-detalle-filas { display: flex; flex-direction: column; gap: 6px; margin: 0; }
+.conn-detalle-filas dt { color: var(--text3); font-size: 10px; letter-spacing: .06em; text-transform: uppercase; }
+.conn-detalle-filas dd { color: var(--text2); margin: 0; overflow-wrap: anywhere; }
+.conn-detalle-enlace { color: var(--accent); display: inline-block; font-size: 12px; margin-top: 10px; text-decoration: none; }
+.conn-detalle-enlace:hover { text-decoration: underline; }
 
 /* El aviso de auto-refresco, junto al botón de refrescar. Portado de v8 y v9: sin él la pantalla se
    refresca sola y no lo dice, y quien mira una tabla no sabe si es de ahora o de hace un rato. */
@@ -4624,40 +4640,3 @@ a { color: var(--cyan); }
 
 
 
-/* ─── Cabecera del sistema de CI-DS Tools (v9) ───────────────
-   Avatar de 34, nombre y la línea `dirección · organización · ambiente` en mono. */
-.cids-cabecera {
-  align-items: center;
-  background: var(--bg2);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  display: flex;
-  gap: 14px;
-  padding: 10px 16px;
-}
-.cids-cabecera.contraida { background: none; border: none; padding: 0; }
-.cids-cabecera-texto { flex: 1; min-width: 0; }
-.cids-cabecera-nombre { color: var(--text); font-size: 14px; font-weight: 700; }
-.cids-cabecera-detalle {
-  color: var(--text2);
-  font-size: 10px;
-  margin-top: 1px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.cids-cabecera-cerrar, .cids-cabecera-abrir {
-  align-items: center;
-  background: none;
-  border: none;
-  border-radius: 4px;
-  color: var(--text3);
-  cursor: pointer;
-  display: inline-flex;
-  flex-shrink: 0;
-  font-size: 14px;
-  gap: 6px;
-  line-height: 1;
-  padding: 2px 4px;
-}
-.cids-cabecera-cerrar:hover, .cids-cabecera-abrir:hover { color: var(--text); }

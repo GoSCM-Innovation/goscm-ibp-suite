@@ -61,32 +61,42 @@ const pulsar = async (texto, selector = '.tabs .tab') => {
   await act(async () => { boton.click() })
 }
 
-describe('cabecera del sistema', () => {
-  it('dice dirección · organización · Sandbox, como v9', async () => {
+describe('el detalle del sistema va en la tira, no en una franja', () => {
+  const detalle = () => contenedor.querySelector('.conn-detalle')
+  const abrirDetalle = () => act(async () => { contenedor.querySelector('.conn-tab.active button[aria-label]').click() })
+
+  it('ya no hay franja bajo la tira', async () => {
     await montar()
-    expect(contenedor.querySelector('.cids-cabecera-nombre').textContent).toBe('CLARO')
-    expect(contenedor.querySelector('.cids-cabecera-detalle').textContent)
-      .toBe('https://claro.hana.ondemand.com/ · CLARO_ORG · Sandbox')
+    expect(contenedor.querySelector('.cids-cabecera')).toBeNull()
+  })
+
+  it('el «ⓘ» de la pestaña activa dice dirección, organización y Sandbox, como la franja de v9', async () => {
+    await montar()
+    expect(detalle()).toBeNull()
+    await abrirDetalle()
+    expect(detalle().querySelector('.conn-detalle-titulo').textContent).toBe('CLARO')
+    expect(detalle().textContent).toContain('https://claro.hana.ondemand.com/')
+    expect(detalle().textContent).toContain('CLARO_ORG')
+    expect(detalle().textContent).toContain('Sandbox')
   })
 
   it('en el destino productivo dice Producción', async () => {
     await montar()
     await pulsar('CLARO · Productivo', '.conn-tab')
-    expect(contenedor.querySelector('.cids-cabecera-detalle').textContent).toContain('· Producción')
+    await abrirDetalle()
+    expect(detalle().textContent).toContain('Producción')
   })
 
-  it('se contrae con ▴ y se vuelve a abrir con ▾', async () => {
+  it('solo la pestaña activa lleva «ⓘ»', async () => {
     await montar()
-    await act(async () => { contenedor.querySelector('.cids-cabecera-cerrar').click() })
-    expect(contenedor.querySelector('.cids-cabecera-detalle')).toBeNull()
-    await act(async () => { contenedor.querySelector('.cids-cabecera-abrir').click() })
-    expect(contenedor.querySelector('.cids-cabecera-detalle')).not.toBeNull()
+    expect(contenedor.querySelectorAll('.conn-tab button[aria-label]')).toHaveLength(1)
   })
 
-  it('no sale en las pestañas que leen ZIP', async () => {
+  it('cambiar de pestaña cierra el detalle', async () => {
     await montar()
-    await pulsar('Integration Explorer')
-    expect(contenedor.querySelector('.cids-cabecera')).toBeNull()
+    await abrirDetalle()
+    await pulsar('CLARO · Productivo', '.conn-tab')
+    expect(detalle()).toBeNull()
   })
 })
 

@@ -14,7 +14,6 @@ import TaskMonitor from './TaskMonitor.jsx'
 import TaskLauncher from './TaskLauncher.jsx'
 import { lectorDeCids } from '../../lib/run-logs.js'
 import ConnectionTabs from '../ui/ConnectionTabs.jsx'
-import CabeceraDeCids from './CabeceraDeCids.jsx'
 
 // Los tableros se cargan aparte, solo al abrir su pestaña. Son los únicos que usan la librería de
 // gráficos, y esa librería pesa más que todo el resto de la aplicación junta: dejarla en el paquete
@@ -37,7 +36,7 @@ const MappingDocumenter = lazy(() => import('./documenter/MappingDocumenter.jsx'
 //
 // Las dos últimas eran entradas del menú lateral en v9 y no pestañas de una conexión, porque no miran
 // ningún repositorio: leen los ZIP del equipo. Aquí el menú lateral es de módulos, así que van como
-// pestañas y se marcan `SIN_DESTINO`.
+// pestañas.
 //
 // El tablero global mira TODOS los destinos, así que el selector no le aplica. Solo aparece cuando
 // hay más de uno, que con CI-DS es siempre —cada conexión rinde pruebas y productivo—, pero la
@@ -53,10 +52,21 @@ const HERRAMIENTAS = [
   { id: 'explorador', label: 'Integration Explorer' },
 ]
 
-// El explorador y el documentador leen los ZIP del equipo: no consultan ningún repositorio, así que
-// el selector de destino no les dice nada. Lo único que el explorador toma de la conexión es qué
-// tareas ya están en el productivo.
-const SIN_DESTINO = new Set(['global', 'explorador', 'documentador'])
+/**
+ * Lo que lleva la pestaña activa: lo que v9 pintaba en la franja bajo la tira, dirección,
+ * organización y ambiente.
+ */
+function detalleDeCids(pestana) {
+  return {
+    titulo: pestana.avatar,
+    filas: [
+      ['Dirección', pestana.baseUrl],
+      ['Organización', pestana.organization],
+      ['Ambiente', pestana.isProduction ? 'Producción' : 'Sandbox'],
+    ].filter(([, valor]) => valor),
+    enlace: null,
+  }
+}
 
 export default function CidsTools() {
   const [conexiones, setConexiones] = useState(null)
@@ -148,7 +158,14 @@ export default function CidsTools() {
 
   /** Los destinos con la forma que espera la tira: es un repositorio por pestaña, no una conexión. */
   const comoPestanas = destinos.map((uno) => (
-    { id: uno.id, name: uno.label, avatar: uno.name, isProduction: uno.production }
+    {
+      id: uno.id,
+      name: uno.label,
+      avatar: uno.name,
+      isProduction: uno.production,
+      baseUrl: uno.baseUrl,
+      organization: uno.organization,
+    }
   ))
 
   return (
@@ -159,9 +176,8 @@ export default function CidsTools() {
         conexiones={comoPestanas}
         activa={elegido}
         onElegir={elegirDestino}
+        detalleDe={detalleDeCids}
       />
-
-      {!SIN_DESTINO.has(herramienta) && <CabeceraDeCids destino={destino} />}
 
       <div className="module-head">
         <div>

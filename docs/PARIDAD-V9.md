@@ -124,8 +124,9 @@ El visor de logs con los textos de v9 («Logs de ejecución», «Cargando logs�
 **Error de v9 que se arregla, no se copia**: al cambiar de página con la nueva ya en caché, el aviso «cargando
 fin/duración…» se quedaba encendido y «Copiar» bloqueado (el efecto salía sin apagarlo). Prueba en
 `TaskMonitor.test.js`.
-**Marco** (`CidsTools.jsx`): la cabecera del sistema de v9 (avatar de 34, nombre y
-`dirección · organización · Producción|Sandbox`, con ▴/▾ para contraerla); para ello `/api/connections`
+**Marco** (`CidsTools.jsx`): el detalle del sistema de v9 (`dirección · organización · Producción|Sandbox`)
+**ya no va en una franja propia** (cambio del 2026-10-06, pedido por el usuario): vive en el «ⓘ» de la
+pestaña activa de la tira, con lo que desaparece el ▴/▾ de contraerla; para ello `/api/connections`
 devuelve también la **organización** (junto a la dirección, que ya salía; no es un secreto y las
 credenciales siguen sin salir). «Sandbox» en vez de «Pruebas». La tira de pestañas de repositorio se ve
 siempre, también sobre el tablero global y los dos módulos de ZIP (desde el global, elegir una lleva a su
@@ -410,6 +411,11 @@ a la vista, con avatar.
 > historia de por qué existió; el problema que resolvía —no poder cambiar de conexión— no puede
 > volver a darse, porque no hay conexión escondida. Además, la cabecera de la conexión pone el nombre
 > y «Abrir en SAP IBP ↗» en una sola fila (v8 los apilaba) para ocupar menos alto.
+>
+> **Cambio del 2026-10-06, pedido por el usuario:** la franja de la conexión (v8 y v9) **desaparece**. La
+> pestaña activa de la tira se ensancha (hasta 320 px), lleva el «↗» al launchpad (solo IBP) y un «ⓘ»
+> que abre el nombre con ambiente, la dirección y, en CI-DS, la organización y el ambiente. El tooltip de
+> toda pestaña lleva la dirección. Data Tools usa la misma tira sin `detalleDe`: no lleva «ⓘ».
 
 Una diferencia con v9, escrita al lado del código: su punto verde decía si la conexión tenía sesión
 abierta contra SAP, porque allí la sesión la abría el navegador. Aquí vive en el servidor y se renueva
