@@ -70,6 +70,13 @@ describe('el detalle del sistema va en la tira, no en una franja', () => {
     expect(contenedor.querySelector('.cids-cabecera')).toBeNull()
   })
 
+  it('no hay título de página: repetiría el nombre de la pestaña activa', async () => {
+    await montar()
+    expect(contenedor.querySelector('.page-title')).toBeNull()
+    await pulsar('Task Monitor')
+    expect(contenedor.querySelector('.page-title')).toBeNull()
+  })
+
   it('el «ⓘ» de la pestaña activa dice dirección, organización y Sandbox, como la franja de v9', async () => {
     await montar()
     expect(detalle()).toBeNull()

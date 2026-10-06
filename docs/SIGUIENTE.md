@@ -7,6 +7,10 @@ actualiza al terminar cada sesión, y su orden es el de prioridad acordada.
 
 ## Dónde estamos
 
+- **Títulos repetidos fuera (2026-10-06, a petición del usuario)**: CI-DS Tools sin título de página
+  sobre sus pestañas; IBP Tools sin el título de Resumen, Job Templates, Job Monitor y Resource Stats
+  (queda su línea de contexto). El «Resumen Global» y el título del error de Job Templates se dejaron.
+  **Pendiente: verlo en el sitio.**
 - **Tira de conexiones con el detalle dentro (2026-10-06, a petición del usuario)**: desaparecen las
   franjas de IBP Tools (`CabeceraDeConexion`) y CI-DS Tools (`CabeceraDeCids`). La pestaña activa se
   ensancha y lleva «↗» (enlace a SAP IBP, solo IBP) y «ⓘ» con el detalle; el tooltip de cada pestaña

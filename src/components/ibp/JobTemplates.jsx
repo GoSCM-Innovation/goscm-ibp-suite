@@ -115,7 +115,7 @@ export default function JobTemplates({ connection }) {
         marginBottom: 16, flexShrink: 0, gap: isMobile ? 8 : 0,
       }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
-          <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text)' }}>Job Templates</div>
+          {/* Sin título: repetiría el nombre de la pestaña (pedido el 2026-10-06). */}
           <div style={{ fontSize: 11, color: 'var(--text2)' }}>
             {search
               ? `${sorted.length} de ${rows.length} registros`

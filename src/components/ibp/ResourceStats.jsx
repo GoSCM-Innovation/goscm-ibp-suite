@@ -103,8 +103,8 @@ export default function ResourceStats({ connection }) {
       {/* Cabecera */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 24, gap: 16, flexWrap: 'wrap' }}>
         <div>
-          <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text)' }}>Resource Stats</div>
-          <div style={{ fontSize: 11, color: 'var(--text2)', marginTop: 3 }}>
+          {/* Sin título: repetiría el nombre de la pestaña (pedido el 2026-10-06). */}
+          <div style={{ fontSize: 11, color: 'var(--text2)' }}>
             {lastRefresh ? `Actualizado ${lastRefresh.toLocaleTimeString()}` : 'Cargando...'}
           </div>
         </div>

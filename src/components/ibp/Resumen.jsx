@@ -137,8 +137,8 @@ export default function Resumen({ connection }) {
         marginBottom: 24, flexWrap: 'wrap', gap: 12,
       }}>
         <div>
-          <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text)' }}>Resumen</div>
-          <div style={{ fontSize: 11, color: 'var(--text2)', marginTop: 2 }}>
+          {/* Sin título: repetiría el nombre de la pestaña (pedido el 2026-10-06). */}
+          <div style={{ fontSize: 11, color: 'var(--text2)' }}>
             {total} jobs en el período
             {lastRefresh && !loading && (
               <span style={{ marginLeft: 8, opacity: .6 }}>· {lastRefresh.toLocaleTimeString()}</span>

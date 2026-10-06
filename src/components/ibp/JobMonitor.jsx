@@ -285,7 +285,7 @@ export default function JobMonitor({ connection }) {
         marginBottom: 16, flexShrink: 0, gap: 12, flexWrap: 'wrap',
       }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
-          <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text)' }}>Job Monitor</div>
+          {/* Sin título: repetiría el nombre de la pestaña (pedido el 2026-10-06). */}
           <div style={{ fontSize: 11, color: 'var(--text2)' }}>
             {loading ? 'Cargando…' : `${filtered.length} de ${rows.length} registros`}
             {lastRefresh && !loading && (

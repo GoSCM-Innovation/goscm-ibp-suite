@@ -416,6 +416,10 @@ a la vista, con avatar.
 > pestaña activa de la tira se ensancha (hasta 320 px), lleva el «↗» al launchpad (solo IBP) y un «ⓘ»
 > que abre el nombre con ambiente, la dirección y, en CI-DS, la organización y el ambiente. El tooltip de
 > toda pestaña lleva la dirección. Data Tools usa la misma tira sin `detalleDe`: no lleva «ⓘ».
+>
+> **Cambio del 2026-10-06, pedido por el usuario:** CI-DS Tools ya **no pinta el título de página**
+> («Task Monitor», «Resumen»…) sobre las pestañas de herramienta: repetía la pestaña activa. Las pantallas
+> conservan su línea de contexto (destino, número de ejecuciones, hora).
 
 Una diferencia con v9, escrita al lado del código: su punto verde decía si la conexión tenía sesión
 abierta contra SAP, porque allí la sesión la abría el navegador. Aquí vive en el servidor y se renueva

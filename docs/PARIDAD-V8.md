@@ -209,6 +209,7 @@ una a otra parece gratis y no lo es.
 | Reordenar columnas arrastrando la cabecera | `DataGrid.jsx` | `MasterDataViewer.jsx` |
 | Filtro por columna sobre la página | `DataGrid.jsx` | `MasterDataViewer.jsx` |
 | Pestañas según el acuerdo configurado | `SystemView.jsx` | `IbpTools.jsx` |
+| Título de cada pantalla (Resumen, Job Templates, Job Monitor, Resource Stats) | `Resumen.jsx`, `JobTemplates.jsx`, `JobMonitor.jsx`, `ResourceStats.jsx` | **Quitado** (2026-10-06, pedido por el usuario): repetía la pestaña activa. Queda la línea de contexto: «N jobs en el período», «N registros», hora |
 | Cabecera de la conexión con «Abrir en SAP IBP ↗» | `SystemView.jsx` | Ya no es una franja (2026-10-06): «↗» y «ⓘ» en la pestaña activa de `ui/ConnectionTabs.jsx` + `lib/url-de-sap.js` |
 | Aviso de auto-refresco | `JobMonitor`, `Resumen` | los dos, aquí |
 | Panel de «Requisitos Técnicos» propio | `Header.jsx` + `es.json` | `lib/requisitos-tecnicos.js` |

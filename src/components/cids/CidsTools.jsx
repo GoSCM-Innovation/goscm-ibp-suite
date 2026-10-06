@@ -179,15 +179,7 @@ export default function CidsTools() {
         detalleDe={detalleDeCids}
       />
 
-      <div className="module-head">
-        <div>
-          <div className="page-title">
-            {HERRAMIENTAS.find((una) => una.id === herramienta)?.label ?? 'CI-DS Tools'}
-          </div>
-        </div>
-
-      </div>
-
+      {/* Sin título de página: repetiría el nombre de la pestaña activa (pedido el 2026-10-06). */}
       <div className="tabs">
         {HERRAMIENTAS.filter((una) => !una.soloConVarios || destinos.length > 1).map((una) => (
           <button
