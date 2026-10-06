@@ -49,6 +49,20 @@ describe('xmlDeHoja', () => {
     expect(xml).toContain('<c r="D1" t="inlineStr" s="8">')
   })
 
+  // v7 escribe `hdrs.map(cleanXml)`: sin el emoji (que XML 1.0 no admite) y sin el espacio que dejaba,
+  // pero con el ancho medido sobre el texto crudo.
+  it('el encabezado se escribe limpio y su ancho se mide con el texto crudo', () => {
+    const hoja = { ...tabla(), encabezados: ['Estado', 'Alertas 🔴', 'PRDID', '# Plantas'], filas: [] }
+    const { xml } = xmlDeHoja(hoja)
+    expect(xml).toContain('<c r="B1" t="inlineStr" s="5"><is><t>Alertas</t></is></c>')
+    expect(xml).not.toContain('Alertas </t>')
+    // «Alertas 🔴» mide 10 (el emoji son dos unidades) + 2 = 12.
+    expect(xml).toContain('<col min="2" max="2" width="12" customWidth="1"/>')
+
+    const escritor = crearEscritorDeTabla({ color: 'FF29ABE2', encabezados: hoja.encabezados, grupos: hoja.grupos, unir: (pedazos) => pedazos.join('') })
+    expect(escritor.cerrar()[0].xml).toContain('<is><t>Alertas</t></is>')
+  })
+
   it('las filas llevan el relleno de su severidad y los números son números', () => {
     const { xml } = xmlDeHoja(tabla())
     expect(xml).toContain('<c r="A2" t="inlineStr" s="2"><is><t>⛔ Alerta</t></is></c>')

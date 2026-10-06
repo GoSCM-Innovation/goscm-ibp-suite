@@ -13,13 +13,15 @@ actualiza al terminar cada sesión, y su orden es el de prioridad acordada.
   distinto en cada página y la base local tenía 27.643 filas con solo 25.440 distintas, con el total
   intacto. Faltaban arcos de abastecimiento y de ahí salían orígenes perdidos, alertas de más y otro
   Resumen. Ahora cada tabla de `EXTRACCIONES` declara su `clave` completa y de ella sale el `$orderby`.
-  **Pendiente: repetir la corrida en la Suite y comprobar que «filas» y «claves distintas» de `sn_loc`
-  coinciden** (consola: abrir `goscm_explorer`, leer `sn_loc` y contar `PRDID|LOCFR|LOCID` distintos), y
-  que los demás hallazgos del cotejo se van. Las claves de las otras tablas se declararon por el modelo de
-  IBP, no se midieron. (2) **Diferencia de parámetros, no de código**: ZVER con «Mercadería + Mat. Prima /
-  Insumo» en v7 y solo «Insumo» en la Suite da otras reglas (gana la más permisiva). Sin resolver:
-  el orden de las filas de Prod Source Item y Resource (v7 usa el natural de SAP, la Suite ordena por
-  `SOURCEID`), el orden de los campos adicionales y el «API Base URL» (la Suite muestra «—» a propósito).
+  **Comprobado el mismo día con una corrida nueva de los dos lados**: Location y Resumen coinciden en todas
+  las cifras, Product coincide fila a fila (solo cambia el orden de dos columnas) y Prod Source Resource
+  coincide como conjunto. Las claves de las otras tablas se declararon por el modelo de IBP, no se midieron. (2) **Diferencia de parámetros, no de código**: ZVER con «Mercadería + Mat. Prima /
+  Insumo» en v7 y solo «Insumo» en la Suite da otras reglas (gana la más permisiva). Ese
+  ajuste quedó igual en la segunda corrida. **Lo que sigue distinto, sin valores de por medio**: el orden de las
+  filas de Prod Source Item y Resource (v7 usa el natural de SAP, que no se puede reproducir con una paginación
+  estable; la Suite ordena por clave), «Reemplaza a» en 3 filas por la misma razón, el orden de los campos
+  adicionales (en cada app es el de selección) y el «API Base URL» (la Suite muestra «—» a propósito).
+  Corregido el encabezado «Alertas»/«Advertencias» del Resumen, que llevaba un espacio de más.
 
 - **CI-DS Tools entero igualado a v9 (2026-10-05)**: Integration Explorer, Mapping Dataflow Generator,
   Resumen Global, Resumen, Projects & Tasks, Task Monitor, Orquestaciones y el marco (cabecera, pestañas,

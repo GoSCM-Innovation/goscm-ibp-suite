@@ -17,7 +17,7 @@
 
 import JSZip from 'jszip'
 
-import { COLORES, NA_DASH, rellenoDeSeveridad } from '../../core/ibp/analisis-hojas.js'
+import { COLORES, NA_DASH, limpiarXml, rellenoDeSeveridad } from '../../core/ibp/analisis-hojas.js'
 import { cellRef } from './xlsx.js'
 
 // Los índices de `cellXfs` de `_styles()`. El orden tiene que coincidir con `ESTILOS_XML`.
@@ -127,6 +127,7 @@ function filasDeLaHoja(hoja) {
     })
     filas.push({
       celdas: hoja.encabezados,
+      texto: hoja.encabezados.map(limpiarXml),
       xfs,
       xfFila: XF_ENCABEZADO,
       alto: 22,
@@ -172,7 +173,10 @@ export const LIMITE_DE_FILAS = 900000
 /** `<row>` de una fila ya descrita, y las notas de sus celdas. `f` es la posición (desde 0) dentro de la hoja. */
 function filaXml(fila, f) {
   const partes = [`<row r="${f + 1}"${fila.alto ? ` ht="${fila.alto}" customHeight="1"` : ''}>`]
-  fila.celdas.forEach((v, ci) => {
+  // Los encabezados se escriben limpios —sin emoji ni espacios de las puntas, `hdrs.map(cleanXml)` de v7— pero
+  // el ancho de la columna se mide con el texto crudo, como en v7 (`colW` sale de `hdrs`).
+  const escritas = fila.texto ?? fila.celdas
+  escritas.forEach((v, ci) => {
     const xf = fila.xfs && fila.xfs[ci] != null ? fila.xfs[ci] : fila.xfFila
     partes.push(celdaXml(v, cellRef(f, ci), xf))
   })
@@ -264,6 +268,7 @@ export function crearEscritorDeTabla({
 }) {
   const filaDeEncabezado = {
     celdas: encabezados,
+    texto: encabezados.map(limpiarXml),
     xfs: encabezados.map((_, i) => {
       const grupo = grupos[i]
       const argb = grupo ? (COLORES.GRUPO[grupo] || COLORES.GOLD) : COLORES.GOLD
