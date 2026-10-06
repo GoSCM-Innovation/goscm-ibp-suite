@@ -1,4 +1,4 @@
-// El armazón: barra superior, menú lateral y el contenido del módulo activo.
+// El armazón: barra superior (solo la marca), menú lateral con la sesión y el contenido del módulo activo.
 //
 // El menú es el de v7, con un nivel más. En v7 las seis aplicaciones colgaban directamente del menú
 // lateral porque v7 ERA un solo producto; aquí conviven tres, así que las aplicaciones cuelgan de su
@@ -94,20 +94,6 @@ export default function Shell({ user, modules, theme, onToggleTheme, onSignOut, 
           {/* El logo ya dice GoSCM, así que al lado va solo "Suite": junto se lee GoSCM Suite. */}
           <span>Suite</span>
         </div>
-        <div className="header-sep" />
-        <span className="header-context">{user.name || user.email}</span>
-        {user.isPlatformAdmin && <span className="tag tag-accent">Plataforma</span>}
-
-        <div style={{ flex: 1 }} />
-
-        <button
-          className="btn btn-ghost btn-sm"
-          onClick={onToggleTheme}
-          title={theme === 'dark' ? 'Cambiar a claro' : 'Cambiar a oscuro'}
-        >
-          {theme === 'dark' ? '☀️' : '🌙'}
-        </button>
-        <button className="btn btn-ghost btn-sm" onClick={onSignOut}>Salir</button>
       </header>
 
       <div className="layout">
@@ -129,6 +115,10 @@ export default function Shell({ user, modules, theme, onToggleTheme, onSignOut, 
               const abierto = moduleId === module.id && !bloqueado
               const plegable = Boolean(module.apps?.length) && !bloqueado
               const plegado = plegable && plegados.has(module.id) && !minimizado
+              // Las aplicaciones se ven según la flecha, estés o no dentro del módulo. Minimizado no
+              // hay flecha y cada aplicación es un icono: ahí solo las del módulo abierto, o el menú
+              // se llenaría de iconos sueltos.
+              const verApps = !bloqueado && (minimizado ? abierto : !plegado)
               return (
                 <Fragment key={module.id}>
                   <div className={plegable ? 'nav-rama' : undefined}>
@@ -158,10 +148,10 @@ export default function Shell({ user, modules, theme, onToggleTheme, onSignOut, 
                     )}
                   </div>
 
-                  {/* Las aplicaciones del módulo abierto. El candado de cada una NO dice «no
+                  {/* Las aplicaciones del módulo desplegado. El candado de cada una NO dice «no
                       contratada» —el módulo entero ya lo está— sino «hace falta conectarse»: es el
                       `req-conn` de v7. */}
-                  {abierto && !plegado && module.apps?.map((app) => {
+                  {verApps && module.apps?.map((app) => {
                     const sinConexion = app.requiereConexion && !conectado
                     return (
                       <button
@@ -203,6 +193,25 @@ export default function Shell({ user, modules, theme, onToggleTheme, onSignOut, 
             <button className="nav-item" onClick={() => setAbrirRequisitos(true)}>
               <span className="nav-icon">⚙</span>
               <span className="nav-label">Requisitos técnicos</span>
+            </button>
+
+            {/* La sesión vive aquí y no en la cabecera (pedido el 2026-10-06): la barra de arriba
+                se quedó solo con la marca para no gastar altura. */}
+            <div className="sidebar-usuario">
+              <span className="sidebar-usuario-nombre">{user.name || user.email}</span>
+              {user.isPlatformAdmin && <span className="tag tag-accent">Plataforma</span>}
+            </div>
+            <button
+              className="nav-item"
+              onClick={onToggleTheme}
+              title={theme === 'dark' ? 'Cambiar a claro' : 'Cambiar a oscuro'}
+            >
+              <span className="nav-icon">{theme === 'dark' ? '☀️' : '🌙'}</span>
+              <span className="nav-label">{theme === 'dark' ? 'Tema claro' : 'Tema oscuro'}</span>
+            </button>
+            <button className="nav-item" onClick={onSignOut} title="Cerrar sesión">
+              <span className="nav-icon">🚪</span>
+              <span className="nav-label">Salir</span>
             </button>
           </div>
         </nav>

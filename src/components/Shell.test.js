@@ -86,9 +86,29 @@ describe('el menú lateral', () => {
     expect(nombres.indexOf('Data Tools')).toBeLessThan(nombres.indexOf('Production Visualizer'))
   })
 
-  it('no despliega las aplicaciones de un módulo que no está abierto', async () => {
+  it('despliega las aplicaciones aunque se esté en otro módulo', async () => {
+    // Pedido el 2026-10-06: la flecha manda, no el módulo en el que se está.
     await montar({ modules: ['explorer', 'cids'], route: 'cids' })
+    expect(enElMenu()).toContain('Production Visualizer')
+  })
+
+  it('en otro módulo, la flecha las pliega y las vuelve a desplegar', async () => {
+    await montar({ modules: ['explorer', 'cids'], route: 'admin' })
+    const flecha = () => contenedor.querySelector('.nav-plegar')
+    const pulsar = (nodo) => act(async () => {
+      nodo.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+    })
+
+    await pulsar(flecha())
     expect(enElMenu()).not.toContain('Production Visualizer')
+    await pulsar(flecha())
+    expect(enElMenu()).toContain('Production Visualizer')
+  })
+
+  it('minimizado, solo se ven las aplicaciones del módulo abierto', async () => {
+    localStorage.setItem('menu_minimizado', '1')
+    await montar({ modules: ['explorer', 'cids'], route: 'cids' })
+    expect(contenedor.querySelectorAll('.nav-app')).toHaveLength(0)
   })
 
   it('no despliega las aplicaciones de un módulo no contratado', async () => {
@@ -96,6 +116,37 @@ describe('el menú lateral', () => {
     await montar({ modules: ['cids'], route: 'explorer' })
     expect(enElMenu()).toContain('Data Tools')
     expect(enElMenu()).not.toContain('Production Visualizer')
+  })
+})
+
+describe('la sesión está en el menú, no en la cabecera', () => {
+  it('la cabecera lleva solo la marca', async () => {
+    await montar()
+    const cabecera = contenedor.querySelector('.header')
+    expect(cabecera.textContent.trim()).toBe('Suite')
+    expect(cabecera.querySelector('button')).toBeNull()
+  })
+
+  it('el menú muestra quién es, el cambio de tema y «Salir»', async () => {
+    const salir = vi.fn()
+    contenedor = document.createElement('div')
+    document.body.appendChild(contenedor)
+    await act(async () => {
+      raiz = createRoot(contenedor)
+      raiz.render(createElement(Shell, {
+        user: { ...USUARIO, isPlatformAdmin: true }, modules: ['explorer'], theme: 'dark',
+        onToggleTheme: () => {}, onSignOut: salir, route: 'explorer', onNavigate: () => {},
+      }))
+    })
+    const menu = contenedor.querySelector('.sidebar')
+    expect(menu.textContent).toContain('Quien sea')
+    expect(menu.textContent).toContain('Plataforma')
+    expect(enElMenu()).toContain('Tema claro')
+
+    await act(async () => {
+      itemDelMenu('Salir').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+    })
+    expect(salir).toHaveBeenCalledTimes(1)
   })
 })
 

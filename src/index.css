@@ -40,7 +40,7 @@
   --font:   'DM Sans', sans-serif;
   --mono:   'JetBrains Mono', monospace;
   --sidebar-w: 252px;
-  --header-h:  52px;
+  --header-h:  44px;
   --radius:    10px;
 }
 
@@ -244,10 +244,9 @@ a { color: var(--cyan); }
   z-index: 50;
 }
 .header-brand { align-items: center; display: flex; font-weight: 700; gap: 12px; letter-spacing: -.01em; }
-.header-logo { flex-shrink: 0; height: 30px; object-fit: contain; width: auto; }
+.header-logo { flex-shrink: 0; height: 26px; object-fit: contain; width: auto; }
 .login-logo { display: block; height: 40px; object-fit: contain; width: auto; }
 .header-sep { background: var(--divider); height: 20px; width: 1px; }
-.header-context { color: var(--text2); font-size: 12px; }
 
 /* ─── Barra lateral ───────────────────────────────────────── */
 
@@ -3014,7 +3013,12 @@ a { color: var(--cyan); }
 /* El menú lateral crece con las aplicaciones desplegadas, así que se desplaza; el pie se queda
    abajo. */
 .sidebar-nav { display: flex; flex-direction: column; gap: 3px; min-height: 0; overflow-y: auto; }
-.sidebar-footer { margin-top: auto; padding-top: 8px; border-top: 1px solid var(--border); }
+.sidebar-footer { display: flex; flex-direction: column; gap: 3px; margin-top: auto; padding-top: 8px; border-top: 1px solid var(--border); }
+/* Quién tiene la sesión abierta. Minimizado y en móvil solo quedan los iconos de tema y salir. */
+.sidebar-usuario { align-items: center; color: var(--text2); display: flex; flex-wrap: wrap; font-size: 12px; gap: 6px; margin-top: 6px; padding: 6px 10px 2px; }
+.sidebar-usuario-nombre { overflow-wrap: anywhere; }
+.sidebar.minimizado .sidebar-usuario { display: none; }
+@media (max-width: 720px) { .sidebar-usuario { display: none; } }
 
 /* ── La tira de pestañas de conexiones ─────────────────────────────────────────────────────────
    Portada de `ConnectionTabs.jsx` de v9, con sus mismas medidas: 38px de alto, 140 a 220 de ancho
