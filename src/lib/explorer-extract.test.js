@@ -76,6 +76,17 @@ describe('extraer', () => {
     expect(fetchMasterPage.mock.calls[0][1].orderby).toEqual(['SOURCEID', 'PRDID'])
   })
 
+  // Ordenar por los dos primeros campos del `$select` dejaba empatadas las filas que los comparten.
+  it('pagina por la clave completa que declara el plan, no por los dos primeros campos', async () => {
+    conFilas(1)
+    await extraer({
+      conexionId: CONEXION,
+      destino: DESTINO,
+      plan: { pasos: [paso({ tabla: 'sn_loc', select: ['LOCID', 'LOCFR', 'PRDID'], orderby: ['LOCID', 'LOCFR', 'PRDID'] })] },
+    })
+    expect(fetchMasterPage.mock.calls[0][1].orderby).toEqual(['LOCID', 'LOCFR', 'PRDID'])
+  })
+
   // «Bajé 8.000 y guardé 5.100» es información; «guardé 5.100» a secas parece un error.
   it('descarta las inválidas y dice cuántas eran', async () => {
     conFilas(4, (i) => ({ SOURCEID: `S${i}`, PRDID: `P${i}`, PINVALID: i % 2 === 0 ? 'X' : '' }))

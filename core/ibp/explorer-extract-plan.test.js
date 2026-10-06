@@ -48,6 +48,46 @@ describe('descartarInvalidas', () => {
   })
 })
 
+// El `$orderby` con que se pagina tiene que identificar UNA fila. Con una parte de la clave las filas que
+// la comparten quedan empatadas, SAP las desempata distinto en cada petición y dos páginas se solapan y
+// dejan huecos con el total intacto: Location Source bajó 27.643 filas con solo 25.440 distintas.
+describe('la clave con que se pagina', () => {
+  const claveDe = (tabla) => EXTRACCIONES.find((una) => una.tabla === tabla).clave
+
+  it('toda tabla declara una clave, y sus campos se piden', () => {
+    for (const una of EXTRACCIONES) {
+      expect(una.clave?.length, una.tabla).toBeGreaterThan(0)
+      for (const campo of una.clave) expect(una.campos, `${una.tabla}.${campo}`).toContain(campo)
+    }
+  })
+
+  it('Location Source se ordena también por PRDID', () => {
+    expect(claveDe('sn_loc')).toEqual(['LOCID', 'LOCFR', 'PRDID'])
+  })
+
+  it('Customer Source y los sustitutos incluyen lo que antes se quedaba fuera', () => {
+    expect(claveDe('sn_cust')).toContain('CUSTID')
+    expect(claveDe('bom_psisub')).toContain('SPRDFR')
+  })
+
+  it('el plan trae el orden con los nombres de este tenant', () => {
+    const { pasos } = planificarExtraccion({
+      efectivo: todoResuelto(),
+      mapa: { GIDLOCATION: { PRDID: 'PRODUCTO' } },
+    })
+    expect(pasos.find((uno) => uno.tabla === 'sn_loc').orderby).toEqual(['LOCID', 'LOCFR', 'PRODUCTO'])
+  })
+
+  it('si el tenant no tiene un campo de la clave, lo dice', () => {
+    const { pasos, avisos } = planificarExtraccion({
+      efectivo: todoResuelto(),
+      mapa: { GIDLOCATION: { PRDID: NO_EXISTE } },
+    })
+    expect(pasos.find((uno) => uno.tabla === 'sn_loc')).toMatchObject({ ordenIncompleto: true })
+    expect(avisos.join(' ')).toMatch(/Arcos entre ubicaciones.*perder filas/)
+  })
+})
+
 describe('planificarExtraccion', () => {
   it('resuelve la tabla y los campos de cada paso', () => {
     const { pasos } = planificarExtraccion({ efectivo: todoResuelto() })

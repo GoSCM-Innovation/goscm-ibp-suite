@@ -16,7 +16,7 @@
 // repiten la descarga siempre. Y se escribe en un registro las mismas líneas que v7 —`[GET] …` antes de
 // cada petición y `✓ Location Source: N registros` después—, que es lo que se ve tras «Ver logs técnicos».
 
-import { descartarInvalidas, planificarExtraccion } from '../../core/ibp/explorer-extract-plan.js'
+import { descartarInvalidas, ordenDe, planificarExtraccion } from '../../core/ibp/explorer-extract-plan.js'
 import { normalizarFilas } from '../../core/ibp/explorer-fields.js'
 import { indexarMaestro } from '../../core/ibp/bom-tree.js'
 import { fetchMasterRows } from './ibp-master-data.js'
@@ -51,8 +51,9 @@ async function pedir({ conexionId, destino, paso, mapa, condiciones, signal }) {
       select: paso.select,
       condiciones,
       // El orden estable es obligatorio al paginar: sin él, dos ventanas sobre una tabla que alguien
-      // está tocando se solapan y dejan huecos.
-      orderby: paso.select.slice(0, 2),
+      // está tocando se solapan y dejan huecos. Y la clave COMPLETA de la fila, no los dos primeros
+      // campos del `$select`, que dejan empatadas las filas que los comparten.
+      orderby: ordenDe(paso),
       skip: desde,
       top: FILAS_POR_PAGINA,
       signal,

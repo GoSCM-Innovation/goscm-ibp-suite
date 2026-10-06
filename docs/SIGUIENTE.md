@@ -3,9 +3,23 @@
 Este archivo es el punto de entrada cuando la instrucción es **«continuemos»**. Se lee primero, se
 actualiza al terminar cada sesión, y su orden es el de prioridad acordada.
 
-Última actualización: **2026-10-05**.
+Última actualización: **2026-10-06**.
 
 ## Dónde estamos
+
+- **Production Analyzer cotejado celda a celda contra v7 (2026-10-06)**, mismo tenant y parámetros. Dos
+  hallazgos. (1) **Defecto corregido**: la descarga paginaba por los dos primeros campos del `$select`, y
+  en Location Source (`LOCID, LOCFR`, sin `PRDID`) miles de filas quedaban empatadas: SAP las desempataba
+  distinto en cada página y la base local tenía 27.643 filas con solo 25.440 distintas, con el total
+  intacto. Faltaban arcos de abastecimiento y de ahí salían orígenes perdidos, alertas de más y otro
+  Resumen. Ahora cada tabla de `EXTRACCIONES` declara su `clave` completa y de ella sale el `$orderby`.
+  **Pendiente: repetir la corrida en la Suite y comprobar que «filas» y «claves distintas» de `sn_loc`
+  coinciden** (consola: abrir `goscm_explorer`, leer `sn_loc` y contar `PRDID|LOCFR|LOCID` distintos), y
+  que los demás hallazgos del cotejo se van. Las claves de las otras tablas se declararon por el modelo de
+  IBP, no se midieron. (2) **Diferencia de parámetros, no de código**: ZVER con «Mercadería + Mat. Prima /
+  Insumo» en v7 y solo «Insumo» en la Suite da otras reglas (gana la más permisiva). Sin resolver:
+  el orden de las filas de Prod Source Item y Resource (v7 usa el natural de SAP, la Suite ordena por
+  `SOURCEID`), el orden de los campos adicionales y el «API Base URL» (la Suite muestra «—» a propósito).
 
 - **CI-DS Tools entero igualado a v9 (2026-10-05)**: Integration Explorer, Mapping Dataflow Generator,
   Resumen Global, Resumen, Projects & Tasks, Task Monitor, Orquestaciones y el marco (cabecera, pestañas,

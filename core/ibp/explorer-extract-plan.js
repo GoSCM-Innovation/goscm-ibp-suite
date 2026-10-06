@@ -28,6 +28,12 @@ export function descartarInvalidas(filas, campo) {
   return (filas ?? []).filter((una) => una[campo] !== MARCA_DE_INVALIDA)
 }
 
+/**
+ * Con qué se ordena al paginar: la clave completa que declaró el plan. Un paso sin ella —armado a
+ * mano— se ordena por todo el `$select`, que desempata más que cualquier prefijo.
+ */
+export const ordenDe = (paso) => (paso.orderby?.length ? paso.orderby : paso.select)
+
 /** El valor de un campo como texto comparable. */
 const clave = (valor) => (valor === null || valor === undefined ? '' : String(valor).trim())
 
@@ -76,6 +82,13 @@ export function clavesDe(filas, campo) {
  * `papel` es el que resuelve `explorer-entities.js`; `campos` son los CANÓNICOS y el mapa los traduce
  * a los de este tenant. `descartarSi` es el campo de invalidez, si la tabla tiene uno.
  *
+ * `clave` son los campos CANÓNICOS que identifican UNA fila de la tabla, y de ellos sale el `$orderby`
+ * con que se pagina. Tienen que ser la clave COMPLETA: con una parte, las filas que comparten esos
+ * campos quedan empatadas, SAP las desempata distinto en cada petición y dos páginas se solapan y dejan
+ * huecos con el total intacto. Medido en el tenant de pruebas: Location Source se ordenaba por
+ * `LOCID, LOCFR` (sin `PRDID`) y bajaba 27.643 filas de las cuales solo 25.440 eran distintas; las
+ * 2.203 que faltaban eran arcos de abastecimiento, y con ellos desaparecían orígenes del informe.
+ *
  * `esencial` distingue lo que hace inútil al módulo de lo que solo lo empobrece: sin la cabecera de
  * receta no hay árbol que dibujar; sin la validez de los componentes el árbol se dibuja igual, solo
  * que sin fechas. Es lo que permite decir "se puede seguir, pero sin esto" en vez de parar todo.
@@ -96,6 +109,7 @@ export const EXTRACCIONES = Object.freeze([
     papel: 'header',
     etiqueta: 'Cabecera de receta',
     campos: ['PRDID', 'SOURCEID', 'LOCID', 'SOURCETYPE', 'OUTPUTCOEFFICIENT', 'PINVALID'],
+    clave: ['PRDID', 'SOURCEID', 'LOCID'],
     descartarSi: 'PINVALID',
     esencial: true,
   },
@@ -105,6 +119,7 @@ export const EXTRACCIONES = Object.freeze([
     papel: 'item',
     etiqueta: 'Componentes de la receta',
     campos: ['SOURCEID', 'PRDID', 'COMPONENTCOEFFICIENT', 'ISALTITEM'],
+    clave: ['SOURCEID', 'PRDID'],
     atadoA: { tabla: 'bom_psh', campo: 'SOURCEID' },
     esencial: true,
   },
@@ -114,6 +129,7 @@ export const EXTRACCIONES = Object.freeze([
     papel: 'itemValidity',
     etiqueta: 'Validez de los componentes',
     campos: ['SOURCEID', 'PRDID', 'COMPVALIDFR', 'COMPVALIDTO'],
+    clave: ['SOURCEID', 'PRDID', 'COMPVALIDFR'],
     atadoA: { tabla: 'bom_psh', campo: 'SOURCEID' },
     esencial: false,
   },
@@ -123,6 +139,7 @@ export const EXTRACCIONES = Object.freeze([
     papel: 'itemSub',
     etiqueta: 'Sustitutos de componentes',
     campos: ['SOURCEID', 'PRDFR', 'SPRDFR'],
+    clave: ['SOURCEID', 'PRDFR', 'SPRDFR'],
     esencial: false,
   },
   {
@@ -131,6 +148,7 @@ export const EXTRACCIONES = Object.freeze([
     papel: 'resource',
     etiqueta: 'Recursos de la receta',
     campos: ['SOURCEID', 'RESID'],
+    clave: ['SOURCEID', 'RESID'],
     atadoA: { tabla: 'bom_psh', campo: 'SOURCEID' },
     esencial: false,
   },
@@ -140,6 +158,7 @@ export const EXTRACCIONES = Object.freeze([
     papel: 'product',
     etiqueta: 'Maestro de productos',
     campos: ['PRDID', 'PRDDESCR', 'MATTYPEID', 'UOMID', 'UOMDESCR'],
+    clave: ['PRDID'],
     // También lo baja el grupo de red: el analizador de la red clasifica por tipo de material y el
     // visualizador enseña la descripción. En v7 la descarga de la red traía su propio Product.
     tambienPara: ['red'],
@@ -154,6 +173,7 @@ export const EXTRACCIONES = Object.freeze([
     // proveedores y viene vacío para el resto. Sin él, la red de suministro no puede dibujar de dónde
     // entra la materia prima, que es media red.
     campos: ['LOCID', 'LOCDESCR', 'LOCTYPE', 'LOCVALID'],
+    clave: ['LOCID'],
     descartarSi: 'LOCVALID',
     // Igual que el maestro de productos: la red lo lee entero por cursor y sin `LOCTYPE` no puede
     // dibujar de dónde entra la materia prima.
@@ -169,6 +189,7 @@ export const EXTRACCIONES = Object.freeze([
     // NO tiene el tipo de recurso: comprobado contra dos tenants, el tipo vive en `RESOURCETYPE` de
     // Resource Location, porque en IBP un mismo recurso puede ser de un tipo distinto en cada planta.
     campos: ['RESID', 'RESDESCR'],
+    clave: ['RESID'],
     esencial: false,
   },
   {
@@ -180,6 +201,7 @@ export const EXTRACCIONES = Object.freeze([
     // ver un recurso ASIGNADO a una planta que ninguna receta usa. `bom_psr` solo trae los recursos
     // que ya están en una receta, así que por definición no puede enseñar los que sobran.
     campos: ['RESID', 'LOCID', 'RESOURCETYPE'],
+    clave: ['RESID', 'LOCID'],
     esencial: false,
   },
 
@@ -190,6 +212,7 @@ export const EXTRACCIONES = Object.freeze([
     papel: 'location',
     etiqueta: 'Arcos entre ubicaciones',
     campos: ['LOCID', 'LOCFR', 'PRDID', 'TLEADTIME', 'TINVALID'],
+    clave: ['LOCID', 'LOCFR', 'PRDID'],
     descartarSi: 'TINVALID',
     esencial: true,
   },
@@ -199,6 +222,7 @@ export const EXTRACCIONES = Object.freeze([
     papel: 'customer',
     etiqueta: 'Arcos hacia clientes',
     campos: ['LOCID', 'PRDID', 'CUSTID', 'CLEADTIME', 'CINVALID'],
+    clave: ['LOCID', 'PRDID', 'CUSTID'],
     descartarSi: 'CINVALID',
     esencial: true,
   },
@@ -208,6 +232,7 @@ export const EXTRACCIONES = Object.freeze([
     papel: 'sourceProd',
     etiqueta: 'Recetas por planta',
     campos: ['SOURCEID', 'PRDID', 'LOCID', 'PLEADTIME', 'PRATIO', 'PINVALID'],
+    clave: ['SOURCEID', 'PRDID', 'LOCID'],
     descartarSi: 'PINVALID',
     esencial: true,
   },
@@ -217,6 +242,7 @@ export const EXTRACCIONES = Object.freeze([
     papel: 'sourceItem',
     etiqueta: 'Componentes de la receta',
     campos: ['SOURCEID', 'PRDID', 'COMPONENTCOEFFICIENT'],
+    clave: ['SOURCEID', 'PRDID'],
     // La nota de v7 en este mismo paso decía «Solo SOURCEIDs activos en PSH».
     atadoA: { tabla: 'sn_plant', campo: 'SOURCEID' },
     esencial: false,
@@ -227,6 +253,7 @@ export const EXTRACCIONES = Object.freeze([
     papel: 'locProd',
     etiqueta: 'Producto por ubicación',
     campos: ['LOCID', 'PRDID'],
+    clave: ['LOCID', 'PRDID'],
     esencial: false,
   },
   {
@@ -235,6 +262,7 @@ export const EXTRACCIONES = Object.freeze([
     papel: 'custProd',
     etiqueta: 'Producto por cliente',
     campos: ['CUSTID', 'PRDID'],
+    clave: ['CUSTID', 'PRDID'],
     esencial: false,
   },
   {
@@ -245,6 +273,7 @@ export const EXTRACCIONES = Object.freeze([
     // Sin la descripción, la red enseña códigos de cliente. Un mapa de a quién le vendes en el que
     // los clientes son números no sirve para hablarlo con nadie.
     campos: ['CUSTID', 'CUSTDESCR', 'CUSTVALID'],
+    clave: ['CUSTID'],
     descartarSi: 'CUSTVALID',
     esencial: false,
   },
@@ -367,6 +396,7 @@ export function planificarExtraccion({
         ...una,
         entidad: null,
         select: [],
+        orderby: [],
         omitidos: [],
         extras: [],
         sePuede: false,
@@ -390,6 +420,11 @@ export function planificarExtraccion({
     const suyos = [...new Set(extras?.[una.tabla] ?? [])].filter((campo) => !base.includes(campo))
     const select = [...base, ...suyos]
 
+    // El orden con que se pagina: la clave completa, con los nombres de ESTE tenant. Si al tenant le
+    // falta alguno de sus campos, el orden queda con empates posibles y se avisa más abajo, porque en
+    // ese caso la descarga puede perder filas sin que el total lo delate.
+    const orderby = armarSelect(mapa, entidad, una.clave)
+
     // Los campos que este tenant no tiene. No impiden bajar: se avisa de qué se pierde con ellos.
     const omitidos = campos.filter((campo) => campoReal(mapa, entidad, campo) === null)
 
@@ -397,6 +432,8 @@ export function planificarExtraccion({
       ...una,
       entidad,
       select,
+      orderby,
+      ordenIncompleto: orderby.length < (una.clave?.length ?? 0),
       omitidos,
       extras: suyos,
       // La marca de invalidez solo se aplica si el campo existe de verdad; si no, no hay nada que
@@ -423,6 +460,9 @@ export function planificarExtraccion({
         .map((uno) => `${uno.etiqueta}: ${uno.motivo}${uno.esencial ? ' Sin esto el módulo no funciona.' : ' Se puede seguir sin esto.'}`),
       ...pasos.filter((uno) => uno.sePuede && uno.omitidos.length > 0)
         .map((uno) => `${uno.etiqueta}: este tenant no tiene ${uno.omitidos.join(', ')}. Se baja sin esos campos.`),
+      ...pasos.filter((uno) => uno.sePuede && uno.ordenIncompleto)
+        .map((uno) => `${uno.etiqueta}: este tenant no tiene todos los campos que identifican una fila (${uno.clave.join(', ')}), `
+          + 'así que el orden con que se baja puede tener empates y la descarga puede perder filas sin avisar.'),
     ],
   }
 }

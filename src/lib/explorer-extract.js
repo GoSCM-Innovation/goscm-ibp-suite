@@ -16,6 +16,7 @@ import {
   clavesDe,
   clavesQueOtrosNecesitan,
   descartarInvalidas,
+  ordenDe,
   soloDeClavesVivas,
 } from '../../core/ibp/explorer-extract-plan.js'
 import { normalizarFilas } from '../../core/ibp/explorer-fields.js'
@@ -67,7 +68,9 @@ async function bajarPaso({ conexionId, destino, paso, mapa, onProgreso, cancelad
       select: paso.select,
       // El orden estable es obligatorio al paginar: sin él, dos ventanas sobre una tabla que alguien
       // está tocando se solapan y dejan huecos, y aquí un hueco es un producto que no se analiza.
-      orderby: paso.select.slice(0, 2),
+      // Y tiene que ser la CLAVE COMPLETA de la fila (`paso.orderby`, del plan): ordenar por los dos
+      // primeros campos del `$select` dejaba empatadas miles de filas de Location Source.
+      orderby: ordenDe(paso),
       skip: desde,
       top: FILAS_POR_PAGINA,
       // El total viene en la MISMA respuesta que la primera página, así que saber cuántas filas hay

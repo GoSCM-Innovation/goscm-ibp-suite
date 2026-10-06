@@ -58,9 +58,9 @@ export const TABLAS_REQUERIDAS_RED = Object.freeze(TABLAS_QUE_BAJA_RED.filter((t
  * SAP se le pida EXACTAMENTE lo que pedía v7 y nada más. Las listas de campos obligatorios y ocultos de
  * cada entidad son `EF_MAND_VISIBLE.sn` y `EF_MAND_HIDDEN.sn`; los campos adicionales del paso ④ se suman.
  *
- * Es el MISMO CONJUNTO de campos que pedía v7, no el mismo orden en dos tablas: en `sn_loc` y `sn_cust` van
- * en el orden de `EXTRACCIONES`, porque de los dos primeros campos sale el `$orderby` con que se pagina y es
- * el que ya usan las demás descargas de la suite (SAP no distingue el orden del `$select`).
+ * Es el MISMO CONJUNTO de campos que pedía v7, no el mismo orden en dos tablas (SAP no distingue el orden
+ * del `$select`). El `$orderby` con que se pagina NO sale de aquí sino de la `clave` de cada tabla en
+ * `EXTRACCIONES`.
  */
 export const CAMPOS_DE_RED = Object.freeze({
   sn_loc: ['LOCID', 'LOCFR', 'PRDID', 'TLEADTIME', 'TINVALID'],
