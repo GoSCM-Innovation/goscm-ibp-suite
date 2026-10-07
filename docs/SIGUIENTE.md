@@ -3,9 +3,21 @@
 Este archivo es el punto de entrada cuando la instrucción es **«continuemos»**. Se lee primero, se
 actualiza al terminar cada sesión, y su orden es el de prioridad acordada.
 
-Última actualización: **2026-10-06**.
+Última actualización: **2026-10-07**.
 
 ## Dónde estamos
+
+- **Network Analyzer cotejado contra v7 (2026-10-07)**, mismo tenant: Estadísticas, Location y Customer
+  idénticas byte a byte; Location Source y Customer Source idénticas como conjunto de filas. Dos
+  correcciones. (1) El orden de los campos de la `clave` de `EXTRACCIONES` es ahora el orden natural de SAP
+  que veía v7, medido en su Excel: Location Source (`LOCFR, LOCID, PRDID`), Customer Source (`CUSTID, LOCID,
+  PRDID`) y recurso de la receta (`RESID, SOURCEID`). Con eso las hojas salen en el mismo orden de filas y
+  «Clientes (códigos)» de Product (150 filas) en el mismo orden. (2) El recorte de encabezados del Excel
+  (`limpiarEncabezados`) es del Production Analyzer y NO del Network Analyzer: v7 deja «Alertas » con
+  espacio en uno y «Alertas» en el otro. **Pendiente: repetir las dos corridas y comprobar el orden.**
+  Si SAP ordena con otra intercalación al pedir `$orderby` que en su orden natural, saldría distinto solo
+  en identificadores con minúsculas (en Customer Source hay `c26952846`). **Sin resolver**: el orden de
+  Prod Source Item (v7 mezcla otras reglas que no se dedujeron) y el «API Base URL» («—» a propósito).
 
 - **Un solo criterio para elegir de una lista (2026-10-06, a petición del usuario)**: hasta 12
   opciones, el control de siempre; más, la ventana con buscador. El número vive en

@@ -66,6 +66,16 @@ async function correr(entrada, extra = {}) {
   })
 }
 
+describe('analizarRed — encabezados del Excel', () => {
+  // `makeGroup` de v7 hace `ws.addRow(headers)` sin limpiar: «Alertas 🔴» queda «Alertas » en el Resumen.
+  it('ninguna hoja pide limpiar los encabezados', async () => {
+    const informe = await correr(casos.casos[0].entrada)
+    const tablas = informe.hojas.filter((una) => una.tipo === 'tabla')
+    expect(tablas.length).toBeGreaterThan(1)
+    expect(tablas.some((una) => una.limpiarEncabezados)).toBe(false)
+  })
+})
+
 describe('analizarRed — contra lo que escribe v7', () => {
   for (const caso of casos.casos) {
     describe(caso.nombre, () => {

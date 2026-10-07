@@ -104,9 +104,14 @@ export function codigos(coleccion) {
  * `notas` es el comentario que Excel enseña al pasar el ratón por el encabezado. `conEstado` dice si
  * la primera columna es el Estado: en la hoja «Tipos Excluidos» no lo es, y la vista web no debe
  * sobrescribir su primera columna con la severidad.
+ *
+ * `limpiarEncabezados` dice si el Excel escribe los encabezados con `limpiarXml` (sin emoji ni espacios de
+ * las puntas). Lo hace el Production Analyzer (`hdrs.map(cleanXml)` en su `makeSheet`) y NO el Network
+ * Analyzer (`ws.addRow(headers)` en su `makeGroup`), así que «Alertas 🔴» sale «Alertas» en uno y
+ * «Alertas » —con el espacio que deja el emoji— en el otro. Es una rareza de v7 y se conserva.
  */
 export function crearHojaDeTabla({
-  nombre, color, encabezados, notas = [], grupos = [], conEstado = true,
+  nombre, color, encabezados, notas = [], grupos = [], conEstado = true, limpiarEncabezados = false,
 }) {
   const hoja = {
     tipo: 'tabla',
@@ -116,6 +121,7 @@ export function crearHojaDeTabla({
     notas: notas.slice(),
     grupos: grupos.slice(),
     conEstado,
+    limpiarEncabezados,
     filas: [],
     extras: [],
     total: 0,

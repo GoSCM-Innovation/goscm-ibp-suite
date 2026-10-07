@@ -89,6 +89,13 @@ export function clavesDe(filas, campo) {
  * `LOCID, LOCFR` (sin `PRDID`) y bajaba 27.643 filas de las cuales solo 25.440 eran distintas; las
  * 2.203 que faltaban eran arcos de abastecimiento, y con ellos desaparecían orígenes del informe.
  *
+ * El ORDEN de los campos de la clave también cuenta, aunque no cambie qué filas llegan: v7 no pedía
+ * `$orderby`, y lo que recibía era el orden natural de SAP, que sus hojas reproducen fila a fila. Medido
+ * contra una corrida real de v7, ese orden es (`LOCFR`, `LOCID`, `PRDID`) en Location Source,
+ * (`CUSTID`, `LOCID`, `PRDID`) en Customer Source y (`RESID`, `SOURCEID`) en el recurso de la receta. Con
+ * esos mismos campos en `$orderby` la Suite recibe las filas en el orden de v7, y de ese orden depende
+ * el de listas como «Clientes (códigos)» de la hoja Product.
+ *
  * `esencial` distingue lo que hace inútil al módulo de lo que solo lo empobrece: sin la cabecera de
  * receta no hay árbol que dibujar; sin la validez de los componentes el árbol se dibuja igual, solo
  * que sin fechas. Es lo que permite decir "se puede seguir, pero sin esto" en vez de parar todo.
@@ -148,7 +155,7 @@ export const EXTRACCIONES = Object.freeze([
     papel: 'resource',
     etiqueta: 'Recursos de la receta',
     campos: ['SOURCEID', 'RESID'],
-    clave: ['SOURCEID', 'RESID'],
+    clave: ['RESID', 'SOURCEID'],
     atadoA: { tabla: 'bom_psh', campo: 'SOURCEID' },
     esencial: false,
   },
@@ -212,7 +219,7 @@ export const EXTRACCIONES = Object.freeze([
     papel: 'location',
     etiqueta: 'Arcos entre ubicaciones',
     campos: ['LOCID', 'LOCFR', 'PRDID', 'TLEADTIME', 'TINVALID'],
-    clave: ['LOCID', 'LOCFR', 'PRDID'],
+    clave: ['LOCFR', 'LOCID', 'PRDID'],
     descartarSi: 'TINVALID',
     esencial: true,
   },
@@ -222,7 +229,7 @@ export const EXTRACCIONES = Object.freeze([
     papel: 'customer',
     etiqueta: 'Arcos hacia clientes',
     campos: ['LOCID', 'PRDID', 'CUSTID', 'CLEADTIME', 'CINVALID'],
-    clave: ['LOCID', 'PRDID', 'CUSTID'],
+    clave: ['CUSTID', 'LOCID', 'PRDID'],
     descartarSi: 'CINVALID',
     esencial: true,
   },

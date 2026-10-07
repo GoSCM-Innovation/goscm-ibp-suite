@@ -61,8 +61,11 @@ describe('la clave con que se pagina', () => {
     }
   })
 
-  it('Location Source se ordena también por PRDID', () => {
-    expect(claveDe('sn_loc')).toEqual(['LOCID', 'LOCFR', 'PRDID'])
+  // El orden natural de SAP que veía v7, medido sobre una corrida real: las hojas de v7 salen en él.
+  it('Location Source, Customer Source y el recurso de la receta se ordenan como los veía v7', () => {
+    expect(claveDe('sn_loc')).toEqual(['LOCFR', 'LOCID', 'PRDID'])
+    expect(claveDe('sn_cust')).toEqual(['CUSTID', 'LOCID', 'PRDID'])
+    expect(claveDe('bom_psr')).toEqual(['RESID', 'SOURCEID'])
   })
 
   it('Customer Source y los sustitutos incluyen lo que antes se quedaba fuera', () => {
@@ -75,7 +78,7 @@ describe('la clave con que se pagina', () => {
       efectivo: todoResuelto(),
       mapa: { GIDLOCATION: { PRDID: 'PRODUCTO' } },
     })
-    expect(pasos.find((uno) => uno.tabla === 'sn_loc').orderby).toEqual(['LOCID', 'LOCFR', 'PRODUCTO'])
+    expect(pasos.find((uno) => uno.tabla === 'sn_loc').orderby).toEqual(['LOCFR', 'LOCID', 'PRODUCTO'])
   })
 
   it('si el tenant no tiene un campo de la clave, lo dice', () => {

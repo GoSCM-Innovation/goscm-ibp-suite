@@ -750,7 +750,8 @@ export async function analizarProduccion(entrada) {
   }
 
   const hojaDeTabla = (cfg) => {
-    const h = crearHojaDeTabla(cfg)
+    // Los encabezados del Excel de este analizador se escriben limpios (ver `crearHojaDeTabla`).
+    const h = crearHojaDeTabla({ ...cfg, limpiarEncabezados: true })
     informe.hojas.push(h)
     return h
   }

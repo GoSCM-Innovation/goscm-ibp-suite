@@ -76,6 +76,7 @@ export function crearFabricaDeHojasGrandes({
     const hoja = crearHojaDeTabla(cfg)
     const escritor = crearEscritorDeTabla({
       color: cfg.color, encabezados: cfg.encabezados, notas: cfg.notas, grupos: cfg.grupos,
+      limpiarEncabezados: cfg.limpiarEncabezados,
     })
     const tabla = TABLA_DE_VISTA_DE[cfg.nombre] ?? null
 

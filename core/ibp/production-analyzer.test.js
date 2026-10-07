@@ -97,6 +97,16 @@ describe('tipos de material (mattype-config.js)', () => {
   })
 })
 
+describe('analizarProduccion — encabezados del Excel', () => {
+  // v7 escribe `hdrs.map(cleanXml)` en este analizador; el de la red escribe los suyos sin limpiar.
+  it('todas las hojas piden escribir los encabezados limpios', async () => {
+    const informe = await analizarProduccion(datos())
+    const tablas = informe.hojas.filter((una) => una.tipo === 'tabla')
+    expect(tablas.length).toBeGreaterThan(1)
+    expect(tablas.every((una) => una.limpiarEncabezados === true)).toBe(true)
+  })
+})
+
 describe('analizarProduccion — hoja Product', () => {
   it('juzga cada producto con las reglas de su categoría', async () => {
     const informe = await analizarProduccion(datos())

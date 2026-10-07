@@ -82,9 +82,9 @@ describe('extraer', () => {
     await extraer({
       conexionId: CONEXION,
       destino: DESTINO,
-      plan: { pasos: [paso({ tabla: 'sn_loc', select: ['LOCID', 'LOCFR', 'PRDID'], orderby: ['LOCID', 'LOCFR', 'PRDID'] })] },
+      plan: { pasos: [paso({ tabla: 'sn_loc', select: ['LOCID', 'LOCFR', 'PRDID'], orderby: ['LOCFR', 'LOCID', 'PRDID'] })] },
     })
-    expect(fetchMasterPage.mock.calls[0][1].orderby).toEqual(['LOCID', 'LOCFR', 'PRDID'])
+    expect(fetchMasterPage.mock.calls[0][1].orderby).toEqual(['LOCFR', 'LOCID', 'PRDID'])
   })
 
   // «Bajé 8.000 y guardé 5.100» es información; «guardé 5.100» a secas parece un error.

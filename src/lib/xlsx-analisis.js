@@ -127,7 +127,7 @@ function filasDeLaHoja(hoja) {
     })
     filas.push({
       celdas: hoja.encabezados,
-      texto: hoja.encabezados.map(limpiarXml),
+      texto: hoja.limpiarEncabezados ? hoja.encabezados.map(limpiarXml) : undefined,
       xfs,
       xfFila: XF_ENCABEZADO,
       alto: 22,
@@ -173,8 +173,9 @@ export const LIMITE_DE_FILAS = 900000
 /** `<row>` de una fila ya descrita, y las notas de sus celdas. `f` es la posición (desde 0) dentro de la hoja. */
 function filaXml(fila, f) {
   const partes = [`<row r="${f + 1}"${fila.alto ? ` ht="${fila.alto}" customHeight="1"` : ''}>`]
-  // Los encabezados se escriben limpios —sin emoji ni espacios de las puntas, `hdrs.map(cleanXml)` de v7— pero
-  // el ancho de la columna se mide con el texto crudo, como en v7 (`colW` sale de `hdrs`).
+  // Los encabezados del Production Analyzer se escriben limpios —sin emoji ni espacios de las puntas,
+  // `hdrs.map(cleanXml)` de v7— pero el ancho de la columna se mide con el texto crudo, como en v7 (`colW`
+  // sale de `hdrs`). Los del Network Analyzer se escriben tal cual (ver `crearHojaDeTabla`).
   const escritas = fila.texto ?? fila.celdas
   escritas.forEach((v, ci) => {
     const xf = fila.xfs && fila.xfs[ci] != null ? fila.xfs[ci] : fila.xfFila
@@ -264,11 +265,12 @@ export const nombreDeParte = (base, n) => (n === 1 ? base : `${base} (${n})`)
  *   escritor.cerrar()               [{ xml, notas }], una por parte, en orden
  */
 export function crearEscritorDeTabla({
-  color, encabezados, notas = [], grupos = [], limite = LIMITE_DE_FILAS, lote = 20000, unir = juntar,
+  color, encabezados, notas = [], grupos = [], limpiarEncabezados = false, limite = LIMITE_DE_FILAS, lote = 20000,
+  unir = juntar,
 }) {
   const filaDeEncabezado = {
     celdas: encabezados,
-    texto: encabezados.map(limpiarXml),
+    texto: limpiarEncabezados ? encabezados.map(limpiarXml) : undefined,
     xfs: encabezados.map((_, i) => {
       const grupo = grupos[i]
       const argb = grupo ? (COLORES.GRUPO[grupo] || COLORES.GOLD) : COLORES.GOLD
