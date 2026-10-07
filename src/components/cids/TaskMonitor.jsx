@@ -28,6 +28,12 @@ import { useDateRange } from '../../lib/useDateRange.js'
 import BotonActualizar from '../ui/BotonActualizar.jsx'
 import DateRangeBar from '../ui/DateRangeBar.jsx'
 import { anchoArrastrado } from '../../lib/ancho-de-columna.js'
+import { descargarTexto } from '../../lib/descargar-csv.js'
+import {
+  TOPE_SIN_CONFIRMAR, armarLibroDeLogs, nombreDelLibro, reunirLogs,
+} from '../../lib/task-logs-export.js'
+
+const TIPO_XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 
 /** Cada cuánto se vuelve a pedir la lista. De v9. */
 const REFRESH_MS = 30_000
@@ -90,6 +96,13 @@ export default function TaskMonitor({ destino, busqueda, onBuscar, transportadas
   const [copiado, setCopiado] = useState(null)
   // Anchos que la persona ajustó arrastrando el borde de la cabecera; el resto parte de ANCHOS.
   const [anchos, setAnchos] = useState({})
+  // La descarga de logs en curso (`{ fase, hechas, total }`) y cómo terminó la última.
+  const [descarga, setDescarga] = useState(null)
+  const [avisoDescarga, setAvisoDescarga] = useState(null)
+  // Por referencia y no por estado: lo lee la descarga entre consulta y consulta. Al salir del
+  // monitor también se para, para no seguir consultando a CI-DS para un archivo que nadie va a ver.
+  const pararDescarga = useRef(false)
+  useEffect(() => () => { pararDescarga.current = true }, [])
 
   // Lo ya consultado se lee DENTRO del efecto que consulta, no al pintar, así que va por
   // referencia y no como dependencia. Si fuera dependencia, cada respuesta volvería a disparar
@@ -259,9 +272,71 @@ RunID: ${elegida.runId}`)) return
     setTimeout(() => setCopiado(null), 1500)
   }
 
+  // Los logs de TODAS las ejecuciones del filtro actual —rango, buscador y estado—, no solo de la
+  // página que se ve. Se toma la lista al pulsar: el refresco automático puede cambiarla mientras
+  // tanto y el archivo tiene que corresponder a lo que había en pantalla.
+  async function descargarLogs() {
+    const lote = filtradas
+    if (lote.length === 0) return
+    if (lote.length > TOPE_SIN_CONFIRMAR && !window.confirm(
+      `Son ${lote.length.toLocaleString('es')} ejecuciones. Cada una es una consulta a CI-DS y la descarga `
+      + 'puede tardar varios minutos. ¿Seguimos?',
+    )) return
+
+    pararDescarga.current = false
+    setAvisoDescarga(null)
+    setDescarga({ fase: 'detalles', hechas: 0, total: lote.length })
+    try {
+      const resultado = await reunirLogs({
+        ejecuciones: lote,
+        llamar: (operacion, parametros) => cidsCall(destino, operacion, parametros),
+        pedirDetalles: (runIds, opciones) => fetchTaskDetails(destino, runIds, opciones),
+        detallesPrevios: detallesRef.current,
+        esTerminal: isTerminal,
+        // Lo mismo que muestra la tabla y que copia «⧉ Copiar», en la zona horaria elegida.
+        comoSeLee: (fila, detalle) => ({
+          nombre: fila.taskName ?? '',
+          inicio: formatEpochMs(fila.startDate, zona),
+          fin: textoFin(detalle, zona),
+          estado: statusMeta(fila.statusCode).label,
+          duracion: detalle ? formatDuration(detalle.durationSeconds) : '',
+        }),
+        debeParar: () => pararDescarga.current,
+        onAvance: setDescarga,
+      })
+      if (!resultado) {
+        setAvisoDescarga({ ok: false, texto: 'Descarga cancelada.' })
+        return
+      }
+      setDetalles((previos) => ({ ...previos, ...resultado.detalles }))
+
+      const libro = await armarLibroDeLogs(resultado.filas)
+      descargarTexto(libro, nombreDelLibro({
+        destino: destino.label,
+        desde: fechas.rango.desde,
+        hasta: fechas.rango.hasta,
+        total: resultado.total,
+      }), TIPO_XLSX)
+
+      // Las que fallaron van igual en el archivo, con el motivo en sus celdas. Aquí se cuenta para
+      // que nadie dé por leído un log que no se pudo traer.
+      setAvisoDescarga(resultado.fallidas > 0
+        ? {
+          ok: false,
+          texto: `Se descargó el archivo, pero ${resultado.fallidas} de ${resultado.total} ejecuciones `
+            + `no tienen log: ${resultado.primerError}`,
+        }
+        : { ok: true, texto: `Se descargaron los logs de ${resultado.total} ejecuciones.` })
+    } catch (fallo) {
+      setAvisoDescarga({ ok: false, texto: fallo.message })
+    } finally {
+      setDescarga(null)
+    }
+  }
+
   return (
     <div className="monitor">
-      <div className={`progress-line${cargando || cancelando || cargandoDetalles ? ' on' : ''}`} />
+      <div className={`progress-line${cargando || cancelando || cargandoDetalles || descarga ? ' on' : ''}`} />
 
       <div className="monitor-head">
         <div className="monitor-meta">
@@ -271,6 +346,14 @@ RunID: ${elegida.runId}`)) return
           {cargandoDetalles && !cargando && <span className="live"><span className="sep">·</span>cargando fin/duración…</span>}
           {ultimoRefresco && !cargando && !cargandoDetalles && (
             <span><span className="sep">·</span>{ultimoRefresco.toLocaleTimeString()}</span>
+          )}
+          {descarga && (
+            <span className="live">
+              <span className="sep">·</span>
+              {descarga.fase === 'detalles'
+                ? 'descarga: leyendo fin y duración…'
+                : `descarga: logs ${descarga.hechas}/${descarga.total}`}
+            </span>
           )}
         </div>
 
@@ -306,6 +389,21 @@ RunID: ${elegida.runId}`)) return
           >
             {copiado === 'ok' ? '✓ Copiado' : copiado === 'error' ? '✕ Error' : '⧉ Copiar'}
           </button>
+          {descarga ? (
+            <button type="button" className="btn btn-sm" onClick={() => { pararDescarga.current = true }}>
+              ✕ Cancelar descarga
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="btn btn-sm"
+              onClick={descargarLogs}
+              disabled={filtradas.length === 0 || cargando}
+              title={`Descargar en Excel los logs de las ${filtradas.length} ejecuciones del filtro actual, de todas las páginas`}
+            >
+              ⬇ Descargar logs
+            </button>
+          )}
           <BotonActualizar
             etiqueta="Refresh"
             className="btn btn-sm"
@@ -352,6 +450,11 @@ RunID: ${elegida.runId}`)) return
         </div>
       )}
       {error && <div className="notice notice-error">✕ {error}</div>}
+      {avisoDescarga && (
+        <div className={`notice ${avisoDescarga.ok ? 'notice-ok' : 'notice-error'}`}>
+          {avisoDescarga.ok ? '✓ ' : '✕ '}{avisoDescarga.texto}
+        </div>
+      )}
 
       {/* Con error no se pinta la tabla ni la paginación, como en v9: unas filas viejas debajo del
           aviso se leerían como si fueran el resultado de esta consulta. */}
