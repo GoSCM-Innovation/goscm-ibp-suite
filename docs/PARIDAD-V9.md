@@ -124,6 +124,14 @@ El visor de logs con los textos de v9 («Logs de ejecución», «Cargando logs�
 **Error de v9 que se arregla, no se copia**: al cambiar de página con la nueva ya en caché, el aviso «cargando
 fin/duración…» se quedaba encendido y «Copiar» bloqueado (el efecto salía sin apagarlo). Prueba en
 `TaskMonitor.test.js`.
+**Agregado que v9 no tenía** (2026-10-07, pedido por el usuario): «⬇ Descargar logs» baja en Excel los logs
+de TODAS las ejecuciones del filtro actual (rango, buscador y estado), no solo de la página visible. Columnas
+Task, Inicio, Fin, Estado, Duración, Log Monitor, Log Trace y Log Error. De cada log se guardan la primera y
+la última página: la guía de web services de CI-DS dice que un `pageNum` mayor que el total devuelve la
+primera, así que la última se pide en una segunda consulta con el `maxPage` de la primera. Un log que pasa
+de 32.767 caracteres (el tope de una celda de Excel) sigue en filas «#2 Task», «#3 Task»… con el resto de
+los datos repetidos. Seis consultas a la vez, confirmación por encima de 500 ejecuciones, avance y
+cancelación. Lógica en `src/lib/task-logs-export.js`, con sus pruebas.
 **Marco** (`CidsTools.jsx`): el detalle del sistema de v9 (`dirección · organización · Producción|Sandbox`)
 **ya no va en una franja propia** (cambio del 2026-10-06, pedido por el usuario): vive en el «ⓘ» de la
 pestaña activa de la tira, con lo que desaparece el ▴/▾ de contraerla; para ello `/api/connections`
