@@ -5,12 +5,19 @@
 // aplicaciones distintas y pedían clasificar dos veces. Clasificar dos veces es cómo se llega a que
 // dos informes del mismo tenant digan cosas distintas del mismo material.
 //
-// Por área y no por tenant: los tipos de material y lo que significan son de cada área. Y en
-// `localStorage` y no en el servidor porque es una preferencia de trabajo, no un dato del cliente:
+// Por TENANT y por área. v7 la guardaba solo por área (`mattype_cfg_<área>`), y dos tenants con un área del
+// mismo nombre compartían exclusiones y categorías: un código como ZVER no significa lo mismo en dos
+// tenants. Aquí se suma la conexión, que es de un solo cliente. Las claves de antes (`mattype_<área>`) se
+// descartan al arrancar: no dicen de qué tenant eran.
+//
+// En `localStorage` y no en el servidor porque es una preferencia de trabajo, no un dato del cliente:
 // quien la cambia quiere ver otro corte del mismo informe, no corregir nada.
 
-/** Dónde se guarda. La clave es la de v7, para no perder lo que ya tuviera guardado quien migre. */
-export const claveGuardada = (area) => `mattype_${area || 'default'}`
+/**
+ * Dónde se guarda. Sin conexión o sin área NO hay clave (`null`): una clave sin tenant sería justo la que
+ * se comparte entre tenants.
+ */
+export const claveGuardada = (conexionId, area) => (conexionId && area ? `mattype:${conexionId}:${area}` : null)
 
 /**
  * La clasificación de partida: cuántos productos hay de cada tipo, todo INCLUIDO y sin categoría.
@@ -28,9 +35,11 @@ export function configuracionInicial(cuentaPorTipo) {
 }
 
 /** Lo guardado para un área, o `null` si no hay nada o está ilegible. */
-export function leerGuardada(area) {
+export function leerGuardada(conexionId, area) {
+  const clave = claveGuardada(conexionId, area)
+  if (!clave) return null
   try {
-    const crudo = localStorage.getItem(claveGuardada(area))
+    const crudo = localStorage.getItem(clave)
     return crudo ? JSON.parse(crudo) : null
   } catch {
     return null
@@ -38,9 +47,11 @@ export function leerGuardada(area) {
 }
 
 /** Guarda la clasificación. Que no se pueda guardar no invalida el análisis; habrá que repetirla. */
-export function guardarClasificacion(area, configuracion) {
+export function guardarClasificacion(conexionId, area, configuracion) {
+  const clave = claveGuardada(conexionId, area)
+  if (!clave) return
   try {
-    localStorage.setItem(claveGuardada(area), JSON.stringify(configuracion))
+    localStorage.setItem(clave, JSON.stringify(configuracion))
   } catch {
     // Sin espacio o en modo privado. No hay nada que hacer y no vale la pena parar el análisis.
   }

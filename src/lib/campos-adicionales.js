@@ -1,8 +1,8 @@
-// Los campos adicionales del paso ④, guardados por área de planificación.
+// Los campos adicionales del paso ④, guardados por TENANT y por área de planificación.
 //
 // Portado de `extraFields.js` de v7 (`efSaveEntity`, `efLoadAll`, `efGetSelect`). Se guardan en
-// `localStorage` con las MISMAS claves que v7 —`ef_sel_pa_<entidad>_<área>`— para no perder lo que ya
-// tuviera elegido quien migre: es una preferencia de trabajo, no un dato del cliente.
+// `localStorage` (ver `clave` abajo): v7 usaba solo el área y esa clave no distinguía tenants. Es una
+// preferencia de trabajo, no un dato del cliente.
 //
 // Las claves de entidad son las de v7 (`product`, `location`, `resource`, `resourceLocation`, `psh`,
 // `psi`, `psr`); `TABLA_DE_ENTIDAD` las lleva a las tablas del plan de extracción.
@@ -30,15 +30,24 @@ export const TABLA_DE_ENTIDAD_RED = Object.freeze({
   customerSource: 'sn_cust',
 })
 
-const clave = (ns, entidad, area) => `ef_sel_${ns}_${entidad}_${area || 'default'}`
+/**
+ * Dónde se guarda lo elegido. Lleva la CONEXIÓN además del área: los campos del maestro son de cada tenant,
+ * y pedirle a SAP un campo que el otro tenant no tiene hace que rechace la consulta entera. v7 lo guardaba
+ * solo por área (`ef_sel_<ns>_<entidad>_<área>`). Sin conexión o sin área no hay clave (`null`).
+ */
+const clave = (ns, entidad, conexionId, area) => (
+  conexionId && area ? `ef_sel:${ns}:${entidad}:${conexionId}:${area}` : null
+)
 
 /** Lo elegido para un área: `{ product: ['CAMPO'], … }`, con todas las entidades presentes. */
-export function leerCamposAdicionales(ns, entidades, area) {
+export function leerCamposAdicionales(ns, entidades, conexionId, area) {
   const salida = {}
   for (const entidad of entidades) {
     salida[entidad] = []
+    const donde = clave(ns, entidad, conexionId, area)
+    if (!donde) continue
     try {
-      const crudo = localStorage.getItem(clave(ns, entidad, area))
+      const crudo = localStorage.getItem(donde)
       const leido = crudo ? JSON.parse(crudo) : null
       if (Array.isArray(leido)) salida[entidad] = leido.filter((c) => typeof c === 'string')
     } catch {
@@ -49,9 +58,11 @@ export function leerCamposAdicionales(ns, entidades, area) {
 }
 
 /** Guarda lo elegido de UNA entidad. Que no se pueda guardar no invalida el análisis. */
-export function guardarCamposAdicionales(ns, entidad, area, campos) {
+export function guardarCamposAdicionales(ns, entidad, conexionId, area, campos) {
+  const donde = clave(ns, entidad, conexionId, area)
+  if (!donde) return
   try {
-    localStorage.setItem(clave(ns, entidad, area), JSON.stringify(campos))
+    localStorage.setItem(donde, JSON.stringify(campos))
   } catch {
     // Sin espacio o en modo privado: habrá que repetirlo la próxima vez.
   }

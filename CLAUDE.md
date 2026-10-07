@@ -75,6 +75,12 @@ Las 17 reglas confirmadas (documentadas en `docs/FASE-0-LEVANTAMIENTO.md` §5) v
 - **Verificación de módulo contratado en el backend**, no solo en la interfaz. Ocultar un botón no es una restricción.
 - Toda URL saliente pasa por la validación SSRF de `core/transport` (incluye allowlist de sufijo de host y de servicios permitidos) y usa `redirect: 'manual'`.
 - Comparaciones de secretos siempre resistentes a timing.
+- **Nada guardado en el navegador se comparte entre tenants.** Toda clave de `localStorage` que dependa de un
+  tenant lleva la CONEXIÓN en su nombre (no basta el área: dos tenants pueden tener un área del mismo nombre),
+  y sin conexión no se guarda ni se lee. La base local (`goscm_explorer`) comprueba su origen en cada lectura
+  y escritura, porque es una sola para todas las pestañas. Al cerrar la sesión, al vencer y al entrar otro
+  usuario se borra lo descargado (`src/lib/limpiar-navegador.js`: ahí está qué es dato y qué es preferencia).
+  v7 tenía `MATTYPE_CFG` global sin vaciar y claves solo por área: no repetir.
 
 ## Convenciones
 - Español para texto de interfaz, documentación y comentarios. Código y nombres de símbolos en inglés.

@@ -265,7 +265,7 @@ describe('el recorrido ② → ⑤', () => {
 
     await act(async () => { contenedor.querySelector('.mattype-toggle input').click() })
     expect(contenedor.textContent).toContain('1 tipo(s) excluido(s) · 120 producto(s) omitidos del análisis principal')
-    expect(JSON.parse(localStorage.getItem('mattype_SAP4')).FERT.excluido).toBe(true)
+    expect(JSON.parse(localStorage.getItem('mattype:c1:SAP4')).FERT.excluido).toBe(true)
 
     const restablecer = contenedor.querySelector('.mattype-reset-btn')
     await act(async () => { restablecer.click() })
@@ -342,9 +342,9 @@ describe('lo que baja el Network Analyzer', () => {
   })
 
   it('los campos adicionales elegidos viajan a la descarga por tabla de la red', async () => {
-    localStorage.setItem('ef_sel_sn_product_SAP4', JSON.stringify(['ZGRUPO']))
-    localStorage.setItem('ef_sel_sn_locationSource_SAP4', JSON.stringify(['ZRUTA']))
-    localStorage.setItem('ef_sel_sn_customer_SAP4', JSON.stringify(['ZCANAL']))
+    localStorage.setItem('ef_sel:sn:product:c1:SAP4', JSON.stringify(['ZGRUPO']))
+    localStorage.setItem('ef_sel:sn:locationSource:c1:SAP4', JSON.stringify(['ZRUTA']))
+    localStorage.setItem('ef_sel:sn:customer:c1:SAP4', JSON.stringify(['ZCANAL']))
     await montar()
     await llegarAlCinco()
 

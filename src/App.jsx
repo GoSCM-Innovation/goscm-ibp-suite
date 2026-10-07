@@ -10,6 +10,7 @@ import { puedeSalir } from './lib/guarda-de-salida.js'
 import { applyTheme, readStoredTheme } from './lib/theme.js'
 import { desconectar } from './lib/conexion-activa.js'
 import { reiniciarTodo as reiniciarPaDoc } from './lib/pa-doc-sesion.js'
+import { limpiarNavegador, olvidarAjustesAntiguos } from './lib/limpiar-navegador.js'
 import { MODULES, moduleById, partirRuta } from './lib/modules.js'
 import Login from './components/Login.jsx'
 import Shell from './components/Shell.jsx'
@@ -21,6 +22,20 @@ import DataTools from './components/data/DataTools.jsx'
 import AdminPanel from './components/admin/AdminPanel.jsx'
 
 const RUTAS_VALIDAS = new Set([...MODULES.map((m) => m.id), 'admin'])
+
+/** Quién fue el último usuario de este navegador, para saber si lo guardado es de otra persona. */
+const CLAVE_ULTIMO_USUARIO = 'goscm_ultimo_usuario'
+
+/**
+ * Deja la aplicación sin rastro del tenant y del cliente anteriores: la conexión activa, la sesión del
+ * documentador y lo guardado en el navegador. Es lo que hay que hacer cada vez que cambia QUIÉN usa la
+ * aplicación, sea porque salió, porque se venció su sesión o porque entró otra persona.
+ */
+function olvidarTodoLoLocal() {
+  desconectar()
+  reiniciarPaDoc()
+  return limpiarNavegador()
+}
 
 /**
  * La sección abierta, leída de la dirección.
@@ -43,6 +58,19 @@ export default function App() {
 
   useEffect(() => { applyTheme(theme) }, [theme])
 
+  // Los ajustes de antes de separar por tenant no dicen de cuál eran: se descartan.
+  useEffect(() => { olvidarAjustesAntiguos() }, [])
+
+  // Si quien entra no es quien usó este navegador por última vez, lo guardado es de otra persona.
+  const usuarioId = session?.user?.id ?? null
+  useEffect(() => {
+    if (!usuarioId) return
+    let previo = null
+    try { previo = localStorage.getItem(CLAVE_ULTIMO_USUARIO) } catch { /* sin acceso: se trata como otro */ }
+    if (previo !== usuarioId) olvidarTodoLoLocal()
+    try { localStorage.setItem(CLAVE_ULTIMO_USUARIO, usuarioId) } catch { /* sin espacio */ }
+  }, [usuarioId])
+
   // Relee quién soy y qué tengo contratado. Se llama al cambiar de sección y al volver a la
   // pestaña: si un administrador vence un módulo, el menú tiene que enterarse sin obligar a
   // recargar. El backend ya rechazaría las llamadas de todas formas — esto es para que la
@@ -53,7 +81,7 @@ export default function App() {
 
   // El servidor dijo que la sesión ya no vale (vencida en medio del trabajo): a la pantalla de acceso.
   useEffect(() => {
-    const alVencer = () => setSession(null)
+    const alVencer = () => { setSession(null); olvidarTodoLoLocal() }
     window.addEventListener(SESION_VENCIDA, alVencer)
     return () => window.removeEventListener(SESION_VENCIDA, alVencer)
   }, [])
@@ -90,10 +118,9 @@ export default function App() {
     if (!puedeSalir()) return
     await api.post('/api/auth/logout').catch(() => {})
     // La conexión vive fuera de React para sobrevivir a los cambios de módulo, así que cerrarla no
-    // ocurre solo: sin esto, quien entre después con otra cuenta hereda el tenant del anterior.
-    desconectar()
-    // Lo mismo con los CSV del documentador: son la configuración de un cliente.
-    reiniciarPaDoc()
+    // ocurre solo: sin esto, quien entre después con otra cuenta hereda el tenant del anterior. Lo mismo
+    // con los CSV del documentador (son la configuración de un cliente) y con lo descargado en el navegador.
+    await olvidarTodoLoLocal()
     setSession(null)
     window.location.hash = ''
   }

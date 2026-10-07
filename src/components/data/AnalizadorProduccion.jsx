@@ -101,7 +101,7 @@ export default function AnalizadorProduccion({ area = '', destino }) {
   const [mapa, setMapa] = useState(null)
   const [clasificacion, setClasificacion] = useState(null)
   const [cargandoTipos, setCargandoTipos] = useState(false)
-  const [extras, setExtras] = useState(() => leerCamposAdicionales('pa', CLAVES_DE_ENTIDAD, area))
+  const [extras, setExtras] = useState(() => leerCamposAdicionales('pa', CLAVES_DE_ENTIDAD, destino.connectionId, area))
 
   const [ejecutando, setEjecutando] = useState(false)
   const [pidiendoModo, setPidiendoModo] = useState(false)
@@ -120,9 +120,9 @@ export default function AnalizadorProduccion({ area = '', destino }) {
   // ── ② y ③: la clasificación de los tipos de material ──────────────────────────────────────────
 
   const guardar = useCallback((siguiente) => {
-    guardarClasificacion(area, siguiente)
+    guardarClasificacion(destino.connectionId, area, siguiente)
     setClasificacion(siguiente)
-  }, [area])
+  }, [destino.connectionId, area])
 
   /**
    * Al confirmar el mapeo: se leen los tipos de material de SAP con una consulta ligera.
@@ -140,7 +140,7 @@ export default function AnalizadorProduccion({ area = '', destino }) {
         entidad,
         mapa: leido?.guardado?.fields ?? {},
       })
-      setClasificacion(mezclarClasificacion(configuracionInicial(cuenta), leerGuardada(area)))
+      setClasificacion(mezclarClasificacion(configuracionInicial(cuenta), leerGuardada(destino.connectionId, area)))
     } catch (fallo) {
       // v7 solo lo anotaba en la consola y dejaba la lista vacía.
       console.warn('[paFetchMattypes] fetch falló:', fallo)
@@ -197,7 +197,7 @@ export default function AnalizadorProduccion({ area = '', destino }) {
   })
 
   function guardarExtras(clave, campos) {
-    guardarCamposAdicionales('pa', clave, area, campos)
+    guardarCamposAdicionales('pa', clave, destino.connectionId, area, campos)
     setExtras((previos) => ({ ...previos, [clave]: campos }))
   }
 

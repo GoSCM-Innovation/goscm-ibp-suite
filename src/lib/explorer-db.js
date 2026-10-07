@@ -33,6 +33,25 @@ export const POR_LOTE = 2000
 
 let conexion = null
 
+/**
+ * La marca de origen que ESTA pestaña escribió o conectó por última vez, o `null` si ninguna.
+ *
+ * La base local es una sola para todas las pestañas del navegador, y su marca de origen es una sola
+ * fila. Si otra pestaña conecta o descarga OTRO tenant, vacía y reescribe lo de esta; sin esto, esta
+ * pestaña seguiría leyendo —y analizando— datos del otro tenant como si fueran suyos. Con esto, cada
+ * lectura y cada escritura comprueba que la marca guardada siga siendo la de esta pestaña.
+ */
+let esperado = null
+
+/** Lo que se lanza cuando otra pestaña cambió el origen de lo guardado. */
+export class OrigenCambiado extends Error {
+  constructor() {
+    super('Los datos guardados en este navegador ya no son de este tenant: otra pestaña conectó a otro '
+      + 'destino. Vuelve a conectar y a descargar en esta pestaña para no mezclar datos de dos tenants.')
+    this.name = 'OrigenCambiado'
+  }
+}
+
 /** Rechaza la promesa si la transacción se aborta o falla, en vez de dejarla colgada. */
 function alFallar(tx, rechazar) {
   tx.onabort = () => rechazar(tx.error ?? new Error('La base local abortó la operación.'))
@@ -107,6 +126,24 @@ export function abrirBase() {
 export function olvidarBase() {
   try { conexion?.close() } catch { /* da igual */ }
   conexion = null
+  esperado = null
+}
+
+/** La marca que hay guardada, leída sin pasar por la comprobación (la usa la propia comprobación). */
+async function marcaGuardada() {
+  const base = await abrirBase()
+  const tx = base.transaction(TABLA_DE_ORIGEN, 'readonly')
+  const fila = await comoPromesa(tx.objectStore(TABLA_DE_ORIGEN).get('actual'), tx)
+  return fila?.marca ?? null
+}
+
+/**
+ * Comprueba que lo guardado siga siendo del origen que esta pestaña espera. Si no hay origen esperado
+ * —nadie conectó todavía— no hay con qué comparar y no se comprueba nada.
+ */
+async function exigirOrigen() {
+  if (esperado === null) return
+  if ((await marcaGuardada()) !== esperado) throw new OrigenCambiado()
 }
 
 /** Comprueba el nombre antes de abrir una transacción condenada a fallar. */
@@ -130,6 +167,7 @@ export async function vaciar(tabla) {
  */
 export async function guardar(tabla, registros) {
   exigirTabla(tabla)
+  if (tabla !== TABLA_DE_ORIGEN) await exigirOrigen()
   const filas = registros ?? []
   if (filas.length === 0) return 0
 
@@ -154,6 +192,7 @@ export async function guardar(tabla, registros) {
 /** Un registro por su clave. */
 export async function leerUno(tabla, clave) {
   exigirTabla(tabla)
+  if (tabla !== TABLA_DE_ORIGEN) await exigirOrigen()
   const base = await abrirBase()
   const tx = base.transaction(tabla, 'readonly')
   return comoPromesa(tx.objectStore(tabla).get(clave), tx)
@@ -167,6 +206,7 @@ export async function leerUno(tabla, clave) {
  */
 export async function leerPorIndice(tabla, indice, valor) {
   exigirTabla(tabla)
+  if (tabla !== TABLA_DE_ORIGEN) await exigirOrigen()
   const base = await abrirBase()
   const tx = base.transaction(tabla, 'readonly')
   return comoPromesa(tx.objectStore(tabla).index(indice).getAll(valor), tx)
@@ -175,6 +215,7 @@ export async function leerPorIndice(tabla, indice, valor) {
 /** Cuántos registros hay, sin traerlos. */
 export async function contar(tabla, { indice, valor } = {}) {
   exigirTabla(tabla)
+  if (tabla !== TABLA_DE_ORIGEN) await exigirOrigen()
   const base = await abrirBase()
   const tx = base.transaction(tabla, 'readonly')
   const almacen = tx.objectStore(tabla)
@@ -191,6 +232,7 @@ export async function contar(tabla, { indice, valor } = {}) {
  */
 export async function porCursor(tabla, porCadaUno, { indice, valor } = {}) {
   exigirTabla(tabla)
+  if (tabla !== TABLA_DE_ORIGEN) await exigirOrigen()
   const base = await abrirBase()
 
   return new Promise((resolver, rechazar) => {
@@ -229,6 +271,7 @@ export async function porCursor(tabla, porCadaUno, { indice, valor } = {}) {
  */
 export async function leerTramo(tabla, { desde = 0, cuantos = 100, indice, valor } = {}) {
   exigirTabla(tabla)
+  if (tabla !== TABLA_DE_ORIGEN) await exigirOrigen()
   const base = await abrirBase()
 
   return new Promise((resolver, rechazar) => {
@@ -260,6 +303,7 @@ export async function leerTramo(tabla, { desde = 0, cuantos = 100, indice, valor
  */
 export async function buscarEnTabla(tabla, prueba, { indice, valor, maximo = 2000, escanear = 300000 } = {}) {
   exigirTabla(tabla)
+  if (tabla !== TABLA_DE_ORIGEN) await exigirOrigen()
   const base = await abrirBase()
 
   return new Promise((resolver, rechazar) => {
@@ -286,8 +330,7 @@ export async function buscarEnTabla(tabla, prueba, { indice, valor, maximo = 200
 
 /** A qué tenant, área y versión pertenece lo guardado. `null` si no hay nada. */
 export async function origenGuardado() {
-  const fila = await leerUno(TABLA_DE_ORIGEN, 'actual')
-  return fila?.marca ?? null
+  return marcaGuardada()
 }
 
 /** Anota de dónde salió lo que se acaba de guardar. */
@@ -298,6 +341,24 @@ export async function anotarOrigen(origen) {
     tx.objectStore(TABLA_DE_ORIGEN).put({ id: 'actual', marca: marcaDeOrigen(origen), fecha: new Date().toISOString() }),
     tx,
   )
+  // Desde aquí, esta pestaña espera ESTE origen: si otro lo cambia, sus lecturas y escrituras fallan.
+  esperado = marcaDeOrigen(origen)
+}
+
+/**
+ * Borra TODA la base local, incluida la marca de origen. Es lo que se hace al cerrar la sesión: lo
+ * descargado es del cliente, y no debe quedar en el navegador para quien use el equipo después.
+ */
+export async function borrarBaseLocal() {
+  olvidarBase()
+  await new Promise((resolver, rechazar) => {
+    const peticion = indexedDB.deleteDatabase(NOMBRE_DE_LA_BASE)
+    peticion.onsuccess = () => resolver()
+    peticion.onerror = () => rechazar(peticion.error)
+    // Otra pestaña la tiene abierta: su conexión se aparta sola al recibir `versionchange`, y el borrado
+    // sigue en cuanto lo hace. No es un fallo, solo hay que esperar.
+    peticion.onblocked = () => {}
+  })
 }
 
 /** Vacía TODAS las tablas de datos y de vista, y olvida la marca de origen. */

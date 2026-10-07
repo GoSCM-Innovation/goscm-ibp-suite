@@ -257,7 +257,7 @@ describe('el recorrido ② → ⑤', () => {
 
     await act(async () => { contenedor.querySelector('.mattype-toggle input').click() })
     expect(contenedor.textContent).toContain('1 tipo(s) excluido(s) · 120 producto(s) omitidos del análisis principal')
-    expect(JSON.parse(localStorage.getItem('mattype_SAP4')).FERT.excluido).toBe(true)
+    expect(JSON.parse(localStorage.getItem('mattype:c1:SAP4')).FERT.excluido).toBe(true)
 
     const restablecer = contenedor.querySelector('.mattype-reset-btn')
     await act(async () => { restablecer.click() })
@@ -315,7 +315,7 @@ describe('lo que baja el Production Analyzer', () => {
   })
 
   it('los campos adicionales elegidos viajan a la descarga por tabla', async () => {
-    localStorage.setItem('ef_sel_pa_product_SAP4', JSON.stringify(['ZGRUPO']))
+    localStorage.setItem('ef_sel:pa:product:c1:SAP4', JSON.stringify(['ZGRUPO']))
     await montar()
     await llegarAlCinco()
 

@@ -7,6 +7,19 @@ actualiza al terminar cada sesión, y su orden es el de prioridad acordada.
 
 ## Dónde estamos
 
+- **Aislamiento entre tenants en el navegador (2026-10-07)**, a raíz de que en v7 aparecían tipos de material
+  de otro tenant. Causa en v7: `MATTYPE_CFG` es global y nada la vacía al cambiar de conexión, y la clave en
+  `localStorage` es solo el área. En la Suite se corrigió: (1) la clasificación de tipos y los campos
+  adicionales se guardan por conexión y área (`mattype:<conexión>:<área>`, `ef_sel:<ns>:<entidad>:<conexión>:<área>`);
+  las claves de antes se borran al arrancar (cada tenant se configura una vez); (2) cerrar sesión, vencer la
+  sesión o entrar otro usuario borra la base local y los cachés de datos, conservando las preferencias
+  visuales; (3) la base local comprueba su origen en cada lectura y escritura, así que una pestaña no puede
+  analizar datos que otra pestaña dejó de otro tenant (`OrigenCambiado`); (4) la pantalla «Algo no se pudo
+  mostrar» venía de `main.jsx`: recargaba una sola vez por sesión y luego tapaba el error, dejando `undefined`
+  en `React.lazy`. Ahora limita la frecuencia (30 s) y no tapa el error. **Pendiente: probarlo con dos tenants
+  reales**, incluida la prueba de dos pestañas. **No auditado**: el backend más allá de `core/connections`
+  (que sí filtra por `client_id` en cada consulta).
+
 - **Network Analyzer cotejado contra v7 (2026-10-07)**, mismo tenant: Estadísticas, Location y Customer
   idénticas byte a byte; Location Source y Customer Source idénticas como conjunto de filas. Dos
   correcciones. (1) El orden de los campos de la `clave` de `EXTRACCIONES` es ahora el orden natural de SAP

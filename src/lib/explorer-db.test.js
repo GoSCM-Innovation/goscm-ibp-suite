@@ -6,6 +6,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { IDBFactory } from 'fake-indexeddb'
 
 import {
+  OrigenCambiado,
   POR_LOTE,
   abrirBase,
   anotarOrigen,
@@ -301,6 +302,66 @@ describe('prepararPara', () => {
     await guardar('bom_psi', [fuente('S1')])
     await expect(prepararPara({ ...ORIGEN, planningArea: 'OTRA', versionId: 'V9' }))
       .resolves.toMatchObject({ seVacio: true })
+  })
+})
+
+// La base local es una sola para todas las pestañas del navegador. Si otra pestaña conecta o descarga OTRO
+// tenant, esta no puede seguir leyendo ni escribiendo como si lo guardado fuera suyo.
+describe('otra pestaña cambia el origen', () => {
+  const OTRO = { connectionId: 'c-2', planningArea: 'PA', versionId: 'V1' }
+
+  /** Simula a la otra pestaña: escribe la marca de otro origen directamente, sin tocar lo que esta espera. */
+  async function otraPestanaConecta() {
+    const base = await abrirBase()
+    await new Promise((resolver, rechazar) => {
+      const tx = base.transaction('dataset', 'readwrite')
+      tx.objectStore('dataset').put({ id: 'actual', marca: 'c-2|PA|V1' })
+      tx.oncomplete = resolver
+      tx.onerror = () => rechazar(tx.error)
+    })
+  }
+
+  it('si esta pestaña no ha conectado nada, no comprueba', async () => {
+    await guardar('bom_prd', [{ PRDID: 'A' }])
+    await expect(contar('bom_prd')).resolves.toBe(1)
+  })
+
+  it('mientras el origen es el suyo, lee y escribe con normalidad', async () => {
+    await prepararPara(ORIGEN)
+    await guardar('bom_prd', [{ PRDID: 'A' }])
+    await expect(contar('bom_prd')).resolves.toBe(1)
+  })
+
+  it('si otra pestaña cambió el origen, leer falla en vez de devolver datos de otro tenant', async () => {
+    await prepararPara(ORIGEN)
+    await guardar('bom_prd', [{ PRDID: 'A' }])
+    await otraPestanaConecta()
+
+    await expect(contar('bom_prd')).rejects.toBeInstanceOf(OrigenCambiado)
+    await expect(leerUno('bom_prd', 'A')).rejects.toBeInstanceOf(OrigenCambiado)
+    await expect(leerPorIndice('bom_prd', 'by_prdid', 'A')).rejects.toBeInstanceOf(OrigenCambiado)
+    await expect(porCursor('bom_prd', () => {})).rejects.toBeInstanceOf(OrigenCambiado)
+    await expect(leerTramo('bom_prd', {})).rejects.toBeInstanceOf(OrigenCambiado)
+    await expect(buscarEnTabla('bom_prd', () => true)).rejects.toBeInstanceOf(OrigenCambiado)
+  })
+
+  it('y escribir también: no deja filas de este tenant mezcladas con las del otro', async () => {
+    await prepararPara(ORIGEN)
+    await otraPestanaConecta()
+    await expect(guardar('bom_prd', [{ PRDID: 'A' }])).rejects.toBeInstanceOf(OrigenCambiado)
+  })
+
+  it('si esta pestaña vuelve a conectar, recupera el acceso', async () => {
+    await prepararPara(ORIGEN)
+    await otraPestanaConecta()
+    await reiniciarAlConectar(OTRO)
+    await expect(contar('bom_prd')).resolves.toBe(0)
+  })
+
+  it('el aviso dice qué hacer', async () => {
+    await prepararPara(ORIGEN)
+    await otraPestanaConecta()
+    await expect(contar('bom_prd')).rejects.toThrow(/otra pestaña/)
   })
 })
 
