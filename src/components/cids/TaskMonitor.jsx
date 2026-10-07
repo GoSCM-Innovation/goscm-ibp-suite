@@ -25,6 +25,7 @@ import { toTsv } from '../../lib/tsv.js'
 import TaskLogsModal from './TaskLogsModal.jsx'
 import { formatEpochMs, formatSapTimestamp } from '../../lib/dates.js'
 import { useDateRange } from '../../lib/useDateRange.js'
+import BotonActualizar from '../ui/BotonActualizar.jsx'
 import DateRangeBar from '../ui/DateRangeBar.jsx'
 import { anchoArrastrado } from '../../lib/ancho-de-columna.js'
 
@@ -305,9 +306,14 @@ RunID: ${elegida.runId}`)) return
           >
             {copiado === 'ok' ? '✓ Copiado' : copiado === 'error' ? '✕ Error' : '⧉ Copiar'}
           </button>
-          <button type="button" className="btn btn-sm" onClick={cargar} disabled={cargando || !rangoValido}>
-            ↺ Refresh
-          </button>
+          <BotonActualizar
+            etiqueta="Refresh"
+            className="btn btn-sm"
+            onClick={cargar}
+            cargando={cargando}
+            mensaje="Consultando tareas en CI-DS…"
+            deshabilitado={!rangoValido}
+          />
           <span className="tag tag-muted" title={`Se actualiza sola cada ${REFRESH_MS / 1000} segundos`}>
             🔄 Auto {REFRESH_MS / 1000}s
           </span>

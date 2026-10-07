@@ -50,9 +50,9 @@ describe('Planning Area Documenter, oculto de momento', () => {
     expect(APPS_EXPLORER.find((una) => una.id === 'padoc')?.oculta).toBe(true)
   })
 
-  it('una dirección que apunta a él cae en la primera aplicación, no en pantalla en blanco', () => {
+  it('una dirección que apunta a él no carga ninguna aplicación, se queda en la bienvenida', () => {
     expect(appById('explorer', 'padoc')).toBeNull()
-    expect(partirRuta('explorer/padoc')).toEqual({ moduleId: 'explorer', appId: 'bom' })
+    expect(partirRuta('explorer/padoc')).toEqual({ moduleId: 'explorer', appId: null })
   })
 })
 
@@ -72,13 +72,13 @@ describe('partirRuta', () => {
     expect(partirRuta('explorer/network')).toEqual({ moduleId: 'explorer', appId: 'network' })
   })
 
-  it('sin aplicación cae en la primera del módulo', () => {
-    expect(partirRuta('explorer')).toEqual({ moduleId: 'explorer', appId: 'bom' })
+  it('sin aplicación no elige ninguna: la elige la persona desde el árbol', () => {
+    expect(partirRuta('explorer')).toEqual({ moduleId: 'explorer', appId: null })
   })
 
-  it('una aplicación que no existe cae en la primera, no deja la pantalla en blanco', () => {
+  it('una aplicación que no existe tampoco carga otra en su lugar', () => {
     // Pasa con una dirección vieja guardada en marcadores o escrita a mano.
-    expect(partirRuta('explorer/inventada')).toEqual({ moduleId: 'explorer', appId: 'bom' })
+    expect(partirRuta('explorer/inventada')).toEqual({ moduleId: 'explorer', appId: null })
   })
 
   it('un módulo sin aplicaciones no inventa ninguna', () => {

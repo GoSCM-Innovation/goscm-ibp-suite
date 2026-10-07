@@ -69,6 +69,16 @@ describe('el destino que reciben las aplicaciones', () => {
   })
 })
 
+describe('sin aplicación elegida', () => {
+  it('muestra la bienvenida y no monta ninguna aplicación', async () => {
+    vistos.length = 0
+    await dibujar({ appId: null })
+    expect(contenedor.querySelector('[data-prueba="pv"]')).toBeNull()
+    expect(contenedor.querySelector('.data-tools-bienvenida')).not.toBeNull()
+    expect(vistos).toHaveLength(0)
+  })
+})
+
 describe('las pestañas de tenants', () => {
   const pestanas = () => [...contenedor.querySelectorAll('.conn-tab')]
   const nombres = () => pestanas().map((una) => una.querySelector('.conn-tab-nombre').textContent)

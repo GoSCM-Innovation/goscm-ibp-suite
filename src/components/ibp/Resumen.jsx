@@ -32,6 +32,7 @@ import {
 import { nombreConAmbiente } from '../../lib/nombre-de-conexion.js'
 import { useIsMobile } from '../../lib/useIsMobile.js'
 import { useVisibleInterval } from '../../lib/useVisibleInterval.js'
+import BotonActualizar from '../ui/BotonActualizar.jsx'
 import ProgressBar from './ProgressBar.jsx'
 
 const DEFAULT_HOURS = 24
@@ -152,10 +153,16 @@ export default function Resumen({ connection }) {
           {!isMobile && <span style={{ color: 'var(--text2)', fontSize: 11 }}>→</span>}
           <input type="datetime-local" value={toDate} onChange={e => setToDate(e.target.value)}
             style={{ ...inputStyle, ...(isMobile && { flexBasis: '100%', width: '100%' }) }} />
-          <button onClick={loadData} disabled={loading} style={{
-            background: 'var(--bg2)', border: '1px solid var(--border2)', borderRadius: 6,
-            color: 'var(--text2)', fontSize: 11, fontWeight: 600, padding: '6px 12px', cursor: 'pointer',
-          }}>↺ Refresh</button>
+          <BotonActualizar
+            etiqueta="Refresh"
+            onClick={loadData}
+            cargando={loading}
+            mensaje="Consultando jobs en SAP…"
+            style={{
+              background: 'var(--bg2)', border: '1px solid var(--border2)', borderRadius: 6,
+              color: 'var(--text2)', fontSize: 11, fontWeight: 600, padding: '6px 12px', cursor: 'pointer',
+            }}
+          />
           {!isMobile && (
             <span style={{
               fontSize: 10, color: 'var(--text3)', whiteSpace: 'nowrap',

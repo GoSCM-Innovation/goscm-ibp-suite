@@ -7,6 +7,27 @@ actualiza al terminar cada sesión, y su orden es el de prioridad acordada.
 
 ## Dónde estamos
 
+- **Cuatro pedidos del usuario (2026-10-06)**. **Pendiente: verlo en el sitio**, no se pudo entrar a la
+  aplicación (ver «Lo que no se pudo comprobar con los ojos»).
+  1. **El proceso de carga se ve.** `ui/BotonActualizar.jsx` (el ↺ gira, el botón se apaga, una frase dice
+     qué se lee y, si lo pidió un clic, «✓ Actualizado») y `ui/EstadoDeCarga.jsx`. Se usan en los cuatro
+     «Actualizar» de IBP (Ver Dato Maestro, Ver Dato Transaccional y las dos migraciones) y en todos los
+     «↺ Refresh» de IBP y CI-DS, que conservan su texto de v8/v9. El Resumen Global de IBP no marcaba que
+     estaba consultando al pulsar «Refresh»: ahora sí. **Lo que NO se tocó**: otras acciones que hablan con
+     SAP y ya tienen su propio indicador (barra fina, «Contando…», progreso de la migración).
+  2. **«✕» en cada paso de una migración**, en las dos: key figures (`KfMigration`) y tablas de dato
+     maestro (`MigrationPlan`). Quita el paso y, como la casilla sale de la lista de pasos, la desmarca.
+  3. **Data Tools ya no abre Production Visualizer solo.** `partirRuta` no elige aplicación por omisión:
+     `explorer` sin app muestra una bienvenida y el árbol del menú queda desplegado. Una dirección vieja
+     (`explorer/padoc`) también cae ahí.
+  4. **Listas extensas en ventana.** `ui/VentanaDeSeleccion.jsx`, con la forma del diálogo de «Campos
+     adicionales» de los Analyzers (buscador por ID o descripción, interruptor por elemento, «Aplicar» /
+     «Cancelar», tope de 500 filas dibujadas). La usan: las columnas de Ver Dato Maestro (`ColumnPicker`,
+     con sus preselecciones), las dimensiones y key figures de Ver Dato Transaccional (`MultiPick`), los
+     atributos del nivel y los key figures de la migración transaccional, y las tablas de la migración
+     de dato maestro. **Se dejaron como estaban**: los desplegables de valores de filtro
+     (`MultiValueSelect`) y los de un solo valor (`SearchSelect`), que ya tienen buscador y son de otra clase.
+
 - **Títulos repetidos fuera (2026-10-06, a petición del usuario)**: CI-DS Tools sin título de página
   sobre sus pestañas; IBP Tools sin el título de Resumen, Job Templates, Job Monitor y Resource Stats
   (queda su línea de contexto). El «Resumen Global» y el título del error de Job Templates se dejaron.

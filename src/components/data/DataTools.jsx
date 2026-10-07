@@ -50,7 +50,8 @@ export default function DataTools({ appId }) {
     [connectionId, planningArea, version],
   )
 
-  const app = APPS_VISIBLES.find((una) => una.id === appId) ?? APPS_VISIBLES[0]
+  // Sin aplicación elegida no se monta ninguna (pedido el 2026-10-06): ver `partirRuta`.
+  const app = APPS_VISIBLES.find((una) => una.id === appId) ?? null
 
   const [conexiones, setConexiones] = useState([])
   const [errorDePestana, setErrorDePestana] = useState('')
@@ -134,6 +135,22 @@ export default function DataTools({ appId }) {
       default:
         return null
     }
+  }
+
+  // La bienvenida: el árbol del menú ya está desplegado, y la aplicación la elige quien llega.
+  if (!app) {
+    return (
+      <div className="data-tools-pagina">
+        <div className="module-page data-tools-cuerpo">
+          <div className="empty-state data-tools-bienvenida" style={{ marginTop: 40 }}>
+            <strong style={{ fontSize: 16, color: 'var(--text)' }}>Data Tools</strong>
+            <p style={{ fontSize: 13, color: 'var(--text2)', marginTop: 8 }}>
+              Elige una aplicación en el menú lateral para empezar.
+            </p>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   // El glosario va de lado a lado y sin cinta: en v7 era así, y no depende de ningún tenant.

@@ -27,7 +27,9 @@ import {
 } from '../../lib/ibp-planning-data.js'
 import { guardarCifras } from '../../lib/ibp-planning-data-edit.js'
 import { useIsMobile } from '../../lib/useIsMobile.js'
+import BotonActualizar from '../ui/BotonActualizar.jsx'
 import SeccionPlegable from '../ui/SeccionPlegable.jsx'
+import VentanaDeSeleccion from '../ui/VentanaDeSeleccion.jsx'
 import DataGrid from './DataGrid.jsx'
 import EditReviewModal from './EditReviewModal.jsx'
 import { MultiValueSelect, SearchSelect } from './FilterControls.jsx'
@@ -83,53 +85,29 @@ function btnPrimary(disabled) {
 }
 
 // ── Selector múltiple con buscador (para dimensiones y key figures) ──
-const pickBtn = { ...BTN_SEC, display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }
-const pickPanel = { position: 'absolute', top: '100%', left: 0, zIndex: 60, marginTop: 4, width: 300, background: 'var(--bg2)', border: '1px solid var(--border2)', borderRadius: 8, boxShadow: 'var(--shadow-lg)', overflow: 'hidden' }
-const pickItem = sel => ({ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 10px', fontSize: 11, fontFamily: 'var(--mono)', cursor: 'pointer', color: sel ? 'var(--accent)' : 'var(--text)', background: sel ? 'color-mix(in srgb, var(--accent) 9%, transparent)' : 'transparent' })
+// Un botón que abre la ventana de selección (pedido el 2026-10-06: en v8 era un desplegable de 300 px).
+const pickBtn = { ...BTN_SEC }
 
 function MultiPick({ label, options, selected, onChange, labels = {} }) {
   const [open, setOpen] = useState(false)
-  const [q, setQ] = useState('')
-  const ref = useRef(null)
-  useEffect(() => {
-    if (!open) return undefined
-    const h = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
-    document.addEventListener('mousedown', h)
-    return () => document.removeEventListener('mousedown', h)
-  }, [open])
-  const sel = new Set(selected)
-  // Se agregan al final: el orden en que se eligen es el orden de las columnas.
-  const toggle = c => (sel.has(c) ? onChange(selected.filter(x => x !== c)) : onChange([...selected, c]))
-  const ql = q.toLowerCase()
-  const filtered = options.filter(o => !q || o.toLowerCase().includes(ql) || String(labels[o] || '').toLowerCase().includes(ql))
   return (
-    <div ref={ref} style={{ position: 'relative' }}>
-      <button type="button" onClick={() => setOpen(o => !o)} style={pickBtn}>
-        {label} <span style={{ color: 'var(--text3)', fontWeight: 400 }}>({selected.length})</span> <span style={{ color: 'var(--text3)', fontSize: 9 }}>▾</span>
+    <>
+      <button type="button" onClick={() => setOpen(true)} style={pickBtn} className="vs-boton">
+        {label} <span className="vs-boton-cuenta">({selected.length})</span>
       </button>
       {open && (
-        <div style={pickPanel}>
-          <input
-            autoFocus
-            value={q}
-            onChange={e => setQ(e.target.value)}
-            placeholder="Buscar…"
-            style={{ background: 'var(--bg)', border: 'none', borderBottom: '1px solid var(--border)', color: 'var(--text)', fontSize: 12, padding: '8px 10px', width: '100%', outline: 'none', boxSizing: 'border-box' }}
-          />
-          <div style={{ maxHeight: 260, overflowY: 'auto' }}>
-            {filtered.map(o => (
-              <label key={o} style={pickItem(sel.has(o))} title={labels[o] || o}>
-                <input type="checkbox" checked={sel.has(o)} onChange={() => toggle(o)} />
-                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {o}{labels[o] && labels[o] !== o ? <span style={{ color: 'var(--text3)' }}> — {labels[o]}</span> : null}
-                </span>
-              </label>
-            ))}
-            {filtered.length === 0 && <div style={{ padding: '8px 10px', fontSize: 11, color: 'var(--text3)' }}>—</div>}
-          </div>
-        </div>
+        <VentanaDeSeleccion
+          titulo={label}
+          opciones={options}
+          seleccion={selected}
+          etiquetas={labels}
+          sufijoDeConteo="seleccionado(s)"
+          // El orden en que se eligen es el orden de las columnas.
+          onGuardar={sel => { onChange(sel); setOpen(false) }}
+          onCerrar={() => setOpen(false)}
+        />
       )}
-    </div>
+    </>
   )
 }
 
@@ -505,15 +483,15 @@ export default function PlanningDataViewer({
           onAlternar={() => setSelCollapsed(v => !v)}
           resumen={selSummary}
           acciones={(
-            <button
-              type="button"
-              style={{ ...BTN_SEC, opacity: catalogLoading ? 0.6 : 1 }}
+            <BotonActualizar
+              style={BTN_SEC}
               onClick={refreshCatalog}
-              disabled={catalogLoading}
+              cargando={catalogLoading}
+              mensaje="Leyendo áreas, versiones y key figures de SAP…"
+              confirmar
+              error={Boolean(catalogError)}
               title="Vuelve a leer el catálogo de SAP (áreas, versiones y tablas). Úsalo si cambiaste una configuración en IBP y aún no se refleja."
-            >
-              ↺ Actualizar
-            </button>
+            />
           )}
         >
           <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 12 }}>

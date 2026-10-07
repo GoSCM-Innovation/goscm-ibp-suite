@@ -31,6 +31,7 @@ import { cancelRun, fetchJobRuns, fetchJobStatuses, restartRun } from '../../lib
 import { useIsMobile } from '../../lib/useIsMobile.js'
 import { useVisibleInterval } from '../../lib/useVisibleInterval.js'
 import JobStepsPanel from './JobStepsPanel.jsx'
+import BotonActualizar from '../ui/BotonActualizar.jsx'
 import ProgressBar from './ProgressBar.jsx'
 import TruncText from './TruncText.jsx'
 
@@ -302,10 +303,16 @@ export default function JobMonitor({ connection }) {
             style={{ ...inputStyle, ...(isMobile && { flexBasis: '100%', width: '100%' }) }} />
           <input type="text" placeholder="Buscar…" value={search} onChange={e => setSearch(e.target.value)}
             style={{ ...inputStyle, width: isMobile ? '100%' : 180, ...(isMobile && { flexBasis: '100%' }) }} />
-          <button type="button" onClick={loadJobs} disabled={loading} style={{
-            background: 'var(--bg2)', border: '1px solid var(--border2)', borderRadius: 6,
-            color: 'var(--text2)', fontSize: 11, fontWeight: 600, padding: '6px 12px', cursor: 'pointer',
-          }}>↺ Refresh</button>
+          <BotonActualizar
+            etiqueta="Refresh"
+            onClick={loadJobs}
+            cargando={loading}
+            mensaje="Consultando jobs en SAP…"
+            style={{
+              background: 'var(--bg2)', border: '1px solid var(--border2)', borderRadius: 6,
+              color: 'var(--text2)', fontSize: 11, fontWeight: 600, padding: '6px 12px', cursor: 'pointer',
+            }}
+          />
           {!isMobile && (
             <span style={{
               fontSize: 10, color: 'var(--text3)', whiteSpace: 'nowrap',

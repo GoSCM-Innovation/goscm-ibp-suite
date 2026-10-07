@@ -32,6 +32,7 @@ import {
 import { nombreConAmbiente } from '../../lib/nombre-de-conexion.js'
 import { useIsMobile } from '../../lib/useIsMobile.js'
 import { useVisibleInterval } from '../../lib/useVisibleInterval.js'
+import BotonActualizar from '../ui/BotonActualizar.jsx'
 import ProgressBar from './ProgressBar.jsx'
 import TruncText from './TruncText.jsx'
 
@@ -47,6 +48,9 @@ export default function GlobalSummary({ connections }) {
   const isMobile = useIsMobile()
   const [connData, setConnData] = useState({})
   const [lastRefresh, setLastRefresh] = useState(null)
+  // Una vuelta de consultas en curso. Sin esto, «Refresh» no mostraba nada hasta que llegaban TODAS
+  // las respuestas (una por conexión): la pantalla seguía igual y no se sabía si el clic había hecho algo.
+  const [consultando, setConsultando] = useState(false)
   const [tzMode, setTzModeState]      = useState(() => getTzMode())
 
   const [fromDate, setFromDate] = useState(() => toInputDate(new Date(Date.now() - DEFAULT_HOURS * 3600 * 1000), getTzMode()))
@@ -70,6 +74,7 @@ export default function GlobalSummary({ connections }) {
     if (!aMarcaSap(desde) || !aMarcaSap(hasta)) return
 
     const turno = ++ultimaRef.current
+    setConsultando(true)
     const results = {}
     await Promise.all(connections.map(async (conn) => {
       // Sin SAP_COM_0326 (Application Jobs) la consulta solo podría fallar: no se hace, y la
@@ -88,6 +93,7 @@ export default function GlobalSummary({ connections }) {
     if (turno !== ultimaRef.current) return
     setConnData(results)
     setLastRefresh(new Date())
+    setConsultando(false)
   }, [connections, fromDate, toDate, tzMode])
 
   // Carga inicial y al cambiar el rango (con una pausa); el refresco periódico se detiene mientras
@@ -124,7 +130,7 @@ export default function GlobalSummary({ connections }) {
 
   return (
     <div style={{ padding: isMobile ? 14 : 28, overflowY: 'auto', height: '100%', boxSizing: 'border-box', position: 'relative' }}>
-      <ProgressBar loading={anyLoading || globalLoading} />
+      <ProgressBar loading={anyLoading || globalLoading || consultando} />
 
       {/* Cabecera */}
       <div style={{
@@ -150,10 +156,16 @@ export default function GlobalSummary({ connections }) {
           {!isMobile && <span style={{ color: 'var(--text2)', fontSize: 11 }}>→</span>}
           <input type="datetime-local" value={toDate} onChange={e => setToDate(e.target.value)}
             style={{ ...inputStyle, ...(isMobile && { flexBasis: '100%', width: '100%' }) }} />
-          <button onClick={loadAll} disabled={anyLoading} style={{
-            background: 'var(--bg2)', border: '1px solid var(--border2)', borderRadius: 6,
-            color: 'var(--text2)', fontSize: 11, fontWeight: 600, padding: '6px 12px', cursor: 'pointer',
-          }}>↺ Refresh</button>
+          <BotonActualizar
+            etiqueta="Refresh"
+            onClick={loadAll}
+            cargando={anyLoading || consultando}
+            mensaje={`Consultando ${connections.length} conexión(es) en SAP…`}
+            style={{
+              background: 'var(--bg2)', border: '1px solid var(--border2)', borderRadius: 6,
+              color: 'var(--text2)', fontSize: 11, fontWeight: 600, padding: '6px 12px', cursor: 'pointer',
+            }}
+          />
           {!isMobile && (
             <span style={{
               fontSize: 10, color: 'var(--text3)', whiteSpace: 'nowrap',

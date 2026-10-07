@@ -51,6 +51,8 @@ import {
 import { analyzeMigrationTable, countMasterRows, migrationStep } from '../../lib/ibp-migration.js'
 import { nombreConAmbiente } from '../../lib/nombre-de-conexion.js'
 import { useIsMobile } from '../../lib/useIsMobile.js'
+import BotonActualizar from '../ui/BotonActualizar.jsx'
+import VentanaDeSeleccion from '../ui/VentanaDeSeleccion.jsx'
 import { MultiValueSelect, SearchSelect } from './FilterControls.jsx'
 
 // ── Textos de v8 (`src/i18n/es.json`), copiados tal cual ─────────────────────────────────────────
@@ -69,10 +71,14 @@ const TXT = {
   'mig.baseVersion': 'Base (__BASE)',
   'mig.selectPa': 'Seleccionar área…',
   'mig.mdtTitle': 'Datos maestros a migrar',
-  'mig.mdtSearch': 'Buscar tipo…',
+  'mig.pickMdts': 'Elegir tablas',
+  'mig.pickMdtsTitle': 'Tablas de dato maestro a migrar',
+  'mig.pickedMdts': 'tabla(s) seleccionada(s)',
   'mig.mdtSelectAll': 'Todos',
   'mig.mdtNone': 'Ninguno',
   'mig.mdtCountSelected': '{n} seleccionado(s)',
+  'mig.removeStep': 'Quitar este paso',
+  'mig.refreshingMsg': 'Leyendo catálogos de SAP…',
   'mig.mdtNoIntersection': 'No hay tipos comunes entre origen y destino para las áreas/versiones seleccionadas',
   'mig.deleteEntries': 'Borrar datos del destino antes de cargar',
   'mig.deleteEntriesNote': 'Elimina los registros existentes en destino para los tipos seleccionados antes de importar (DeleteEntries=true)',
@@ -384,7 +390,7 @@ export default function MigrationPlan({ connection }) {
   const [dstVersion, setDstVersion] = useState('')
 
   // ── Tablas elegidas y su orden ──
-  const [mdtSearch, setMdtSearch] = useState('')
+  const [pickMdts, setPickMdts]   = useState(false)   // la ventana de selección de tablas
   const [mdtOrder, setMdtOrder]   = useState([])   // nombres de ORIGEN, en orden
   // Origen → destino para tablas que se llaman distinto en cada sistema (AS1PRODUCT → AS4PRODUCT).
   const [mdtMapping, setMdtMapping] = useState({})
@@ -443,6 +449,35 @@ export default function MigrationPlan({ connection }) {
   function resetSelection() {
     setMdtOrder([]); setMdtMapping({})
     setMdtFilters({}); setFilterOpen(null); setMdtFieldOpts({}); setFilterTest({})
+  }
+
+  // La ventana de selección de tablas. Las que siguen elegidas conservan su lugar, su mapeo y su filtro;
+  // las desmarcadas se van con ellos; las nuevas entran al final con el destino sugerido.
+  function aplicarMdts(sel) {
+    const quedan = new Set(sel)
+    const fuera = mdtOrder.filter(m => !quedan.has(m))
+    const nuevas = sel.filter(m => !mdtOrder.includes(m))
+    setMdtOrder(prev => [...prev.filter(m => quedan.has(m)), ...nuevas])
+    setMdtMapping(prev => {
+      const n = { ...prev }
+      fuera.forEach(m => { delete n[m] })
+      nuevas.forEach(m => { n[m] = suggestDstName(m, dstCandidates) || m })
+      return n
+    })
+    setMdtFilters(prev => {
+      const n = { ...prev }
+      fuera.forEach(m => { delete n[m] })
+      return n
+    })
+    if (fuera.includes(filterOpen)) setFilterOpen(null)
+  }
+
+  // Quitar UNA tabla de la selección, con su mapeo y su filtro: lo hace el botón «✕» del paso.
+  function quitarMdt(mdt) {
+    setMdtOrder(prev => prev.filter(m => m !== mdt))
+    setMdtMapping(prev => { const n = { ...prev }; delete n[mdt]; return n })
+    setMdtFilters(prev => { const n = { ...prev }; delete n[mdt]; return n })
+    if (filterOpen === mdt) setFilterOpen(null)
   }
 
   // ── Catálogo del destino ──
@@ -543,8 +578,6 @@ export default function MigrationPlan({ connection }) {
 
   // La tabla de destino de una de origen: la elegida a mano → la sugerida → la misma.
   const resolveDst = src => mdtMapping[src] || suggestDstName(src, dstCandidates) || src
-
-  const filteredMdts = availableMdts.filter(m => !mdtSearch || m.toLowerCase().includes(mdtSearch.toLowerCase()))
 
   // Tablas elegidas cuyo destino NO es específico de la versión elegida: SAP las escribe en la base.
   const nonVersionMdts = (() => {
@@ -1071,8 +1104,13 @@ export default function MigrationPlan({ connection }) {
           <div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 5 }}>
               <label style={{ ...LABEL, marginBottom: 0 }}>{t('mig.srcLabel')}</label>
-              <button
-                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 10, color: 'var(--text3)', padding: '0 2px' }}
+              <BotonActualizar
+                etiqueta={t('mig.refreshConns').replace(/^↺\s*/, '')}
+                cargando={dstLoading || srcLoading}
+                mensaje={t('mig.refreshingMsg')}
+                confirmar
+                error={Boolean(catalogError)}
+                style={{ ...BTN_SEC, padding: '3px 10px', fontSize: 11 }}
                 onClick={() => {
                   // Las conexiones Y los catálogos: se olvida lo guardado de destino y origen para que
                   // un catálogo viejo o vacío no deje el desplegable de áreas vacío para siempre.
@@ -1082,9 +1120,7 @@ export default function MigrationPlan({ connection }) {
                   setCatalogTick(n => n + 1)
                 }}
                 title={t('mig.refreshConns')}
-              >
-                {t('mig.refreshConns')}
-              </button>
+              />
             </div>
 
             {/* Se elige entre las conexiones dadas de alta: v8 pedía aquí usuario y contraseña del
@@ -1210,13 +1246,6 @@ export default function MigrationPlan({ connection }) {
             </div>
           </div>
 
-          <input
-            style={{ ...INPUT, marginBottom: 10 }}
-            placeholder={t('mig.mdtSearch')}
-            value={mdtSearch}
-            onChange={e => setMdtSearch(e.target.value)}
-          />
-
           {(!srcVersion || !dstVersion) && (
             <div style={{
               fontSize: 11, color: 'var(--yellow, #e6a817)',
@@ -1233,36 +1262,33 @@ export default function MigrationPlan({ connection }) {
               {t('mig.mdtNoIntersection')}
             </div>
           ) : (
-            <div style={{ maxHeight: 240, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }}>
-              {filteredMdts.map(mdt => (
-                <label key={mdt} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', padding: '4px 2px' }}>
-                  <input
-                    type="checkbox"
-                    checked={mdtOrder.includes(mdt)}
-                    onChange={e => {
-                      if (e.target.checked) {
-                        setMdtOrder(prev => [...prev, mdt])
-                        setMdtMapping(prev => ({ ...prev, [mdt]: suggestDstName(mdt, dstCandidates) || mdt }))
-                      } else {
-                        setMdtOrder(prev => prev.filter(m => m !== mdt))
-                        setMdtMapping(prev => { const n = { ...prev }; delete n[mdt]; return n })
-                        setMdtFilters(prev => { const n = { ...prev }; delete n[mdt]; return n })
-                        if (filterOpen === mdt) setFilterOpen(null)
-                      }
-                    }}
-                  />
-                  <span style={{ fontSize: 12, color: 'var(--text)', fontFamily: 'var(--mono)', flex: 1 }}>{mdt}</span>
-                  {oneSel && mdtOrder.includes(mdt) && (
-                    <button
-                      style={{ ...BTN_SEC, padding: '2px 8px', fontSize: 10, marginLeft: 4, flexShrink: 0 }}
-                      onClick={e => { e.preventDefault(); handlePreview(mdt) }}
-                    >
-                      {t('mig.previewBtn')}
-                    </button>
-                  )}
-                </label>
-              ))}
+            // La lista de tablas es larga: se elige en una ventana (pedido el 2026-10-06) y las elegidas
+            // quedan debajo, en «Orden de migración», donde cada una se puede quitar.
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <button type="button" className="vs-boton" style={BTN_SEC} onClick={() => setPickMdts(true)}>
+                {t('mig.pickMdts')} <span className="vs-boton-cuenta">({mdtOrder.length}/{availableMdts.length})</span>
+              </button>
+              {/* La vista previa del v8 salía en la fila de la única tabla marcada. */}
+              {oneSel && (
+                <button
+                  type="button"
+                  style={{ ...BTN_SEC, padding: '5px 10px', fontSize: 11 }}
+                  onClick={() => handlePreview(mdtOrder[0])}
+                >
+                  {t('mig.previewBtn')} ({mdtOrder[0]})
+                </button>
+              )}
             </div>
+          )}
+          {pickMdts && (
+            <VentanaDeSeleccion
+              titulo={t('mig.pickMdtsTitle')}
+              opciones={availableMdts}
+              seleccion={mdtOrder}
+              sufijoDeConteo={t('mig.pickedMdts')}
+              onGuardar={sel => { aplicarMdts(sel); setPickMdts(false) }}
+              onCerrar={() => setPickMdts(false)}
+            />
           )}
 
           {/* ── Orden de migración ── */}
@@ -1391,6 +1417,15 @@ export default function MigrationPlan({ connection }) {
                       })}
                       style={{ ...BTN_SEC, padding: '2px 7px', fontSize: 10, opacity: idx === mdtOrder.length - 1 ? 0.25 : 1 }}
                     >↓</button>
+                    {/* Quitar el paso (pedido el 2026-10-06): lo mismo que desmarcar su casilla. */}
+                    <button
+                      type="button"
+                      onPointerDown={e => e.stopPropagation()}
+                      onClick={() => quitarMdt(mdt)}
+                      title={t('mig.removeStep')}
+                      aria-label={t('mig.removeStep')}
+                      style={{ ...BTN_SEC, padding: '2px 7px', fontSize: 10, color: 'var(--red)' }}
+                    >✕</button>
                   </div>
 
                   {/* Fichas del filtro activo (editor cerrado) */}

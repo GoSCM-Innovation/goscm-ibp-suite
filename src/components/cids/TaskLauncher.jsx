@@ -9,6 +9,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { cidsCall, isTaskPromoted } from '../../lib/cids.js'
+import BotonActualizar from '../ui/BotonActualizar.jsx'
 import PromotedBadge from './PromotedBadge.jsx'
 import RunTaskModal from './RunTaskModal.jsx'
 
@@ -157,7 +158,13 @@ export default function TaskLauncher({ destino, onTaskLanzada, transportadas }) 
               Limpiar
             </button>
           )}
-          <button type="button" className="btn btn-sm" onClick={refrescar} disabled={cargando}>↺ Refresh</button>
+          <BotonActualizar
+            etiqueta="Refresh"
+            className="btn btn-sm"
+            onClick={refrescar}
+            cargando={cargando}
+            mensaje="Leyendo tareas de CI-DS…"
+          />
         </div>
       </div>
 

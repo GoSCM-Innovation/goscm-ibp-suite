@@ -25,6 +25,7 @@ import {
 } from '../../lib/ibp-master-data.js'
 import { borrarDatoMaestro, guardarDatoMaestro } from '../../lib/ibp-master-data-edit.js'
 import { useIsMobile } from '../../lib/useIsMobile.js'
+import BotonActualizar from '../ui/BotonActualizar.jsx'
 import SeccionPlegable from '../ui/SeccionPlegable.jsx'
 import ColumnPicker from './ColumnPicker.jsx'
 import DataGrid from './DataGrid.jsx'
@@ -638,15 +639,15 @@ export default function MasterDataViewer({ connectionId, active = true, initial 
           onAlternar={() => setSelCollapsed(v => !v)}
           resumen={selSummary}
           acciones={(
-            <button
-              type="button"
-              style={{ ...BTN_SEC, opacity: catalogLoading ? 0.6 : 1, cursor: catalogLoading ? 'wait' : 'pointer' }}
+            <BotonActualizar
+              style={BTN_SEC}
               onClick={refreshCatalog}
-              disabled={catalogLoading}
+              cargando={catalogLoading}
+              mensaje="Leyendo áreas, versiones y tablas de SAP…"
+              confirmar
+              error={Boolean(catalogError)}
               title="Vuelve a leer el catálogo de SAP (áreas, versiones y tablas). Úsalo si cambiaste una configuración en IBP y aún no se refleja."
-            >
-              ↺ Actualizar
-            </button>
+            />
           )}
         >
           <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1.4fr', gap: 12 }}>

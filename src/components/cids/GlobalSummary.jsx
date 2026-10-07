@@ -24,6 +24,7 @@ import {
   colorDeTasa, latestFailed, perDayBreakdown, statusBreakdown, topTasks,
 } from '../../lib/cids-stats.js'
 import { useDateRange } from '../../lib/useDateRange.js'
+import BotonActualizar from '../ui/BotonActualizar.jsx'
 import ConnectionAvatar from '../ui/ConnectionAvatar.jsx'
 import DateRangeBar from '../ui/DateRangeBar.jsx'
 import EnvBadge from './EnvBadge.jsx'
@@ -163,9 +164,14 @@ export default function GlobalSummary({ destinos }) {
             onZona={fechas.cambiarZona}
             onRango={fechas.cambiarRango}
           />
-          <button type="button" className="btn btn-sm" onClick={cargar} disabled={cargando || !rangoValido}>
-            ↺ Refresh
-          </button>
+          <BotonActualizar
+            etiqueta="Refresh"
+            className="btn btn-sm"
+            onClick={cargar}
+            cargando={cargando}
+            mensaje="Consultando tareas en CI-DS…"
+            deshabilitado={!rangoValido}
+          />
           <span className="tag tag-muted">Auto-refresh {REFRESH_MS / 60000} min</span>
         </div>
       </div>

@@ -39,6 +39,8 @@ import {
   fetchAttrValues, fetchConversionValuesCached, fetchConversions, fetchPlanningCatalogCached, invalidatePlanningCaches,
 } from '../../lib/ibp-planning-data.js'
 import { nombreConAmbiente } from '../../lib/nombre-de-conexion.js'
+import BotonActualizar from '../ui/BotonActualizar.jsx'
+import VentanaDeSeleccion from '../ui/VentanaDeSeleccion.jsx'
 import { MultiValueSelect, SearchSelect } from './FilterControls.jsx'
 
 // ── Los textos de v8 (`i18n/es.json`), con sus mismas claves ──────────────────────────────────────
@@ -65,7 +67,13 @@ const TEXTOS = {
   'kfm.timeLevel': 'Nivel de tiempo',
   'kfm.levelPreview': 'Nivel: {attrs}',
   'kfm.levelHint': 'Selecciona los atributos raíz que definen el nivel del dato.',
-  'kfm.attrSearch': 'Buscar atributo…',
+  'kfm.pickAttrs': 'Elegir atributos',
+  'kfm.pickAttrsTitle': 'Atributos del nivel (destino)',
+  'kfm.pickedAttrs': 'atributo(s) seleccionado(s)',
+  'kfm.removeAttr': 'Quitar este atributo',
+  'kfm.pickKfs': 'Elegir key figures',
+  'kfm.pickKfsTitle': 'Key figures del destino ({dst})',
+  'kfm.pickedKfs': 'key figure(s) seleccionado(s)',
   'kfm.attrNeedsMap': 'No existe con ese nombre en el origen — requiere mapeo',
   'kfm.dst': 'destino',
   'kfm.selectSrcAttr': 'Atributo del origen…',
@@ -74,7 +82,6 @@ const TEXTOS = {
   'kfm.sameAreaNote': 'Origen y destino son la misma área y versión: se escribe sobre el mismo KF (upsert in-place). Los miembros de destino que coincidan con los valores leídos quedan sobrescritos con el valor agregado.',
   'kfm.sectionKf': 'Key figures del destino a llenar ({n})',
   'kfm.kfHint': 'Marca los key figures del DESTINO ({dst}) que quieres llenar. Luego, en cada paso, eliges de qué key figure del ORIGEN ({src}) sale cada uno.',
-  'kfm.kfSearch': 'Buscar key figure…',
   'kfm.pasteBtn': '📋 Pegar lista',
   'kfm.pasteClose': '✕ Cerrar',
   'kfm.pasteHint': 'Un key figure por línea (también valen coma o punto y coma) — se agregan con origen del mismo nombre. Línea con dos columnas separadas por TAB (copia de dos columnas de Excel) = ORIGEN → DESTINO.',
@@ -97,6 +104,8 @@ const TEXTOS = {
   'kfm.colSrc': 'Origen ({sys})',
   'kfm.colDst': 'Destino ({sys})',
   'kfm.selectSrcKf': 'Key figure del origen…',
+  'kfm.removeStep': 'Quitar este paso',
+  'kfm.refreshingMsg': 'Leyendo áreas y catálogos de SAP (origen y destino)…',
   'kfm.cancelBtn': 'Cancelar migración',
   'kfm.migrateBtn': 'Migrar',
   'kfm.confirmTitle': 'Confirmar migración',
@@ -319,9 +328,9 @@ export default function KfMigration({ connection }) {
   const [txName, setTxName]         = useState('IBP-ControlTower-KF')  // etiqueta de la transacción en el destino
   const [timeField, setTimeField]   = useState('PERIODID4_TSTAMP')
   const [levelAttrs, setLevelAttrs] = useState([])   // atributos del destino (nivel raíz)
-  const [attrSearch, setAttrSearch] = useState('')
+  const [pickAttrs, setPickAttrs]   = useState(false)  // la ventana de atributos del nivel
   const [steps, setSteps]           = useState([])   // [{ dstKf, srcKf, convs }]
-  const [kfSearch, setKfSearch]     = useState('')
+  const [pickKfs, setPickKfs]       = useState(false)  // la ventana de key figures
   // Agregar en bloque: pegar una lista (de Excel o del bloc de notas) en vez de marcar una por una
   const [showPaste, setShowPaste]     = useState(false)
   const [pasteText, setPasteText]     = useState('')
@@ -506,9 +515,6 @@ export default function KfMigration({ connection }) {
       return { value: s, label: lbl && lbl !== s ? `${s} — ${lbl}` : s }
     }), [srcAttrSet, srcCat])
 
-  const filteredAttrs = useMemo(() => dstAttrs.filter(a => !attrSearch || a.toLowerCase().includes(attrSearch.toLowerCase()) || (dstCat?.labels?.[a] || '').toLowerCase().includes(attrSearch.toLowerCase())), [dstAttrs, attrSearch, dstCat])
-  const filteredKfs   = useMemo(() => dstKfs.filter(k => !kfSearch || k.toLowerCase().includes(kfSearch.toLowerCase()) || (dstCat?.labels?.[k] || '').toLowerCase().includes(kfSearch.toLowerCase())), [dstKfs, kfSearch, dstCat])
-
   // El atributo del origen de un atributo del destino: el elegido → el mismo nombre → ninguno.
   const resolveSrcAttr = a => attrMap[a] || (srcAttrSet.has(a) ? a : null)
   // Atributos sin contrapartida en el origen (otro nombre): necesitan que se elija
@@ -525,6 +531,30 @@ export default function KfMigration({ connection }) {
       .catch(() => {})
   }
 
+  // Detectar las conversiones de varios pasos nuevos de tres en tres: con la ventana de selección se
+  // pueden agregar cientos de golpe, y una lectura a SAP por cada uno a la vez lo saturaría.
+  function detectConvsEnCola(pasos) {
+    const queue = [...pasos]
+    Array.from({ length: 3 }, async () => {
+      for (;;) {
+        const s = queue.shift()
+        if (!s) return
+        await detectConvs(s.dstKf, s.srcKf || s.dstKf)
+      }
+    })
+  }
+
+  // ── La ventana de selección de key figures ──
+  // Los pasos que siguen elegidos conservan su lugar y su mapeo; los desmarcados se van; los nuevos
+  // entran al final, con la key figure del origen del mismo nombre si existe.
+  function aplicarKfs(sel) {
+    const quedan = new Set(sel)
+    const actuales = new Set(steps.map(s => s.dstKf))
+    const nuevos = sel.filter(k => !actuales.has(k)).map(k => ({ dstKf: k, srcKf: defaultSrcKf(k) }))
+    setSteps(p => [...p.filter(s => quedan.has(s.dstKf)), ...nuevos.map(n => ({ ...n, convs: undefined }))])
+    detectConvsEnCola(nuevos)
+  }
+
   // ── Agregar en bloque desde una lista pegada ──
   function handlePasteApply() {
     const { agregadas, faltantes, repetidas } = cifrasPegadas(pasteText, {
@@ -532,15 +562,7 @@ export default function KfMigration({ connection }) {
     })
     if (agregadas.length > 0) {
       setSteps(prev => [...prev, ...agregadas.map(a => ({ ...a, convs: undefined }))])
-      // Detectar conversiones como al marcar a mano, de tres en tres.
-      const queue = [...agregadas]
-      Array.from({ length: 3 }, async () => {
-        for (;;) {
-          const s = queue.shift()
-          if (!s) return
-          await detectConvs(s.dstKf, s.srcKf || s.dstKf)
-        }
-      })
+      detectConvsEnCola(agregadas)
       setPasteText('')
     }
     setPasteResult({ added: agregadas.length, missing: faltantes, dupes: repetidas })
@@ -893,15 +915,20 @@ export default function KfMigration({ connection }) {
       <div style={{ ...SECTION, opacity: running ? 0.5 : 1, pointerEvents: running ? 'none' : 'auto' }}>
         <div style={{ ...SECTION_HDR, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <span>{t('kfm.sectionConn')}</span>
-          <button
-            type="button"
-            onClick={refreshCatalogs}
-            disabled={dstLoading || srcLoading}
-            title={t('mig.refreshConns')}
-            style={{ background: 'none', border: 'none', cursor: (dstLoading || srcLoading) ? 'default' : 'pointer', fontSize: 10, color: 'var(--text3)', padding: '0 2px', textTransform: 'none', letterSpacing: 0, fontWeight: 600 }}
-          >
-            {t('mig.refreshConns')}
-          </button>
+          {/* El botón con su proceso a la vista (pedido el 2026-10-06): antes el texto era casi
+              invisible y la lectura de SAP no avisaba de nada. */}
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+            <BotonActualizar
+              etiqueta={t('mig.refreshConns').replace(/^↺\s*/, '')}
+              onClick={refreshCatalogs}
+              cargando={dstLoading || srcLoading}
+              mensaje={t('kfm.refreshingMsg')}
+              confirmar
+              error={Boolean(catError)}
+              title={t('mig.refreshConns')}
+              style={{ ...BTN_SEC, padding: '4px 10px', fontSize: 11, textTransform: 'none', letterSpacing: 0 }}
+            />
+          </span>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
           {/* Origen */}
@@ -984,23 +1011,38 @@ export default function KfMigration({ connection }) {
               {levelAttrs.length > 0 ? t('kfm.levelPreview', { attrs: [...levelAttrs, timeLabel].join(' · ') }) : t('kfm.levelHint')}
             </div>
           </div>
-          <input style={{ ...INPUT, marginBottom: 8 }} placeholder={t('kfm.attrSearch')} value={attrSearch} onChange={e => setAttrSearch(e.target.value)} />
-          <div style={{ maxHeight: 180, overflowY: 'auto', display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-            {filteredAttrs.slice(0, 200).map(a => {
-              const sel = levelAttrs.includes(a)
-              const inSrc = srcAttrSet.has(a)
-              return (
-                <button key={a} type="button" onClick={() => setLevelAttrs(p => sel ? p.filter(x => x !== a) : [...p, a])}
-                  title={dstCat.labels?.[a] || a}
-                  style={{ fontSize: 11, fontFamily: 'var(--mono)', padding: '4px 8px', borderRadius: 6, cursor: 'pointer',
-                    border: `1px solid ${sel ? 'var(--accent)' : 'var(--border)'}`,
-                    background: sel ? 'color-mix(in srgb, var(--accent) 15%, transparent)' : 'var(--bg)',
-                    color: sel ? 'var(--text)' : 'var(--text2)' }}>
-                  {a}{!inSrc && <span title={t('kfm.attrNeedsMap')} style={{ color: 'var(--yellow, #e6a817)', marginLeft: 4 }}>⚠</span>}
-                </button>
-              )
-            })}
+          {/* La lista de atributos es larga: se elige en una ventana (pedido el 2026-10-06) y aquí quedan
+              solo los elegidos, cada uno con su ✕. */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+            <button type="button" className="vs-boton" style={{ ...BTN_SEC, padding: '5px 12px' }} onClick={() => setPickAttrs(true)}>
+              {t('kfm.pickAttrs')} <span className="vs-boton-cuenta">({levelAttrs.length}/{dstAttrs.length})</span>
+            </button>
+            {levelAttrs.map(a => (
+              <span key={a} title={dstCat.labels?.[a] || a}
+                style={{ fontSize: 11, fontFamily: 'var(--mono)', padding: '4px 4px 4px 8px', borderRadius: 6,
+                  border: '1px solid var(--accent)', background: 'color-mix(in srgb, var(--accent) 15%, transparent)', color: 'var(--text)',
+                  display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                {a}{!srcAttrSet.has(a) && <span title={t('kfm.attrNeedsMap')} style={{ color: 'var(--yellow, #e6a817)' }}>⚠</span>}
+                <button type="button" onClick={() => setLevelAttrs(p => p.filter(x => x !== a))}
+                  title={t('kfm.removeAttr')} aria-label={t('kfm.removeAttr')}
+                  style={{ background: 'none', border: 'none', color: 'var(--text3)', cursor: 'pointer', fontSize: 11, padding: '0 3px' }}>✕</button>
+              </span>
+            ))}
           </div>
+          {pickAttrs && (
+            <VentanaDeSeleccion
+              titulo={t('kfm.pickAttrsTitle')}
+              opciones={dstAttrs}
+              seleccion={levelAttrs}
+              etiquetas={dstCat.labels || {}}
+              insignia={a => (!srcAttrSet.has(a)
+                ? <span title={t('kfm.attrNeedsMap')} style={{ color: 'var(--yellow, #e6a817)', flexShrink: 0 }}>⚠</span>
+                : null)}
+              sufijoDeConteo={t('kfm.pickedAttrs')}
+              onGuardar={sel => { setLevelAttrs(sel); setPickAttrs(false) }}
+              onCerrar={() => setPickAttrs(false)}
+            />
+          )}
 
           {/* El atributo del origen de cada atributo del nivel. Por omisión, el mismo nombre. Cambiarlo
               LEE un atributo del destino desde OTRO del origen (CUSTID ← ATRIBUTOZ) y SAP agrega el KF a
@@ -1214,23 +1256,22 @@ export default function KfMigration({ connection }) {
           <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 8 }}>
             {t('kfm.kfHint', { dst: dstName, src: srcName || t('kfm.srcLabel') })}
           </div>
-          <input style={{ ...INPUT, marginBottom: 8 }} placeholder={t('kfm.kfSearch')} value={kfSearch} onChange={e => setKfSearch(e.target.value)} />
-          <div style={{ maxHeight: 200, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }}>
-            {filteredKfs.slice(0, 300).map(k => {
-              const sel = steps.some(s => s.dstKf === k)
-              return (
-                <label key={k} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', padding: '3px 2px' }} title={dstCat.labels?.[k] || k}>
-                  <input type="checkbox" checked={sel} onChange={e => {
-                    if (e.target.checked) {
-                      setSteps(p => [...p, { dstKf: k, srcKf: defaultSrcKf(k), convs: undefined }])
-                      detectConvs(k, defaultSrcKf(k) || k)
-                    } else setSteps(p => p.filter(s => s.dstKf !== k))
-                  }} />
-                  <span style={{ fontSize: 12, fontFamily: 'var(--mono)', color: 'var(--text)', flex: 1 }}>{k}</span>
-                </label>
-              )
-            })}
-          </div>
+          {/* Los key figures son cientos: se eligen en una ventana (pedido el 2026-10-06) y los elegidos
+              aparecen debajo, en «Orden y mapeo», donde cada paso se puede quitar. */}
+          <button type="button" className="vs-boton" style={BTN_SEC} onClick={() => setPickKfs(true)}>
+            {t('kfm.pickKfs')} <span className="vs-boton-cuenta">({steps.length}/{dstKfs.length})</span>
+          </button>
+          {pickKfs && (
+            <VentanaDeSeleccion
+              titulo={t('kfm.pickKfsTitle', { dst: dstName })}
+              opciones={dstKfs}
+              seleccion={steps.map(s => s.dstKf)}
+              etiquetas={dstCat.labels || {}}
+              sufijoDeConteo={t('kfm.pickedKfs')}
+              onGuardar={sel => { aplicarKfs(sel); setPickKfs(false) }}
+              onCerrar={() => setPickKfs(false)}
+            />
+          )}
 
           {/* Los pasos en orden, con el mapeo de key figure */}
           {steps.length > 0 && (
@@ -1241,7 +1282,7 @@ export default function KfMigration({ connection }) {
                 <span style={{ flex: 1, minWidth: 0 }}>{t('kfm.colSrc', { sys: srcName })}</span>
                 <span style={{ width: 12, flexShrink: 0 }} />
                 <span style={{ flex: '0 0 38%' }}>{t('kfm.colDst', { sys: dstName })}</span>
-                <span style={{ width: 58, flexShrink: 0 }} />
+                <span style={{ width: 86, flexShrink: 0 }} />
               </div>
               {steps.map((s, idx) => (
                 <div key={s.dstKf} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 8px', marginBottom: 4, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 7 }}>
@@ -1261,6 +1302,15 @@ export default function KfMigration({ connection }) {
                   <span style={{ fontSize: 11, fontFamily: 'var(--mono)', color: 'var(--text)', flex: '0 0 38%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={s.dstKf}>{s.dstKf}</span>
                   <button type="button" disabled={idx === 0} onClick={() => setSteps(p => { const a = [...p];[a[idx], a[idx - 1]] = [a[idx - 1], a[idx]]; return a })} style={{ ...BTN_SEC, padding: '2px 7px', fontSize: 10, opacity: idx === 0 ? 0.25 : 1 }}>↑</button>
                   <button type="button" disabled={idx === steps.length - 1} onClick={() => setSteps(p => { const a = [...p];[a[idx], a[idx + 1]] = [a[idx + 1], a[idx]]; return a })} style={{ ...BTN_SEC, padding: '2px 7px', fontSize: 10, opacity: idx === steps.length - 1 ? 0.25 : 1 }}>↓</button>
+                  {/* Quitar el paso (pedido el 2026-10-06). La casilla de arriba sale de `steps`, así que
+                      se desmarca sola. */}
+                  <button
+                    type="button"
+                    title={t('kfm.removeStep')}
+                    aria-label={t('kfm.removeStep')}
+                    onClick={() => setSteps(p => p.filter(x => x.dstKf !== s.dstKf))}
+                    style={{ ...BTN_SEC, padding: '2px 7px', fontSize: 10, color: 'var(--red)' }}
+                  >✕</button>
                 </div>
               ))}
             </div>

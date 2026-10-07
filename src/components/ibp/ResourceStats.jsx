@@ -17,6 +17,7 @@ import {
 import { getTzLabel, getTzMode, setTzMode as saveTzMode } from '../../lib/fechas-v8.js'
 import { fetchResourceStats } from '../../lib/ibp-resources.js'
 import { useVisibleInterval } from '../../lib/useVisibleInterval.js'
+import BotonActualizar from '../ui/BotonActualizar.jsx'
 import ProgressBar from './ProgressBar.jsx'
 
 // Los rangos de v8, con sus textos (`stats.range*` de `es.json`).
@@ -120,11 +121,18 @@ export default function ResourceStats({ connection }) {
               transition: 'all .15s',
             }}>{r.label}</button>
           ))}
-          <button type="button" onClick={handleRefresh} disabled={loading} style={{
-            padding: '5px 11px', fontSize: 12, fontWeight: 700, borderRadius: 6, cursor: 'pointer',
-            background: 'transparent', border: '1px solid var(--border)', color: 'var(--text2)',
-            marginLeft: 4, transition: 'all .15s',
-          }}>↻</button>
+          <BotonActualizar
+            etiqueta=""
+            onClick={handleRefresh}
+            cargando={loading}
+            mensaje="Leyendo uso de recursos…"
+            title="Actualizar"
+            style={{
+              padding: '5px 11px', fontSize: 12, fontWeight: 700, borderRadius: 6, cursor: 'pointer',
+              background: 'transparent', border: '1px solid var(--border)', color: 'var(--text2)',
+              marginLeft: 4, transition: 'all .15s',
+            }}
+          />
         </div>
       </div>
 

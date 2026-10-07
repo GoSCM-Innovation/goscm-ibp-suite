@@ -122,13 +122,15 @@ export const appById = (moduleId, appId) => (
 /**
  * Parte una dirección `modulo/app` en sus dos mitades.
  *
- * La app se descarta si el módulo no tiene ninguna con ese identificador: una dirección vieja o
- * escrita a mano no debe dejar la pantalla en blanco, tiene que caer en la primera app del módulo.
+ * La app se descarta si el módulo no tiene ninguna con ese identificador. Sin aplicación NO se
+ * elige ninguna (pedido el 2026-10-06): pulsar «Data Tools» despliega el árbol y es la persona quien
+ * elige, en vez de cargar la primera aplicación sin que la pida. Quien lo muestra pinta una pantalla
+ * de bienvenida, así una dirección vieja o escrita a mano tampoco deja la pantalla en blanco.
  */
 export function partirRuta(ruta) {
   const [moduleId, appId] = String(ruta ?? '').split('/')
   const module = moduleById(moduleId)
   if (!module) return { moduleId, appId: null }
   if (!module.apps) return { moduleId, appId: null }
-  return { moduleId, appId: appById(moduleId, appId) ? appId : module.apps[0].id }
+  return { moduleId, appId: appById(moduleId, appId) ? appId : null }
 }
