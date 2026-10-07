@@ -14,6 +14,7 @@
 import { useEffect, useState } from 'react'
 
 import { listIbpConnections } from '../../../lib/ibp.js'
+import SelectorDeLista from '../../ui/SelectorDeLista.jsx'
 
 export default function PanelConexionIbp({
   conexionId,
@@ -78,29 +79,35 @@ export default function PanelConexionIbp({
         <div className="docs-conexion-rejilla">
           <label className="docs-campo">
             <span>Conexión</span>
-            <select
+            <SelectorDeLista
               className="select input-sm"
               value={conexionId}
-              onChange={(evento) => { setSinElegir(false); onConexionElegida(evento.target.value) }}
-            >
-              <option value="">— elegir —</option>
-              {conexiones.map((una) => <option key={una.id} value={una.id}>{una.name}</option>)}
-            </select>
+              titulo="Conexión"
+              placeholder="— elegir —"
+              onChange={(valor) => { setSinElegir(false); onConexionElegida(valor) }}
+              options={[
+                { value: '', label: '— elegir —' },
+                ...conexiones.map((una) => ({ value: una.id, label: una.name })),
+              ]}
+            />
           </label>
 
           <label className="docs-campo">
             <span>
               Planning Area <span className="docs-opcional">(para los ejemplos de datos)</span>
             </span>
-            <select
+            <SelectorDeLista
               className="select input-sm"
               value={planArea}
+              titulo="Planning Area"
+              placeholder={opcionVacia}
               disabled={!catalogo || planAreas.length === 0}
-              onChange={(evento) => onPlanArea(evento.target.value)}
-            >
-              <option value="">{opcionVacia}</option>
-              {planAreas.map((una) => <option key={una} value={una}>{una}</option>)}
-            </select>
+              onChange={onPlanArea}
+              options={[
+                { value: '', label: opcionVacia },
+                ...planAreas.map((una) => ({ value: una, label: una })),
+              ]}
+            />
           </label>
 
           <div className="docs-campo">

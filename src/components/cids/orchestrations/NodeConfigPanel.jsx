@@ -22,6 +22,7 @@ import {
   RETRY_LIMITS,
 } from '../../../../core/orchestrations/graph.js'
 import { cidsCall } from '../../../lib/cids.js'
+import SelectorDeLista from '../../ui/SelectorDeLista.jsx'
 import './lienzo.css'
 
 const QUE_SI_FALLA = [
@@ -95,6 +96,7 @@ export default function NodeConfigPanel({ destino, nodo, onCambiar, onBorrar, on
           <>
             <div className="field">
               <label htmlFor="cfg-falla">En caso de error</label>
+              {/* select-fijo: lista cerrada y corta, no crece con los datos */}
               <select
                 id="cfg-falla"
                 className="select"
@@ -245,23 +247,25 @@ function VariablesGlobales({ destino, datos, onCambiar }) {
           {estado === 'loading' ? (
             <div className="cfg-variable-cargando">Cargando variables…</div>
           ) : (
-            <select
+            <SelectorDeLista
               className="select"
               value={fila.name ?? ''}
-              onChange={(evento) => cambiarFila(indice, 'name', evento.target.value)}
-              aria-label="Variable"
-            >
-              <option value="">— Seleccionar —</option>
-              {/* Si el nombre ya estaba puesto y SAP ya no lo declara, se conserva en la lista. */}
-              {fila.name && !disponibles.some((una) => una.name === fila.name) && (
-                <option value={fila.name}>{fila.name}</option>
-              )}
-              {disponibles.map((una) => (
-                <option key={una.name} value={una.name}>
-                  {una.name}{una.description ? ` — ${una.description}` : ''}
-                </option>
-              ))}
-            </select>
+              titulo="Variable"
+              placeholder="— Seleccionar —"
+              onChange={(valor) => cambiarFila(indice, 'name', valor)}
+              ariaLabel="Variable"
+              options={[
+                { value: '', label: '— Seleccionar —' },
+                // Si el nombre ya estaba puesto y SAP ya no lo declara, se conserva en la lista.
+                ...(fila.name && !disponibles.some((una) => una.name === fila.name)
+                  ? [{ value: fila.name, label: fila.name }]
+                  : []),
+                ...disponibles.map((una) => ({
+                  value: una.name,
+                  label: `${una.name}${una.description ? ` — ${una.description}` : ''}`,
+                })),
+              ]}
+            />
           )}
           <input
             className="input"
@@ -334,38 +338,40 @@ function AgenteYConfiguracion({ destino, datos, onCambiar }) {
     <>
       <div className="field">
         <label htmlFor="cfg-agente">Agente (opcional)</label>
-        <select
+        <SelectorDeLista
           id="cfg-agente"
           className="select"
           value={datos.agentName ?? ''}
-          onChange={(evento) => onCambiar('agentName', evento.target.value || null)}
-        >
-          <option value="">— Que lo decida CI-DS —</option>
-          {datos.agentName && !agentes.some((uno) => uno.name === datos.agentName) && (
-            <option value={datos.agentName}>{datos.agentName}</option>
-          )}
-          {agentes.map((uno) => (
-            <option key={uno.guid ?? uno.name} value={uno.name}>{uno.name}</option>
-          ))}
-        </select>
+          titulo="Agente"
+          placeholder="— Que lo decida CI-DS —"
+          onChange={(valor) => onCambiar('agentName', valor || null)}
+          options={[
+            { value: '', label: '— Que lo decida CI-DS —' },
+            ...(datos.agentName && !agentes.some((uno) => uno.name === datos.agentName)
+              ? [{ value: datos.agentName, label: datos.agentName }]
+              : []),
+            ...agentes.map((uno) => ({ value: uno.name, label: uno.name })),
+          ]}
+        />
       </div>
 
       <div className="field">
         <label htmlFor="cfg-config">Configuración del sistema (opcional)</label>
-        <select
+        <SelectorDeLista
           id="cfg-config"
           className="select"
           value={datos.profileName ?? ''}
-          onChange={(evento) => onCambiar('profileName', evento.target.value || null)}
-        >
-          <option value="">— Que lo decida CI-DS —</option>
-          {datos.profileName && !configuraciones.some((una) => una.name === datos.profileName) && (
-            <option value={datos.profileName}>{datos.profileName}</option>
-          )}
-          {configuraciones.map((una) => (
-            <option key={una.guid ?? una.name} value={una.name}>{una.name}</option>
-          ))}
-        </select>
+          titulo="Configuración del sistema"
+          placeholder="— Que lo decida CI-DS —"
+          onChange={(valor) => onCambiar('profileName', valor || null)}
+          options={[
+            { value: '', label: '— Que lo decida CI-DS —' },
+            ...(datos.profileName && !configuraciones.some((una) => una.name === datos.profileName)
+              ? [{ value: datos.profileName, label: datos.profileName }]
+              : []),
+            ...configuraciones.map((una) => ({ value: una.name, label: una.name })),
+          ]}
+        />
       </div>
     </>
   )

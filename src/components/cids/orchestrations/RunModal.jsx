@@ -30,6 +30,7 @@ import {
   variablesDeTareas,
 } from '../../../lib/orchestration-run-form.js'
 import Modal from '../../ui/Modal.jsx'
+import SelectorDeLista from '../../ui/SelectorDeLista.jsx'
 import './ejecucion.css'
 
 /** La clave de cada fila de variables: el índice no sirve, porque quitar una del medio movería el foco. */
@@ -244,19 +245,21 @@ export default function RunModal({ destino, grafo, onConfirmar, onClose }) {
                 placeholder="Nombre del agente (dejar vacío para default)"
               />
             ) : (
-              <select
+              <SelectorDeLista
                 id="ej-agente"
                 className="select"
                 value={agenteElegido}
-                onChange={(evento) => setAgenteElegido(evento.target.value)}
-              >
-                <option value="">— Sin agente específico —</option>
-                {agentes.map((agente) => (
-                  <option key={agente.guid || agente.name} value={agente.name}>
-                    {agente.name}{sufijoDeAgente(agente)}
-                  </option>
-                ))}
-              </select>
+                titulo="Agente"
+                placeholder="— Sin agente específico —"
+                onChange={setAgenteElegido}
+                options={[
+                  { value: '', label: '— Sin agente específico —' },
+                  ...agentes.map((agente) => ({
+                    value: agente.name,
+                    label: `${agente.name}${sufijoDeAgente(agente)}`,
+                  })),
+                ]}
+              />
             )}
           </Campo>
 
@@ -270,19 +273,21 @@ export default function RunModal({ destino, grafo, onConfirmar, onClose }) {
                 placeholder="Nombre del perfil (dejar vacío para default)"
               />
             ) : (
-              <select
+              <SelectorDeLista
                 id="ej-configuracion"
                 className="select"
                 value={configuracionElegida}
-                onChange={(evento) => setConfiguracionElegida(evento.target.value)}
-              >
-                <option value="">— Sin configuración específica —</option>
-                {configuraciones.map((configuracion) => (
-                  <option key={configuracion.guid || configuracion.name} value={configuracion.name}>
-                    {configuracion.name}
-                  </option>
-                ))}
-              </select>
+                titulo="Configuración de sistema"
+                placeholder="— Sin configuración específica —"
+                onChange={setConfiguracionElegida}
+                options={[
+                  { value: '', label: '— Sin configuración específica —' },
+                  ...configuraciones.map((configuracion) => ({
+                    value: configuracion.name,
+                    label: configuracion.name,
+                  })),
+                ]}
+              />
             )}
           </Campo>
 
@@ -317,22 +322,24 @@ export default function RunModal({ destino, grafo, onConfirmar, onClose }) {
                 {cargandoVariables ? (
                   <div className="input ej-variable-cargando">Cargando…</div>
                 ) : (
-                  <select
+                  <SelectorDeLista
                     className="select"
-                    aria-label="Variable"
+                    ariaLabel="Variable"
                     value={fila.name}
-                    onChange={(evento) => cambiarFila(fila.clave, 'name', evento.target.value)}
-                  >
-                    <option value="">— Seleccionar —</option>
-                    {fila.name && !disponibles.some((una) => una.name === fila.name) && (
-                      <option value={fila.name}>{fila.name}</option>
-                    )}
-                    {disponibles.map((una) => (
-                      <option key={una.name} value={una.name}>
-                        {una.name}{una.description ? ` — ${una.description}` : ''}
-                      </option>
-                    ))}
-                  </select>
+                    titulo="Variable"
+                    placeholder="— Seleccionar —"
+                    onChange={(valor) => cambiarFila(fila.clave, 'name', valor)}
+                    options={[
+                      { value: '', label: '— Seleccionar —' },
+                      ...(fila.name && !disponibles.some((una) => una.name === fila.name)
+                        ? [{ value: fila.name, label: fila.name }]
+                        : []),
+                      ...disponibles.map((una) => ({
+                        value: una.name,
+                        label: `${una.name}${una.description ? ` — ${una.description}` : ''}`,
+                      })),
+                    ]}
+                  />
                 )}
                 <input
                   className="input"

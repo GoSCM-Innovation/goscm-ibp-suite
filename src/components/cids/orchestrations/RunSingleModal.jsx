@@ -14,6 +14,7 @@ import { useEffect, useState } from 'react'
 import { cidsCall } from '../../../lib/cids.js'
 import { aplanarAgentes } from '../../../lib/orchestration-run-form.js'
 import Modal from '../../ui/Modal.jsx'
+import SelectorDeLista from '../../ui/SelectorDeLista.jsx'
 import './ejecucion.css'
 
 export default function RunSingleModal({ destino, nodo, onClose }) {
@@ -105,26 +106,38 @@ export default function RunSingleModal({ destino, nodo, onClose }) {
             <div className="ej-campo-cab">
               <label htmlFor="ej-single-agente">Agente ({agentes.length} disponibles)</label>
             </div>
-            <select id="ej-single-agente" className="select" value={agente} onChange={(evento) => setAgente(evento.target.value)}>
-              <option value="">— Default del sistema —</option>
-              {agenteFueraDeLista && <option value={agente}>{agente}</option>}
-              {agentes.map((uno) => (
-                <option key={uno.guid || uno.name} value={uno.name}>{uno.name}</option>
-              ))}
-            </select>
+            <SelectorDeLista
+              id="ej-single-agente"
+              className="select"
+              value={agente}
+              titulo="Agente"
+              placeholder="— Default del sistema —"
+              onChange={setAgente}
+              options={[
+                { value: '', label: '— Default del sistema —' },
+                ...(agenteFueraDeLista ? [{ value: agente, label: agente }] : []),
+                ...agentes.map((uno) => ({ value: uno.name, label: uno.name })),
+              ]}
+            />
           </div>
 
           <div className="ej-campo">
             <div className="ej-campo-cab">
               <label htmlFor="ej-single-perfil">Configuración ({configuraciones.length} disponibles)</label>
             </div>
-            <select id="ej-single-perfil" className="select" value={perfil} onChange={(evento) => setPerfil(evento.target.value)}>
-              <option value="">— Default del sistema —</option>
-              {perfilFueraDeLista && <option value={perfil}>{perfil}</option>}
-              {configuraciones.map((una) => (
-                <option key={una.guid || una.name} value={una.name}>{una.name}</option>
-              ))}
-            </select>
+            <SelectorDeLista
+              id="ej-single-perfil"
+              className="select"
+              value={perfil}
+              titulo="Configuración"
+              placeholder="— Default del sistema —"
+              onChange={setPerfil}
+              options={[
+                { value: '', label: '— Default del sistema —' },
+                ...(perfilFueraDeLista ? [{ value: perfil, label: perfil }] : []),
+                ...configuraciones.map((una) => ({ value: una.name, label: una.name })),
+              ]}
+            />
           </div>
 
           {variables.length > 0 && (

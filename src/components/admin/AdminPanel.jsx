@@ -6,6 +6,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '../../lib/api.js'
+import SelectorDeLista from '../ui/SelectorDeLista.jsx'
 import ClientsTab from './ClientsTab.jsx'
 import UsersTab from './UsersTab.jsx'
 import ConnectionsTab from './ConnectionsTab.jsx'
@@ -75,15 +76,18 @@ export default function AdminPanel({ user }) {
         <div className="card" style={{ marginBottom: 16, padding: '12px 14px' }}>
           <div style={{ alignItems: 'center', display: 'flex', flexWrap: 'wrap', gap: 10 }}>
             <span style={{ color: 'var(--text2)', fontSize: 12 }}>Administrando</span>
-            <select
+            <SelectorDeLista
               className="select"
               style={{ maxWidth: 280, width: 'auto' }}
               value={clientId ?? ''}
-              onChange={(e) => setClientId(e.target.value || null)}
-            >
-              <option value="">Mi empresa ({user.email.split('@')[1]})</option>
-              {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
+              titulo="Cliente"
+              ariaLabel="Cliente que se administra"
+              onChange={(valor) => setClientId(valor || null)}
+              options={[
+                { value: '', label: `Mi empresa (${user.email.split('@')[1]})` },
+                ...clients.map((c) => ({ value: c.id, label: c.name })),
+              ]}
+            />
             {seleccionado?.status === 'suspended' && <span className="tag tag-muted">Cliente suspendido</span>}
           </div>
         </div>

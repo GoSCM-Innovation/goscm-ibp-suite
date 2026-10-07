@@ -7,6 +7,22 @@ actualiza al terminar cada sesión, y su orden es el de prioridad acordada.
 
 ## Dónde estamos
 
+- **Un solo criterio para elegir de una lista (2026-10-06, a petición del usuario)**: hasta 12
+  opciones, el control de siempre; más, la ventana con buscador. El número vive en
+  `src/lib/lista-extensa.js` (`UMBRAL_LISTA_EXTENSA`) y vale para Data Tools, CI-DS Tools e IBP Tools.
+  - **Una opción**: `ui/SelectorDeLista.jsx` sustituye a `<select>` (misma clase, id y estilo; `onChange`
+    recibe el valor). `SearchSelect` de IBP aplica el mismo criterio. En la ventana (modo `unica` de
+    `ui/VentanaDeSeleccion.jsx`) un clic elige y cierra, y Enter elige la primera coincidencia.
+  - **Varias opciones**: siempre ventana con «Aplicar». Incluye los valores a filtrar (`MultiValueSelect`),
+    que se piden a SAP al abrir y se leen dentro de la ventana, con el aviso del tope de 5.000.
+  - **La garantía**: `src/components/selector-homologado.test.js` falla si aparece un `<select>` suelto.
+    Los que son una lista cerrada y corta (estrategia de error, operador de filtro, nivel de tiempo,
+    tamaño de página, tipo y acuerdo de conexión) llevan el comentario `select-fijo`.
+  - **Sin cambiar a propósito** (ya tienen buscador y son de v7): el diálogo «Filtros de red»
+    (`data/FiltrosDeRed.jsx`, ya es una ventana) y la lista de integraciones del documentador
+    (`cids/documenter/MappingDocumenter.jsx`, lista en página con buscador y «Activar filtradas»).
+    Si el usuario quiere la lista del documentador en ventana, es una decisión suya: toca la forma de v7.
+  **Pendiente: verlo en el sitio.**
 - **Cuatro pedidos del usuario (2026-10-06)**. **Pendiente: verlo en el sitio**, no se pudo entrar a la
   aplicación (ver «Lo que no se pudo comprobar con los ojos»).
   1. **El proceso de carga se ve.** `ui/BotonActualizar.jsx` (el ↺ gira, el botón se apaga, una frase dice

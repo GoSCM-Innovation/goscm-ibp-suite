@@ -382,6 +382,7 @@ export default function DataGrid({
         <span style={{ flex: 1 }} />
         <label style={{ fontSize: 11, color: 'var(--text3)', display: 'flex', alignItems: 'center', gap: 6 }}>
           Filas por página
+          {/* select-fijo: lista cerrada y corta, no crece con los datos */}
           <select value={pageSize} onChange={e => onPageSizeChange(parseInt(e.target.value, 10))} style={inputSm}>
             {pageSizeOptions.map(o => <option key={o} value={o}>{o}</option>)}
           </select>

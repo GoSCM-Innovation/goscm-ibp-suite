@@ -40,6 +40,7 @@ import {
 } from '../../lib/ibp-planning-data.js'
 import { nombreConAmbiente } from '../../lib/nombre-de-conexion.js'
 import BotonActualizar from '../ui/BotonActualizar.jsx'
+import SelectorDeLista from '../ui/SelectorDeLista.jsx'
 import VentanaDeSeleccion from '../ui/VentanaDeSeleccion.jsx'
 import { MultiValueSelect, SearchSelect } from './FilterControls.jsx'
 
@@ -939,28 +940,51 @@ export default function KfMigration({ connection }) {
             ) : (
               // v8 pedía aquí usuario y contraseña del origen. En esta plataforma las credenciales viven
               // cifradas en el servidor: se elige entre las conexiones dadas de alta.
-              <select style={SELECT} value={srcConnId || ''} onChange={e => {
-                const id = e.target.value || null
-                setSrcConnId(id)
-                setSrcVersion('')
-                setSrcAreas([]); setSrcPa(''); applySrcCat(null)
-              }}>
-                <option value="">{t('kfm.selectSource')}</option>
-                {allConns.map(c => <option key={c.id} value={c.id}>{c.id === connection.id ? t('mig.srcSelf', { name: nombreConAmbiente(c) }) : nombreConAmbiente(c)}</option>)}
-              </select>
+              <SelectorDeLista
+                style={SELECT}
+                className=""
+                titulo={t('kfm.srcLabel')}
+                value={srcConnId || ''}
+                onChange={v => {
+                  const id = v || null
+                  setSrcConnId(id)
+                  setSrcVersion('')
+                  setSrcAreas([]); setSrcPa(''); applySrcCat(null)
+                }}
+                options={[
+                  { value: '', label: t('kfm.selectSource') },
+                  ...allConns.map(c => ({ value: c.id, label: c.id === connection.id ? t('mig.srcSelf', { name: nombreConAmbiente(c) }) : nombreConAmbiente(c) })),
+                ]}
+              />
             )}
             {srcConn && (
               <div style={{ marginTop: 12 }}>
                 <label style={LABEL}>{t('kfm.area')}</label>
-                <select style={SELECT} value={srcPa} onChange={e => { setSrcPa(e.target.value); applySrcCat(null) }} disabled={srcAreas.length <= 1}>
-                  {srcAreas.length !== 1 && <option value="">{srcLoading ? t('kfm.loadingCat') : t('kfm.selectArea')}</option>}
-                  {srcAreas.map(a => <option key={a} value={a}>{a}</option>)}
-                </select>
+                <SelectorDeLista
+                  style={SELECT}
+                  className=""
+                  titulo={t('kfm.area')}
+                  value={srcPa}
+                  onChange={v => { setSrcPa(v); applySrcCat(null) }}
+                  disabled={srcAreas.length <= 1}
+                  options={[
+                    ...(srcAreas.length !== 1 ? [{ value: '', label: srcLoading ? t('kfm.loadingCat') : t('kfm.selectArea') }] : []),
+                    ...srcAreas.map(a => ({ value: a, label: a })),
+                  ]}
+                />
                 <label style={{ ...LABEL, marginTop: 10 }}>{t('kfm.srcVersion')}</label>
-                <select style={SELECT} value={srcVersion} onChange={e => setSrcVersion(e.target.value)} disabled={!srcCat}>
-                  <option value="">{t('kfm.baseVersion')}</option>
-                  {(srcCat?.versions || []).filter(v => v.id && v.id !== '__BASELINE').map(v => <option key={v.id} value={v.id}>{v.name} ({v.id})</option>)}
-                </select>
+                <SelectorDeLista
+                  style={SELECT}
+                  className=""
+                  titulo={t('kfm.srcVersion')}
+                  value={srcVersion}
+                  onChange={setSrcVersion}
+                  disabled={!srcCat}
+                  options={[
+                    { value: '', label: t('kfm.baseVersion') },
+                    ...(srcCat?.versions || []).filter(v => v.id && v.id !== '__BASELINE').map(v => ({ value: v.id, label: `${v.name} (${v.id})` })),
+                  ]}
+                />
               </div>
             )}
           </div>
@@ -972,17 +996,33 @@ export default function KfMigration({ connection }) {
             </div>
             <div style={{ marginTop: 12 }}>
               <label style={LABEL}>{t('kfm.area')}</label>
-              <select style={SELECT} value={dstPa} onChange={e => { setDstPa(e.target.value); applyDstCat(null) }} disabled={dstAreas.length <= 1}>
-                {dstAreas.length !== 1 && <option value="">{dstLoading ? t('kfm.loadingCat') : t('kfm.selectArea')}</option>}
-                {dstAreas.map(a => <option key={a} value={a}>{a}</option>)}
-              </select>
+              <SelectorDeLista
+                style={SELECT}
+                className=""
+                titulo={t('kfm.area')}
+                value={dstPa}
+                onChange={v => { setDstPa(v); applyDstCat(null) }}
+                disabled={dstAreas.length <= 1}
+                options={[
+                  ...(dstAreas.length !== 1 ? [{ value: '', label: dstLoading ? t('kfm.loadingCat') : t('kfm.selectArea') }] : []),
+                  ...dstAreas.map(a => ({ value: a, label: a })),
+                ]}
+              />
             </div>
             <div style={{ marginTop: 12 }}>
               <label style={LABEL}>{t('kfm.dstVersion')}</label>
-              <select style={SELECT} value={dstVersion} onChange={e => setDstVersion(e.target.value)} disabled={!dstCat}>
-                <option value="">{t('kfm.baseVersion')}</option>
-                {(dstCat?.versions || []).filter(v => v.id && v.id !== '__BASELINE').map(v => <option key={v.id} value={v.id}>{v.name} ({v.id})</option>)}
-              </select>
+              <SelectorDeLista
+                style={SELECT}
+                className=""
+                titulo={t('kfm.dstVersion')}
+                value={dstVersion}
+                onChange={setDstVersion}
+                disabled={!dstCat}
+                options={[
+                  { value: '', label: t('kfm.baseVersion') },
+                  ...(dstCat?.versions || []).filter(v => v.id && v.id !== '__BASELINE').map(v => ({ value: v.id, label: `${v.name} (${v.id})` })),
+                ]}
+              />
             </div>
             <div style={{ marginTop: 12 }}>
               <label style={LABEL}>{t('kfm.txName')}</label>
@@ -1001,6 +1041,7 @@ export default function KfMigration({ connection }) {
           <div style={{ display: 'flex', gap: 12, marginBottom: 12, alignItems: 'flex-end' }}>
             <div style={{ flex: '0 0 220px' }}>
               <label style={LABEL}>{t('kfm.timeLevel')}</label>
+              {/* select-fijo: lista cerrada y corta, no crece con los datos */}
               <select style={SELECT} value={timeField} onChange={e => setTimeField(e.target.value)}>
                 {TIME_LEVELS.filter(tl => (dstCat.dims || []).includes(tl.field)).map(tl => (
                   <option key={tl.field} value={tl.field}>{t(`kfm.time_${tl.key}`)}</option>
@@ -1118,10 +1159,12 @@ export default function KfMigration({ connection }) {
                 options={srcFilterAttrOptions}
                 onChange={v => setAttrFilters(p => p.map((x, xi) => xi === ci ? { ...x, field: v, value: '' } : x))}
                 placeholder={t('kfm.fltAttrPh')}
+                titulo={t('kfm.fltAttrPh')}
                 searchPlaceholder={t('kfm.typeToFilter')}
                 style={{ flex: '0 0 32%', minWidth: 0 }}
                 btnStyle={{ fontSize: 11, padding: '4px 8px' }}
               />
+              {/* select-fijo: lista cerrada y corta, no crece con los datos */}
               <select
                 value={c.op}
                 onChange={e => {
@@ -1153,6 +1196,7 @@ export default function KfMigration({ connection }) {
                   onChange={v => setAttrFilters(p => p.map((x, xi) => xi === ci ? { ...x, value: v } : x))}
                   loadValues={() => fetchAttrValues(srcConnId, { area: srcCat.pa, campo: c.field })}
                   placeholder={t('flt.valuesPh')}
+                  titulo={`Valores de ${c.field || 'el atributo'}`}
                   disabled={!c.field}
                 />
               )}

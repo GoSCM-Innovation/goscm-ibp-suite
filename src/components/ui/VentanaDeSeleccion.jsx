@@ -1,53 +1,71 @@
-// La ventana emergente para elegir de una lista extensa: buscador por ID o descripción, un
-// interruptor por elemento, el conteo de lo elegido y «Cancelar» / «Aplicar».
+// La ventana emergente para elegir de una lista extensa: buscador por ID o descripción y, según el
+// modo, un interruptor por elemento («múltiple») o un clic que elige y cierra («única»).
 //
-// Pedido el 2026-10-06: elegir atributos de un maestro o key figures en una lista dentro de la
-// página, o en un desplegable de 300 px, no escala. La forma es la del diálogo de «Campos adicionales»
-// de los Analyzers (`data/CamposAdicionales.jsx`), con el mismo `<dialog>` nativo y las mismas
-// clases `ef-*`: capa superior del navegador, foco atrapado y Escape gratis.
+// Pedido el 2026-10-06: elegir de una lista larga dentro de la página, o en un desplegable de 300 px,
+// no escala. La forma es la del diálogo de «Campos adicionales» de los Analyzers
+// (`data/CamposAdicionales.jsx`), con el mismo `<dialog>` nativo y las mismas clases `ef-*`: capa
+// superior del navegador, foco atrapado y Escape gratis.
 //
-// Es de presentación pura y NO sabe qué se está eligiendo: todo llega por props. Se monta al abrirse y
-// se desmonta al cerrarse, así la selección temporal y el buscador nacen limpios cada vez, y «Cancelar»
-// descarta lo marcado sin que quien la usa tenga que deshacer nada.
+// CUÁNDO se usa lo decide `lib/lista-extensa.js` (más de 12 opciones), no cada pantalla. Esta pieza no
+// sabe qué se está eligiendo: todo llega por props. Se monta al abrirse y se desmonta al cerrarse, así la
+// selección temporal y el buscador nacen limpios cada vez, y «Cancelar» descarta lo marcado.
 //
-// El orden en que se marca es el orden de la selección (se agrega al final, se quita sin mover el
-// resto): en las columnas de una tabla ese orden es el de las columnas.
+// Modo múltiple: lo marcado no se aplica hasta «Aplicar». El orden de la selección es el orden en que se
+// marcó (se agrega al final, se quita sin mover el resto): en las columnas de una tabla es el de las
+// columnas.
+// Modo única: pulsar una fila (o Enter sobre la primera coincidencia) la elige y cierra, sin «Aplicar».
 
 import { useEffect, useRef, useState } from 'react'
 
 // Dibujar miles de filas de golpe congela la ventana. Pasado esto se pide afinar la búsqueda.
 const TOPE_DE_FILAS = 500
 
-const coincide = (id, descripcion, consulta) => (
-  !consulta || id.toUpperCase().includes(consulta) || Boolean(descripcion && descripcion.toUpperCase().includes(consulta))
-)
-
 /**
  * @param {object} props
  * @param {string}   props.titulo
- * @param {string[]} props.opciones             Todos los elementos elegibles, en el orden en que se listan.
- * @param {string[]} props.seleccion            Lo elegido al abrir, en orden.
- * @param {(sel: string[]) => void} props.onGuardar
+ * @param {string[]} props.opciones             Todos los elementos elegibles (sus IDs), en el orden en que se listan.
  * @param {() => void} props.onCerrar
- * @param {Record<string, string>} [props.etiquetas]  Descripción de cada elemento, si se conoce.
+ * @param {'multiple'|'unica'} [props.modo]
+ * @param {string[]} [props.seleccion]          Múltiple: lo elegido al abrir, en orden.
+ * @param {(sel: string[]) => void} [props.onGuardar]   Múltiple.
+ * @param {string}   [props.valor]              Única: el elegido ahora (se resalta).
+ * @param {(id: string) => void} [props.onElegir]       Única.
+ * @param {Record<string, string>} [props.nombres]      Texto principal de cada elemento si NO es su ID
+ *        («ID — descripción» ya armado, o una fecha legible). Se busca en él también.
+ * @param {Record<string, string>} [props.etiquetas]    Descripción de cada elemento, si se conoce.
  * @param {string[]} [props.claves]             Elementos que se marcan con la insignia «clave».
  * @param {(id: string) => import('react').ReactNode} [props.insignia]  Marca extra por elemento.
  * @param {(ctl: { opciones: string[], temporal: string[], setTemporal: Function }) => import('react').ReactNode} [props.cabecera]
  *        Controles propios sobre el buscador (las preselecciones de columnas, por ejemplo).
  * @param {string}   [props.sufijoDeConteo]     «campo(s) seleccionado(s)».
+ * @param {boolean}  [props.cargando]           Las opciones aún se están leyendo (de SAP, por ejemplo).
+ * @param {string}   [props.mensajeDeCarga]
+ * @param {string}   [props.error]              Si las opciones no se pudieron leer.
+ * @param {string}   [props.aviso]              Una advertencia sobre la lista (por ejemplo, que está recortada).
+ * @param {string}   [props.textoVacio]
  */
 export default function VentanaDeSeleccion({
   titulo,
   opciones,
-  seleccion,
-  onGuardar,
   onCerrar,
+  modo = 'multiple',
+  seleccion = [],
+  onGuardar,
+  valor,
+  onElegir,
+  nombres = {},
   etiquetas = {},
   claves = [],
   insignia = null,
   cabecera = null,
   sufijoDeConteo = 'seleccionado(s)',
+  cargando = false,
+  mensajeDeCarga = 'Cargando…',
+  error = '',
+  aviso = '',
+  textoVacio = 'No hay elementos para elegir.',
 }) {
+  const unica = modo === 'unica'
   const dialogo = useRef(null)
   const [filtro, setFiltro] = useState('')
   const [temporal, setTemporal] = useState(() => [...seleccion])
@@ -59,8 +77,13 @@ export default function VentanaDeSeleccion({
     else el.open = true
   }, [])
 
+  // El buscador mira el ID, el texto principal y la descripción, sin distinguir mayúsculas.
   const consulta = filtro.trim().toUpperCase()
-  const visibles = opciones.filter((id) => coincide(id, etiquetas[id] || '', consulta))
+  const coincide = (id) => !consulta
+    || id.toUpperCase().includes(consulta)
+    || Boolean(nombres[id] && nombres[id].toUpperCase().includes(consulta))
+    || Boolean(etiquetas[id] && etiquetas[id].toUpperCase().includes(consulta))
+  const visibles = opciones.filter(coincide)
   const dibujadas = visibles.slice(0, TOPE_DE_FILAS)
   const claveSet = new Set(claves)
   const marcadas = new Set(temporal)
@@ -78,6 +101,9 @@ export default function VentanaDeSeleccion({
     setTemporal((actual) => actual.filter((id) => !fuera.has(id)))
   }
 
+  const nombreDe = (id) => nombres[id] ?? id
+  const descripcionDe = (id) => (etiquetas[id] && etiquetas[id] !== id && etiquetas[id] !== nombreDe(id) ? etiquetas[id] : '')
+
   return (
     // `onClose` se dispara cuando el navegador cierra el diálogo por su cuenta (Escape): hay que
     // desmontarlo también, o el estado de quien lo usa diría «abierto» sobre un diálogo ya cerrado.
@@ -87,7 +113,7 @@ export default function VentanaDeSeleccion({
         <button type="button" className="dialog-close-btn" onClick={onCerrar} aria-label="Cerrar">✕</button>
       </div>
       <div className="ef-fields-dialog-body">
-        {cabecera && <div className="vs-cabecera">{cabecera({ opciones, temporal, setTemporal })}</div>}
+        {cabecera && !unica && <div className="vs-cabecera">{cabecera({ opciones, temporal, setTemporal })}</div>}
 
         <div className="ef-fields-search-wrap">
           <input
@@ -97,46 +123,77 @@ export default function VentanaDeSeleccion({
             className="ef-fields-search"
             value={filtro}
             onChange={(evento) => setFiltro(evento.target.value)}
+            onKeyDown={(evento) => {
+              // Como en el desplegable de siempre: Enter elige la primera coincidencia.
+              if (unica && evento.key === 'Enter' && visibles.length > 0) {
+                evento.preventDefault()
+                onElegir(visibles[0])
+              }
+            }}
           />
-          <div className="vs-masivas">
-            <button type="button" className="vs-enlace" onClick={marcarVisibles} disabled={visibles.length === 0}>
-              Marcar visibles ({visibles.length})
-            </button>
-            <button type="button" className="vs-enlace" onClick={quitarVisibles} disabled={visibles.length === 0}>
-              Quitar visibles
-            </button>
-          </div>
+          {!unica && (
+            <div className="vs-masivas">
+              <button type="button" className="vs-enlace" onClick={marcarVisibles} disabled={visibles.length === 0}>
+                Marcar visibles ({visibles.length})
+              </button>
+              <button type="button" className="vs-enlace" onClick={quitarVisibles} disabled={visibles.length === 0}>
+                Quitar visibles
+              </button>
+            </div>
+          )}
         </div>
 
         <div className="ef-fields-list">
-          {dibujadas.map((id) => (
+          {cargando && <p className="vs-nota">{mensajeDeCarga}</p>}
+          {!cargando && error && <p className="vs-nota vs-nota-aviso">{error}</p>}
+          {!cargando && aviso && <p className="vs-nota vs-nota-aviso">{aviso}</p>}
+
+          {!cargando && dibujadas.map((id) => (unica ? (
+            <button
+              type="button"
+              key={id}
+              className={`vs-fila${id === valor ? ' sel' : ''}`}
+              onClick={() => onElegir(id)}
+            >
+              <span className="ef-field-info">
+                <span className="ef-field-name">{nombreDe(id)}</span>
+                {descripcionDe(id) && <span className="ef-field-desc">{descripcionDe(id)}</span>}
+              </span>
+              {insignia?.(id)}
+            </button>
+          ) : (
             <div className="ef-field-item" key={id}>
               <label className="ef-toggle-wrap">
                 <input type="checkbox" checked={marcadas.has(id)} onChange={() => alternar(id)} />
                 <span className="ef-toggle-slider" />
               </label>
               <div className="ef-field-info">
-                <span className="ef-field-name">{id}</span>
-                {etiquetas[id] && etiquetas[id] !== id && <span className="ef-field-desc">{etiquetas[id]}</span>}
+                <span className="ef-field-name">{nombreDe(id)}</span>
+                {descripcionDe(id) && <span className="ef-field-desc">{descripcionDe(id)}</span>}
               </div>
               {insignia?.(id)}
               {claveSet.has(id) && <span className="ef-mandatory-badge">clave</span>}
             </div>
-          ))}
-          {visibles.length > dibujadas.length && (
+          )))}
+
+          {!cargando && visibles.length > dibujadas.length && (
             <p className="vs-nota">Se muestran {dibujadas.length} de {visibles.length}. Afina la búsqueda para ver el resto.</p>
           )}
-          {visibles.length === 0 && (
-            <p className="vs-nota">{consulta ? `Sin resultados para "${filtro}".` : 'No hay elementos para elegir.'}</p>
+          {!cargando && !error && visibles.length === 0 && (
+            <p className="vs-nota">{consulta ? `Sin resultados para "${filtro}".` : textoVacio}</p>
           )}
         </div>
 
         <div className="ef-fields-footer">
           {/* Cuenta TODA la selección, también lo que el buscador esconde: es lo que se aplica. */}
-          <span className="ef-fields-count">{temporal.length > 0 ? `${temporal.length} ${sufijoDeConteo}` : ''}</span>
+          <span className="ef-fields-count">
+            {!unica && temporal.length > 0 ? `${temporal.length} ${sufijoDeConteo}` : ''}
+          </span>
           <div className="btn-row" style={{ margin: 0 }}>
             <button type="button" className="btn btn-secondary" onClick={onCerrar}>Cancelar</button>
-            <button type="button" className="btn btn-primary" onClick={() => onGuardar(temporal)}>Aplicar</button>
+            {!unica && (
+              <button type="button" className="btn btn-primary" onClick={() => onGuardar(temporal)}>Aplicar</button>
+            )}
           </div>
         </div>
       </div>

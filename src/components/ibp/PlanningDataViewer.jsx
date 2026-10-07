@@ -28,6 +28,7 @@ import {
 import { guardarCifras } from '../../lib/ibp-planning-data-edit.js'
 import { useIsMobile } from '../../lib/useIsMobile.js'
 import BotonActualizar from '../ui/BotonActualizar.jsx'
+import SelectorDeLista from '../ui/SelectorDeLista.jsx'
 import SeccionPlegable from '../ui/SeccionPlegable.jsx'
 import VentanaDeSeleccion from '../ui/VentanaDeSeleccion.jsx'
 import DataGrid from './DataGrid.jsx'
@@ -497,17 +498,32 @@ export default function PlanningDataViewer({
           <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 12 }}>
             <div>
               <label style={LABEL}>Área de planificación</label>
-              <select style={SELECT} value={area} onChange={e => chooseArea(e.target.value)} disabled={catalogLoading || areas.length <= 1}>
-                {areas.length === 0 && <option value="">{catalogLoading ? '…' : '—'}</option>}
-                {areas.map(a => <option key={a} value={a}>{a}</option>)}
-              </select>
+              <SelectorDeLista
+                style={SELECT}
+                className=""
+                titulo="Área de planificación"
+                value={area}
+                onChange={chooseArea}
+                disabled={catalogLoading || areas.length <= 1}
+                options={areas.length === 0
+                  ? [{ value: '', label: catalogLoading ? '…' : '—' }]
+                  : areas.map(a => ({ value: a, label: a }))}
+              />
             </div>
             <div>
               <label style={LABEL}>Versión</label>
-              <select style={SELECT} value={version} onChange={e => chooseVersion(e.target.value)} disabled={!catalog}>
-                <option value="">(base / sin versión)</option>
-                {versions.filter(v => v.id).map(v => <option key={v.id} value={v.id}>{v.id}{v.name && v.name !== v.id ? ` — ${v.name}` : ''}</option>)}
-              </select>
+              <SelectorDeLista
+                style={SELECT}
+                className=""
+                titulo="Versión"
+                value={version}
+                onChange={chooseVersion}
+                disabled={!catalog}
+                options={[
+                  { value: '', label: '(base / sin versión)' },
+                  ...versions.filter(v => v.id).map(v => ({ value: v.id, label: `${v.id}${v.name && v.name !== v.id ? ` — ${v.name}` : ''}` })),
+                ]}
+              />
             </div>
           </div>
         </SeccionPlegable>
@@ -537,6 +553,7 @@ export default function PlanningDataViewer({
               </div>
               <div>
                 <label style={LABEL}>Nivel de tiempo</label>
+                {/* select-fijo: lista cerrada y corta, no crece con los datos */}
                 <select style={{ ...SELECT, width: 'auto' }} value={timeField} onChange={e => setTimeField(e.target.value)}>
                   {timeLevelsAvail.map(tl => <option key={tl.field} value={tl.field}>{tl.label}</option>)}
                 </select>
@@ -548,19 +565,33 @@ export default function PlanningDataViewer({
               {units.length > 0 && (
                 <div>
                   <label style={LABEL}>Unidad destino</label>
-                  <select style={{ ...SELECT, width: 'auto' }} value={selUom} onChange={e => setSelUom(e.target.value)}>
-                    <option value="">—</option>
-                    {units.map(u => <option key={u.id} value={u.id}>{u.id}{u.descripcion && u.descripcion !== u.id ? ` — ${u.descripcion}` : ''}</option>)}
-                  </select>
+                  <SelectorDeLista
+                    style={{ ...SELECT, width: 'auto' }}
+                    className=""
+                    titulo="Unidad destino"
+                    value={selUom}
+                    onChange={setSelUom}
+                    options={[
+                      { value: '', label: '—' },
+                      ...units.map(u => ({ value: u.id, label: `${u.id}${u.descripcion && u.descripcion !== u.id ? ` — ${u.descripcion}` : ''}` })),
+                    ]}
+                  />
                 </div>
               )}
               {currencies.length > 0 && (
                 <div>
                   <label style={LABEL}>Moneda destino</label>
-                  <select style={{ ...SELECT, width: 'auto' }} value={selCurr} onChange={e => setSelCurr(e.target.value)}>
-                    <option value="">—</option>
-                    {currencies.map(c => <option key={c.id} value={c.id}>{c.id}{c.descripcion && c.descripcion !== c.id ? ` — ${c.descripcion}` : ''}</option>)}
-                  </select>
+                  <SelectorDeLista
+                    style={{ ...SELECT, width: 'auto' }}
+                    className=""
+                    titulo="Moneda destino"
+                    value={selCurr}
+                    onChange={setSelCurr}
+                    options={[
+                      { value: '', label: '—' },
+                      ...currencies.map(c => ({ value: c.id, label: `${c.id}${c.descripcion && c.descripcion !== c.id ? ` — ${c.descripcion}` : ''}` })),
+                    ]}
+                  />
                 </div>
               )}
             </div>
@@ -592,8 +623,9 @@ export default function PlanningDataViewer({
               {conds.map((c, i) => (
                 <div key={i} style={{ display: 'flex', gap: 6, marginBottom: 6, alignItems: 'center', flexWrap: 'wrap' }}>
                   <div style={{ width: isMobile ? '100%' : 220 }}>
-                    <SearchSelect value={c.field} options={fieldOptions} onChange={v => setCond(i, { field: v })} placeholder="Campo…" searchPlaceholder="Buscar valor…" />
+                    <SearchSelect value={c.field} options={fieldOptions} onChange={v => setCond(i, { field: v })} placeholder="Campo…" searchPlaceholder="Buscar valor…" titulo="Campo del filtro" />
                   </div>
+                  {/* select-fijo: lista cerrada y corta, no crece con los datos */}
                   <select style={{ ...SELECT, width: 'auto' }} value={c.op} onChange={e => setCond(i, { op: e.target.value })}>
                     <option value="in">igual / en lista</option>
                     <option value="sw">comienza con</option>
@@ -610,6 +642,7 @@ export default function PlanningDataViewer({
                       value={c.value}
                       onChange={v => setCond(i, { value: v })}
                       placeholder="Valores (separados por coma)…"
+                      titulo={`Valores de ${c.field || 'la columna'}`}
                       disabled={!c.field}
                       loadValues={() => fetchAttrValues(connectionId, { area: catalog.area, campo: c.field })}
                     />

@@ -18,6 +18,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import Modal from '../ui/Modal.jsx'
+import SelectorDeLista from '../ui/SelectorDeLista.jsx'
 import { conexionPreseleccionada, estaConectado, useConexionActiva } from '../../lib/conexion-activa.js'
 import { fijarDestino } from '../../lib/fijar-destino.js'
 import { listIbpConnections } from '../../lib/ibp.js'
@@ -181,22 +182,23 @@ export default function ConnectDialog({ onClose }) {
             <>
               <div className="form-group" style={{ maxWidth: 520 }}>
                 <label htmlFor="connSel">Conexión</label>
-                <select
+                <SelectorDeLista
                   id="connSel"
                   className="conn-select"
                   value={conexionId}
-                  onChange={(evento) => {
-                    setConexionId(evento.target.value)
+                  titulo="Conexión"
+                  placeholder="Elige una conexión…"
+                  onChange={(valor) => {
+                    setConexionId(valor)
                     setCatalogo(null)
                     setArea('')
                     setVersionId('')
                   }}
-                >
-                  <option value="">Elige una conexión…</option>
-                  {conexiones.map((una) => (
-                    <option key={una.id} value={una.id}>{etiquetaDeConexion(una)}</option>
-                  ))}
-                </select>
+                  options={[
+                    { value: '', label: 'Elige una conexión…' },
+                    ...conexiones.map((una) => ({ value: una.id, label: etiquetaDeConexion(una) })),
+                  ]}
+                />
                 {conexion?.isProduction && (
                   <p style={{ fontSize: 11, color: 'var(--accent)', margin: '6px 0 0' }}>
                     ⚠ Es un tenant productivo.
@@ -230,17 +232,21 @@ export default function ConnectDialog({ onClose }) {
         <div className="conn-step active">
           <div className="form-group" style={{ maxWidth: 420 }}>
             <label htmlFor="paSel">Planning Area</label>
-            <select
+            <SelectorDeLista
               id="paSel"
               className="conn-select"
               value={area}
-              onChange={(evento) => { setArea(evento.target.value); setVersionId('') }}
-            >
-              <option value="">Elige un área…</option>
-              {Object.entries(catalogo ?? {}).map(([id, una]) => (
-                <option key={id} value={id}>{una.desc === id ? id : `${id} — ${una.desc}`}</option>
-              ))}
-            </select>
+              titulo="Planning Area"
+              placeholder="Elige un área…"
+              onChange={(valor) => { setArea(valor); setVersionId('') }}
+              options={[
+                { value: '', label: 'Elige un área…' },
+                ...Object.entries(catalogo ?? {}).map(([id, una]) => ({
+                  value: id,
+                  label: una.desc === id ? id : `${id} — ${una.desc}`,
+                })),
+              ]}
+            />
           </div>
 
           <div className="btn-row">
@@ -262,20 +268,22 @@ export default function ConnectDialog({ onClose }) {
         <div className="conn-step active">
           <div className="form-group" style={{ maxWidth: 420 }}>
             <label htmlFor="verSel">Versión</label>
-            <select
+            <SelectorDeLista
               id="verSel"
               className="conn-select"
               value={version}
-              onChange={(evento) => setVersionId(evento.target.value)}
-            >
-              <option value="">Elige una versión…</option>
-              <option value={VERSION_BASE}>Versión base — el dato maestro del área</option>
-              {versiones.map((una) => (
-                <option key={una.id} value={una.id}>
-                  {una.name === una.id ? una.id : `${una.id} — ${una.name}`}
-                </option>
-              ))}
-            </select>
+              titulo="Versión"
+              placeholder="Elige una versión…"
+              onChange={setVersionId}
+              options={[
+                { value: '', label: 'Elige una versión…' },
+                { value: VERSION_BASE, label: 'Versión base — el dato maestro del área' },
+                ...versiones.map((una) => ({
+                  value: una.id,
+                  label: una.name === una.id ? una.id : `${una.id} — ${una.name}`,
+                })),
+              ]}
+            />
             <p style={{ fontSize: 11, color: 'var(--text3)', margin: '6px 0 0' }}>
               La versión base ejecuta sin filtro de versión: es el dato maestro del área.
             </p>

@@ -25,6 +25,7 @@ import BotonCopiar from '../../ui/BotonCopiar.jsx'
 import BotonPantallaCompleta from '../../ui/BotonPantallaCompleta.jsx'
 import FileDropzone from '../../ui/FileDropzone.jsx'
 import Interruptor from '../../ui/Interruptor.jsx'
+import SelectorDeLista from '../../ui/SelectorDeLista.jsx'
 
 import { conConflicto, enrichWithAtl } from '../../../lib/atl-enrich.js'
 import { parseATL } from '../../../lib/cids-atl.js'
@@ -533,15 +534,18 @@ export default function IntegrationExplorer() {
                         </button>
                       </>
                     ) : (
-                      <select
+                      <SelectorDeLista
                         className="exp-conn-conectar es-cids"
                         value=""
-                        onChange={(evento) => setDestinoCids(evento.target.value)}
-                        aria-label="Conectar SAP CI-DS"
-                      >
-                        <option value="" disabled>Conectar SAP CI-DS</option>
-                        {destinos.map((uno) => <option key={uno.id} value={uno.id}>{uno.label}</option>)}
-                      </select>
+                        onChange={setDestinoCids}
+                        ariaLabel="Conectar SAP CI-DS"
+                        titulo="Conectar SAP CI-DS"
+                        placeholder="Conectar SAP CI-DS"
+                        options={[
+                          { value: '', label: 'Conectar SAP CI-DS', disabled: true },
+                          ...destinos.map((uno) => ({ value: uno.id, label: uno.label })),
+                        ]}
+                      />
                     )}
                     <Ayuda cual="cids" />
                   </div>
@@ -568,15 +572,18 @@ export default function IntegrationExplorer() {
                         </button>
                       </>
                     ) : (
-                      <select
+                      <SelectorDeLista
                         className="exp-conn-conectar es-ibp"
                         value=""
-                        onChange={(evento) => setTenantIbp(evento.target.value)}
-                        aria-label="Conectar SAP IBP"
-                      >
-                        <option value="" disabled>Conectar SAP IBP</option>
-                        {tenants.map((uno) => <option key={uno.id} value={uno.id}>{uno.name}</option>)}
-                      </select>
+                        onChange={setTenantIbp}
+                        ariaLabel="Conectar SAP IBP"
+                        titulo="Conectar SAP IBP"
+                        placeholder="Conectar SAP IBP"
+                        options={[
+                          { value: '', label: 'Conectar SAP IBP', disabled: true },
+                          ...tenants.map((uno) => ({ value: uno.id, label: uno.name })),
+                        ]}
+                      />
                     )}
                     <Ayuda cual="ibp" />
                   </div>

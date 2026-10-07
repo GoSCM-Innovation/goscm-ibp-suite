@@ -10,6 +10,7 @@
 import { useEffect, useState } from 'react'
 import { cidsCall } from '../../lib/cids.js'
 import Modal from '../ui/Modal.jsx'
+import SelectorDeLista from '../ui/SelectorDeLista.jsx'
 
 /** SAP prefija el estado de un agente con "AGENT:". Se quita solo para mostrarlo, como en v9. */
 const estadoAgente = (valor) => String(valor || '').replace(/^AGENT:/, '')
@@ -98,29 +99,37 @@ export default function RunTaskModal({ destino, task, onClose, onLanzada }) {
         <div className="form-stack">
           <div className="field">
             <label htmlFor="agente">Agente (opcional)</label>
-            <select id="agente" className="select" value={agente} onChange={(e) => setAgente(e.target.value)}>
-              <option value="">— Sin especificar —</option>
-              {agentes.map((uno) => (
-                <option key={uno.guid ?? uno.name} value={uno.name}>
-                  {uno.name}{uno.agentStatus ? ` (${estadoAgente(uno.agentStatus)})` : ''}
-                </option>
-              ))}
-            </select>
+            <SelectorDeLista
+              id="agente"
+              className="select"
+              value={agente}
+              titulo="Agente"
+              placeholder="— Sin especificar —"
+              onChange={setAgente}
+              options={[
+                { value: '', label: '— Sin especificar —' },
+                ...agentes.map((uno) => ({
+                  value: uno.name,
+                  label: `${uno.name}${uno.agentStatus ? ` (${estadoAgente(uno.agentStatus)})` : ''}`,
+                })),
+              ]}
+            />
           </div>
 
           <div className="field">
             <label htmlFor="configuracion">Configuración del sistema (opcional)</label>
-            <select
+            <SelectorDeLista
               id="configuracion"
               className="select"
               value={configuracion}
-              onChange={(e) => setConfiguracion(e.target.value)}
-            >
-              <option value="">— Sin especificar —</option>
-              {configuraciones.map((una) => (
-                <option key={una.guid ?? una.name} value={una.name}>{una.name}</option>
-              ))}
-            </select>
+              titulo="Configuración del sistema"
+              placeholder="— Sin especificar —"
+              onChange={setConfiguracion}
+              options={[
+                { value: '', label: '— Sin especificar —' },
+                ...configuraciones.map((una) => ({ value: una.name, label: una.name })),
+              ]}
+            />
           </div>
 
           {variables.length > 0 && (

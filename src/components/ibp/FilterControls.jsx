@@ -1,29 +1,34 @@
-// Los dos controles de filtro de v8, portados tal cual de `Migration/FilterControls.jsx`.
+// Los dos controles de filtro de v8, portados de `Migration/FilterControls.jsx`.
 //
-//   - SearchSelect: un desplegable con BUSCADOR, para listas largas (tablas, campos, key figures,
-//     unidades) donde un <select> nativo no se deja recorrer. Enter elige la primera coincidencia;
-//     Escape o un clic fuera lo cierran.
-//   - MultiValueSelect: los valores elegidos como fichas, un campo para escribir más, y un
-//     desplegable con los valores REALES del origen que se pide la primera vez que se abre. Pegar
-//     una lista (una columna de Excel, o separada por tabulador, punto y coma o coma) la convierte
-//     en fichas de una vez: es la forma de filtrar por treinta materiales sin escribirlos.
+//   - SearchSelect: un desplegable con BUSCADOR (Enter elige la primera coincidencia; Escape o un clic
+//     fuera lo cierran). Desde el 2026-10-06, con más de 12 opciones se elige en la ventana con
+//     buscador (`ui/VentanaDeSeleccion.jsx`) en vez de en este desplegable: ver `lib/lista-extensa.js`.
+//   - MultiValueSelect: los valores elegidos como fichas, un campo para escribir más, y un botón ▾ que
+//     abre la ventana con los valores REALES del origen, que se piden la primera vez que se abre.
+//     Pegar una lista (una columna de Excel, o separada por tabulador, punto y coma o coma) la
+//     convierte en fichas de una vez: es la forma de filtrar por treinta materiales sin escribirlos.
 //
 // Los usan los dos visores de datos y las dos migraciones: en v8 eran los mismos, y aquí también.
 
 import { useEffect, useRef, useState } from 'react'
 
 import { partirValores, valorLegible } from '../../../core/ibp/master-data-model.js'
+import { esListaExtensa } from '../../lib/lista-extensa.js'
+import VentanaDeSeleccion from '../ui/VentanaDeSeleccion.jsx'
 
-export function SearchSelect({ value, options, onChange, placeholder, searchPlaceholder, invalid, style, btnStyle, mono = true }) {
+export function SearchSelect({ value, options, onChange, placeholder, searchPlaceholder, invalid, style, btnStyle, mono = true, titulo }) {
   const [open, setOpen] = useState(false)
   const [q, setQ] = useState('')
   const boxRef = useRef(null)
+  // El criterio único (`lib/lista-extensa.js`): una lista extensa se elige en la ventana con buscador;
+  // una corta conserva este desplegable.
+  const extensa = esListaExtensa(options.length)
   useEffect(() => {
-    if (!open) return undefined
+    if (!open || extensa) return undefined
     const h = e => { if (boxRef.current && !boxRef.current.contains(e.target)) setOpen(false) }
     document.addEventListener('mousedown', h)
     return () => document.removeEventListener('mousedown', h)
-  }, [open])
+  }, [open, extensa])
   const sel = options.find(o => o.value === value)
   const ql = q.toLowerCase()
   const filtered = !q ? options : options.filter(o =>
@@ -46,7 +51,18 @@ export function SearchSelect({ value, options, onChange, placeholder, searchPlac
         </span>
         <span style={{ color: 'var(--text3)', fontSize: 9, flexShrink: 0 }}>▾</span>
       </button>
-      {open && (
+      {open && extensa && (
+        <VentanaDeSeleccion
+          modo="unica"
+          titulo={titulo || placeholder || 'Elegir de la lista'}
+          opciones={options.map(o => o.value)}
+          nombres={Object.fromEntries(options.map(o => [o.value, o.label || String(o.value)]))}
+          valor={value}
+          onElegir={pick}
+          onCerrar={() => setOpen(false)}
+        />
+      )}
+      {open && !extensa && (
         <div style={{
           position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 60, marginTop: 3,
           background: 'var(--bg2)', border: '1px solid var(--border2)', borderRadius: 8,
@@ -95,24 +111,18 @@ export function SearchSelect({ value, options, onChange, placeholder, searchPlac
  * `value` es la lista separada por comas, tal cual se guarda. Las fichas enseñan el valor LEGIBLE
  * (una fecha de OData se ve como fecha), pero lo guardado sigue siendo el valor crudo.
  */
-export function MultiValueSelect({ value, onChange, loadValues, placeholder, disabled }) {
+export function MultiValueSelect({ value, onChange, loadValues, placeholder, disabled, titulo }) {
   const [open, setOpen]       = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState(false)
   const [all, setAll]         = useState(null)   // null = todavía no se pidió
-  const [q, setQ]             = useState('')
   const [typed, setTyped]     = useState('')     // lo que se está escribiendo (entra con Enter o coma)
-  const boxRef = useRef(null)
 
-  useEffect(() => {
-    if (!open) return undefined
-    const h = e => { if (boxRef.current && !boxRef.current.contains(e.target)) setOpen(false) }
-    document.addEventListener('mousedown', h)
-    return () => document.removeEventListener('mousedown', h)
-  }, [open])
-
+  // Los valores reales se piden la primera vez que se abre la ventana. Se abre SIEMPRE la ventana,
+  // aunque al final haya pocos valores: cuántos son no se sabe hasta leerlos, y un control que saltara
+  // de lista a ventana al terminar de cargar sería peor que uno predecible.
   const openDropdown = () => {
-    setOpen(o => !o)
+    setOpen(true)
     if (all == null && !loading) {
       setLoading(true); setError(false)
       Promise.resolve()
@@ -124,12 +134,6 @@ export function MultiValueSelect({ value, onChange, loadValues, placeholder, dis
   }
 
   const selectedArr = partirValores(value)
-  const selected = new Set(selectedArr)
-  const toggle = v => {
-    const next = new Set(selected)
-    if (next.has(v)) next.delete(v); else next.add(v)
-    onChange([...next].join(','))
-  }
   const removeToken = tok => onChange(selectedArr.filter(t => t !== tok).join(','))
   const commitTyped = () => {
     const toks = partirValores(typed)
@@ -139,13 +143,12 @@ export function MultiValueSelect({ value, onChange, loadValues, placeholder, dis
     for (const tk of toks) if (!merged.includes(tk)) merged.push(tk)
     onChange(merged.join(','))
   }
-  const ql = q.toLowerCase()
-  // Se busca en el valor crudo y en el legible: «28/7» encuentra una fecha guardada como /Date(...)/.
-  const filtered = (all || []).filter(v =>
-    !q || v.toLowerCase().includes(ql) || valorLegible(v).toLowerCase().includes(ql))
+  // El texto legible de cada valor. La ventana busca en el valor crudo y en este: «28/7» encuentra una
+  // fecha guardada como /Date(...)/.
+  const nombres = Object.fromEntries((all || []).map(v => [v, valorLegible(v)]))
 
   return (
-    <div ref={boxRef} style={{ position: 'relative', flex: 1, minWidth: 0 }}>
+    <div style={{ position: 'relative', flex: 1, minWidth: 0 }}>
       <div style={{ display: 'flex', gap: 4, alignItems: 'flex-start' }}>
         <div
           style={{
@@ -214,52 +217,26 @@ export function MultiValueSelect({ value, onChange, loadValues, placeholder, dis
         >▾</button>
       </div>
       {open && (
-        <div style={{
-          position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 60, marginTop: 3,
-          background: 'var(--bg2)', border: '1px solid var(--border2)', borderRadius: 8,
-          boxShadow: 'var(--shadow-lg)', overflow: 'hidden',
-        }}>
-          <input
-            autoFocus
-            value={q}
-            onChange={e => setQ(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Escape') setOpen(false) }}
-            placeholder="Buscar valor…"
-            style={{
-              background: 'var(--bg)', border: 'none', borderBottom: '1px solid var(--border)',
-              color: 'var(--text)', fontSize: 11, padding: '7px 10px', width: '100%',
-              outline: 'none', boxSizing: 'border-box',
-            }}
-          />
-          <div style={{ maxHeight: 200, overflowY: 'auto' }}>
-            {loading && <div style={{ padding: '8px 10px', fontSize: 11, color: 'var(--text3)' }}>Cargando valores reales…</div>}
-            {!loading && error && <div style={{ padding: '8px 10px', fontSize: 11, color: 'var(--yellow, #e6a817)' }}>No se pudieron cargar los valores — escribe manualmente</div>}
-            {!loading && !error && all != null && all.length === 0 && (
-              <div style={{ padding: '8px 10px', fontSize: 11, color: 'var(--text3)' }}>Sin valores disponibles — escribe manualmente</div>
-            )}
-            {/* Los valores se leen con un tope de 5.000 filas: un maestro más grande da una lista
-                RECORTADA. Se dice, en vez de dejar que pase por completa. */}
-            {!loading && !error && all != null && all.length >= 5000 && (
-              <div style={{ padding: '6px 10px', fontSize: 10, color: 'var(--yellow, #e6a817)', borderBottom: '1px solid var(--border)' }}>
-                ⚠ Lista posiblemente incompleta (tope de 5.000 registros del maestro): escribe o pega los valores que falten.
-              </div>
-            )}
-            {!loading && filtered.map(v => (
-              <label
-                key={v}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 7, padding: '4px 10px',
-                  fontSize: 11, fontFamily: 'var(--mono)', cursor: 'pointer',
-                  color: selected.has(v) ? 'var(--accent)' : 'var(--text)',
-                  background: selected.has(v) ? 'color-mix(in srgb, var(--accent) 10%, transparent)' : 'transparent',
-                }}
-              >
-                <input type="checkbox" checked={selected.has(v)} onChange={() => toggle(v)} />
-                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{valorLegible(v)}</span>
-              </label>
-            ))}
-          </div>
-        </div>
+        <VentanaDeSeleccion
+          titulo={titulo || 'Valores del origen'}
+          opciones={all || []}
+          nombres={nombres}
+          // Lo que se escribió a mano y no está en la lista se conserva: la selección temporal parte de
+          // TODO lo elegido, no solo de lo que la lista conoce.
+          seleccion={selectedArr}
+          sufijoDeConteo="valor(es) seleccionado(s)"
+          cargando={loading}
+          mensajeDeCarga="Cargando valores reales…"
+          error={!loading && error ? 'No se pudieron cargar los valores. Escríbelos o pégalos en el campo.' : ''}
+          textoVacio="Sin valores disponibles. Escríbelos o pégalos en el campo."
+          // Los valores se leen con un tope de 5.000 filas: un maestro más grande da una lista
+          // RECORTADA. Se dice, en vez de dejar que pase por completa.
+          aviso={!loading && !error && all != null && all.length >= 5000
+            ? 'Lista posiblemente incompleta (tope de 5.000 registros del maestro): escribe o pega los valores que falten.'
+            : ''}
+          onGuardar={sel => { onChange(sel.join(',')); setOpen(false) }}
+          onCerrar={() => setOpen(false)}
+        />
       )}
     </div>
   )

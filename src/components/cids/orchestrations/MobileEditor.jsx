@@ -219,6 +219,7 @@ export default function MobileEditor({
                     <div className="movil-paso-cuerpo">
                       <div className="field">
                         <label htmlFor={`m-falla-${nodo.id}`}>Si este paso falla</label>
+                        {/* select-fijo: lista cerrada y corta, no crece con los datos */}
                         <select
                           id={`m-falla-${nodo.id}`}
                           className="select"

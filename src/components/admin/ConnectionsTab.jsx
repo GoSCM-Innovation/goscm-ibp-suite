@@ -281,6 +281,7 @@ export default function ConnectionsTab({ clientId }) {
               {detail.kind !== 'cids' && (
                 <div className="field" style={{ flex: '2 1 280px' }}>
                   <label htmlFor="agreement">Acuerdo</label>
+                  {/* select-fijo: lista cerrada y corta, no crece con los datos */}
                   <select
                     id="agreement"
                     className="select"
@@ -350,6 +351,7 @@ export default function ConnectionsTab({ clientId }) {
         <form onSubmit={createConnection} style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 12 }}>
           <div className="field" style={{ flex: '0 0 140px' }}>
             <label htmlFor="kind">Tipo</label>
+            {/* select-fijo: lista cerrada y corta, no crece con los datos */}
             <select
               id="kind"
               className="select"

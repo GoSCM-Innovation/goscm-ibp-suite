@@ -26,6 +26,7 @@ import {
 import { borrarDatoMaestro, guardarDatoMaestro } from '../../lib/ibp-master-data-edit.js'
 import { useIsMobile } from '../../lib/useIsMobile.js'
 import BotonActualizar from '../ui/BotonActualizar.jsx'
+import SelectorDeLista from '../ui/SelectorDeLista.jsx'
 import SeccionPlegable from '../ui/SeccionPlegable.jsx'
 import ColumnPicker from './ColumnPicker.jsx'
 import DataGrid from './DataGrid.jsx'
@@ -653,21 +654,37 @@ export default function MasterDataViewer({ connectionId, active = true, initial 
           <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1.4fr', gap: 12 }}>
             <div>
               <label style={LABEL}>Área de planificación</label>
-              <select style={SELECT} value={pa} onChange={e => chooseArea(e.target.value)} disabled={catalogLoading}>
-                <option value="">{catalogLoading ? '…' : '—'}</option>
-                {pas.map(p => (
-                  <option key={p.id} value={p.id}>
-                    {p.id === SIMPLE_PA ? p.desc : `${p.id}${p.desc && p.desc !== p.id ? ` — ${p.desc}` : ''}`}
-                  </option>
-                ))}
-              </select>
+              <SelectorDeLista
+                style={SELECT}
+                className=""
+                titulo="Área de planificación"
+                value={pa}
+                onChange={chooseArea}
+                disabled={catalogLoading}
+                placeholder={catalogLoading ? '…' : '—'}
+                options={[
+                  { value: '', label: catalogLoading ? '…' : '—' },
+                  ...pas.map(p => ({
+                    value: p.id,
+                    label: p.id === SIMPLE_PA ? p.desc : `${p.id}${p.desc && p.desc !== p.id ? ` — ${p.desc}` : ''}`,
+                  })),
+                ]}
+              />
             </div>
             <div>
               <label style={LABEL}>Versión</label>
-              <select style={SELECT} value={version} onChange={e => chooseVersion(e.target.value)} disabled={!pa || isSimple}>
-                <option value="">(base / sin versión)</option>
-                {versions.map(v => <option key={v.id} value={v.id}>{v.id}{v.name && v.name !== v.id ? ` — ${v.name}` : ''}</option>)}
-              </select>
+              <SelectorDeLista
+                style={SELECT}
+                className=""
+                titulo="Versión"
+                value={version}
+                onChange={chooseVersion}
+                disabled={!pa || isSimple}
+                options={[
+                  { value: '', label: '(base / sin versión)' },
+                  ...versions.map(v => ({ value: v.id, label: `${v.id}${v.name && v.name !== v.id ? ` — ${v.name}` : ''}` })),
+                ]}
+              />
             </div>
             <div>
               <label style={LABEL}>Tabla (dato maestro)</label>
@@ -677,6 +694,7 @@ export default function MasterDataViewer({ connectionId, active = true, initial 
                 onChange={setMdt}
                 placeholder={pa ? 'Selecciona una tabla…' : 'Selecciona un área de planificación y una tabla para empezar.'}
                 searchPlaceholder="Buscar tabla…"
+                titulo="Tabla (dato maestro)"
               />
             </div>
           </div>
@@ -745,8 +763,10 @@ export default function MasterDataViewer({ connectionId, active = true, initial 
                       onChange={v => setCond(i, { field: v })}
                       placeholder="Campo…"
                       searchPlaceholder="Buscar valor…"
+                      titulo="Campo del filtro"
                     />
                   </div>
+                  {/* select-fijo: lista cerrada y corta, no crece con los datos */}
                   <select style={{ ...SELECT, width: 'auto' }} value={c.op} onChange={e => setCond(i, { op: e.target.value })}>
                     <option value="in">igual / en lista</option>
                     <option value="sw">comienza con</option>
@@ -763,6 +783,7 @@ export default function MasterDataViewer({ connectionId, active = true, initial 
                       value={c.value}
                       onChange={v => setCond(i, { value: v })}
                       placeholder="Valores (separados por coma)…"
+                      titulo={`Valores de ${c.field || 'la columna'}`}
                       disabled={!c.field}
                       loadValues={() => fetchMasterValues(connectionId, { entidad: mdt, campo: c.field, planningArea: readPA, versionId: readVersion })}
                     />

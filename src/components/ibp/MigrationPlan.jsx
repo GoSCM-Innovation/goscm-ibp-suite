@@ -52,6 +52,7 @@ import { analyzeMigrationTable, countMasterRows, migrationStep } from '../../lib
 import { nombreConAmbiente } from '../../lib/nombre-de-conexion.js'
 import { useIsMobile } from '../../lib/useIsMobile.js'
 import BotonActualizar from '../ui/BotonActualizar.jsx'
+import SelectorDeLista from '../ui/SelectorDeLista.jsx'
 import VentanaDeSeleccion from '../ui/VentanaDeSeleccion.jsx'
 import { MultiValueSelect, SearchSelect } from './FilterControls.jsx'
 
@@ -1130,16 +1131,20 @@ export default function MigrationPlan({ connection }) {
                 {t('mig.noSourceOptions')}
               </div>
             ) : (
-              <select
+              <SelectorDeLista
                 style={SELECT}
+                className=""
+                titulo={t('mig.srcLabel')}
                 value={srcConnId || ''}
-                onChange={e => setSrcConnId(e.target.value || null)}
-              >
-                <option value="">{t('mig.noSource')}</option>
-                {allConns.map(c => (
-                  <option key={c.id} value={c.id}>{c.id === connection.id ? t('mig.srcSelf', { name: nombreConAmbiente(c) }) : nombreConAmbiente(c)}</option>
-                ))}
-              </select>
+                onChange={v => setSrcConnId(v || null)}
+                options={[
+                  { value: '', label: t('mig.noSource') },
+                  ...allConns.map(c => ({
+                    value: c.id,
+                    label: c.id === connection.id ? t('mig.srcSelf', { name: nombreConAmbiente(c) }) : nombreConAmbiente(c),
+                  })),
+                ]}
+              />
             )}
 
             {/* Área / versión del origen */}
@@ -1151,21 +1156,31 @@ export default function MigrationPlan({ connection }) {
                   <>
                     <div>
                       <label style={LABEL}>{t('mig.paLabel')}</label>
-                      <select style={SELECT} value={srcPa} onChange={e => { setSrcPa(e.target.value); setSrcVersion(''); resetSelection() }}>
-                        <option value="">{t('mig.selectPa')}</option>
-                        {getPas(srcCatalog).map(p => (
-                          <option key={p.id} value={p.id}>{p.desc ? `${p.id} — ${p.desc}` : p.id}</option>
-                        ))}
-                      </select>
+                      <SelectorDeLista
+                        style={SELECT}
+                        className=""
+                        titulo={t('mig.paLabel')}
+                        value={srcPa}
+                        onChange={v => { setSrcPa(v); setSrcVersion(''); resetSelection() }}
+                        options={[
+                          { value: '', label: t('mig.selectPa') },
+                          ...getPas(srcCatalog).map(p => ({ value: p.id, label: p.desc ? `${p.id} — ${p.desc}` : p.id })),
+                        ]}
+                      />
                     </div>
                     <div>
                       <label style={LABEL}>{t('mig.versionLabel')}</label>
-                      <select style={SELECT} value={srcVersion} onChange={e => { setSrcVersion(e.target.value); resetSelection() }}>
-                        <option value="">{t('mig.baseVersion')}</option>
-                        {getVersions(srcCatalog, srcPa).map(v => (
-                          <option key={v.id} value={v.id}>{v.name ? `${v.name} (${v.id})` : v.id}</option>
-                        ))}
-                      </select>
+                      <SelectorDeLista
+                        style={SELECT}
+                        className=""
+                        titulo={t('mig.versionLabel')}
+                        value={srcVersion}
+                        onChange={v => { setSrcVersion(v); resetSelection() }}
+                        options={[
+                          { value: '', label: t('mig.baseVersion') },
+                          ...getVersions(srcCatalog, srcPa).map(v => ({ value: v.id, label: v.name ? `${v.name} (${v.id})` : v.id })),
+                        ]}
+                      />
                     </div>
                   </>
                 )}
@@ -1194,21 +1209,31 @@ export default function MigrationPlan({ connection }) {
                 <>
                   <div>
                     <label style={LABEL}>{t('mig.paLabel')}</label>
-                    <select style={SELECT} value={dstPa} onChange={e => { setDstPa(e.target.value); setDstVersion(''); resetSelection() }}>
-                      <option value="">{t('mig.selectPa')}</option>
-                      {getPas(dstCatalog).map(p => (
-                        <option key={p.id} value={p.id}>{p.desc ? `${p.id} — ${p.desc}` : p.id}</option>
-                      ))}
-                    </select>
+                    <SelectorDeLista
+                      style={SELECT}
+                      className=""
+                      titulo={t('mig.paLabel')}
+                      value={dstPa}
+                      onChange={v => { setDstPa(v); setDstVersion(''); resetSelection() }}
+                      options={[
+                        { value: '', label: t('mig.selectPa') },
+                        ...getPas(dstCatalog).map(p => ({ value: p.id, label: p.desc ? `${p.id} — ${p.desc}` : p.id })),
+                      ]}
+                    />
                   </div>
                   <div>
                     <label style={LABEL}>{t('mig.versionLabel')}</label>
-                    <select style={SELECT} value={dstVersion} onChange={e => { setDstVersion(e.target.value); resetSelection() }}>
-                      <option value="">{t('mig.baseVersion')}</option>
-                      {getVersions(dstCatalog, dstPa).map(v => (
-                        <option key={v.id} value={v.id}>{v.name ? `${v.name} (${v.id})` : v.id}</option>
-                      ))}
-                    </select>
+                    <SelectorDeLista
+                      style={SELECT}
+                      className=""
+                      titulo={t('mig.versionLabel')}
+                      value={dstVersion}
+                      onChange={v => { setDstVersion(v); resetSelection() }}
+                      options={[
+                        { value: '', label: t('mig.baseVersion') },
+                        ...getVersions(dstCatalog, dstPa).map(v => ({ value: v.id, label: v.name ? `${v.name} (${v.id})` : v.id })),
+                      ]}
+                    />
                   </div>
                 </>
               )}
@@ -1381,6 +1406,7 @@ export default function MigrationPlan({ connection }) {
                         options={dstCandidates.map(d => ({ value: d, label: d }))}
                         onChange={v => setMdtMapping(prev => ({ ...prev, [mdt]: v }))}
                         searchPlaceholder={t('kfm.typeToFilter')}
+                        titulo={`Tabla de destino de ${mdt}`}
                         btnStyle={{
                           fontSize: 11, padding: '3px 6px',
                           borderColor: resolveDst(mdt) === mdt ? 'var(--border)' : 'var(--accent)',
@@ -1468,10 +1494,12 @@ export default function MigrationPlan({ connection }) {
                                 options={mdtFieldOpts[mdt].map(f => ({ value: f, label: srcFieldLabels[f] && srcFieldLabels[f] !== f ? `${f} — ${srcFieldLabels[f]}` : f }))}
                                 onChange={v => setMdtFilters(p => ({ ...p, [mdt]: conds.map((x, xi) => xi === ci ? { ...x, field: v, value: '' } : x) }))}
                                 placeholder={t('flt.fieldPh')}
+                                titulo={t('flt.fieldPh')}
                                 searchPlaceholder={t('kfm.typeToFilter')}
                                 style={{ flex: '0 0 32%', minWidth: 0 }}
                                 btnStyle={{ fontSize: 11, padding: '4px 8px' }}
                               />
+                              {/* select-fijo: lista cerrada y corta, no crece con los datos */}
                               <select
                                 value={c.op}
                                 onChange={e => setMdtFilters(p => ({ ...p, [mdt]: conds.map((x, xi) => xi === ci ? { ...x, op: e.target.value } : x) }))}
@@ -1493,6 +1521,7 @@ export default function MigrationPlan({ connection }) {
                                   onChange={v => setMdtFilters(p => ({ ...p, [mdt]: conds.map((x, xi) => xi === ci ? { ...x, value: v } : x) }))}
                                   loadValues={() => fetchMasterValues(srcConnId, { entidad: mdt, campo: c.field, planningArea: srcPa, versionId: srcVersion })}
                                   placeholder={t('flt.valuesPh')}
+                                  titulo={`Valores de ${c.field || mdt}`}
                                   disabled={!c.field}
                                 />
                               )}

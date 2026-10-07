@@ -34,6 +34,7 @@ function StrategyRow({ step, onChange }) {
   return (
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', marginTop: 8 }}>
       <div style={{ position: 'relative', flex: '1 1 160px', minWidth: 140 }}>
+        {/* select-fijo: lista cerrada y corta, no crece con los datos */}
         <select
           value={step.errorStrategy || 'stop'}
           onChange={e => onChange({ errorStrategy: e.target.value })}
