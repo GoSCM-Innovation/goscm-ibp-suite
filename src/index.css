@@ -369,6 +369,13 @@ a { color: var(--cyan); }
    página no se desplace entera: la barra de filtros queda siempre a la vista. */
 .module-page { display: flex; flex-direction: column; gap: 14px; height: 100%; min-height: 0; }
 .module-head { align-items: flex-end; display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; }
+/* El `height: 100%` de arriba no se cumple: `#root` solo tiene `min-height`, así que la página crece
+   con su contenido. En el Task Monitor eso deja la barra de «📋 Ver logs» debajo de las 50 filas,
+   fuera de la vista, y parece que elegir una fila no hace nada. v9 fijaba `#root` a `100vh`; aquí
+   se fija solo esta página para no despertar las demás reglas `height: 100%` de la aplicación.
+   Se resta la cabecera y el relleno de `.content`. El piso evita que en una ventana baja la tabla
+   quede por debajo de su mínimo y la barra se monte sobre lo que sigue. */
+.module-page-a-pantalla { height: calc(100vh - var(--header-h) - 44px); min-height: 600px; }
 
 /* La barra de carga de v8 (`ui/ProgressBar.jsx`) y el giro de su «Actualizando…», tal cual. */
 @keyframes spin { to { transform: rotate(360deg); } }
