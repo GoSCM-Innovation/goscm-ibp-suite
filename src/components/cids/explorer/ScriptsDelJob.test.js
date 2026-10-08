@@ -111,6 +111,28 @@ describe('la sección «Scripts pre/post-load» del detalle', () => {
   })
 })
 
+describe('«Select Distinct Rows» en la sección «Filtros» del detalle', () => {
+  it('nombra los transforms que lo tienen, antes de las expresiones', async () => {
+    await montar(detalle(integracion({
+      distinctTransforms: ['Transform4', 'Transform22'],
+      filters: [{ sourceTable: 'MARA', expression: "MARA.LVORM = ''" }],
+    })))
+    const bloque = contenedor.querySelector('.exp-distinct')
+    expect(bloque.textContent).toContain('Select Distinct Rows')
+    expect([...bloque.querySelectorAll('.exp-distinct-transform')].map((uno) => uno.textContent))
+      .toEqual(['Transform4', 'Transform22'])
+
+    const cuerpo = bloque.closest('.exp-section-body')
+    expect(cuerpo.previousSibling.textContent).toContain('Filtros')
+    expect(cuerpo.textContent.indexOf('Select Distinct Rows')).toBeLessThan(cuerpo.textContent.indexOf('MARA.LVORM'))
+  })
+
+  it('no sale si ningún transform lo tiene', async () => {
+    await montar(detalle(integracion()))
+    expect(contenedor.querySelector('.exp-distinct')).toBeNull()
+  })
+})
+
 describe('la insignia 📜 de la lista', () => {
   const lista = (integraciones) => createElement(ExplorerMaster, {
     dimension: 'integracion',

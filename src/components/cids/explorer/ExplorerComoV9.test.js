@@ -390,6 +390,30 @@ describe('la pantalla entera', () => {
       .toBe('Selecciona una integración a la izquierda para explorar sus campos')
   })
 
+  it('sin ningún transform con «Select Distinct Rows» no sale su interruptor', async () => {
+    await montar(createElement(IntegrationExplorer))
+    await subirYExplorar()
+    expect(contenedor.textContent).not.toContain('Select Distinct Rows')
+  })
+
+  it('el interruptor «Solo con Select Distinct Rows» lleva su contador y filtra', async () => {
+    analyzeProject.mockResolvedValue(analisis([
+      integracion(0, { jobName: 'JOB_A' }),
+      integracion(1, { jobName: 'JOB_B', distinctTransforms: ['Transform4'] }),
+    ]))
+    await montar(createElement(IntegrationExplorer))
+    await subirYExplorar()
+
+    const interruptor = [...contenedor.querySelectorAll('.interruptor')]
+      .find((uno) => uno.textContent.includes('Solo con Select Distinct Rows'))
+    expect(interruptor.querySelector('.exp-distinct-count').textContent).toBe('1')
+
+    await act(async () => { interruptor.querySelector('input').click() })
+    expect(contenedor.querySelector('.exp-counter').textContent).toBe('1 / 2')
+    expect(contenedor.querySelector('.exp-master').textContent).toContain('JOB_B')
+    expect(contenedor.querySelector('.exp-master').textContent).not.toContain('JOB_A')
+  })
+
   it('sale el interruptor «Promovido a producción» solo tras conectar CI-DS', async () => {
     await montar(createElement(IntegrationExplorer))
     await subirYExplorar()
