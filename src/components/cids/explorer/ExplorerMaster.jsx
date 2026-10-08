@@ -75,6 +75,27 @@ const estaEnIbp = (indiceDeJobs, jobName) => Boolean(
 
 const AvisoDeConflicto = () => <span className="exp-warn" title={TITULO_DEL_CONFLICTO}>⚠</span>
 
+/**
+ * Si un grupo plegable (un proyecto, o una tarea con varios dataflows) está abierto.
+ *
+ * Nace abierto si contiene la integración elegida, y se abre solo cuando la selección CAMBIA y cae
+ * dentro —por ejemplo, al saltar a una vecina que está en otro proyecto—, para que lo elegido se vea.
+ * Fuera de eso manda el clic en la cabecera: antes el grupo quedaba forzado abierto mientras
+ * contuviera la elegida, y no había forma de plegarlo sin elegir algo de otro grupo.
+ */
+function useAbiertoConLaSeleccion(seleccion, contieneLaElegida) {
+  const [abierto, setAbierto] = useState(contieneLaElegida)
+  const [seleccionVista, setSeleccionVista] = useState(seleccion)
+
+  // Se ajusta durante el dibujo y no en un efecto: así no se pinta un instante plegado.
+  if (seleccion !== seleccionVista) {
+    setSeleccionVista(seleccion)
+    if (contieneLaElegida) setAbierto(true)
+  }
+
+  return [abierto, setAbierto]
+}
+
 /** Una integración suelta, o un dataflow dentro de una tarea con varios. */
 function Fila({ integracion, activa, esHija, transportada, enIbp, choca, cadenas, onElegir }) {
   const nombre = esHija ? (integracion.dataflowName || integracion.targetTable) : integracion.jobName
@@ -105,7 +126,7 @@ function Fila({ integracion, activa, esHija, transportada, enIbp, choca, cadenas
 /** Una tarea con varios dataflows: se abre y se cierra. */
 function Tarea({ tarea, seleccion, transportadas, indiceDeJobs, enConflicto, cadenas, onElegir }) {
   const contieneLaElegida = tarea.dataflows.some((una) => una._idx === seleccion)
-  const [abierta, setAbierta] = useState(contieneLaElegida)
+  const [abierta, setAbierta] = useAbiertoConLaSeleccion(seleccion, contieneLaElegida)
 
   if (tarea.dataflows.length === 1) {
     const [unica] = tarea.dataflows
@@ -140,10 +161,10 @@ function Tarea({ tarea, seleccion, transportadas, indiceDeJobs, enConflicto, cad
           <Cadenas cadenas={cadenas} idxs={idxs} />
           {tarea.dataflows.some((una) => enConflicto?.has(una._idx)) && <AvisoDeConflicto />}
         </span>
-        <span className="exp-arrow">{abierta || contieneLaElegida ? '▼' : '▶'}</span>
+        <span className="exp-arrow">{abierta ? '▼' : '▶'}</span>
       </button>
 
-      {(abierta || contieneLaElegida) && tarea.dataflows.map((una) => (
+      {abierta && tarea.dataflows.map((una) => (
         <Fila
           key={una._idx}
           integracion={una}
@@ -164,11 +185,11 @@ function Tarea({ tarea, seleccion, transportadas, indiceDeJobs, enConflicto, cad
  * Un proyecto: solo se dibuja su cabecera cuando hay más de uno cargado.
  *
  * Como en v9 nace PLEGADO, salvo el que contiene la integración elegida, y su cabecera dice
- * «nombre (N)» en mayúsculas.
+ * «nombre (N)» en mayúsculas. Se puede plegar aunque contenga la elegida.
  */
 function Proyecto({ proyecto, unico, seleccion, transportadas, indiceDeJobs, enConflicto, cadenas, onElegir }) {
   const contieneLaElegida = proyecto.tareas.some((una) => una.dataflows.some((otra) => otra._idx === seleccion))
-  const [abierto, setAbierto] = useState(contieneLaElegida)
+  const [abierto, setAbierto] = useAbiertoConLaSeleccion(seleccion, contieneLaElegida)
 
   const tareas = proyecto.tareas.map((una) => (
     <Tarea
@@ -189,9 +210,9 @@ function Proyecto({ proyecto, unico, seleccion, transportadas, indiceDeJobs, enC
     <div className="exp-project">
       <button type="button" className="exp-project-head" onClick={() => setAbierto((previo) => !previo)}>
         <span>{proyecto.nombre} ({proyecto.total})</span>
-        <span className="exp-arrow">{abierto || contieneLaElegida ? '▼' : '▶'}</span>
+        <span className="exp-arrow">{abierto ? '▼' : '▶'}</span>
       </button>
-      {(abierto || contieneLaElegida) && tareas}
+      {abierto && tareas}
     </div>
   )
 }

@@ -161,6 +161,36 @@ describe('la lista de la izquierda', () => {
     expect(contenedor.querySelectorAll('.exp-item')).toHaveLength(1)
   })
 
+  it('el proyecto que contiene la integración elegida se puede plegar', async () => {
+    const integraciones = [integracion(0, { _zipName: 'A.zip' }), integracion(1, { _zipName: 'B.zip' })]
+    await montar(lista({ integraciones, seleccion: 1 }))
+
+    const cabeceraB = [...contenedor.querySelectorAll('.exp-project-head')].find((una) => una.textContent.includes('B ('))
+    await act(async () => { cabeceraB.click() })
+    expect(contenedor.querySelectorAll('.exp-item')).toHaveLength(0)
+    expect(cabeceraB.textContent).toContain('▶')
+
+    // Volver a dibujar con la MISMA selección (un filtro que cambia, por ejemplo) no lo reabre.
+    await act(async () => { raiz.render(lista({ integraciones: [...integraciones], seleccion: 1 })) })
+    expect(contenedor.querySelectorAll('.exp-item')).toHaveLength(0)
+  })
+
+  it('elegir algo de un proyecto plegado (saltar a una vecina) lo abre', async () => {
+    const integraciones = [integracion(0, { _zipName: 'A.zip' }), integracion(1, { _zipName: 'B.zip' })]
+    await montar(lista({ integraciones, seleccion: 1 }))
+    await act(async () => { raiz.render(lista({ integraciones, seleccion: 0 })) })
+    expect(contenedor.querySelectorAll('.exp-item.active')).toHaveLength(1)
+  })
+
+  it('una tarea con varios dataflows se puede plegar aunque contenga la elegida', async () => {
+    const integraciones = [integracion(0, { jobName: 'JOB_X' }), integracion(1, { jobName: 'JOB_X' })]
+    await montar(lista({ integraciones, seleccion: 1 }))
+    expect(contenedor.querySelectorAll('.exp-item.child')).toHaveLength(2)
+
+    await act(async () => { contenedor.querySelector('.exp-task-head').click() })
+    expect(contenedor.querySelectorAll('.exp-item.child')).toHaveLength(0)
+  })
+
   it('sin integraciones dice lo de v9', async () => {
     await montar(lista({}))
     expect(contenedor.textContent).toBe('No se encontraron integraciones')
