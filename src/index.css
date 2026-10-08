@@ -4598,6 +4598,12 @@ a { color: var(--cyan); }
   font-size: 11px; font-weight: 600; padding: 0;
 }
 .vs-enlace:disabled { color: var(--text3); cursor: default; }
+/* Lo elegido, fijo sobre la lista que se desplaza. Con tope de alto: si hay muchas, se desplaza solo. */
+.vs-elegidas {
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0; max-height: 34%; overflow-y: auto; padding: 0 20px 6px;
+}
 .vs-nota { color: var(--text2); font-size: 12px; padding: 8px 0; }
 .vs-nota-aviso { color: var(--yellow, #e6a817); }
 /* Elección única: la fila entera es el botón. */

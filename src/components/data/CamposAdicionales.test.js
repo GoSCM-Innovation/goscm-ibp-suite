@@ -159,6 +159,25 @@ describe('el diálogo', () => {
     expect(dialogo().querySelector('#efModalCount').textContent).toBe('1 campo(s) adicional(es) seleccionado(s)')
   })
 
+  it('los extras elegidos quedan arriba como encabezado, sin repetirse abajo, y quitarlos lo actualiza', async () => {
+    await montar({ seleccion: { product: ['BASEUOM'] } })
+    await abrir('Product')
+    const arriba = () => [...dialogo().querySelectorAll('.vs-elegidas .ef-field-name')].map((e) => e.textContent)
+    const abajo = () => [...dialogo().querySelectorAll('.ef-fields-list .ef-field-name')].map((e) => e.textContent)
+    expect(arriba()).toEqual(['BASEUOM'])
+    expect(abajo()).not.toContain('BASEUOM')
+
+    await act(async () => { interruptor('PRDGROUP').click() })
+    expect(arriba()).toEqual(['BASEUOM', 'PRDGROUP'])
+
+    await act(async () => { interruptor('BASEUOM').click() })
+    expect(arriba()).toEqual(['PRDGROUP'])
+    expect(abajo()).toContain('BASEUOM')
+
+    await buscar('weight')
+    expect(arriba()).toEqual(['PRDGROUP'])
+  })
+
   it('el contador está vacío con 0 seleccionados y sube y baja al marcar', async () => {
     await montar()
     await abrir('Product')

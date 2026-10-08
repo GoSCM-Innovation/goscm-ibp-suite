@@ -58,7 +58,13 @@ function DialogoDeCampos({ entidad, obligatorios, ocultos, descripciones, inicia
 
   // v7: `q = filter.trim().toUpperCase()`. El mensaje de «sin resultados» cita el filtro tal cual se escribió.
   const consulta = filtro.trim().toUpperCase()
-  const visiblesOpcionales = opcionales.filter((campo) => coincide(campo, descripciones[campo] || '', consulta))
+  // Los extras ya elegidos van fijos ARRIBA (en el orden en que se marcaron) y no se repiten en la
+  // lista de abajo: con muchos campos, saber cuáles están activos no puede obligar a buscarlos. El
+  // encabezado no obedece al buscador; quitar un campo de ahí lo devuelve a «disponibles».
+  const elegidosSet = new Set(temporal)
+  const visiblesOpcionales = opcionales
+    .filter((campo) => !elegidosSet.has(campo))
+    .filter((campo) => coincide(campo, descripciones[campo] || '', consulta))
 
   function alternar(campo, marcado) {
     setTemporal((actual) => {
@@ -68,6 +74,17 @@ function DialogoDeCampos({ entidad, obligatorios, ocultos, descripciones, inicia
       return actual
     })
   }
+
+  const interruptorDe = (campo) => (
+    <label className="ef-toggle-wrap">
+      <input
+        type="checkbox"
+        checked={temporal.includes(campo)}
+        onChange={(evento) => alternar(campo, evento.target.checked)}
+      />
+      <span className="ef-toggle-slider" />
+    </label>
+  )
 
   return (
     // `onClose` se dispara cuando el navegador cierra el diálogo por su cuenta (Escape): hay que
@@ -88,6 +105,20 @@ function DialogoDeCampos({ entidad, obligatorios, ocultos, descripciones, inicia
             onChange={(evento) => setFiltro(evento.target.value)}
           />
         </div>
+
+        {temporal.length > 0 && (
+          <div className="vs-elegidas">
+            <div className="ef-section-label">{`Campos adicionales seleccionados (${temporal.length})`}</div>
+            {temporal.map((campo) => (
+              <FilaDeCampo
+                key={campo}
+                campo={campo}
+                descripcion={descripciones[campo]}
+                interruptor={interruptorDe(campo)}
+              />
+            ))}
+          </div>
+        )}
 
         <div id="efModalList" className="ef-fields-list">
           {obligatorios.length > 0 && (
@@ -121,21 +152,14 @@ function DialogoDeCampos({ entidad, obligatorios, ocultos, descripciones, inicia
                   key={campo}
                   campo={campo}
                   descripcion={descripciones[campo]}
-                  interruptor={(
-                    <label className="ef-toggle-wrap">
-                      <input
-                        type="checkbox"
-                        checked={temporal.includes(campo)}
-                        onChange={(evento) => alternar(campo, evento.target.checked)}
-                      />
-                      <span className="ef-toggle-slider" />
-                    </label>
-                  )}
+                  interruptor={interruptorDe(campo)}
                 />
               ))}
             </>
           )}
-          {visiblesOpcionales.length === 0 && consulta && (
+          {/* Si lo buscado ya está arriba, entre los elegidos, no es «sin resultados». */}
+          {visiblesOpcionales.length === 0 && consulta
+            && !temporal.some((campo) => coincide(campo, descripciones[campo] || '', consulta)) && (
             <p style={{ fontSize: '12px', color: 'var(--text2)', padding: '8px 0' }}>Sin resultados para "{filtro}".</p>
           )}
         </div>

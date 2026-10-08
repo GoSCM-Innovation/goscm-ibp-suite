@@ -24,7 +24,9 @@ const dibujar = (props = {}) => act(async () => {
   }))
 })
 
-const filas = () => [...contenedor.querySelectorAll('.ef-field-item')].map(f => f.querySelector('.ef-field-name').textContent)
+// Las filas de la lista que se desplaza (lo elegido va aparte, en el encabezado `.vs-elegidas`).
+const filas = () => [...contenedor.querySelectorAll('.ef-fields-list .ef-field-item')].map(f => f.querySelector('.ef-field-name').textContent)
+const elegidas = () => [...contenedor.querySelectorAll('.vs-elegidas .ef-field-item')].map(f => f.querySelector('.ef-field-name').textContent)
 const interruptor = id => [...contenedor.querySelectorAll('.ef-field-item')]
   .find(f => f.querySelector('.ef-field-name').textContent === id).querySelector('input')
 const pulsar = (nodo) => act(async () => { nodo.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })) })
@@ -50,10 +52,47 @@ afterEach(async () => {
 })
 
 describe('VentanaDeSeleccion', () => {
-  it('lista todas las opciones y marca la selección inicial', () => {
-    expect(filas()).toEqual(OPCIONES)
+  it('lo elegido queda arriba, como encabezado, y no se repite en la lista', () => {
+    expect(elegidas()).toEqual(['BETA'])
+    expect(filas()).toEqual(['ALFA', 'GAMA', 'DELTA'])
     expect(interruptor('BETA').checked).toBe(true)
     expect(interruptor('ALFA').checked).toBe(false)
+    expect(contenedor.querySelector('.vs-elegidas .ef-section-label').textContent).toBe('Seleccionados (1)')
+  })
+
+  it('marcar sube la opción al encabezado y quitarla desde ahí la devuelve a la lista', async () => {
+    await pulsar(interruptor('DELTA'))
+    expect(elegidas()).toEqual(['BETA', 'DELTA'])
+    expect(filas()).toEqual(['ALFA', 'GAMA'])
+    await pulsar(interruptor('BETA'))
+    expect(elegidas()).toEqual(['DELTA'])
+    expect(filas()).toEqual(['ALFA', 'BETA', 'GAMA'])
+    await pulsar(interruptor('DELTA'))
+    expect(contenedor.querySelector('.vs-elegidas')).toBeNull()
+    expect(filas()).toEqual(OPCIONES)
+  })
+
+  it('el encabezado no obedece al buscador: lo activo se ve siempre', async () => {
+    await escribir('gama')
+    expect(elegidas()).toEqual(['BETA'])
+    expect(filas()).toEqual(['GAMA'])
+  })
+
+  it('elección única: el valor actual queda arriba y no se repite abajo', async () => {
+    const onElegir = vi.fn()
+    await dibujar({ modo: 'unica', valor: 'GAMA', onElegir })
+    const nombre = f => f.querySelector('.ef-field-name').textContent
+    const arriba = [...contenedor.querySelectorAll('.vs-elegidas .vs-fila')].map(nombre)
+    expect(arriba).toEqual(['GAMA'])
+    const abajo = [...contenedor.querySelectorAll('.ef-fields-list .vs-fila')].map(nombre)
+    expect(abajo).toEqual(['ALFA', 'BETA', 'DELTA'])
+    await pulsar(boton('BETA'))
+    expect(onElegir).toHaveBeenCalledWith('BETA')
+  })
+
+  it('elección única sin valor: no hay encabezado', async () => {
+    await dibujar({ modo: 'unica', valor: '', onElegir: vi.fn() })
+    expect(contenedor.querySelector('.vs-elegidas')).toBeNull()
   })
 
   it('no aplica nada hasta pulsar «Aplicar», y entrega la selección en el orden en que se marcó', async () => {
@@ -75,7 +114,9 @@ describe('VentanaDeSeleccion', () => {
     await escribir('tercera')
     expect(filas()).toEqual(['GAMA'])
     await escribir('ta')
-    expect(filas()).toEqual(['BETA', 'DELTA'])
+    // BETA también coincide, pero está elegida: se ve arriba, no en la lista.
+    expect(filas()).toEqual(['DELTA'])
+    expect(elegidas()).toEqual(['BETA'])
   })
 
   it('«Marcar visibles» solo marca lo que el buscador deja ver', async () => {

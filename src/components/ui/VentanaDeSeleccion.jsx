@@ -84,9 +84,23 @@ export default function VentanaDeSeleccion({
     || Boolean(nombres[id] && nombres[id].toUpperCase().includes(consulta))
     || Boolean(etiquetas[id] && etiquetas[id].toUpperCase().includes(consulta))
   const visibles = opciones.filter(coincide)
-  const dibujadas = visibles.slice(0, TOPE_DE_FILAS)
   const claveSet = new Set(claves)
   const marcadas = new Set(temporal)
+
+  // Lo elegido va fijo ARRIBA, fuera de la lista que se desplaza, y no se repite debajo: con 600
+  // opciones, saber cuál está activo no puede obligar a buscarlo. El encabezado NO obedece al buscador
+  // (es justo lo que se quiere ver siempre) y quitar algo de ahí lo devuelve a la lista.
+  // Múltiple: TODO lo marcado (es lo que se aplica), en el orden en que se marcó. Única: el valor
+  // actual, si es una de las opciones.
+  const elegidas = unica
+    ? (valor !== undefined && valor !== '' && opciones.includes(valor) ? [valor] : [])
+    : temporal
+  const elegidasSet = new Set(elegidas)
+  const enLista = visibles.filter((id) => !elegidasSet.has(id))
+  const dibujadas = enLista.slice(0, TOPE_DE_FILAS)
+  const elegidasDibujadas = elegidas.slice(0, TOPE_DE_FILAS)
+  // «Marcar visibles» cuenta lo que de verdad va a marcar, no lo que ya estaba marcado.
+  const porMarcar = visibles.filter((id) => !marcadas.has(id))
 
   function alternar(id) {
     setTemporal((actual) => (actual.includes(id) ? actual.filter((otro) => otro !== id) : [...actual, id]))
@@ -103,6 +117,35 @@ export default function VentanaDeSeleccion({
 
   const nombreDe = (id) => nombres[id] ?? id
   const descripcionDe = (id) => (etiquetas[id] && etiquetas[id] !== id && etiquetas[id] !== nombreDe(id) ? etiquetas[id] : '')
+
+  // La misma fila en el encabezado de lo elegido y en la lista de abajo.
+  const fila = (id) => (unica ? (
+    <button
+      type="button"
+      key={id}
+      className={`vs-fila${id === valor ? ' sel' : ''}`}
+      onClick={() => onElegir(id)}
+    >
+      <span className="ef-field-info">
+        <span className="ef-field-name">{nombreDe(id)}</span>
+        {descripcionDe(id) && <span className="ef-field-desc">{descripcionDe(id)}</span>}
+      </span>
+      {insignia?.(id)}
+    </button>
+  ) : (
+    <div className="ef-field-item" key={id}>
+      <label className="ef-toggle-wrap">
+        <input type="checkbox" checked={marcadas.has(id)} onChange={() => alternar(id)} />
+        <span className="ef-toggle-slider" />
+      </label>
+      <div className="ef-field-info">
+        <span className="ef-field-name">{nombreDe(id)}</span>
+        {descripcionDe(id) && <span className="ef-field-desc">{descripcionDe(id)}</span>}
+      </div>
+      {insignia?.(id)}
+      {claveSet.has(id) && <span className="ef-mandatory-badge">clave</span>}
+    </div>
+  ))
 
   return (
     // `onClose` se dispara cuando el navegador cierra el diálogo por su cuenta (Escape): hay que
@@ -127,14 +170,14 @@ export default function VentanaDeSeleccion({
               // Como en el desplegable de siempre: Enter elige la primera coincidencia.
               if (unica && evento.key === 'Enter' && visibles.length > 0) {
                 evento.preventDefault()
-                onElegir(visibles[0])
+                onElegir(enLista[0] ?? visibles[0])
               }
             }}
           />
           {!unica && (
             <div className="vs-masivas">
-              <button type="button" className="vs-enlace" onClick={marcarVisibles} disabled={visibles.length === 0}>
-                Marcar visibles ({visibles.length})
+              <button type="button" className="vs-enlace" onClick={marcarVisibles} disabled={porMarcar.length === 0}>
+                Marcar visibles ({porMarcar.length})
               </button>
               <button type="button" className="vs-enlace" onClick={quitarVisibles} disabled={visibles.length === 0}>
                 Quitar visibles
@@ -143,41 +186,28 @@ export default function VentanaDeSeleccion({
           )}
         </div>
 
+        {!cargando && elegidas.length > 0 && (
+          <div className="vs-elegidas">
+            <div className="ef-section-label">{unica ? 'Elegido ahora' : `Seleccionados (${elegidas.length})`}</div>
+            {elegidasDibujadas.map(fila)}
+            {elegidas.length > elegidasDibujadas.length && (
+              <p className="vs-nota">y {elegidas.length - elegidasDibujadas.length} más.</p>
+            )}
+          </div>
+        )}
+
         <div className="ef-fields-list">
           {cargando && <p className="vs-nota">{mensajeDeCarga}</p>}
           {!cargando && error && <p className="vs-nota vs-nota-aviso">{error}</p>}
           {!cargando && aviso && <p className="vs-nota vs-nota-aviso">{aviso}</p>}
 
-          {!cargando && dibujadas.map((id) => (unica ? (
-            <button
-              type="button"
-              key={id}
-              className={`vs-fila${id === valor ? ' sel' : ''}`}
-              onClick={() => onElegir(id)}
-            >
-              <span className="ef-field-info">
-                <span className="ef-field-name">{nombreDe(id)}</span>
-                {descripcionDe(id) && <span className="ef-field-desc">{descripcionDe(id)}</span>}
-              </span>
-              {insignia?.(id)}
-            </button>
-          ) : (
-            <div className="ef-field-item" key={id}>
-              <label className="ef-toggle-wrap">
-                <input type="checkbox" checked={marcadas.has(id)} onChange={() => alternar(id)} />
-                <span className="ef-toggle-slider" />
-              </label>
-              <div className="ef-field-info">
-                <span className="ef-field-name">{nombreDe(id)}</span>
-                {descripcionDe(id) && <span className="ef-field-desc">{descripcionDe(id)}</span>}
-              </div>
-              {insignia?.(id)}
-              {claveSet.has(id) && <span className="ef-mandatory-badge">clave</span>}
-            </div>
-          )))}
+          {!cargando && elegidas.length > 0 && dibujadas.length > 0 && (
+            <div className="ef-section-label">{unica ? 'Otras opciones' : 'Disponibles'}</div>
+          )}
+          {!cargando && dibujadas.map(fila)}
 
-          {!cargando && visibles.length > dibujadas.length && (
-            <p className="vs-nota">Se muestran {dibujadas.length} de {visibles.length}. Afina la búsqueda para ver el resto.</p>
+          {!cargando && enLista.length > dibujadas.length && (
+            <p className="vs-nota">Se muestran {dibujadas.length} de {enLista.length}. Afina la búsqueda para ver el resto.</p>
           )}
           {!cargando && !error && visibles.length === 0 && (
             <p className="vs-nota">{consulta ? `Sin resultados para "${filtro}".` : textoVacio}</p>
