@@ -70,6 +70,19 @@ describe('filasACsv', () => {
     expect(filasACsv(columnas, filas, comoSeLee).split('\r\n')[1]).toBe('P1;<ACME>')
   })
 
+  // El CSV de la suite se compara contra IBP: la semana tiene que decir lo mismo que IBP.
+  it('un periodo sale en UTC como lo guarda IBP, no en la zona de quien exporta', () => {
+    const zonaOriginal = process.env.TZ
+    process.env.TZ = 'America/Santiago'
+    try {
+      const csv = filasACsv(['RESID', 'PERIODID4_TSTAMP'], [{ RESID: 'LOCAR001_1000', PERIODID4_TSTAMP: '/Date(1791158400000)/' }])
+      expect(csv.split('\r\n')[1]).toBe('LOCAR001_1000;2026-10-05 00:00:00')
+    } finally {
+      if (zonaOriginal === undefined) delete process.env.TZ
+      else process.env.TZ = zonaOriginal
+    }
+  })
+
   it('los encabezados NO pasan por el formateador: son nombres, no valores', () => {
     expect(filasACsv(columnas, filas, () => 'X').split('\r\n')[0]).toBe('PRDID;BRAND')
   })

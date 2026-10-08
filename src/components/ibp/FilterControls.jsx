@@ -111,7 +111,7 @@ export function SearchSelect({ value, options, onChange, placeholder, searchPlac
  * `value` es la lista separada por comas, tal cual se guarda. Las fichas enseñan el valor LEGIBLE
  * (una fecha de OData se ve como fecha), pero lo guardado sigue siendo el valor crudo.
  */
-export function MultiValueSelect({ value, onChange, loadValues, placeholder, disabled, titulo }) {
+export function MultiValueSelect({ value, onChange, loadValues, placeholder, disabled, titulo, campo }) {
   const [open, setOpen]       = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState(false)
@@ -145,7 +145,8 @@ export function MultiValueSelect({ value, onChange, loadValues, placeholder, dis
   }
   // El texto legible de cada valor. La ventana busca en el valor crudo y en este: «28/7» encuentra una
   // fecha guardada como /Date(...)/.
-  const nombres = Object.fromEntries((all || []).map(v => [v, valorLegible(v)]))
+  // `campo` es la columna filtrada: si es un periodo, se lee como IBP lo guarda (UTC).
+  const nombres = Object.fromEntries((all || []).map(v => [v, valorLegible(v, campo)]))
 
   return (
     <div style={{ position: 'relative', flex: 1, minWidth: 0 }}>
@@ -166,7 +167,7 @@ export function MultiValueSelect({ value, onChange, loadValues, placeholder, dis
                 borderRadius: 4, padding: '2px 4px 2px 6px', fontSize: 11, fontFamily: 'var(--mono)',
               }}
             >
-              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{valorLegible(tok)}</span>
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{valorLegible(tok, campo)}</span>
               {!disabled && (
                 <button
                   type="button"

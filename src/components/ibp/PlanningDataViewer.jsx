@@ -643,6 +643,7 @@ export default function PlanningDataViewer({
                       onChange={v => setCond(i, { value: v })}
                       placeholder="Valores (separados por coma)…"
                       titulo={`Valores de ${c.field || 'la columna'}`}
+                      campo={c.field}
                       disabled={!c.field}
                       loadValues={() => fetchAttrValues(connectionId, { area: catalog.area, campo: c.field })}
                     />

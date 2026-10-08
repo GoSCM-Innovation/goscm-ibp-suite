@@ -67,7 +67,8 @@ const DIRTY_BG = 'color-mix(in srgb, var(--accent) 16%, transparent)'
 
 const EDIT_HINT = 'Modo edición: clic en una celda para editarla. Claves y campos de solo lectura están bloqueados.'
 
-const cellText = v => (v == null ? '' : valorLegible(v))
+// `c` es la columna: un periodo de IBP se enseña como IBP lo guarda (UTC), no en la zona del navegador.
+const cellText = (v, c) => (v == null ? '' : valorLegible(v, c))
 const num = n => Number(n ?? 0).toLocaleString()
 
 export default function DataGrid({
@@ -130,7 +131,7 @@ export default function DataGrid({
     const sample = tableRef.current?.querySelector('tbody td') || tableRef.current?.querySelector('th')
     const font = sample ? getComputedStyle(sample).font : ''
     ctx.font = font && font.trim() ? font : '12px monospace'
-    const width = anchoAjustado(c, visibleRows.map(r => cellText(r[c])), t => ctx.measureText(t).width, { esClave: keySet.has(c) })
+    const width = anchoAjustado(c, visibleRows.map(r => cellText(r[c], c)), t => ctx.measureText(t).width, { esClave: keySet.has(c) })
     setColWidths(p => ({ ...p, [c]: width }))
   }
 
@@ -148,7 +149,7 @@ export default function DataGrid({
   const colSet = new Set(columns)
   const active = Object.entries(colFilters).filter(([c, v]) => v && v.trim() && colSet.has(c))
   const visibleRows = active.length === 0 ? rows : rows.filter(r =>
-    active.every(([c, v]) => cellText(r[c]).toLowerCase().startsWith(v.trim().toLowerCase())))
+    active.every(([c, v]) => cellText(r[c], c).toLowerCase().startsWith(v.trim().toLowerCase())))
 
   const rowKeyOf = r => keyNames.map(k => String(r[k] ?? '')).join('')
   const beginEdit = (rk, field, current) => { setEditing({ rk, field }); setDraft(current == null ? '' : String(current)) }
@@ -291,7 +292,7 @@ export default function DataGrid({
                     {columns.map(c => {
                       const isDirty = changes && Object.prototype.hasOwnProperty.call(changes, c)
                       const rawVal  = isDirty ? changes[c] : r[c]
-                      const txt     = cellText(rawVal)
+                      const txt     = cellText(rawVal, c)
                       const canEdit = editMode && editableSet.has(c)
                       const isEditing = editMode && editing && editing.rk === rk && editing.field === c
                       if (isEditing) {

@@ -310,13 +310,13 @@ function fmtDuration(ms) {
 
 // Un valor de una celda: las fechas de OData legibles, y un objeto anidado (la fila que trae un
 // mensaje con `$expand`) como texto en vez de romper la tabla.
-function formatCell(val) {
+function formatCell(val, columna) {
   if (val == null) return ''
   if (typeof val === 'object') {
     const { __metadata, __deferred, ...resto } = val
     return JSON.stringify(resto)
   }
-  return valorLegible(val)
+  return valorLegible(val, columna)
 }
 
 // Las fases del desglose por tabla, en el orden en que pasan.
@@ -1865,7 +1865,7 @@ export default function MigrationPlan({ connection }) {
                                     <tr key={mi}>
                                       {msgCols.map(c => (
                                         <td key={c} style={{ padding: '3px 8px', borderBottom: '1px solid var(--border)', color: msg.Severity === 'E' || msg.Severity === 'A' ? 'var(--red)' : 'var(--text2)', fontFamily: 'var(--mono)' }}>
-                                          {formatCell(msg[c])}
+                                          {formatCell(msg[c], c)}
                                         </td>
                                       ))}
                                     </tr>
@@ -1996,7 +1996,7 @@ export default function MigrationPlan({ connection }) {
                             <tr key={i} style={{ background: i % 2 === 0 ? 'transparent' : 'var(--bg)' }}>
                               {cols.map(c => (
                                 <td key={c} style={{ padding: '4px 10px', borderBottom: '1px solid var(--border)', color: 'var(--text)', fontFamily: 'var(--mono)' }}>
-                                  {formatCell(row[c])}
+                                  {formatCell(row[c], c)}
                                 </td>
                               ))}
                             </tr>

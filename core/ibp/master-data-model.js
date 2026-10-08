@@ -54,10 +54,37 @@ export function literalOdata(valor) {
   return `datetimeoffset'${iso}'`
 }
 
-/** Un valor tal como se le muestra a una persona: las fechas de OData en formato local. */
-export function valorLegible(valor) {
+/** Las columnas de periodo de Planning Data: `PERIODID4_TSTAMP` (semana), `PERIODID3_TSTAMP` (mes)… */
+const COLUMNA_DE_PERIODO = /^PERIODID\d+_TSTAMP$/i
+
+/**
+ * Un periodo de planificación tal como lo guarda IBP: la fecha y hora UTC, SIN convertir de zona.
+ *
+ * Una semana de IBP es la medianoche UTC de su lunes (`2026-10-05 00:00:00`). Pasarla por la zona
+ * horaria del navegador la mueve: en Santiago o Buenos Aires (UTC-3) sale el domingo 4 a las 21:00, y
+ * quien compara contra IBP ve un dato distinto donde no lo hay. Se mide en UTC y se escribe como el
+ * archivo de IBP (`AAAA-MM-DD HH:MM:SS`), sin tocar el contenido.
+ */
+function periodoTalCualEnIbp(milisegundos) {
+  const iso = new Date(milisegundos).toISOString()
+  const fracciones = iso.slice(20, 23)
+  return `${iso.slice(0, 10)} ${iso.slice(11, 19)}${fracciones === '000' ? '' : `.${fracciones}`}`
+}
+
+/**
+ * Un valor tal como se le muestra a una persona.
+ *
+ * Las fechas de OData van en formato local, salvo las de una columna de periodo (`columna`): esas se
+ * enseñan como IBP las guarda, en UTC. Sin `columna` no se sabe de qué clase de fecha se trata y se
+ * conserva el formato local de siempre (los `CREATEDDATE` de dato maestro son instantes reales).
+ */
+export function valorLegible(valor, columna) {
   const fecha = FECHA_ODATA.exec(String(valor))
-  return fecha ? new Date(Number.parseInt(fecha[1], 10)).toLocaleString('es') : String(valor ?? '')
+  if (!fecha) return String(valor ?? '')
+  const milisegundos = Number.parseInt(fecha[1], 10)
+  return COLUMNA_DE_PERIODO.test(String(columna ?? ''))
+    ? periodoTalCualEnIbp(milisegundos)
+    : new Date(milisegundos).toLocaleString('es')
 }
 
 /** Parte una lista escrita a mano en valores limpios. */
@@ -102,7 +129,7 @@ export function etiquetaDeCondicion(condicion) {
   if (!condicion?.field) return null
   if (condicion.op === 'nb') return `${condicion.field} ≠ ∅`
 
-  const valores = partirValores(condicion.value).map(valorLegible)
+  const valores = partirValores(condicion.value).map((uno) => valorLegible(uno, condicion.field))
   if (valores.length === 0) return null
   if (condicion.op === 'sw') return `${condicion.field} ⌐ ${valores[0]}…`
   if (valores.length === 1) return `${condicion.field} = ${valores[0]}`

@@ -25,7 +25,7 @@ const TD = { padding: '5px 10px', fontSize: 12, borderBottom: '1px solid var(--b
 const btnSec = { background: 'none', border: '1px solid var(--border2)', borderRadius: 6, color: 'var(--text2)', fontSize: 12, fontWeight: 600, padding: '8px 16px', cursor: 'pointer' }
 const btnPri = { background: 'var(--accent)', border: 'none', borderRadius: 6, color: 'var(--text-on-accent)', fontSize: 12, fontWeight: 700, padding: '8px 18px', cursor: 'pointer' }
 
-const cellText = v => (v == null ? '' : valorLegible(v))
+const cellText = (v, c) => (v == null ? '' : valorLegible(v, c))
 const num = n => Number(n ?? 0).toLocaleString()
 
 /**
@@ -38,9 +38,9 @@ export default function EditReviewModal({ open, edits, keyNames = [], onConfirm,
   // Una fila de la tabla por campo cambiado.
   const changeRows = []
   for (const { row, changes } of Object.values(edits)) {
-    const key = keyNames.map(k => cellText(row[k])).join(' · ') || '—'
+    const key = keyNames.map(k => cellText(row[k], k)).join(' · ') || '—'
     for (const [field, val] of Object.entries(changes)) {
-      changeRows.push({ key, field, before: cellText(row[field]), after: cellText(val) })
+      changeRows.push({ key, field, before: cellText(row[field], field), after: cellText(val, field) })
     }
   }
   const rowCount = Object.keys(edits).length

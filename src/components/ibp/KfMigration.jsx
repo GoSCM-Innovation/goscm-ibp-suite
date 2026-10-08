@@ -1197,6 +1197,7 @@ export default function KfMigration({ connection }) {
                   loadValues={() => fetchAttrValues(srcConnId, { area: srcCat.pa, campo: c.field })}
                   placeholder={t('flt.valuesPh')}
                   titulo={`Valores de ${c.field || 'el atributo'}`}
+                  campo={c.field}
                   disabled={!c.field}
                 />
               )}

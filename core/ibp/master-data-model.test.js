@@ -36,6 +36,54 @@ describe('valorLegible', () => {
     expect(valorLegible('AS1PRODUCT')).toBe('AS1PRODUCT')
     expect(valorLegible(null)).toBe('')
   })
+
+  // Una semana de IBP es la medianoche UTC de su lunes. En hora de Santiago o Buenos Aires (UTC-3)
+  // la misma fecha sale como domingo 21:00, y quien compara contra IBP cree que el dato cambió.
+  describe('columnas de periodo', () => {
+    const SEMANA = '/Date(1791158400000)/' // 2026-10-05 00:00:00 UTC, un lunes
+    const zonaOriginal = process.env.TZ
+    const enZona = (zona, fn) => {
+      process.env.TZ = zona
+      try { return fn() } finally {
+        if (zonaOriginal === undefined) delete process.env.TZ
+        else process.env.TZ = zonaOriginal
+      }
+    }
+
+    it('se enseña como IBP la guarda, en UTC, sea cual sea la zona del navegador', () => {
+      for (const zona of ['America/Santiago', 'America/Argentina/Buenos_Aires', 'Europe/Madrid', 'America/Mexico_City', 'UTC']) {
+        expect(enZona(zona, () => valorLegible(SEMANA, 'PERIODID4_TSTAMP'))).toBe('2026-10-05 00:00:00')
+      }
+    })
+
+    it('vale para todos los niveles de tiempo', () => {
+      for (const campo of ['PERIODID0_TSTAMP', 'PERIODID1_TSTAMP', 'PERIODID2_TSTAMP', 'PERIODID3_TSTAMP', 'PERIODID5_TSTAMP']) {
+        expect(valorLegible(SEMANA, campo)).toBe('2026-10-05 00:00:00')
+      }
+    })
+
+    it('conserva la hora y los milisegundos si los trae: no se recorta el contenido', () => {
+      expect(valorLegible('/Date(1791158400000)/', 'PERIODID0_TSTAMP')).toBe('2026-10-05 00:00:00')
+      expect(valorLegible('/Date(1791161730500)/', 'PERIODID0_TSTAMP')).toBe('2026-10-05 00:55:30.500')
+    })
+
+    it('otra columna conserva la hora local de siempre (CREATEDDATE es un instante real)', () => {
+      const local = enZona('America/Santiago', () => valorLegible(SEMANA, 'CREATEDDATE'))
+      expect(local).not.toContain('2026-10-05')
+      expect(enZona('America/Santiago', () => valorLegible(SEMANA))).toBe(local)
+    })
+
+    it('un valor que no es fecha no cambia, aunque la columna sea de periodo', () => {
+      expect(valorLegible('2026-10-05', 'PERIODID4_TSTAMP')).toBe('2026-10-05')
+    })
+  })
+})
+
+describe('etiquetaDeCondicion con periodos', () => {
+  it('lee el periodo igual que la grilla', () => {
+    const etiqueta = etiquetaDeCondicion({ field: 'PERIODID4_TSTAMP', op: 'in', value: '/Date(1791158400000)/' })
+    expect(etiqueta).toBe('PERIODID4_TSTAMP = 2026-10-05 00:00:00')
+  })
 })
 
 describe('partirValores', () => {
