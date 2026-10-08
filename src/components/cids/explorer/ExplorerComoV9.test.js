@@ -161,6 +161,36 @@ describe('la lista de la izquierda', () => {
     expect(contenedor.querySelectorAll('.exp-item')).toHaveLength(1)
   })
 
+  it('el proyecto que contiene la integración elegida se puede plegar', async () => {
+    const integraciones = [integracion(0, { _zipName: 'A.zip' }), integracion(1, { _zipName: 'B.zip' })]
+    await montar(lista({ integraciones, seleccion: 1 }))
+
+    const cabeceraB = [...contenedor.querySelectorAll('.exp-project-head')].find((una) => una.textContent.includes('B ('))
+    await act(async () => { cabeceraB.click() })
+    expect(contenedor.querySelectorAll('.exp-item')).toHaveLength(0)
+    expect(cabeceraB.textContent).toContain('▶')
+
+    // Volver a dibujar con la MISMA selección (un filtro que cambia, por ejemplo) no lo reabre.
+    await act(async () => { raiz.render(lista({ integraciones: [...integraciones], seleccion: 1 })) })
+    expect(contenedor.querySelectorAll('.exp-item')).toHaveLength(0)
+  })
+
+  it('elegir algo de un proyecto plegado (saltar a una vecina) lo abre', async () => {
+    const integraciones = [integracion(0, { _zipName: 'A.zip' }), integracion(1, { _zipName: 'B.zip' })]
+    await montar(lista({ integraciones, seleccion: 1 }))
+    await act(async () => { raiz.render(lista({ integraciones, seleccion: 0 })) })
+    expect(contenedor.querySelectorAll('.exp-item.active')).toHaveLength(1)
+  })
+
+  it('una tarea con varios dataflows se puede plegar aunque contenga la elegida', async () => {
+    const integraciones = [integracion(0, { jobName: 'JOB_X' }), integracion(1, { jobName: 'JOB_X' })]
+    await montar(lista({ integraciones, seleccion: 1 }))
+    expect(contenedor.querySelectorAll('.exp-item.child')).toHaveLength(2)
+
+    await act(async () => { contenedor.querySelector('.exp-task-head').click() })
+    expect(contenedor.querySelectorAll('.exp-item.child')).toHaveLength(0)
+  })
+
   it('sin integraciones dice lo de v9', async () => {
     await montar(lista({}))
     expect(contenedor.textContent).toBe('No se encontraron integraciones')
@@ -388,6 +418,30 @@ describe('la pantalla entera', () => {
     await subirYExplorar()
     expect(contenedor.querySelector('.exp-detail-pane').textContent)
       .toBe('Selecciona una integración a la izquierda para explorar sus campos')
+  })
+
+  it('sin ningún transform con «Select Distinct Rows» no sale su interruptor', async () => {
+    await montar(createElement(IntegrationExplorer))
+    await subirYExplorar()
+    expect(contenedor.textContent).not.toContain('Select Distinct Rows')
+  })
+
+  it('el interruptor «Solo con Select Distinct Rows» lleva su contador y filtra', async () => {
+    analyzeProject.mockResolvedValue(analisis([
+      integracion(0, { jobName: 'JOB_A' }),
+      integracion(1, { jobName: 'JOB_B', distinctTransforms: ['Transform4'] }),
+    ]))
+    await montar(createElement(IntegrationExplorer))
+    await subirYExplorar()
+
+    const interruptor = [...contenedor.querySelectorAll('.interruptor')]
+      .find((uno) => uno.textContent.includes('Solo con Select Distinct Rows'))
+    expect(interruptor.querySelector('.exp-distinct-count').textContent).toBe('1')
+
+    await act(async () => { interruptor.querySelector('input').click() })
+    expect(contenedor.querySelector('.exp-counter').textContent).toBe('1 / 2')
+    expect(contenedor.querySelector('.exp-master').textContent).toContain('JOB_B')
+    expect(contenedor.querySelector('.exp-master').textContent).not.toContain('JOB_A')
   })
 
   it('sale el interruptor «Promovido a producción» solo tras conectar CI-DS', async () => {

@@ -42,6 +42,7 @@ import {
   filtrarIntegraciones,
   planAreaOptions,
   tieneScripts,
+  tieneSelectDistinct,
 } from '../../../lib/integration-view.js'
 import { useResizableColumn } from '../../../lib/useResizableColumn.js'
 import AtlProcessMaster from './AtlProcessMaster.jsx'
@@ -186,6 +187,7 @@ export default function IntegrationExplorer() {
   const [soloConflictos, setSoloConflictos] = useState(false)
   const [soloEnIbp, setSoloEnIbp] = useState(false)
   const [soloConScript, setSoloConScript] = useState(false)
+  const [soloConDistinct, setSoloConDistinct] = useState(false)
 
   // De dónde sale cada marca. Vacío = sin conectar.
   const [destinos, setDestinos] = useState([])
@@ -271,14 +273,20 @@ export default function IntegrationExplorer() {
   // dibuja y el filtro no aplica aunque hubiera quedado encendido.
   const conScript = useMemo(() => integraciones.filter(tieneScripts).length, [integraciones])
   const filtrarPorScript = soloConScript && conScript > 0
+
+  // Cuántas tienen algún transform con «Select Distinct Rows». Igual que el de scripts: sin ninguna,
+  // el interruptor no se dibuja y el filtro no aplica.
+  const conDistinct = useMemo(() => integraciones.filter(tieneSelectDistinct).length, [integraciones])
+  const filtrarPorDistinct = soloConDistinct && conDistinct > 0
   const filtrarPorConflictos = soloConflictos && Boolean(enConflicto) && atl.conflictos.length > 0
 
   const filtros = useMemo(
     () => ({
       planAreas, srcDS, dstDS, soloTransportadas, transportadas: marcaTransportadas,
       soloConScript: filtrarPorScript,
+      soloConDistinct: filtrarPorDistinct,
     }),
-    [planAreas, srcDS, dstDS, soloTransportadas, marcaTransportadas, filtrarPorScript],
+    [planAreas, srcDS, dstDS, soloTransportadas, marcaTransportadas, filtrarPorScript, filtrarPorDistinct],
   )
 
   /** Los filtros de la barra que no son de texto: ATL y IBP. Los demás van dentro de `filtros`. */
@@ -362,6 +370,7 @@ export default function IntegrationExplorer() {
     setSoloConflictos(false)
     setSoloEnIbp(false)
     setSoloConScript(false)
+    setSoloConDistinct(false)
 
     try {
       setBase(await analyzeProject(archivos))
@@ -724,6 +733,18 @@ export default function IntegrationExplorer() {
                   titulo="Mostrar solo integraciones cuyo job tiene un script pre/post-load con contenido"
                 >
                   📜 Solo con script <span className="exp-script-count">{conScript}</span>
+                </Interruptor>
+              </div>
+            )}
+
+            {conDistinct > 0 && (
+              <div className="exp-filtro-fila">
+                <Interruptor
+                  activo={soloConDistinct}
+                  onCambiar={setSoloConDistinct}
+                  titulo="Mostrar solo integraciones con algún transform que tenga «Select Distinct Rows»"
+                >
+                  Solo con Select Distinct Rows <span className="exp-distinct-count">{conDistinct}</span>
                 </Interruptor>
               </div>
             )}

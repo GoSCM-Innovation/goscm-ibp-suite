@@ -56,7 +56,7 @@ export const datastoreOptions = (integraciones) => ({
  * Un conjunto vacío significa "todas", no "ninguna": es lo que espera quien no tocó el filtro.
  */
 export function baseFiltrada(integraciones, filtros = {}) {
-  const { planAreas, srcDS, dstDS, soloTransportadas, transportadas, soloConScript } = filtros
+  const { planAreas, srcDS, dstDS, soloTransportadas, transportadas, soloConScript, soloConDistinct } = filtros
 
   return integraciones.filter((una) => {
     if (planAreas?.size > 0 && !planAreas.has(una.planArea || '')) return false
@@ -64,9 +64,18 @@ export function baseFiltrada(integraciones, filtros = {}) {
     if (dstDS?.size > 0 && !dstDS.has(una.dstDSName || '')) return false
     if (soloTransportadas && !transportadas?.has((una.jobName || '').toUpperCase())) return false
     if (soloConScript && !tieneScripts(una)) return false
+    if (soloConDistinct && !tieneSelectDistinct(una)) return false
     return true
   })
 }
+
+/** Los transforms del dataflow que tienen «Select Distinct Rows», o ninguno. */
+export const transformsConDistinct = (integracion) => (
+  Array.isArray(integracion?.distinctTransforms) ? integracion.distinctTransforms : []
+)
+
+/** Si algún transform del dataflow tiene «Select Distinct Rows». */
+export const tieneSelectDistinct = (integracion) => transformsConDistinct(integracion).length > 0
 
 /** Los scripts pre/post-load de la integración, o ninguno. De v9 (`_jobScripts`). */
 export const scriptsDe = (integracion) => (

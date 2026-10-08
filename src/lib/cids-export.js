@@ -88,10 +88,14 @@ export function buildSchemaMap(dataflow, porIndice) {
 }
 
 /**
- * Las transformaciones del dataflow: `nombre → { fields, filterExpr }`.
+ * Las transformaciones del dataflow: `nombre → { fields, filterExpr, selectDistinct }`.
  *
  * Se incluyen las de tipo XMLMap además de las Query porque las salidas de RFC y BAPI pasan por
  * ellas: sin eso, la cadena de expresiones se corta ahí y no se llega a la tabla real.
+ *
+ * `selectDistinct` es la casilla «Select Distinct Rows» del transform. CI-DS la guarda como
+ * `selectDistinctRows="true"` en el esquema de salida y, apagada, no escribe el atributo: en los
+ * exports revisados (9 proyectos, 360 transforms marcados) nunca aparece con `false`.
  */
 export function parseTransforms(dataflow) {
   const transformaciones = {}
@@ -120,6 +124,7 @@ export function parseTransforms(dataflow) {
     transformaciones[elemento.getAttribute('displayName') || ''] = {
       fields: campos,
       filterExpr: esquemaSalida.getAttribute('filterExpression') || '',
+      selectDistinct: (esquemaSalida.getAttribute('selectDistinctRows') || '').toLowerCase() === 'true',
     }
   }
 
@@ -601,6 +606,10 @@ export function parseDataflow(dataflow, porIndice, formatos, datastoreOrigenPorO
     ...destino,
     mappings,
     filters: extractFilters(dataflow, transformaciones, mapaDeEsquemas),
+    // Los transforms con «Select Distinct Rows», por su nombre en el dataflow.
+    distinctTransforms: Object.entries(transformaciones)
+      .filter(([, transformacion]) => transformacion.selectDistinct)
+      .map(([nombre]) => nombre),
     lookups: extractLookups(transformaciones),
     dataflowName: dataflow.getAttribute('name') || dataflow.getAttribute('displayName') || '',
     dataflowGuid: dataflow.getAttribute('guid') || '',

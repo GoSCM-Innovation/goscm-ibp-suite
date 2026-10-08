@@ -10,6 +10,7 @@ import {
   filasPorIntegracion,
   filtrarIntegraciones,
   planAreaOptions,
+  tieneSelectDistinct,
   vecinos,
 } from './integration-view.js'
 
@@ -98,6 +99,12 @@ describe('baseFiltrada', () => {
   it('deja solo las que ya están en el productivo cuando se pide', () => {
     const filtros = { soloTransportadas: true, transportadas: new Set(['JOB_1']) }
     expect(baseFiltrada(integraciones, filtros).map((una) => una._idx)).toEqual([1])
+  })
+
+  it('deja solo las que tienen algún transform con «Select Distinct Rows» cuando se pide', () => {
+    const conDistinct = [integraciones[0], { ...integraciones[1], distinctTransforms: ['Transform4'] }]
+    expect(baseFiltrada(conDistinct, { soloConDistinct: true }).map((una) => una._idx)).toEqual([1])
+    expect(baseFiltrada(conDistinct, { soloConDistinct: false })).toHaveLength(2)
   })
 })
 
@@ -211,5 +218,13 @@ describe('vecinos', () => {
 
   it('una integración suelta no tiene vecinos', () => {
     expect(vecinos(cadenas, 9)).toEqual({ entrantes: [], salientes: [] })
+  })
+})
+
+describe('tieneSelectDistinct', () => {
+  it('mira la lista de transforms, y una integración sin ella no tiene', () => {
+    expect(tieneSelectDistinct({ distinctTransforms: ['Transform4'] })).toBe(true)
+    expect(tieneSelectDistinct({ distinctTransforms: [] })).toBe(false)
+    expect(tieneSelectDistinct({})).toBe(false)
   })
 })

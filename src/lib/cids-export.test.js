@@ -214,6 +214,19 @@ describe('parseTransforms', () => {
     expect(parseTransforms(dataflow)).not.toHaveProperty('Lector')
   })
 
+  // Así lo escribe CI-DS: el atributo solo aparece con la casilla marcada.
+  it('marca «Select Distinct Rows» solo si el esquema de salida trae selectDistinctRows="true"', () => {
+    const conDistinct = parseXml(
+      `<DataFlow xmlns:xmi="http://www.omg.org/XMI">
+         <elements xmi:type="dataflow:QueryTransform" displayName="Transform4">
+           <outputSchema selectDistinctRows="true"><schemaNodes name="A" projectionExpression="X.A"/></outputSchema>
+         </elements>
+       </DataFlow>`,
+    )
+    expect(parseTransforms(conDistinct).Transform4.selectDistinct).toBe(true)
+    expect(parseTransforms(dataflow).Transform1.selectDistinct).toBe(false)
+  })
+
   it('una transformación sin esquema de salida se salta', () => {
     const sinSalida = parseXml(
       '<DataFlow xmlns:xmi="http://www.omg.org/XMI"><elements xmi:type="QueryTransform" displayName="Q"/></DataFlow>',
@@ -521,6 +534,16 @@ describe('parseDataflow', () => {
     expect(resultado.diagram.nodes).toHaveLength(3)
     expect(resultado.dataflowName).toBe('DF_PRODUCTO')
     expect(resultado.dataflowGuid).toBe('G-1')
+  })
+
+  it('lista los transforms con «Select Distinct Rows», y ninguno si no los hay', () => {
+    expect(resultado.distinctTransforms).toEqual([])
+    const conDistinct = XML_TABLA.replace(
+      `<outputSchema filterExpression="MARA_R.MTART = 'FERT'">`,
+      `<outputSchema filterExpression="MARA_R.MTART = 'FERT'" selectDistinctRows="true">`,
+    )
+    expect(parseDataflow(dataflowDe(conDistinct), { 0: 'ERP', 1: 'IBP' }, {}, '', '').distinctTransforms)
+      .toEqual(['Target_Query'])
   })
 
   it('un dataflow sin escritor no es una integraciÃ³n', () => {

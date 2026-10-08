@@ -14,6 +14,7 @@ import {
   ICONO_DE_VIA,
   NOMBRE_DE_VIA,
   scriptsDe,
+  transformsConDistinct,
   vecinos,
 } from '../../../lib/integration-view.js'
 import AtlSection from './AtlSection.jsx'
@@ -126,6 +127,21 @@ export function ListaDeFiltros({ filtros }) {
       <pre className="exp-expr">{uno.expression}</pre>
     </div>
   ))
+}
+
+/**
+ * Qué transforms del dataflow tienen «Select Distinct Rows». Va dentro de «Filtros» porque, como un
+ * filtro, cambia qué filas llegan al destino: descarta las repetidas.
+ */
+function SelectDistinct({ transforms }) {
+  if (transforms.length === 0) return null
+
+  return (
+    <div className="exp-distinct">
+      <span className="exp-distinct-label">Select Distinct Rows</span>
+      {transforms.map((nombre) => <code className="exp-distinct-transform" key={nombre}>{nombre}</code>)}
+    </div>
+  )
 }
 
 /** El texto de la vía de una arista: la tabla, el archivo o el lookup que une las dos integraciones. */
@@ -266,6 +282,7 @@ export default function IntegrationDetail({
       </Seccion>
 
       <Seccion titulo="🔍 Filtros" cantidad={integracion.filters.length} abiertaPorOmision>
+        <SelectDistinct transforms={transformsConDistinct(integracion)} />
         <ListaDeFiltros filtros={integracion.filters} />
       </Seccion>
 
