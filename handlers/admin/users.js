@@ -37,11 +37,14 @@ export default async function handler(req, res) {
       }
 
       if (status !== undefined) {
-        return res.status(200).json({ user: await setUserStatus(clientId, userId, status) })
+        return res.status(200).json({
+          user: await setUserStatus(clientId, userId, status, { actingIsPlatformAdmin: session.isPlatformAdmin }),
+        })
       }
 
       const user = await setUserRoles(
-        clientId, userId, { isAdmin, isPlatformAdmin }, { actingUserId: session.userId },
+        clientId, userId, { isAdmin, isPlatformAdmin },
+        { actingUserId: session.userId, actingIsPlatformAdmin: session.isPlatformAdmin },
       )
       return res.status(200).json({ user })
     }
@@ -49,7 +52,9 @@ export default async function handler(req, res) {
     if (req.method === 'DELETE') {
       const userId = req.query?.id || req.body?.userId
       if (!userId) return res.status(400).json({ error: 'Falta el usuario.' })
-      const deleted = await deleteUser(clientId, userId, { actingUserId: session.userId })
+      const deleted = await deleteUser(clientId, userId, {
+        actingUserId: session.userId, actingIsPlatformAdmin: session.isPlatformAdmin,
+      })
       return res.status(deleted ? 200 : 404).json(deleted ? { deleted: true } : { error: 'El usuario no existe.' })
     }
 

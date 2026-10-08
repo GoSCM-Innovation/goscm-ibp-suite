@@ -71,3 +71,11 @@ describe('isSecureRequest', () => {
     expect(isSecureRequest({ headers: {} })).toBe(false)
   })
 })
+
+describe('readSessionCookie — cookies malformadas', () => {
+  // Quien manda una cookie con un `%` roto quiere reventar la petición: no es una sesión, no es un error.
+  it('un `%` mal formado no lanza: no hay sesión', () => {
+    expect(readSessionCookie(`${SESSION_COOKIE}=%E0%A4%A`)).toBeNull()
+    expect(readSessionCookie(`${SESSION_COOKIE}=%`)).toBeNull()
+  })
+})

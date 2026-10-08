@@ -12,6 +12,7 @@ import { getAnyCredentials, getConnectionTarget } from '../../core/connections/i
 import { explicarFallo } from '../../core/ibp/explicar-fallo.js'
 import { escribirDatoMaestro } from '../../core/ibp/master-data-edit-run.js'
 import { filasParaBorrar, filasParaModificar } from '../../core/ibp/master-data-edit.js'
+import { esNombreSeguro } from '../../core/ibp/nombre-seguro.js'
 
 const ACUERDOS = ['SAP_COM_0720', 'SAP_COM_0326']
 
@@ -48,6 +49,8 @@ export default async function handler(req, res) {
     })
   }
   if (!entidad) return res.status(400).json({ error: 'Falta la tabla.' })
+  // La entidad se pega en la ruta (`…/${entidad}Trans`): un nombre con `/` o `..` llamaría a otro servicio.
+  if (!esNombreSeguro(entidad)) return res.status(400).json({ error: 'El nombre de la tabla no es válido.' })
   if (!Array.isArray(claves) || claves.length === 0) {
     return res.status(400).json({
       error: 'Sin las claves de negocio no se puede identificar qué registro tocar.',

@@ -24,6 +24,7 @@ export const TENANT_SCOPED_TABLES = new Set([
   'connections',
   'connection_agreements',
   'orchestrations',
+  'explorer_maps',
 ])
 
 export class TenantScopeError extends Error {

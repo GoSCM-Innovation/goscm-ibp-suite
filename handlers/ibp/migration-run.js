@@ -19,6 +19,7 @@
 import { requireModule } from '../../core/auth/guards.js'
 import { getAnyCredentials, getConnectionTarget } from '../../core/connections/index.js'
 import { explicarFallo } from '../../core/ibp/explicar-fallo.js'
+import { esNombreSeguro } from '../../core/ibp/nombre-seguro.js'
 import {
   cargarBorrado,
   cargarSegmento,
@@ -90,6 +91,12 @@ export default async function handler(req, res) {
   }
   if ((accion === 'cargar' || accion === 'borrar') && esElMismo(origen, destino)) {
     return res.status(400).json({ error: 'El origen y el destino son el mismo tenant, área y versión.' })
+  }
+  // Las tablas de origen y de destino se pegan en la ruta: un nombre con `/` o `..` llamaría a otro servicio.
+  for (const tabla of [entidad, entidadDestino]) {
+    if (tabla !== undefined && tabla !== null && tabla !== '' && !esNombreSeguro(tabla)) {
+      return res.status(400).json({ error: 'El nombre de la tabla no es válido.' })
+    }
   }
   if (!Array.isArray(columnas) || !Array.isArray(claves) || !Array.isArray(filas)) {
     return res.status(400).json({ error: 'Las columnas, las claves y las filas tienen que ser listas.' })

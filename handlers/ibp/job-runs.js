@@ -124,7 +124,15 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Método no permitido.' })
   }
 
-  const ctx = await preparar(req, res)
+  // `preparar` también puede lanzar (una conexión que no es de este cliente, un acuerdo sin configurar):
+  // eso es un 400 explicado, no un 500 sin controlar.
+  let ctx
+  try {
+    ctx = await preparar(req, res)
+  } catch (error) {
+    console.error(`[ibp/job-runs] ${error.stack || error.message}`)
+    return res.status(400).json({ error: explicarFallo(error, ACUERDO), detalle: error.detail ?? '' })
+  }
   if (!ctx) return
 
   try {

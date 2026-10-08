@@ -26,7 +26,9 @@ export function readSessionCookie(cookieHeader) {
     if (separator === -1) continue
     if (part.slice(0, separator).trim() !== SESSION_COOKIE) continue
     const value = part.slice(separator + 1).trim()
-    return value === '' ? null : decodeURIComponent(value)
+    if (value === '') return null
+    // Una cookie con un `%` mal formado la manda quien quiere romper la petición: no es una sesión.
+    try { return decodeURIComponent(value) } catch { return null }
   }
   return null
 }

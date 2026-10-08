@@ -3,9 +3,24 @@
 Este archivo es el punto de entrada cuando la instrucción es **«continuemos»**. Se lee primero, se
 actualiza al terminar cada sesión, y su orden es el de prioridad acordada.
 
-Última actualización: **2026-10-07**.
+Última actualización: **2026-10-08**.
 
 ## Dónde estamos
+
+- **Auditoría del backend (2026-10-08)**: ningún camino confirmado para tocar datos de otro cliente a través de
+  la API (todo `clientId` sale de la sesión; todas las consultas filtran por cliente). **Hecho**: validación
+  de nombres de servicio, entidad y campos en `sample` y de las tablas en `master-data-edit` y
+  `migration-run` (`core/ibp/nombre-seguro.js`); `preparar()` dentro del `try` en `job-runs`, `master-data` y
+  `planning-data`; cookie con `%` roto ya no revienta; cerrar sesión responde 500 si Redis falla; el mensaje
+  de correo duplicado no confirma correos de otros clientes; un administrador de cliente no puede tocar a un
+  administrador de plataforma; `explorer_maps` entra en la guarda de tablas por cliente y una prueba compara la
+  guarda con las migraciones. **Decisión del usuario**: `MAIL_REDIRECT_TO` se queda por ahora (hay que
+  quitarla antes del primer cliente). **Sin hacer, a propósito**: vida máxima de la sesión (H9), tope de
+  intentos de código por correo (H12), olvidar la sesión de CI-DS al cambiar su credencial (H13), registrar el
+  correo con hash (H14) y comprobar que el `__next` de SAP sea del mismo host (sospecha sin confirmar).
+  **Abierto**: `catalog` y `sample` exigen el módulo `cids` porque solo los usa el documentador de CI-DS (el
+  enriquecimiento con datos vivos de IBP); un cliente con solo CI-DS lee con ellos datos de su propia conexión
+  IBP. Falta decidir si eso es lo deseado. **Abierto**: ejecuciones programadas (ver abajo).
 
 - **Aislamiento entre tenants en el navegador (2026-10-07)**, a raíz de que en v7 aparecían tipos de material
   de otro tenant. Causa en v7: `MATTYPE_CFG` es global y nada la vacía al cambiar de conexión, y la clave en

@@ -89,7 +89,18 @@ describe('createUser', () => {
 
   it('no deja dos usuarios con el mismo correo en toda la plataforma', async () => {
     queryOne.mockResolvedValue({ client_id: 'otro-cliente' })
-    await expect(createUser(CLIENTE, { email: 'a@b.com' })).rejects.toThrow(/Ya hay un usuario con ese correo/)
+    await expect(createUser(CLIENTE, { email: 'a@b.com' })).rejects.toThrow(/No se pudo crear/)
+  })
+
+  // Confirmar que un correo existe en OTRO cliente le diría a un administrador qué correos hay en el resto
+  // de la plataforma. En el propio cliente sí se dice: es lo que necesita saber para corregirlo.
+  it('si el correo es de este mismo cliente lo dice; si es de otro, no lo confirma', async () => {
+    queryOne.mockResolvedValue({ client_id: CLIENTE })
+    await expect(createUser(CLIENTE, { email: 'a@b.com' })).rejects.toThrow(/Ya hay un usuario con ese correo en este cliente/)
+
+    queryOne.mockResolvedValue({ client_id: 'otro-cliente' })
+    const fallo = await createUser(CLIENTE, { email: 'a@b.com' }).catch((error) => error)
+    expect(fallo.message).not.toMatch(/Ya hay|plataforma|cliente/i)
   })
 
   it('guarda el correo en minúsculas y con el cliente en la fila', async () => {
@@ -160,7 +171,7 @@ describe('setUserRoles', () => {
       .mockResolvedValueOnce({ id: USUARIO, is_admin: true, is_platform_admin: true })
       .mockResolvedValueOnce({ id: USUARIO })
 
-    await setUserRoles(CLIENTE, USUARIO, { isAdmin: false })
+    await setUserRoles(CLIENTE, USUARIO, { isAdmin: false }, { actingIsPlatformAdmin: true })
 
     const [, , params] = queryOneScoped.mock.calls[1]
     expect(params[0]).toBe(false) // is_admin, el que se cambió
@@ -170,7 +181,7 @@ describe('setUserRoles', () => {
   it('nadie puede quitarse a sí mismo el rol de plataforma', async () => {
     queryOneScoped.mockResolvedValue({ id: USUARIO, is_admin: true, is_platform_admin: true })
     await expect(
-      setUserRoles(CLIENTE, USUARIO, { isPlatformAdmin: false }, { actingUserId: USUARIO }),
+      setUserRoles(CLIENTE, USUARIO, { isPlatformAdmin: false }, { actingUserId: USUARIO, actingIsPlatformAdmin: true }),
     ).rejects.toThrow(/a ti mismo/)
   })
 
@@ -178,7 +189,7 @@ describe('setUserRoles', () => {
     queryOneScoped.mockResolvedValue({ id: USUARIO, is_admin: true, is_platform_admin: true })
     queryOne.mockResolvedValue({ n: 0 })
     await expect(
-      setUserRoles(CLIENTE, USUARIO, { isPlatformAdmin: false }, { actingUserId: 'otro' }),
+      setUserRoles(CLIENTE, USUARIO, { isPlatformAdmin: false }, { actingUserId: 'otro', actingIsPlatformAdmin: true }),
     ).rejects.toThrow(/último administrador/)
   })
 
@@ -188,7 +199,7 @@ describe('setUserRoles', () => {
       .mockResolvedValueOnce({ id: USUARIO, is_platform_admin: false })
     queryOne.mockResolvedValue({ n: 1 })
     await expect(
-      setUserRoles(CLIENTE, USUARIO, { isPlatformAdmin: false }, { actingUserId: 'otro' }),
+      setUserRoles(CLIENTE, USUARIO, { isPlatformAdmin: false }, { actingUserId: 'otro', actingIsPlatformAdmin: true }),
     ).resolves.toMatchObject({ isPlatformAdmin: false })
   })
 })
@@ -207,7 +218,7 @@ describe('deleteUser', () => {
   it('no borra al último administrador de plataforma', async () => {
     queryOneScoped.mockResolvedValue({ id: USUARIO, is_platform_admin: true })
     queryOne.mockResolvedValue({ n: 0 })
-    await expect(deleteUser(CLIENTE, USUARIO)).rejects.toThrow(/último administrador/)
+    await expect(deleteUser(CLIENTE, USUARIO, { actingIsPlatformAdmin: true })).rejects.toThrow(/último administrador/)
   })
 
   it('al borrar cierra sus sesiones', async () => {
@@ -245,5 +256,50 @@ describe('setSubscription', () => {
     queryOneScoped.mockResolvedValue({ module: 'cids' })
     await setSubscription(CLIENTE, 'cids', { validFrom: '2026-01-01', validUntil: '2026-12-31' })
     expect(queryOneScoped.mock.calls[0][2]).toEqual([CLIENTE, 'cids', 'active', '2026-01-01', '2026-12-31'])
+  })
+})
+
+// Un administrador de plataforma solo lo toca otro administrador de plataforma: el de un cliente que lo tuviera
+// entre sus usuarios no puede desactivarlo, quitarle el rol ni borrarlo.
+describe('un administrador de plataforma como objetivo', () => {
+  const OBJETIVO = { id: USUARIO, is_admin: true, is_platform_admin: true }
+
+  beforeEach(() => { queryOneScoped.mockReset() })
+
+  it('quien no lo es no puede darlo de baja', async () => {
+    queryOneScoped.mockResolvedValue(OBJETIVO)
+    await expect(setUserStatus(CLIENTE, USUARIO, 'disabled', { actingIsPlatformAdmin: false }))
+      .rejects.toThrow(/Solo un administrador de la plataforma/)
+    await expect(setUserStatus(CLIENTE, USUARIO, 'disabled')).rejects.toThrow(/Solo un administrador de la plataforma/)
+    expect(destroyUserSessions).not.toHaveBeenCalled()
+  })
+
+  it('quien no lo es no puede quitarle ni darle roles', async () => {
+    queryOneScoped.mockResolvedValue(OBJETIVO)
+    await expect(setUserRoles(CLIENTE, USUARIO, { isAdmin: false }, { actingUserId: 'otro' }))
+      .rejects.toThrow(/Solo un administrador de la plataforma/)
+    expect(destroyUserSessions).not.toHaveBeenCalled()
+  })
+
+  it('quien no lo es no puede borrarlo', async () => {
+    queryOneScoped.mockResolvedValue(OBJETIVO)
+    await expect(deleteUser(CLIENTE, USUARIO, { actingUserId: 'otro' }))
+      .rejects.toThrow(/Solo un administrador de la plataforma/)
+    expect(destroyUserSessions).not.toHaveBeenCalled()
+  })
+
+  it('un administrador de plataforma sí puede darlo de baja', async () => {
+    queryOneScoped
+      .mockResolvedValueOnce(OBJETIVO)
+      .mockResolvedValueOnce({ id: USUARIO, status: 'disabled' })
+    await expect(setUserStatus(CLIENTE, USUARIO, 'disabled', { actingIsPlatformAdmin: true })).resolves.toBeDefined()
+    expect(destroyUserSessions).toHaveBeenCalledWith(USUARIO)
+  })
+
+  it('un usuario normal lo cambia cualquier administrador de su cliente', async () => {
+    queryOneScoped
+      .mockResolvedValueOnce({ id: USUARIO, is_platform_admin: false })
+      .mockResolvedValueOnce({ id: USUARIO, status: 'disabled' })
+    await expect(setUserStatus(CLIENTE, USUARIO, 'disabled')).resolves.toBeDefined()
   })
 })

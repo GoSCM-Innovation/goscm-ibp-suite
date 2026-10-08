@@ -7,7 +7,8 @@
 // A qué entidad preguntarle lo decide `target-entity.js`, que es puro y lo comparte el navegador.
 
 import { sapFetch } from '../transport/sap-fetch.js'
-import { serviceRoot } from './catalog.js'
+import { SERVICIOS, serviceRoot } from './catalog.js'
+import { esNombreSeguro } from './nombre-seguro.js'
 
 /** Un valor de SAP, listo para una celda. Las fechas de OData V2 vienen como `/Date(…)/`. */
 export function formatIbpExample(valor) {
@@ -42,6 +43,13 @@ export const MUESTRA_POR_OMISION = 50
 export async function readSampleRow({
   baseUrl, credentials, service, entitySet, planArea, selectFields = [], top = MUESTRA_POR_OMISION,
 }) {
+  // El servicio y la entidad van pegados a la ruta, y los campos al `$select`: se aceptan solo nombres que
+  // no puedan armar otra consulta con las credenciales de la conexión. Un campo con un nombre raro se
+  // descarta —SAP lo habría rechazado de todos modos— y una entidad o un servicio raros no se consultan.
+  if (!SERVICIOS.includes(service)) return { row: null, detail: 'servicio no válido' }
+  if (!esNombreSeguro(entitySet)) return { row: null, detail: 'nombre de entidad no válido' }
+  selectFields = selectFields.filter(esNombreSeguro)
+
   const pedido = Math.trunc(Number(top))
   const filasPedidas = Math.min(pedido > 0 ? pedido : MUESTRA_POR_OMISION, TOPE_DE_MUESTRA)
   const partes = [`$top=${filasPedidas}`, '$format=json']
@@ -74,9 +82,6 @@ export async function readSampleRow({
   }
 }
 
-/** Un nombre de entidad o de campo de OData: letras, números y guion bajo, nada que arme otra consulta. */
-const NOMBRE_SEGURO = /^[A-Za-z0-9_]+$/
-
 /**
  * La consulta dirigida de v9 (`fetchFieldExampleMD`): UN valor no vacío de UN campo de dato maestro.
  *
@@ -87,7 +92,7 @@ const NOMBRE_SEGURO = /^[A-Za-z0-9_]+$/
  * busca. Nunca lanza: sin valor devuelve `null`.
  */
 export async function readFieldExample({ baseUrl, credentials, entitySet, planArea, field }) {
-  if (!NOMBRE_SEGURO.test(String(entitySet)) || !NOMBRE_SEGURO.test(String(field))) return { value: null }
+  if (!esNombreSeguro(entitySet) || !esNombreSeguro(field)) return { value: null }
 
   const filtro = encodeURIComponent(`${field} ne ''`)
   const partes = [

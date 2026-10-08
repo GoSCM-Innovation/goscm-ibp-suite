@@ -101,6 +101,16 @@ export async function setClientStatus(clientId, status) {
 
 // ─── Usuarios ────────────────────────────────────────────────────────────────
 
+/**
+ * Un administrador de plataforma solo lo toca otro administrador de plataforma. Sin esto, el administrador de un
+ * cliente que tuviera a uno de ellos entre sus usuarios podría desactivarlo, quitarle el rol o borrarlo.
+ */
+function exigirPoderSobre(objetivo, actingIsPlatformAdmin) {
+  if (objetivo.is_platform_admin && !actingIsPlatformAdmin) {
+    throw new Error('Solo un administrador de la plataforma puede cambiar a otro administrador de la plataforma.')
+  }
+}
+
 export async function listUsers(clientId) {
   const rows = await queryScoped(
     clientId,
@@ -119,7 +129,13 @@ export async function createUser(clientId, { email, name = null, isAdmin = false
   // cliente + correo. Se comprueba antes para dar un mensaje entendible en vez del error
   // técnico de la base.
   const existing = await queryOne('select client_id from users where lower(email) = $1', [address])
-  if (existing) throw new Error('Ya hay un usuario con ese correo en la plataforma.')
+  if (existing) {
+    // Si el correo ya es de ESTE cliente se dice, que es lo que quien administra necesita saber. Si es de otro
+    // cliente no: confirmarlo le diría a un administrador qué correos existen en el resto de la plataforma.
+    throw new Error(existing.client_id === clientId
+      ? 'Ya hay un usuario con ese correo en este cliente.'
+      : 'No se pudo crear un usuario con ese correo.')
+  }
 
   return toUser(await queryOneScoped(
     clientId,
@@ -134,10 +150,18 @@ export async function createUser(clientId, { email, name = null, isAdmin = false
  * Da de baja o reactiva a alguien. Al darlo de baja se cierran sus sesiones abiertas: quitarle
  * el acceso tiene que surtir efecto ahora, no cuando le caduque la sesión.
  */
-export async function setUserStatus(clientId, userId, status) {
+export async function setUserStatus(clientId, userId, status, { actingIsPlatformAdmin = false } = {}) {
   if (!['active', 'disabled'].includes(status)) {
     throw new Error(`Estado de usuario desconocido: "${status}".`)
   }
+  const objetivo = await queryOneScoped(
+    clientId,
+    'select id, is_platform_admin from users where id = $1 and client_id = $2',
+    [userId, clientId],
+  )
+  if (!objetivo) throw new Error('El usuario no existe para este cliente.')
+  exigirPoderSobre(objetivo, actingIsPlatformAdmin)
+
   const updated = await queryOneScoped(
     clientId,
     'update users set status = $1 where id = $2 and client_id = $3 returning id, email, status',
@@ -158,13 +182,16 @@ export async function setUserStatus(clientId, userId, status) {
  * `actingUserId` es quien está haciendo el cambio: sirve para impedir que alguien se quite a
  * sí mismo el rol de plataforma y se encierre fuera.
  */
-export async function setUserRoles(clientId, userId, { isAdmin, isPlatformAdmin }, { actingUserId } = {}) {
+export async function setUserRoles(
+  clientId, userId, { isAdmin, isPlatformAdmin }, { actingUserId, actingIsPlatformAdmin = false } = {},
+) {
   const user = await queryOneScoped(
     clientId,
     'select id, is_admin, is_platform_admin from users where id = $1 and client_id = $2',
     [userId, clientId],
   )
   if (!user) throw new Error('El usuario no existe para este cliente.')
+  exigirPoderSobre(user, actingIsPlatformAdmin)
 
   const nextAdmin = isAdmin === undefined ? user.is_admin : Boolean(isAdmin)
   const nextPlatform = isPlatformAdmin === undefined ? user.is_platform_admin : Boolean(isPlatformAdmin)
@@ -194,7 +221,7 @@ export async function setUserRoles(clientId, userId, { isAdmin, isPlatformAdmin 
   return toUser(updated)
 }
 
-export async function deleteUser(clientId, userId, { actingUserId } = {}) {
+export async function deleteUser(clientId, userId, { actingUserId, actingIsPlatformAdmin = false } = {}) {
   if (actingUserId && actingUserId === userId) {
     throw new Error('No puedes borrarte a ti mismo.')
   }
@@ -204,6 +231,7 @@ export async function deleteUser(clientId, userId, { actingUserId } = {}) {
     [userId, clientId],
   )
   if (!user) return false
+  exigirPoderSobre(user, actingIsPlatformAdmin)
 
   if (user.is_platform_admin) {
     const remaining = await queryOne(

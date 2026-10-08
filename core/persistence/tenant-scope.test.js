@@ -125,3 +125,22 @@ describe('queryScoped', () => {
     expect(queryOne).toHaveBeenCalledWith(text, [CLIENT])
   })
 })
+
+// Si se añade una tabla con `client_id` y nadie la mete en la guarda, sus consultas dejan de revisarse sin
+// que nada avise. Esta prueba lee las migraciones y compara.
+describe('TENANT_SCOPED_TABLES — cubre todas las tablas con client_id', () => {
+  it('es exactamente el conjunto de tablas de las migraciones que tienen la columna client_id', async () => {
+    const { readdirSync, readFileSync } = await import('node:fs')
+    const { TENANT_SCOPED_TABLES } = await import('./tenant-scope.js')
+    const carpeta = new URL('./migrations/', import.meta.url)
+    const sql = readdirSync(carpeta).filter((f) => f.endsWith('.sql'))
+      .map((f) => readFileSync(new URL(f, carpeta), 'utf8')).join('\n')
+
+    const todas = [...sql.matchAll(/create table (?:if not exists )?(\w+)\s*\(([\s\S]*?)\n\)\s*;/gi)]
+    // Si el análisis dejara de ver alguna tabla, la prueba no probaría nada: tienen que ser todas.
+    expect(todas.length).toBe((sql.match(/create table/gi) ?? []).length)
+
+    const conCliente = todas.filter((m) => /\bclient_id\b/.test(m[2])).map((m) => m[1]).sort()
+    expect([...TENANT_SCOPED_TABLES].sort()).toEqual(conCliente)
+  })
+})
