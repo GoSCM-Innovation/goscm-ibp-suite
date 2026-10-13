@@ -11,11 +11,16 @@
 // elegidas ($select): nunca se baja una tabla entera. Las claves van SIEMPRE en el $select aunque no
 // se miren, para que cada fila se pueda identificar al editarla o borrarla.
 //
+// «Solo filas distintas (DISTINCT)» es nuevo de esta plataforma, no viene de v8: quita las filas
+// repetidas según las columnas elegidas. Es de solo lectura (una fila distinta resume varias reales) y
+// su lógica vive en `core/ibp/master-data-distinct.js`.
+//
 // Lo único que cambia respecto de v8 es DÓNDE se habla con SAP: aquí es el servidor, porque las
 // credenciales viven cifradas allí y nunca llegan al navegador.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
+import { contarDistintas, consultaDistinct, distinctSinEfecto } from '../../../core/ibp/master-data-distinct.js'
 import { etiquetaDeCondicion, filtroDeCondiciones } from '../../../core/ibp/master-data-model.js'
 import { TOPES } from '../../../core/ibp/export-csv.js'
 import { volcarACsv } from '../../lib/descargar-csv.js'
@@ -88,7 +93,7 @@ function btnPrimary(disabled) {
 // Lo que pone el envoltorio de pestañas, además de la conexión:
 //   active  — si esta pestaña es la que se ve. Si no, no se dibuja nada, pero el componente sigue
 //             montado y conserva su página.
-//   initial — { pa, version, mdt, conds, cols, pageSize } para rehacer una pestaña restaurada o duplicada.
+//   initial — { pa, version, mdt, conds, cols, pageSize, distinct } para rehacer una pestaña restaurada o duplicada.
 //   onMeta  — avisa qué está mirando (y si tiene cambios sin guardar) para nombrar la pestaña.
 //   fullscreen / onToggleFullscreen — la pantalla completa, que la lleva el envoltorio.
 export default function MasterDataViewer({ connectionId, active = true, initial = null, onMeta, fullscreen = false, onToggleFullscreen }) {
@@ -123,14 +128,19 @@ export default function MasterDataViewer({ connectionId, active = true, initial 
   // ── Filtros ──
   const [conds, setConds]           = useState(() => initial?.conds || [])  // [{ field, op: 'in'|'sw', value }]
   const [filterTest, setFilterTest] = useState(null)   // { loading?, n?, total?, error? }
+  // «Solo filas distintas»: borrador, como las columnas. Lo aplicado es `query.distinct`.
+  const [distinct, setDistinct]     = useState(() => Boolean(initial?.distinct))
   // Las columnas que trae una pestaña duplicada o restaurada: se usan una vez, en la primera lectura.
   const hydrateColsRef = useRef(initial?.cols || null)
 
   // ── La consulta de la tabla (null hasta «Mostrar datos») ──
-  // { page, pageSize, sort: { field, dir } | null, conds, filter, total }
+  // { page, pageSize, sort: { field, dir } | null, conds, filter, total, distinct }
   const [query, setQuery]       = useState(null)
   const [pageSize, setPageSize] = useState(() => initial?.pageSize || loadPageSize())
   const [rows, setRows]         = useState([])
+  // Cómo se leyeron `rows`: sin claves (DISTINCT) o con ellas. Va aparte de `query` porque al aplicar
+  // la consulta cambia ANTES que las filas, y la tabla identifica cada fila según cómo se leyó.
+  const [rowsDistinct, setRowsDistinct] = useState(false)
   const [gridLoading, setGridLoading] = useState(false)
   const [gridError, setGridError]     = useState('')
   const [applying, setApplying]       = useState(false)
@@ -362,15 +372,19 @@ export default function MasterDataViewer({ connectionId, active = true, initial 
     abortRef.current = ac
     setGridLoading(true); setGridError('')
     // Las claves van siempre, aunque no se vean: son lo que identifica la fila al editar o borrar.
-    const select = [...new Set([...appliedCols, ...schema.keyNames])]
+    // Menos en DISTINCT: son justo lo que impide que SAP quite las repetidas, y ahí no se edita.
+    const { select, orderby } = q.distinct
+      ? consultaDistinct(appliedCols, q.sort)
+      : { select: [...new Set([...appliedCols, ...schema.keyNames])], orderby: orderFor(q.sort, schema.keyNames) }
     try {
       const data = await fetchMasterRows(connectionId, {
         entidad: mdt, planningArea: readPA, versionId: readVersion, condiciones: q.conds,
-        select, orderby: orderFor(q.sort, schema.keyNames),
+        select, orderby,
         skip: (q.page - 1) * q.pageSize, top: q.pageSize, signal: ac.signal,
       })
       if (ac.signal.aborted) return
       setRows(data)
+      setRowsDistinct(Boolean(q.distinct))
     } catch (e) {
       if (e?.name === 'AbortError' || ac.signal.aborted) return
       setGridError(`No se pudieron cargar los datos: ${errText(e)}`)
@@ -395,6 +409,7 @@ export default function MasterDataViewer({ connectionId, active = true, initial 
       if (!window.confirm('Hay cambios sin guardar. ¿Descartarlos?')) return
       setEdits({})
     }
+    if (distinct && selectedCols.length === 0) { window.alert('Elige al menos una columna para ver las filas distintas.'); return }
     setSelected({})
     setApplying(true)
     try {
@@ -402,18 +417,43 @@ export default function MasterDataViewer({ connectionId, active = true, initial 
       // total y las páginas mentirían. Sin filtro, esta cuenta es la de la tabla entera.
       const activeConds = condsCompletas(conds)
       let total = schema.total
-      try {
-        total = await fetchMasterCount(connectionId, { entidad: mdt, planningArea: readPA, versionId: readVersion, condiciones: activeConds })
-      } catch { /* se queda el total anterior */ }
-      if (!extraFilter) setSchema(s => (s ? { ...s, total } : s))
+      if (distinct) {
+        // SAP no cuenta las filas distintas (su `$inlinecount` es el de la tabla), así que se cuentan
+        // leyéndolas. A diferencia de la cuenta normal, aquí NO sirve «quedarse con el total
+        // anterior»: sería el de la tabla entera y las páginas mentirían.
+        const { select, orderby } = consultaDistinct(selectedCols)
+        let cuenta
+        try {
+          cuenta = await contarDistintas({
+            leerPagina: ({ skip, top }) => fetchMasterRows(connectionId, {
+              entidad: mdt, planningArea: readPA, versionId: readVersion, condiciones: activeConds,
+              select, orderby, skip, top,
+            }),
+          })
+        } catch (e) {
+          window.alert(`No se pudieron contar las filas distintas: ${errText(e)}`)
+          return
+        }
+        if (cuenta.truncado) {
+          window.alert(`Hay más de ${num(cuenta.total)} filas distintas con estas columnas, demasiadas para mostrar. Elige menos columnas o acota el filtro.`)
+          return
+        }
+        total = cuenta.total
+        setEditMode(false)
+      } else {
+        try {
+          total = await fetchMasterCount(connectionId, { entidad: mdt, planningArea: readPA, versionId: readVersion, condiciones: activeConds })
+        } catch { /* se queda el total anterior */ }
+        if (!extraFilter) setSchema(s => (s ? { ...s, total } : s))
+      }
       setAppliedCols(selectedCols)
-      setQuery({ page: 1, pageSize, sort: null, conds: activeConds, filter: extraFilter, total })
+      setQuery({ page: 1, pageSize, sort: null, conds: activeConds, filter: extraFilter, total, distinct })
       // Con los datos a la vista, se pliega la configuración para darle aire a la tabla.
       setSelCollapsed(true); setDataCollapsed(true)
     } finally {
       setApplying(false)
     }
-  }, [mdt, schema, extraFilter, conds, selectedCols, connectionId, readPA, readVersion, pageSize, edits])
+  }, [mdt, schema, extraFilter, conds, selectedCols, distinct, connectionId, readPA, readVersion, pageSize, edits])
 
   // Exportar TODAS las filas de la consulta (todas las páginas) a un CSV. Páginas grandes, porque en
   // SAP el costo es por petición y no por fila.
@@ -429,9 +469,11 @@ export default function MasterDataViewer({ connectionId, active = true, initial 
     setExporting(true); setExportProgress({ loaded: 0, total })
     // Se exportan EXACTAMENTE las columnas que se ven, en su orden. Las claves se leen para que el
     // orden sea estable entre páginas, pero al archivo llegan solo si están a la vista.
+    // En DISTINCT no se añaden las claves: se exportan las filas únicas de las columnas a la vista.
     const exportCols = appliedCols.length ? appliedCols : [...schema.allColumns]
-    const select  = [...new Set([...exportCols, ...schema.keyNames])]
-    const orderby = orderFor(query.sort, schema.keyNames)
+    const { select, orderby } = query.distinct
+      ? consultaDistinct(exportCols, query.sort)
+      : { select: [...new Set([...exportCols, ...schema.keyNames])], orderby: orderFor(query.sort, schema.keyNames) }
     try {
       const salida = await volcarACsv({
         columnas: exportCols,
@@ -439,7 +481,7 @@ export default function MasterDataViewer({ connectionId, active = true, initial 
           entidad: mdt, planningArea: readPA, versionId: readVersion, condiciones: query.conds,
           select, orderby, skip, top, signal,
         }),
-        nombre: [mdt, (isSimple ? 'simple' : version) || 'base'],
+        nombre: [mdt, (isSimple ? 'simple' : version) || 'base', query.distinct ? 'distinct' : ''],
         total,
         tope: maximo,
         signal: ac.signal,
@@ -500,10 +542,10 @@ export default function MasterDataViewer({ connectionId, active = true, initial 
     // `def` lleva la configuración entera —selección, filtros, columnas, página— para que
     // «Duplicar pestaña» dé una pestaña idéntica e independiente. Nunca filas.
     onMetaRef.current?.(
-      { pa, version, mdt, conds, cols: selectedCols, pageSize },
+      { pa, version, mdt, conds, cols: selectedCols, pageSize, distinct },
       { areaId: pa, versionId: version, leafLabel: mdt, dirty: editCount > 0 || selCount > 0 },
     )
-  }, [pa, version, mdt, conds, selectedCols, pageSize, editCount, selCount])
+  }, [pa, version, mdt, conds, selectedCols, pageSize, distinct, editCount, selCount])
 
   const onToggleRow = useCallback((rk, row) => {
     setSelected(prev => {
@@ -608,16 +650,19 @@ export default function MasterDataViewer({ connectionId, active = true, initial 
     const a = new Set(appliedCols)
     const colsDirty = selectedCols.length !== appliedCols.length || selectedCols.some(c => !a.has(c))
     const filterDirty = (extraFilter || undefined) !== (query.filter || undefined)
-    return colsDirty || filterDirty
-  }, [query, selectedCols, appliedCols, extraFilter])
+    const distinctDirty = distinct !== Boolean(query.distinct)
+    return colsDirty || filterDirty || distinctDirty
+  }, [query, selectedCols, appliedCols, extraFilter, distinct])
 
   // Lo que dice cada sección plegada, para no perder el contexto.
   const selSummary = pa
     ? [isSimple ? 'Dato maestro simple (sin versión)' : pa, isSimple ? '' : (version || '(base / sin versión)'), mdt].filter(Boolean).join('  /  ')
     : '—'
   const dataSummary = schema
-    ? `${selectedCols.length}/${schema.allColumns.length} columnas · ${conds.length} filtros`
+    ? `${selectedCols.length}/${schema.allColumns.length} columnas · ${conds.length} filtros${distinct ? ' · solo filas distintas' : ''}`
     : ''
+  // Con todas las claves elegidas cada fila ya es única: el interruptor no cambiaría nada.
+  const distinctInutil = distinct && schema ? distinctSinEfecto(selectedCols, schema.keyNames) : false
 
   // Pestaña de atrás: sigue viva pero no dibuja nada.
   if (!active) return null
@@ -744,7 +789,35 @@ export default function MasterDataViewer({ connectionId, active = true, initial 
               <span style={{ fontSize: 12, color: 'var(--text2)' }}>
                 {num(schema.total)} filas en total
               </span>
+              <label
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', borderRadius: 8, padding: '6px 12px',
+                  border: `1px solid ${distinct ? 'var(--accent)' : 'var(--border2)'}`,
+                  background: distinct ? 'color-mix(in srgb, var(--accent) 12%, transparent)' : 'transparent',
+                }}
+                title="Equivale a SELECT DISTINCT: si dos filas son iguales en las columnas elegidas, se muestra una sola."
+              >
+                <input
+                  type="checkbox"
+                  checked={distinct}
+                  onChange={e => setDistinct(e.target.checked)}
+                  style={{ width: 18, height: 18, accentColor: 'var(--accent)', cursor: 'pointer', margin: 0 }}
+                />
+                <span style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: distinct ? 'var(--accent)' : 'var(--text)' }}>
+                    Solo filas distintas (DISTINCT)
+                  </span>
+                  <span style={{ fontSize: 11, color: 'var(--text3)' }}>
+                    Quita las filas repetidas según las columnas elegidas. Solo lectura.
+                  </span>
+                </span>
+              </label>
             </div>
+            {distinctInutil && (
+              <div style={{ fontSize: 11, color: 'var(--text3)', margin: '-4px 0 12px' }}>
+                ⓘ Elegiste todas las claves de la tabla: cada fila ya es única y el resultado será el mismo. Quita alguna clave para que se junten las repetidas.
+              </div>
+            )}
 
             <div style={{ borderTop: '1px solid var(--border)', paddingTop: 12 }}>
               <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text2)', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 4 }}>
@@ -853,15 +926,20 @@ export default function MasterDataViewer({ connectionId, active = true, initial 
             editableCols={editableCols}
             edits={edits}
             editCount={editCount}
-            onToggleEdit={() => setEditMode(v => !v)}
+            // En DISTINCT una fila resume varias reales y no se puede saber cuál tocar: sin editar
+            // y sin casillas para borrar (sin estas funciones, la tabla no dibuja los controles).
+            onToggleEdit={query.distinct ? undefined : () => setEditMode(v => !v)}
             onCellEdit={onCellEdit}
             onSaveEdits={() => { setSaveResult(null); setShowSaveModal(true) }}
             onDiscardEdits={discardEdits}
             selectedKeys={selected}
             selCount={selCount}
-            onToggleRow={onToggleRow}
+            onToggleRow={query.distinct ? undefined : onToggleRow}
             onToggleAllPage={onToggleAllPage}
             onDeleteSelected={() => { setDeleteResult(null); setShowDeleteModal(true) }}
+            sinClaves={rowsDistinct}
+            etiquetaTotal={query.distinct ? 'filas distintas' : undefined}
+            aviso={query.distinct ? 'Modo DISTINCT: solo lectura (para editar o borrar, apaga «Solo filas distintas»).' : undefined}
             fullscreen={fullscreen}
             onToggleFullscreen={onToggleFullscreen}
             onExport={exportCsv}

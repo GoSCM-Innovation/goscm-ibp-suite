@@ -85,6 +85,10 @@ export default function DataGrid({
   fullscreen = false, onToggleFullscreen,
   // Exportar (opcional). La lectura de todas las páginas la hace quien usa la tabla.
   onExport, exporting = false, exportProgress = null, onCancelExport,
+  // Una consulta DISTINCT: las filas no tienen claves de negocio (`sinClaves`), así que las identifica
+  // su posición; el total se llama de otro modo (`etiquetaTotal`); y `aviso` explica por qué no se
+  // puede editar ni borrar.
+  sinClaves = false, etiquetaTotal = 'registros en total', aviso,
 }) {
   const keySet = new Set(keyNames)
   const editableSet = new Set(editableCols)
@@ -166,6 +170,7 @@ export default function DataGrid({
         <span style={{ fontSize: 11, color: 'var(--text3)' }}>ⓘ El filtro por columna actúa solo sobre los registros de esta página (empieza con).</span>
         {!editMode && <span style={{ fontSize: 11, color: 'var(--text3)' }}>ⓘ Arrastra cabeceras para reordenar; arrastra su borde para ajustar el ancho (doble clic = autoajuste).</span>}
         {editMode && <span style={{ fontSize: 11, color: 'var(--accent)' }}>✎ {editHintText}</span>}
+        {aviso && <span style={{ fontSize: 11, color: 'var(--accent)', fontWeight: 600 }}>ⓘ {aviso}</span>}
         {active.length > 0 && (
           <span style={{ fontSize: 11, color: 'var(--accent)' }}>
             Mostrando {num(visibleRows.length)} de {num(rows.length)} de esta página
@@ -279,8 +284,12 @@ export default function DataGrid({
               </tr>
             </thead>
             <tbody>
-              {visibleRows.map(r => {
-                const rk = rowKeyOf(r)
+              {visibleRows.map((r, i) => {
+                // Sin claves de negocio la clave de React es la posición. No se puede sacar de las
+                // columnas que se ven: al aplicar, las filas viejas se dibujan un instante con las
+                // columnas nuevas, y si esas columnas no son únicas salen claves repetidas, que en
+                // React dejan filas fantasma en la tabla.
+                const rk = sinClaves ? `#${i}` : rowKeyOf(r)
                 const changes = edits[rk]?.changes
                 return (
                   <tr key={rk}>
@@ -355,7 +364,7 @@ export default function DataGrid({
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 2px', flexShrink: 0, flexWrap: 'wrap' }}>
         {total != null && (
           <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)' }}>
-            {num(total)} registros en total
+            {num(total)} {etiquetaTotal}
           </span>
         )}
         <button type="button" disabled={loading || page <= 1} onClick={() => onPageChange(page - 1)} style={navBtn(loading || page <= 1)}>
