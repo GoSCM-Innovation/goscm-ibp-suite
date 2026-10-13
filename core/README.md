@@ -54,6 +54,10 @@ Así que se borró. La paginación vive en:
 - `ibp/master-data-model.js` — `filasPorPagina`, el tamaño de página desde un presupuesto de bytes
   medido (900 KB: por encima del megabyte las respuestas volvían cortadas).
 - `ibp/planning-data.js` — el lector de cifras clave, con su propio tope y `$top` pequeño para contar.
+- `ibp/master-data-distinct.js` — el modo «Solo filas distintas» del visor de dato maestro. SAP
+  deduplica solo cuando el `$select` no lleva todas las claves, pero su `$inlinecount` sigue siendo el de
+  la tabla entera (medido: 2.578 con 6 o 618 filas distintas), así que el total se cuenta leyendo, y se
+  ordena solo por las columnas pedidas (ordenar por una que no está en el `$select` es un 500).
 
 El primer administrador se crea con `npm run db:seed` porque la base arranca vacía y el panel exige ser administrador para entrar. Es el único punto del sistema donde nace un usuario sin que otro lo autorice.
 
