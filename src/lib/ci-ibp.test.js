@@ -8,6 +8,7 @@ import {
   filasDeCifra,
   infoDeDestino,
   leerCifraDeFilas,
+  mapeoParaTabla,
   opcionesDeAreas,
   opcionesDeTipos,
   opcionesDeVersiones,
@@ -282,5 +283,41 @@ describe('revisarContraIbp', () => {
   it('un body que no tiene los campos no rompe', () => {
     expect(revisar({})).toEqual([])
     expect(revisarContraIbp({ bloque: undefined, areas: AREAS })).toEqual([])
+  })
+})
+
+describe('mapeoParaTabla', () => {
+  const NUEVA = [
+    { campo: 'LOCID', etiqueta: 'Location ID', tipo: 'NVARCHAR(20)', sistema: false },
+    { campo: 'LOCDESCR', etiqueta: 'Location Description', tipo: 'NVARCHAR(60)', sistema: false },
+    { campo: 'PlanningAreaID', etiqueta: 'Planning Area ID', tipo: 'NVARCHAR(30)', sistema: true },
+  ]
+  const pares = (filas) => filas.map((una) => `${una.origen}:${una.destino}`)
+
+  it('si ningún destino existe en la nueva tabla, la llena con sus campos menos los de sistema', () => {
+    const filas = [fila('A', 'UOMTOID'), fila('B', 'UOMTODESCR')]
+    expect(pares(mapeoParaTabla(filas, NUEVA))).toEqual(['LOCID:LOCID', 'LOCDESCR:LOCDESCR'])
+  })
+
+  it('un mapeo vacío también se llena', () => {
+    expect(pares(mapeoParaTabla([], NUEVA))).toEqual(['LOCID:LOCID', 'LOCDESCR:LOCDESCR'])
+  })
+
+  it('las filas cuyo destino existe se quedan con su origen, las demás se quitan, y NO se agrega nada', () => {
+    const filas = [fila('MATNR', 'LOCID'), fila('X', 'ZPROPIO'), fila('Y', 'UOMTOID')]
+    expect(pares(mapeoParaTabla(filas, NUEVA))).toEqual(['MATNR:LOCID'])
+  })
+
+  it('compara sin distinguir mayúsculas y conserva lo que la fila decía', () => {
+    expect(pares(mapeoParaTabla([fila('A', 'locid')], NUEVA))).toEqual(['A:locid'])
+  })
+
+  it('una fila a medias (sin origen o sin destino) no cuenta como mapeo', () => {
+    const resultado = mapeoParaTabla([fila('', 'LOCID'), fila('A', '')], NUEVA)
+    expect(pares(resultado)).toEqual(['LOCID:LOCID', 'LOCDESCR:LOCDESCR'])
+  })
+
+  it('una tabla sin campos deja el mapeo vacío', () => {
+    expect(mapeoParaTabla([fila('A', 'X')], [])).toEqual([])
   })
 })

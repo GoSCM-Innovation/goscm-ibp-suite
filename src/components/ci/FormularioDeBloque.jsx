@@ -14,14 +14,16 @@
 // el otro tipo y aparecen, vacíos, los del nuevo (con confirmación si lo que se quita tiene valor).
 //
 // Con `ibp` (lo que IBP dice de este body, ver `useIbpDelBody`) el área, la versión y el tipo de maestro se eligen de
-// los de IBP, los campos se eligen de la tabla o del área y los valores del filtro se sugieren. Todo sigue siendo
-// editable a mano: sin `ibp` el formulario es el de siempre.
+// los de IBP, los campos se eligen de la tabla o del área y los valores del filtro se sugieren. Elegir otro tipo de
+// maestro de la lista también ajusta el mapeo a los campos de esa tabla. Todo sigue siendo editable a mano: sin `ibp`
+// el formulario es el de siempre.
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { leerBody } from '../../../core/ci/body.js'
 import { CAMPOS_CONOCIDOS, CAMPOS_ESPECIALES, NOMBRES_CON_CONTROL, TIPOS_DE_DATO, camposDe } from '../../../core/ci/campos.js'
-import { CAMPO_DE_PERIODO } from '../../../core/ci/ibp-nombres.js'
-import { esVariable, opcionesDeAreas, opcionesDeTipos, opcionesDeVersiones } from '../../lib/ci-ibp.js'
+import { CAMPO_DE_PERIODO, componerTipo } from '../../../core/ci/ibp-nombres.js'
+import { escribirMapeo, leerMapeo } from '../../../core/ci/mapping.js'
+import { esVariable, mapeoParaTabla, opcionesDeAreas, opcionesDeTipos, opcionesDeVersiones } from '../../lib/ci-ibp.js'
 import CampoConLista from './CampoConLista.jsx'
 import ConstructorDeFiltro from './ConstructorDeFiltro.jsx'
 import TablaDeMapeo from './TablaDeMapeo.jsx'
@@ -73,6 +75,15 @@ function conTipoDeDato(bloque, nuevo, quitar, agregar) {
 }
 
 export default function FormularioDeBloque({ texto, onCambiar, deshabilitado = false, ibp = null, nivelesDeTiempo = [] }) {
+  // Elegir un tipo de maestro lee los campos de su tabla antes de cambiar nada, y mientras tanto la persona puede seguir
+  // escribiendo. Por eso lo que se cambia al volver se aplica sobre el texto de AHORA y no sobre el de cuando se pulsó
+  // (`textoActual`), y una elección que ya no es la última, o que se quedó sin pantalla, se descarta (`eleccion`).
+  const [leyendoTabla, setLeyendoTabla] = useState('')
+  const textoActual = useRef(texto)
+  const eleccion = useRef(0)
+  useEffect(() => { textoActual.current = texto })
+  useEffect(() => () => { eleccion.current += 1 }, [])
+
   const leido = leerBody(texto)
 
   if (!leido.ok) {
@@ -211,11 +222,43 @@ export default function FormularioDeBloque({ texto, onCambiar, deshabilitado = f
     emitir(conTipoDeDato(bloque, nuevo, aQuitar.map((una) => una.campo), aAgregar.map((una) => una.campo)))
   }
 
-  /** Elegir el tipo de la lista de IBP rellena también el prefijo, que en el body va aparte. */
-  function elegirTipo(tipoDeMaestro) {
+  /**
+   * Elegir el tipo de la lista de IBP rellena también el prefijo, que en el body va aparte, y ajusta el mapeo a los
+   * campos de la nueva tabla (ver `mapeoParaTabla`). Todo en un solo cambio.
+   *
+   * Si los campos no se pueden leer, o las tres listas del mapeo no coinciden entre sí (no se sabe cuál era la buena, y
+   * no se arregla solo), solo cambian el tipo y el prefijo.
+   */
+  async function elegirTipo(tipoDeMaestro) {
     const opcion = tiposDelArea.find((una) => una.value === tipoDeMaestro)
     if (!opcion || opcion.value === '') return
-    emitir(conCampos(bloque, { MasterDataPrefix: opcion.prefijo, MasterDataType: opcion.value }))
+
+    const tabla = componerTipo(opcion.prefijo, opcion.value)
+    const esta = eleccion.current + 1
+    eleccion.current = esta
+    setLeyendoTabla(tabla)
+
+    let campos = null
+    try {
+      campos = (await ibp.leer('campos-maestro', { entidad: tabla })).campos
+    } catch {
+      // Sin los campos de la tabla solo cambia el tipo: el mapeo se queda y la revisión avisa de lo que no cuadre.
+    }
+    if (eleccion.current !== esta) return
+    setLeyendoTabla('')
+
+    const ahora = leerBody(textoActual.current)
+    if (!ahora.ok) return
+    const cambios = { MasterDataPrefix: opcion.prefijo, MasterDataType: opcion.value }
+    const mapeo = leerMapeo(ahora.bloque)
+    const tablaDeAhora = componerTipo(
+      typeof ahora.bloque.MasterDataPrefix === 'string' ? ahora.bloque.MasterDataPrefix.trim() : '',
+      typeof ahora.bloque.MasterDataType === 'string' ? ahora.bloque.MasterDataType.trim() : '',
+    )
+    if (campos && mapeo.coherente && tablaDeAhora.toUpperCase() !== tabla.toUpperCase()) {
+      Object.assign(cambios, escribirMapeo(mapeoParaTabla(mapeo.filas, campos)))
+    }
+    onCambiar(JSON.stringify({ [ahora.clave]: conCampos(ahora.bloque, cambios) }, null, 2))
   }
 
   return (
@@ -262,7 +305,8 @@ export default function FormularioDeBloque({ texto, onCambiar, deshabilitado = f
               {controlDe(campo)}
               <span className="card-hint mono">
                 {campo.campo}{campo.ayuda ? ` · ${campo.ayuda}` : ''}
-                {ibp && campo.campo === 'MasterDataType' && tiposDelArea.length > 1 && ' · al elegir de la lista se rellena también el prefijo'}
+                {ibp && campo.campo === 'MasterDataType' && tiposDelArea.length > 1 && ' · al elegir de la lista se rellenan también el prefijo y los campos del mapeo'}
+                {campo.campo === 'MasterDataType' && leyendoTabla && ` · leyendo los campos de ${leyendoTabla}…`}
                 {campo.campo === 'TargetTimeProfileLevelinSAPIBP' && nivelesDeTiempo.length > 0 && ' · la lista trae los que ya usan otras integraciones de esta conexión'}
               </span>
             </div>

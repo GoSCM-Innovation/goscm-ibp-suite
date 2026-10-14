@@ -463,3 +463,142 @@ describe('la revisión no impide nada', () => {
     expect(texto()).not.toContain('Revisión contra IBP')
   })
 })
+
+describe('elegir otro tipo de maestro ajusta el mapeo a la nueva tabla', () => {
+  const CAMPOS_LOCATION = [
+    { campo: 'LOCID', etiqueta: 'Location ID', tipo: 'NVARCHAR(20)', sistema: false },
+    { campo: 'LOCDESCR', etiqueta: 'Location Description', tipo: 'NVARCHAR(60)', sistema: false },
+    { campo: 'PlanningAreaID', etiqueta: 'Planning Area ID', tipo: 'NVARCHAR(30)', sistema: true },
+  ]
+  const camposDe = (entidad) => (entidad === 'ABLOCATION' ? CAMPOS_LOCATION : CAMPOS)
+  const respuestaDe = (entidad) => ({ ibp: IBP, entidad, campos: camposDe(entidad) })
+  const conMapeo = (pares, cambios = {}) => bloqueMaestro({
+    FieldMapping: pares.map(([o, d]) => `${o}:${d}`).join(','),
+    SourceFieldsfromAddon: pares.map(([o]) => o).join(','),
+    TargetFieldsInSAPIBP: pares.map(([, d]) => d).join(','),
+    ...cambios,
+  })
+
+  beforeEach(() => {
+    servidor({ 'campos-maestro': async (p) => respuestaDe(p.entidad) })
+  })
+
+  // El caso que se reportó: se cambió el maestro y el mapeo seguía con los campos de la tabla anterior.
+  it('si ningún destino existe en la nueva tabla, el mapeo se llena con los campos de esa tabla (sin los de sistema)', async () => {
+    await abrir({ body: cuerpo(conMapeo([['MATNR', 'PRDID'], ['MTART', 'MATTYPEID']])) })
+    await elegir(campo('ci-MasterDataType'), 'LOCATION')
+    await esperar()
+
+    expect(pedidos('campos-maestro').map((p) => p.entidad)).toContain('ABLOCATION')
+    const bloque = await bloqueActual()
+    expect(bloque.MasterDataType).toBe('LOCATION')
+    expect(bloque.MasterDataPrefix).toBe('AB')
+    expect(bloque.FieldMapping).toBe('LOCID:LOCID,LOCDESCR:LOCDESCR')
+    expect(bloque.SourceFieldsfromAddon).toBe('LOCID,LOCDESCR')
+    expect(bloque.TargetFieldsInSAPIBP).toBe('LOCID,LOCDESCR')
+    // Y ya no hay campos que no existan.
+    expect(texto()).not.toContain('No existe en IBP')
+    expect(texto()).not.toContain('Revisión contra IBP')
+  })
+
+  it('las filas cuyo destino existe en la nueva tabla se quedan con su origen, y no se agrega nada más', async () => {
+    await abrir({ body: cuerpo(conMapeo([['MI_SITIO', 'LOCID'], ['X', 'PRDID']])) })
+    await elegir(campo('ci-MasterDataType'), 'LOCATION')
+    await esperar()
+
+    expect((await bloqueActual()).FieldMapping).toBe('MI_SITIO:LOCID')
+  })
+
+  it('escribir el tipo a mano NO toca el mapeo', async () => {
+    await abrir({ body: cuerpo(conMapeo([['MATNR', 'PRDID']])) })
+    await pulsar(campo('ci-MasterDataType').parentElement.querySelector('button'))
+    await escribir(campo('ci-MasterDataType'), 'LOCATION')
+    await esperar()
+
+    const bloque = await bloqueActual()
+    expect(bloque.MasterDataType).toBe('LOCATION')
+    expect(bloque.FieldMapping).toBe('MATNR:PRDID')
+  })
+
+  // No se sabe cuál de las tres listas era la buena: no se arregla solo.
+  it('si las tres listas del mapeo no coinciden, cambia el tipo y no toca el mapeo', async () => {
+    const roto = bloqueMaestro({ FieldMapping: 'A:PRDID,B:MATTYPEID', SourceFieldsfromAddon: 'A', TargetFieldsInSAPIBP: 'PRDID' })
+    await abrir({ body: cuerpo(roto) })
+    await elegir(campo('ci-MasterDataType'), 'LOCATION')
+    await esperar()
+
+    const bloque = await bloqueActual()
+    expect(bloque.MasterDataType).toBe('LOCATION')
+    expect(bloque.FieldMapping).toBe('A:PRDID,B:MATTYPEID')
+    expect(bloque.SourceFieldsfromAddon).toBe('A')
+  })
+
+  it('si los campos de la nueva tabla no se pueden leer, cambia el tipo y el prefijo y deja el mapeo', async () => {
+    servidor({
+      'campos-maestro': async (p) => {
+        if (p.entidad === 'ABLOCATION') throw new Error('SAP devolvió 500')
+        return respuestaDe(p.entidad)
+      },
+    })
+    await abrir({ body: cuerpo(conMapeo([['MATNR', 'PRDID']])) })
+    await elegir(campo('ci-MasterDataType'), 'LOCATION')
+    await esperar()
+
+    const bloque = await bloqueActual()
+    expect(bloque.MasterDataType).toBe('LOCATION')
+    expect(bloque.FieldMapping).toBe('MATNR:PRDID')
+  })
+
+  it('mientras lee lo dice, y al terminar deja de decirlo', async () => {
+    let soltar
+    const pendiente = new Promise((resolver) => { soltar = resolver })
+    servidor({ 'campos-maestro': async (p) => (p.entidad === 'ABLOCATION' ? pendiente : respuestaDe(p.entidad)) })
+    await abrir({ body: cuerpo(conMapeo([['MATNR', 'PRDID']])) })
+
+    await elegir(campo('ci-MasterDataType'), 'LOCATION')
+    await esperar()
+    expect(texto()).toContain('leyendo los campos de ABLOCATION')
+
+    soltar(respuestaDe('ABLOCATION'))
+    await esperar()
+    expect(texto()).not.toContain('leyendo los campos de')
+  })
+
+  // La lectura puede tardar unos segundos: lo que se escribió mientras tanto no se pisa.
+  it('lo que se escribe mientras se leen los campos no se pierde', async () => {
+    let soltar
+    const pendiente = new Promise((resolver) => { soltar = resolver })
+    servidor({ 'campos-maestro': async (p) => (p.entidad === 'ABLOCATION' ? pendiente : respuestaDe(p.entidad)) })
+    await abrir({ body: cuerpo(conMapeo([['MATNR', 'PRDID']], { BatchName: 'ORIGINAL' })) })
+
+    await elegir(campo('ci-MasterDataType'), 'LOCATION')
+    await escribir(campo('ci-BatchName'), 'EDITADO MIENTRAS TANTO')
+    soltar(respuestaDe('ABLOCATION'))
+    await esperar()
+
+    const bloque = await bloqueActual()
+    expect(bloque.BatchName).toBe('EDITADO MIENTRAS TANTO')
+    expect(bloque.MasterDataType).toBe('LOCATION')
+    expect(bloque.FieldMapping).toBe('LOCID:LOCID,LOCDESCR:LOCDESCR')
+  })
+
+  it('si se elige otro tipo antes de que termine la lectura del anterior, manda el último', async () => {
+    let soltar
+    const pendiente = new Promise((resolver) => { soltar = resolver })
+    const tres = [{ ...AREAS[0], tipos: { '': ['ABLOCATION', 'ABPRODUCT', 'ABRESOURCE'] } }]
+    servidor({
+      resumen: async () => ({ ibp: IBP, areas: tres, avisos: [] }),
+      'campos-maestro': async (p) => (p.entidad === 'ABLOCATION' ? pendiente : respuestaDe(p.entidad)),
+    })
+    await abrir({ body: cuerpo(conMapeo([['MATNR', 'PRDID']])) })
+
+    await elegir(campo('ci-MasterDataType'), 'LOCATION')
+    await elegir(campo('ci-MasterDataType'), 'RESOURCE')
+    await esperar()
+    soltar(respuestaDe('ABLOCATION'))
+    await esperar()
+
+    const bloque = await bloqueActual()
+    expect(bloque.MasterDataType).toBe('RESOURCE')
+  })
+})

@@ -131,6 +131,21 @@ export function camposPreseleccionados(filas, campos) {
 }
 
 /**
+ * El mapeo al pasar a OTRA tabla de dato maestro: las filas cuyo campo destino existe en la nueva tabla se quedan (con su
+ * origen), y las que no, se quitan, porque apuntarían a algo que no existe. Si no queda ninguna, el mapeo se llena con
+ * los campos de la nueva tabla, todos menos los que SAP rellena solo, con el origen igual al destino. Si quedan
+ * algunas NO se agrega nada: se respeta un mapeo que ya se había armado a propósito.
+ */
+export function mapeoParaTabla(filas, campos) {
+  const deLaTabla = new Set(campos.map((uno) => uno.campo.toUpperCase()))
+  const quedan = filas.filter((fila) => (
+    fila.origen.trim() !== '' && fila.destino.trim() !== '' && deLaTabla.has(fila.destino.trim().toUpperCase())
+  ))
+  if (quedan.length > 0) return quedan
+  return campos.filter((uno) => !uno.sistema).map((uno) => ({ id: `ibp-${uno.campo}`, origen: uno.campo, destino: uno.campo }))
+}
+
+/**
  * Aplica lo elegido en el selector de campos a la tabla de mapeo, sin pisar lo que ya había:
  *
  *   - las filas cuyo destino NO es un campo de la tabla de IBP (un campo propio del origen) se quedan;
