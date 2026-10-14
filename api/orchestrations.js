@@ -27,7 +27,7 @@ import {
 } from '../core/orchestrations/orchestrations.js'
 
 /** Qué módulo hay que tener contratado para orquestar cada tipo de conexión. */
-const MODULO_DE = Object.freeze({ cids: 'cids', ibp: 'jobs' })
+const MODULO_DE = Object.freeze({ cids: 'cids', ibp: 'jobs', ci: 'ci' })
 
 export default async function handler(req, res) {
   const session = await requireSession(req, res)

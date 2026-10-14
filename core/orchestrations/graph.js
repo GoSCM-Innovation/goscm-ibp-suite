@@ -54,6 +54,12 @@ export const RETRY_LIMITS = Object.freeze({
     maxRetries: Object.freeze({ min: 1, max: 10, porOmision: 3 }),
     retryDelaySeconds: Object.freeze({ min: 10, max: 3600, porOmision: 60 }),
   }),
+  // Integraciones de CPI: una carga a IBP no se repite a la ligera, así que por omisión no se reintenta
+  // (cero) y el tope es bajo. Reintentar una carga ya enviada la repite entera.
+  ci: Object.freeze({
+    maxRetries: Object.freeze({ min: 0, max: 3, porOmision: 0 }),
+    retryDelaySeconds: Object.freeze({ min: 10, max: 3600, porOmision: 60 }),
+  }),
 })
 
 /**
@@ -94,6 +100,10 @@ function normalizarDatos(datos = {}, { tipo, limites }) {
   const templateName = aTextoOnulo(datos.templateName) ?? aTextoOnulo(datos.jobTemplateName)
   const jobText = aTextoOnulo(datos.jobText) ?? aTextoOnulo(datos.jobTemplateText)
 
+  // Un paso de CI Tools dice qué integración ejecutar. Se guarda SOLO cuando viene, como la plantilla de IBP,
+  // para que las orquestaciones de CI-DS e IBP se sigan guardando igual que antes.
+  const integrationId = aTextoOnulo(datos.integrationId)
+
   const etiqueta = aTextoOnulo(datos.label)
   const label = tipo === 'group'
     ? etiqueta ?? ''
@@ -105,6 +115,7 @@ function normalizarDatos(datos = {}, { tipo, limites }) {
     taskType: aTextoOnulo(datos.taskType),
     ...(templateName ? { templateName } : {}),
     ...(jobText ? { jobText } : {}),
+    ...(integrationId ? { integrationId } : {}),
     label,
     agentName: aTextoOnulo(datos.agentName),
     profileName: aTextoOnulo(datos.profileName),
@@ -199,7 +210,7 @@ function nodosQueNuncaCorrerian(nodos, aristas) {
  * Lanza con un mensaje que se pueda mostrar: quien guarda es una persona que acaba de dibujar algo y
  * tiene que poder arreglarlo.
  *
- * `kind` es el tipo de la conexión (`cids` o `ibp`) y solo decide los topes de los reintentos; sin
+ * `kind` es el tipo de la conexión (`cids`, `ibp` o `ci`) y solo decide los topes de los reintentos; sin
  * él valen los de CI-DS, que eran los únicos que había.
  */
 export function normalizeGraph({ nodes = [], edges = [] } = {}, { kind = 'cids' } = {}) {

@@ -17,6 +17,15 @@ const OTRO = '__otro__'
 // se lo enseña a nadie.
 const ACUERDO_CIDS = 'CIDS'
 
+// Lo mismo para CI Tools: el endpoint de un iFlow de Cloud Integration se llama con usuario y contraseña
+// (Basic Auth). Mismo nombre fijo que `CI_AGREEMENT` de `core/connections`.
+const ACUERDO_CI = 'CI'
+
+/** ¿Es una conexión de las que llevan un solo usuario y contraseña, sin acuerdos de comunicación? */
+const sinAcuerdos = (kind) => kind === 'cids' || kind === 'ci'
+
+const NOMBRE_DEL_TIPO = { ibp: 'SAP IBP', cids: 'CI-DS', ci: 'Cloud Integration' }
+
 export default function ConnectionsTab({ clientId }) {
   const [connections, setConnections] = useState([])
   const [detail, setDetail] = useState(null)
@@ -107,7 +116,7 @@ export default function ConnectionsTab({ clientId }) {
       await api.post('/api/admin/connections', {
         clientId,
         connectionId: detail.id,
-        agreement: detail.kind === 'cids' ? ACUERDO_CIDS : codigoAcuerdo,
+        agreement: detail.kind === 'cids' ? ACUERDO_CIDS : detail.kind === 'ci' ? ACUERDO_CI : codigoAcuerdo,
         sapUser: acuerdo.sapUser,
         password: acuerdo.password,
       })
@@ -192,7 +201,7 @@ export default function ConnectionsTab({ clientId }) {
                       <span className="tag tag-muted" style={{ marginLeft: 8 }}>Pruebas + Productivo</span>
                     )}
                   </td>
-                  <td><span className="tag">{connection.kind === 'ibp' ? 'SAP IBP' : 'CI-DS'}</span></td>
+                  <td><span className="tag">{NOMBRE_DEL_TIPO[connection.kind] ?? connection.kind}</span></td>
                   <td className="mono" style={{ color: 'var(--text2)', maxWidth: 320, overflow: 'hidden', textOverflow: 'ellipsis' }}>
                     {connection.baseUrl}
                   </td>
@@ -227,19 +236,19 @@ export default function ConnectionsTab({ clientId }) {
       {detail && (
         <div className="card">
           <div className="card-title">
-            {detail.kind === 'cids' ? `Credenciales · ${detail.name}` : `Acuerdos de comunicación · ${detail.name}`}
+            {sinAcuerdos(detail.kind) ? `Credenciales · ${detail.name}` : `Acuerdos de comunicación · ${detail.name}`}
           </div>
           <p className="card-hint" style={{ marginTop: 4 }}>
-            {detail.kind === 'cids'
-              ? 'El usuario con el que la Suite se identifica en CI-DS. La contraseña no se puede volver a ver: para cambiarla, se escribe una nueva.'
-              : 'Cada acuerdo tiene su propio usuario de SAP. La contraseña no se puede volver a ver: para cambiarla, se escribe una nueva.'}
+            {detail.kind === 'cids' && 'El usuario con el que la Suite se identifica en CI-DS. La contraseña no se puede volver a ver: para cambiarla, se escribe una nueva.'}
+            {detail.kind === 'ci' && 'El usuario y la contraseña (Basic Auth) con los que la Suite llama al endpoint del iFlow. La contraseña no se puede volver a ver: para cambiarla, se escribe una nueva.'}
+            {!sinAcuerdos(detail.kind) && 'Cada acuerdo tiene su propio usuario de SAP. La contraseña no se puede volver a ver: para cambiarla, se escribe una nueva.'}
           </p>
 
           <div className="table-wrap" style={{ marginTop: 12 }}>
             <table className="table">
               <thead>
                 <tr>
-                  {detail.kind !== 'cids' && <th>Acuerdo</th>}
+                  {!sinAcuerdos(detail.kind) && <th>Acuerdo</th>}
                   <th>Usuario</th><th>Actualizado</th><th />
                 </tr>
               </thead>
@@ -247,7 +256,7 @@ export default function ConnectionsTab({ clientId }) {
                 {detail.agreements.length === 0 && (
                   <tr>
                     <td className="table-empty" colSpan={4}>
-                      {detail.kind === 'cids'
+                      {sinAcuerdos(detail.kind)
                         ? 'Esta conexión todavía no tiene credenciales.'
                         : 'Esta conexión todavía no tiene acuerdos.'}
                     </td>
@@ -255,7 +264,7 @@ export default function ConnectionsTab({ clientId }) {
                 )}
                 {detail.agreements.map((a) => (
                   <tr key={a.id}>
-                    {detail.kind !== 'cids' && (
+                    {!sinAcuerdos(detail.kind) && (
                       <td>
                         <div className="mono">{a.agreement}</div>
                         {acuerdoIbp(a.agreement) && (
@@ -278,7 +287,7 @@ export default function ConnectionsTab({ clientId }) {
 
           <form onSubmit={saveAgreement} style={{ marginTop: 16 }}>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
-              {detail.kind !== 'cids' && (
+              {!sinAcuerdos(detail.kind) && (
                 <div className="field" style={{ flex: '2 1 280px' }}>
                   <label htmlFor="agreement">Acuerdo</label>
                   {/* select-fijo: lista cerrada y corta, no crece con los datos */}
@@ -297,7 +306,7 @@ export default function ConnectionsTab({ clientId }) {
                   </select>
                 </div>
               )}
-              {detail.kind !== 'cids' && seleccion === OTRO && (
+              {!sinAcuerdos(detail.kind) && seleccion === OTRO && (
                 <div className="field" style={{ flex: '1 1 180px' }}>
                   <label htmlFor="agreementOtro">Código del acuerdo</label>
                   <input
@@ -333,10 +342,10 @@ export default function ConnectionsTab({ clientId }) {
                 />
               </div>
               <button className="btn btn-primary" type="submit" disabled={busy} style={{ alignSelf: 'flex-end' }}>
-                {detail.kind === 'cids' ? 'Guardar credenciales' : 'Guardar acuerdo'}
+                {sinAcuerdos(detail.kind) ? 'Guardar credenciales' : 'Guardar acuerdo'}
               </button>
             </div>
-            {detail.kind !== 'cids' && infoAcuerdo && (
+            {!sinAcuerdos(detail.kind) && infoAcuerdo && (
               <p className="card-hint" style={{ marginTop: 10 }}>
                 <strong>Activa:</strong> {infoAcuerdo.activa}.
                 {yaConfigurados.has(infoAcuerdo.codigo) && ' Ya está configurado: guardar de nuevo reemplaza el usuario y la contraseña.'}
@@ -360,6 +369,7 @@ export default function ConnectionsTab({ clientId }) {
             >
               <option value="ibp">SAP IBP</option>
               <option value="cids">SAP CI-DS</option>
+              <option value="ci">Cloud Integration</option>
             </select>
           </div>
           <div className="field" style={{ flex: '1 1 180px' }}>
@@ -379,7 +389,9 @@ export default function ConnectionsTab({ clientId }) {
               id="baseUrl"
               className="input mono"
               required
-              placeholder="https://mi-api.scmibp1.ondemand.com/"
+              placeholder={nueva.kind === 'ci'
+                ? 'https://…it-cpi034-rt.cfapps.us10-002.hana.ondemand.com/http/IBP2'
+                : 'https://mi-api.scmibp1.ondemand.com/'}
               value={nueva.baseUrl}
               onChange={(e) => setNueva({ ...nueva, baseUrl: e.target.value })}
             />
@@ -414,6 +426,7 @@ export default function ConnectionsTab({ clientId }) {
         </form>
         <p className="card-hint" style={{ marginTop: 10 }}>
           La dirección se comprueba al guardar: si no corresponde a un tenant de SAP, no se crea.
+          {nueva.kind === 'ci' && ' En Cloud Integration es el endpoint completo del iFlow, con su ruta: cada ambiente (desarrollo, calidad, producción) es una conexión.'}
         </p>
       </div>
     </div>

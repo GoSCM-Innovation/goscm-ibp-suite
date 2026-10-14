@@ -12,6 +12,7 @@
 
 import { queryOneScoped, queryScoped } from '../persistence/tenant-scope.js'
 import { getConnectionTarget } from '../connections/connections.js'
+import { getIntegrations } from '../ci/integrations.js'
 import { normalizeGraph } from './graph.js'
 import { borrarRun, errorDeConflicto, esTerminal, getRun } from './run-store.js'
 
@@ -34,8 +35,11 @@ function nombreValido(name) {
   return limpio
 }
 
-/** Los tipos de conexión que el motor sabe orquestar: tareas de CI-DS y Application Jobs de IBP. */
-const TIPOS_ORQUESTABLES = Object.freeze(['cids', 'ibp'])
+/**
+ * Los tipos de conexión que el motor sabe orquestar: tareas de CI-DS, Application Jobs de IBP e integraciones de
+ * Cloud Integration (CI Tools).
+ */
+const TIPOS_ORQUESTABLES = Object.freeze(['cids', 'ibp', 'ci'])
 
 /**
  * Comprueba que el destino exista, sea de este cliente y sea de un tipo que se pueda orquestar.
@@ -49,6 +53,26 @@ async function assertDestino(clientId, connectionId) {
     throw new Error(`La conexión "${conexion.name}" no se puede orquestar: es de tipo "${conexion.kind}".`)
   }
   return conexion
+}
+
+/**
+ * En CI Tools, cada paso apunta a una integración. Se comprueba al guardar que las que se nombran existan y sean
+ * de esta conexión: una que no, descubierta al ejecutar, sería en mitad de una cadena de cargas.
+ *
+ * Un paso SIN integración sí se guarda —quien dibuja agrega el paso y elige después—; lo que no se deja es
+ * lanzarla así (ver `validarInicio` de `core/ci`).
+ */
+async function assertIntegraciones(clientId, conexion, grafo) {
+  if (conexion.kind !== 'ci') return
+  const ids = grafo.nodes.filter((nodo) => nodo.type !== 'group').map((nodo) => nodo.data.integrationId).filter(Boolean)
+  if (ids.length === 0) return
+
+  const buenas = new Set(
+    (await getIntegrations(clientId, ids)).filter((una) => una.connectionId === conexion.id).map((una) => una.id),
+  )
+  if (ids.some((id) => !buenas.has(id))) {
+    throw new Error('Un paso apunta a una integración que no existe en esta conexión.')
+  }
 }
 
 /** Las orquestaciones de un destino: un tenant y uno de sus dos repositorios. */
@@ -77,6 +101,7 @@ export async function createOrchestration(clientId, { connectionId, production =
   const conexion = await assertDestino(clientId, connectionId)
   // El tipo decide los topes de los reintentos: los de IBP son los de v8 y no los de v9.
   const grafo = normalizeGraph({ nodes, edges }, { kind: conexion.kind })
+  await assertIntegraciones(clientId, conexion, grafo)
 
   return toOrchestration(await queryOneScoped(
     clientId,
@@ -101,11 +126,12 @@ export async function updateOrchestration(clientId, id, { name, nodes, edges } =
   const nombre = name === undefined ? actual.name : nombreValido(name)
   // El grafo se valida completo aunque solo venga una de las dos mitades: una arista nueva puede
   // apuntar a un nodo que no está, y validar media cosa no demuestra nada.
-  const { kind } = await getConnectionTarget(clientId, actual.connectionId)
+  const conexion = await getConnectionTarget(clientId, actual.connectionId)
   const grafo = normalizeGraph({
     nodes: nodes === undefined ? actual.nodes : nodes,
     edges: edges === undefined ? actual.edges : edges,
-  }, { kind })
+  }, { kind: conexion.kind })
+  await assertIntegraciones(clientId, conexion, grafo)
 
   return toOrchestration(await queryOneScoped(
     clientId,

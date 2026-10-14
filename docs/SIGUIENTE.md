@@ -3,9 +3,19 @@
 Este archivo es el punto de entrada cuando la instrucción es **«continuemos»**. Se lee primero, se
 actualiza al terminar cada sesión, y su orden es el de prioridad acordada.
 
-Última actualización: **2026-10-08**.
+Última actualización: **2026-10-14**.
 
 ## Dónde estamos
+
+- **CI Tools, el cuarto módulo (2026-10-14), en la rama `feat/ci-tools`, sin fusionar a `main`.** Integraciones de
+  Cloud Integration que cargan datos a IBP: biblioteca con carpetas, formulario y JSON, ejecutar, historial y
+  orquestaciones por etapas sobre el mismo motor. Detalle, decisiones del usuario y garantías en
+  [`CI-TOOLS.md`](CI-TOOLS.md). **Nada se ha ejecutado contra un tenant de CPI** (su sección «Sin estrenar» es la
+  lista de lo que hay que mirar con el usuario delante). **La migración 006 ya está aplicada** (2026-10-14), el
+  módulo `ci` está activo para GoSCM y existe la conexión «CI STARBRANDS DEV» sin credenciales. Probado contra la base,
+  Redis y el CPI real con credenciales de mentira (401): ver «Lo que ya se comprobó» en `CI-TOOLS.md`. **Falta la
+  primera carga con las credenciales reales.** Pendiente de otro lado: el detalle del error por MPL ID
+  (necesita otro acceso a CPI) y la programación (necesita reloj).
 
 - **Auditoría del backend (2026-10-08)**: ningún camino confirmado para tocar datos de otro cliente a través de
   la API (todo `clientId` sale de la sesión; todas las consultas filtran por cliente). **Hecho**: validación
@@ -194,7 +204,7 @@ actualiza al terminar cada sesión, y su orden es el de prioridad acordada.
   ```bash
   vercel --prod --yes
   ```
-- **2.671 pruebas**, lint y build limpios, y el build **sin ningún aviso**.
+- **4.410 pruebas** (2026-10-14, en la rama de CI Tools), lint y build limpios, y el build **sin ningún aviso**.
 - Los tres proyectos previos están portados en funcionalidad.
 - **La interfaz de los TRES está restaurada tal cual era.** Es una decisión del usuario y ahora es
   regla del proyecto: ver [«Respetar la interfaz de origen»](../CLAUDE.md#respetar-la-interfaz-de-origen).

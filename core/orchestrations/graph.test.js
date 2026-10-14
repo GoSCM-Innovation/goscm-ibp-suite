@@ -316,3 +316,44 @@ describe('normalizeGraph', () => {
     })
   })
 })
+
+describe('orquestaciones de CI Tools', () => {
+  const paso = (id, extra = {}) => ({
+    id, type: 'task', position: { x: 0, y: 0 }, data: { integrationId: `int-${id}`, label: id, ...extra },
+  })
+
+  it('conserva la integración de cada paso', () => {
+    const { nodes } = normalizeGraph({ nodes: [paso('a'), paso('b')], edges: [arista('a', 'b')] }, { kind: 'ci' })
+    expect(nodes.map((nodo) => nodo.data.integrationId)).toEqual(['int-a', 'int-b'])
+  })
+
+  // Perderla aquí dejaría cada paso sin integración: se guardaría y al ejecutar diría que no sabe qué lanzar.
+  it('la integración sobrevive a un guardado y a un segundo guardado', () => {
+    const una = normalizeGraph({ nodes: [paso('a')] }, { kind: 'ci' })
+    const dos = normalizeGraph(una, { kind: 'ci' })
+    expect(dos.nodes[0].data.integrationId).toBe('int-a')
+  })
+
+  it('las orquestaciones de CI-DS e IBP siguen guardándose sin ese campo', () => {
+    const { nodes } = normalizeGraph({ nodes: [tarea('a')] })
+    expect(nodes[0].data).not.toHaveProperty('integrationId')
+  })
+
+  it('por omisión no reintenta: una carga ya enviada se repetiría entera', () => {
+    const { nodes } = normalizeGraph({ nodes: [paso('a')] }, { kind: 'ci' })
+    expect(nodes[0].data).toMatchObject({ errorStrategy: 'stop', maxRetries: 0, retryDelaySeconds: 60 })
+  })
+
+  it('los reintentos tienen un tope bajo (3) y una espera mínima de 10 s', () => {
+    const { nodes } = normalizeGraph({
+      nodes: [paso('a', { errorStrategy: 'retry', maxRetries: 99, retryDelaySeconds: 1 })],
+    }, { kind: 'ci' })
+    expect(nodes[0].data).toMatchObject({ maxRetries: 3, retryDelaySeconds: 10 })
+  })
+
+  it('los ciclos se rechazan igual', () => {
+    expect(() => normalizeGraph({
+      nodes: [paso('a'), paso('b')], edges: [arista('a', 'b'), arista('b', 'a')],
+    }, { kind: 'ci' })).toThrow(/ciclo/)
+  })
+})

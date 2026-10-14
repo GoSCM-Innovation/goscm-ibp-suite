@@ -14,7 +14,7 @@ import { readSessionCookie } from './cookies.js'
 import { readSession } from './sessions.js'
 
 /** Los módulos que se venden. Debe coincidir con el CHECK de `module_subscriptions`. */
-export const MODULES = Object.freeze(['explorer', 'jobs', 'cids'])
+export const MODULES = Object.freeze(['explorer', 'jobs', 'cids', 'ci'])
 
 const ACTIVE_SUBSCRIPTION = `
   status = 'active'

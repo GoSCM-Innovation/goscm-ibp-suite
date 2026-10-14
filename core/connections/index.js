@@ -6,6 +6,7 @@
 export { decryptSecret, encryptSecret } from './crypto.js'
 
 export {
+  CI_AGREEMENT,
   CONNECTION_KINDS,
   KNOWN_AGREEMENTS,
   createConnection,

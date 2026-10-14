@@ -17,6 +17,7 @@ import Shell from './components/Shell.jsx'
 import ModuleLocked from './components/ModuleLocked.jsx'
 import ModulePlaceholder from './components/ModulePlaceholder.jsx'
 import CidsTools from './components/cids/CidsTools.jsx'
+import CiTools from './components/ci/CiTools.jsx'
 import IbpTools from './components/ibp/IbpTools.jsx'
 import DataTools from './components/data/DataTools.jsx'
 import AdminPanel from './components/admin/AdminPanel.jsx'
@@ -158,6 +159,7 @@ export default function App() {
     if (!modules.includes(module.id)) return <ModuleLocked module={module} />
     // Los módulos que ya están escritos se montan; el resto sigue con su presentación.
     if (module.id === 'cids') return <CidsTools />
+    if (module.id === 'ci') return <CiTools />
     if (module.id === 'jobs') return <IbpTools />
     if (module.id === 'explorer') return <DataTools appId={appId} />
     return <ModulePlaceholder module={module} />

@@ -127,6 +127,55 @@ describe('validateSapUrl', () => {
       .resolves.toMatch(/no es un servicio/)
   })
 
+  describe('destino ci (runtime de Cloud Integration)', () => {
+    const CI = 'https://acme-dev-ol7tmww3.it-cpi034-rt.cfapps.us10-002.hana.ondemand.com/http/IBP2'
+
+    it('acepta el endpoint de un iFlow', async () => {
+      await expect(validateSapUrl(CI, { kind: 'ci' })).resolves.toBeNull()
+      await expect(validateSapUrl(CI.replace('it-cpi034-rt', 'it-cpi001-rt').replace('us10-002', 'eu10'), { kind: 'ci' }))
+        .resolves.toBeNull()
+    })
+
+    // Cualquier cliente de BTP publica aplicaciones en `*.cfapps.<región>.hana.ondemand.com`: sin el
+    // segmento `it-cpi` se podría apuntar una conexión a una aplicación ajena y mandarle la contraseña.
+    it.each([
+      'https://app-ajena.cfapps.us10-002.hana.ondemand.com/http/IBP2',
+      'https://acme.it-cpi034-rt.cfapps.us10-002.hana.ondemand.com.malicioso.com/http/IBP2',
+      'https://acme.it-cpi034-rt.cfapps.hana.ondemand.com.otro.net/http/IBP2',
+      'https://it-cpi034-rt.cfapps.us10-002.hana.ondemand.com/http/IBP2',
+      'https://x.kyma.ondemand.com/http/IBP2',
+    ])('rechaza %s', async (url) => {
+      await expect(validateSapUrl(url, { kind: 'ci' })).resolves.toBe('Host no permitido')
+    })
+
+    it('un host de CI no sirve como destino de IBP, y uno de IBP no sirve como destino de CI', async () => {
+      await expect(validateSapHost(CI, { kind: 'ibp' })).resolves.toBe('Host no permitido')
+      await expect(validateSapUrl(IBP, { kind: 'ci' })).resolves.toBe('Host no permitido')
+    })
+
+    it('no aplica la lista de servicios de OData', async () => {
+      await expect(validateSapUrl(CI, { kind: 'ci' })).resolves.toBeNull()
+    })
+
+    it('rechaza http y direcciones numéricas', async () => {
+      await expect(validateSapUrl(CI.replace('https', 'http'), { kind: 'ci' })).resolves.toMatch(/HTTPS/)
+      await expect(validateSapUrl('https://52.10.20.30/http/IBP2', { kind: 'ci' })).resolves.toMatch(/por su nombre/)
+    })
+
+    it('rechaza lo que resuelve a una dirección interna', async () => {
+      lookup.mockResolvedValue([{ address: '10.0.0.5', family: 4 }])
+      await expect(validateSapUrl(CI, { kind: 'ci' })).resolves.toMatch(/dirección interna/)
+    })
+
+    it('el patrón se puede abrir por variable de entorno', async () => {
+      const raro = 'https://acme.otro-dominio.hana.ondemand.com/http/IBP2'
+      await expect(validateSapUrl(raro, { kind: 'ci' })).resolves.toBe('Host no permitido')
+      process.env.ALLOWED_CI_HOST_REGEX = '^acme\\.otro-dominio\\.hana\\.ondemand\\.com$'
+      await expect(validateSapUrl(raro, { kind: 'ci' })).resolves.toBeNull()
+      delete process.env.ALLOWED_CI_HOST_REGEX
+    })
+  })
+
   it('exige decir a qué destino se llama', async () => {
     await expect(validateSapUrl(IBP, {})).rejects.toThrow(/Destino desconocido/)
     await expect(validateSapUrl(IBP, { kind: 'otro' })).rejects.toThrow(/Destino desconocido/)
