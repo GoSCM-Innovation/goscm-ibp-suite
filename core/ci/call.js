@@ -39,6 +39,18 @@ export const MENSAJE_MAX = 1500
  */
 const CODIGOS_SIN_ENVIAR = new Set(['ENOTFOUND', 'ECONNREFUSED', 'EAI_AGAIN', 'ERR_INVALID_URL'])
 
+/**
+ * Qué quiere decir, para quien ejecuta, un error de HTTP que se repite mucho. Sin esto, un 401 se leía «CPI
+ * respondió 401 sin mensaje» y no decía que lo que hay que mirar es la contraseña de la conexión.
+ * El 401 se midió contra un tenant real (credenciales de prueba); el 403 y el 404 son lo que esos códigos
+ * significan en HTTP, sin suponer nada de cómo CPI configura sus roles.
+ */
+const MOTIVO_DE_ERROR = Object.freeze({
+  401: 'CPI rechazó el usuario o la contraseña de la conexión.',
+  403: 'CPI rechazó el acceso: el usuario de la conexión no tiene permiso para llamar a este endpoint.',
+  404: 'CPI no encontró el endpoint: revisa la dirección de la conexión.',
+})
+
 /** Deja el texto de la respuesta en una línea legible y de tamaño razonable. */
 export function recortar(texto) {
   const limpio = String(texto ?? '').replace(/\s+/g, ' ').trim()
@@ -124,8 +136,11 @@ export async function llamarEndpoint({
     return { resultado: 'success', enviado: true, httpStatus, duracionMs: duracion(), mplId, mensaje }
   }
 
+  const motivo = MOTIVO_DE_ERROR[httpStatus]
   return {
     resultado: 'error', enviado: true, httpStatus, duracionMs: duracion(), mplId,
-    mensaje: mensaje || `CPI respondió ${httpStatus} sin mensaje.`,
+    mensaje: motivo
+      ? `${motivo}${mensaje ? ` Respuesta: ${mensaje}` : ''}`
+      : (mensaje || `CPI respondió ${httpStatus} sin mensaje.`),
   }
 }

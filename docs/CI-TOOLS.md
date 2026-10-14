@@ -106,13 +106,15 @@ Cada una tiene prueba; la lista es para que nadie las quite sin saber por qué e
 
 ## Para ponerlo en marcha
 
-1. **Aplicar la migración**: `npm run db:migrate`. La 006 está escrita y **no se ha aplicado a ninguna base**. Se
-   comprobó contra la base real que los nombres de las dos restricciones que recrea (`connections_kind_check` y
-   `module_subscriptions_module_check`) son los que asume.
-2. **Activar el módulo `ci`** al cliente (Administración → Clientes, quien administra la plataforma).
+1. **Aplicar la migración**: `npm run db:migrate`. **Aplicada el 2026-10-14** a la base que usa la Suite (tenía las
+   001 a 005). Se comprobó antes que los nombres de las dos restricciones que recrea (`connections_kind_check` y
+   `module_subscriptions_module_check`) eran los que asume, y después que quedaron con `ci`.
+2. **Activar el módulo `ci`** al cliente (Administración → Clientes, quien administra la plataforma). **Hecho para
+   GoSCM el 2026-10-14.**
 3. **Dar de alta una conexión «Cloud Integration»** por ambiente, con el endpoint completo y el usuario y la
-   contraseña. Si el host de algún tenant no encaja con el patrón, no hace falta tocar código: se abre con la
-   variable de entorno `ALLOWED_CI_HOST_REGEX`.
+   contraseña. **Creada «CI STARBRANDS DEV» el 2026-10-14, SIN credenciales**: la contraseña de Basic Auth la escribe
+   una persona en Administración → Conexiones (no pasa por código). Si el host de algún tenant no encaja con el
+   patrón, no hace falta tocar código: se abre con la variable de entorno `ALLOWED_CI_HOST_REGEX`.
 4. **Vercel**: `vercel.json` ya declara 300 s para `api/ci/[...ruta].js` y `api/orchestration-run.js` (IBP ya usa 300 s
    en este plan). Una llamada a CPI puede tardar más que el límite de 10 s que Vercel aplica si no se declara nada.
 
@@ -131,18 +133,33 @@ Cada una tiene prueba; la lista es para que nadie las quite sin saber por qué e
 
 ## Sin estrenar
 
-**Nada de CI Tools se ha ejecutado contra un tenant de CPI.** Todo está probado por piezas (varios cientos de pruebas nuevas) y
-la interfaz se vio con datos de muestra, no contra el servidor. Lo que hay que comprobar con el usuario delante,
-en desarrollo y de a una integración:
+**Nunca ha entrado una carga a IBP por esta vía**: falta ejecutar una integración con las credenciales reales.
 
-1. **La llamada real**: que Basic Auth con el usuario de la conexión entre, y qué responde CPI cuando sale bien
-   (el cuerpo no se conoce: solo se vio el 500 con el MPL ID) y cuánto tarda.
-2. **El patrón de host.** Se midió con un solo tenant (`it-cpi034-rt.cfapps.us10-002`).
-3. **Los 300 s** de la función en el plan Hobby (IBP ya los declara, pero no se ha medido una llamada de ese tamaño).
+### Lo que ya se comprobó contra el sistema real (2026-10-14)
+
+Con un cliente y una sesión TEMPORALES (borrados al terminar) sobre el servidor de desarrollo, la base y Redis
+reales, y la dirección real del CPI de desarrollo con credenciales de mentira:
+
+- La migración 006, el SQL de la biblioteca, el historial y las orquestaciones (45 comprobaciones de API).
+- **La llamada llega a CPI y contesta** (401 con credenciales falsas, en unos 2 s); se clasifica como error, no como
+  «sin confirmar», y el mensaje manda a mirar el usuario y la contraseña de la conexión.
+- **El patrón de host acepta el host real** (`…it-cpi034-rt.cfapps.us10-002…`), incluida su resolución por DNS.
+- **El candado**: dos ejecuciones simultáneas de la misma integración, sale una.
+- **El módulo se exige en el servidor** (vencerlo da 403 al instante) y **un segundo cliente no ve ni toca nada del
+  primero** (404 al leer, cambiar o borrar; no ve su conexión ni su historial).
+- La pantalla real: crear, guardar y ejecutar una integración, y armar y lanzar una orquestación de dos etapas
+  (fallo del primer paso, segundo omitido, «Retomar» disponible), el historial y la conexión en Administración.
+
+### Lo que sigue sin estrenar
+
+1. **La carga real**: que Basic Auth con el usuario correcto entre y qué responde CPI cuando sale bien (el cuerpo no
+   se conoce: solo se vio el 500 con el MPL ID) y cuánto tarda.
+2. **Los 300 s** de la función en el plan Hobby (IBP ya los declara, pero no se ha medido una llamada de ese tamaño).
 4. **Una pestaña cerrada a mitad de una vuelta**: se asume que la función sigue hasta terminar o que el paso queda
    «sin confirmar»; no se ha visto cuál de las dos pasa en Vercel.
 5. **Un endpoint único por cliente**: se asumió que todos los bodies de una conexión van al mismo endpoint.
 6. **El filtro**: la semántica de varias condiciones (si el mismo campo repetido es «o» y campos distintos «y») y si el
    iFlow admite más operadores que `EQ` y `BT`.
 7. **`BatchCommand`**: la Suite solo lo muestra. Qué hace `REPLACE` exactamente en el iFlow lo sabe quien lo escribió.
-8. **Orquestaciones de punta a punta**: etapas en paralelo, un fallo a mitad, «Retomar», y el caso «sin confirmar».
+8. **Orquestaciones con cargas que salen bien**, y el caso «sin confirmar» (se probó en el motor con pruebas, no con
+   una llamada que de verdad se corte).

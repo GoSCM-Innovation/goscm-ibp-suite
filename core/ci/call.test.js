@@ -100,6 +100,29 @@ describe('CPI contesta', () => {
     expect((await llamarEndpoint({ url: URL_CI, credentials: credenciales, cuerpo, fetchImpl })).resultado).toBe('error')
   })
 
+  // Medido contra un tenant real: con credenciales de prueba CPI contesta 401 sin cuerpo.
+  it('un 401 sin texto dice que hay que mirar el usuario y la contraseña de la conexión', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(respuesta(401, ''))
+    const salida = await llamarEndpoint({ url: URL_CI, credentials: credenciales, cuerpo, fetchImpl })
+    expect(salida).toMatchObject({ resultado: 'error', httpStatus: 401 })
+    expect(salida.mensaje).toBe('CPI rechazó el usuario o la contraseña de la conexión.')
+  })
+
+  it('un 403 y un 404 dicen qué revisar, y conservan lo que CPI haya contestado', async () => {
+    const f403 = vi.fn().mockResolvedValue(respuesta(403, 'Forbidden'))
+    const f404 = vi.fn().mockResolvedValue(respuesta(404, ''))
+    expect((await llamarEndpoint({ url: URL_CI, credentials: credenciales, cuerpo, fetchImpl: f403 })).mensaje)
+      .toBe('CPI rechazó el acceso: el usuario de la conexión no tiene permiso para llamar a este endpoint. Respuesta: Forbidden')
+    expect((await llamarEndpoint({ url: URL_CI, credentials: credenciales, cuerpo, fetchImpl: f404 })).mensaje)
+      .toContain('revisa la dirección de la conexión')
+  })
+
+  it('el 500 de la captura de Postman conserva su mensaje tal cual', async () => {
+    const texto = 'An internal server error occured: The MPL ID for the failed message is : AGrOoIkGv-d7sJej0DVu0bhXLV8K'
+    const salida = await llamarEndpoint({ url: URL_CI, credentials: credenciales, cuerpo, fetchImpl: vi.fn().mockResolvedValue(respuesta(500, texto)) })
+    expect(salida.mensaje).toBe(texto)
+  })
+
   it('un error sin texto dice igualmente el código', async () => {
     const fetchImpl = vi.fn().mockResolvedValue(respuesta(503, ''))
     expect((await llamarEndpoint({ url: URL_CI, credentials: credenciales, cuerpo, fetchImpl })).mensaje).toMatch(/503/)
