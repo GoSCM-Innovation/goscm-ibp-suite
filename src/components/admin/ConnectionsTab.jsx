@@ -3,11 +3,17 @@
 // La contraseña se escribe aquí una vez y no vuelve a mostrarse nunca: viaja al servidor, se
 // cifra y se queda ahí. Ninguna pantalla la puede recuperar, ni siquiera esta. Para cambiarla
 // se escribe una nueva encima.
+//
+// La lista va agrupada por tipo (SAP IBP, CI-DS, Cloud Integration): tres filas que se abren de una en una, para que
+// no sea una sola tabla larga.
 
 import { useEffect, useState } from 'react'
 import { api } from '../../lib/api.js'
 import { ACUERDOS_IBP, acuerdoIbp } from '../../lib/requisitos-tecnicos.js'
+import { GRUPOS_DE_CONEXION, agrupar, resumenDeNombres } from '../../lib/admin-grupos.js'
+import SeccionPlegable from '../ui/SeccionPlegable.jsx'
 import SelectorDeLista from '../ui/SelectorDeLista.jsx'
+import { useGrupos } from './useGrupos.js'
 
 // Valor del desplegable para un acuerdo que no está en la lista: SAP publica acuerdos nuevos y
 // `core/connections` no restringe el código, así que se puede escribir.
@@ -25,8 +31,6 @@ const ACUERDO_CI = 'CI'
 /** ¿Es una conexión de las que llevan un solo usuario y contraseña, sin acuerdos de comunicación? */
 const sinAcuerdos = (kind) => kind === 'cids' || kind === 'ci'
 
-const NOMBRE_DEL_TIPO = { ibp: 'SAP IBP', cids: 'CI-DS', ci: 'Cloud Integration' }
-
 export default function ConnectionsTab({ clientId }) {
   const [connections, setConnections] = useState([])
   const [detail, setDetail] = useState(null)
@@ -37,6 +41,9 @@ export default function ConnectionsTab({ clientId }) {
   // Qué conexión se está renombrando, y con qué nombre. Lo único editable de una conexión: cambiarle
   // la dirección la convertiría en otro tenant conservando sus credenciales.
   const [renombrando, setRenombrando] = useState(null)
+  // Los tres grupos empiezan cerrados; el formulario de alta, también.
+  const grupos = useGrupos()
+  const [nuevaAbierta, setNuevaAbierta] = useState(false)
 
   const [nueva, setNueva] = useState({ kind: 'ibp', name: '', baseUrl: '', organization: '', isProduction: false })
   const [acuerdo, setAcuerdo] = useState({ agreement: '', sapUser: '', password: '' })
@@ -89,6 +96,8 @@ export default function ConnectionsTab({ clientId }) {
         organization: nueva.kind === 'cids' ? nueva.organization || null : null,
         isProduction: nueva.isProduction,
       })
+      grupos.abrir(nueva.kind)
+      setNuevaAbierta(false)
       setNueva({ kind: 'ibp', name: '', baseUrl: '', organization: '', isProduction: false })
       recargar()
     })
@@ -152,97 +161,106 @@ export default function ConnectionsTab({ clientId }) {
   const codigoAcuerdo = seleccion === OTRO ? acuerdo.agreement : seleccion
   const infoAcuerdo = acuerdoIbp(seleccion)
 
+  const filaDe = (connection) => (
+    <tr key={connection.id} onClick={() => open(connection)} style={{ cursor: 'pointer' }}>
+      <td style={{ fontWeight: 600 }}>
+        {renombrando?.id === connection.id ? (
+          // El clic se detiene en el formulario, y tiene que ser en el FORMULARIO y no en
+          // cada control: la fila entera abre el detalle, así que un clic en «Guardar»
+          // llegaba a la fila, ponía `busy` y deshabilitaba el botón antes de que el
+          // formulario llegara a enviarse. El nombre no se guardaba y no se decía por qué.
+          <form
+            onSubmit={guardarNombre}
+            onClick={(e) => e.stopPropagation()}
+            style={{ display: 'flex', gap: 6 }}
+          >
+            <input
+              className="input input-sm"
+              value={renombrando.name}
+              onChange={(e) => setRenombrando({ ...renombrando, name: e.target.value })}
+              aria-label={`Nombre de ${connection.name}`}
+              autoFocus
+            />
+            <button type="submit" className="btn btn-sm btn-primary" disabled={busy}>
+              Guardar
+            </button>
+            <button type="button" className="btn btn-sm" onClick={() => setRenombrando(null)}>
+              Cancelar
+            </button>
+          </form>
+        ) : connection.name}
+        {/* Para CI-DS no se muestra: la conexión no es de pruebas ni productiva, es las
+            dos, y la marca de la fila solo confundiría. */}
+        {connection.kind !== 'cids' && connection.isProduction && (
+          <span className="tag tag-accent" style={{ marginLeft: 8 }}>Productivo</span>
+        )}
+        {connection.kind === 'cids' && (
+          <span className="tag tag-muted" style={{ marginLeft: 8 }}>Pruebas + Productivo</span>
+        )}
+        {connection.kind === 'ci' && connection.ibpConnectionName && (
+          <span className="tag tag-muted" style={{ marginLeft: 8 }} title="IBP de destino">→ {connection.ibpConnectionName}</span>
+        )}
+      </td>
+      <td className="mono" style={{ color: 'var(--text2)', maxWidth: 320, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        {connection.baseUrl}
+      </td>
+      <td>{connection.agreementCount}</td>
+      <td style={{ textAlign: 'right' }}>
+        <button
+          className="btn btn-sm"
+          disabled={busy}
+          onClick={(e) => {
+            e.stopPropagation()
+            setRenombrando({ id: connection.id, name: connection.name })
+          }}
+        >
+          Renombrar
+        </button>
+        <button
+          className="btn btn-sm btn-danger"
+          disabled={busy}
+          style={{ marginLeft: 6 }}
+          onClick={(e) => { e.stopPropagation(); removeConnection(connection) }}
+        >
+          Borrar
+        </button>
+      </td>
+    </tr>
+  )
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       {error && <div className="notice notice-error">{error}</div>}
 
-      <div className="card">
+      <div className="card admin-grupos">
         <div className="card-title">Conexiones</div>
-        <div className="table-wrap" style={{ marginTop: 12 }}>
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Nombre</th>
-                <th>Tipo</th>
-                <th>Dirección</th>
-                <th>Acuerdos</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {loading && <tr><td className="table-empty" colSpan={5}>Cargando…</td></tr>}
-              {!loading && connections.length === 0 && (
-                <tr><td className="table-empty" colSpan={5}>Todavía no hay conexiones configuradas.</td></tr>
+        <div style={{ marginTop: 10 }}>
+          {loading && <p className="card-hint">Cargando…</p>}
+          {!loading && agrupar(connections, GRUPOS_DE_CONEXION, (una) => una.kind).map((grupo) => (
+            <SeccionPlegable
+              key={grupo.id}
+              titulo={<>{grupo.titulo} <span className="tag tag-muted">{grupo.elementos.length}</span></>}
+              plegada={grupos.plegado(grupo.id)}
+              onAlternar={() => grupos.alternar(grupo.id)}
+              resumen={resumenDeNombres(grupo.elementos.map((una) => una.name))}
+            >
+              {grupo.elementos.length === 0 ? <p className="card-hint">No hay conexiones de este tipo.</p> : (
+                <div className="table-wrap">
+                  <table className="table">
+                    <thead>
+                      <tr>
+                        <th>Nombre</th>
+                        <th>Dirección</th>
+                        <th>{grupo.id === 'ibp' ? 'Acuerdos' : 'Credenciales'}</th>
+                        <th />
+                      </tr>
+                    </thead>
+                    <tbody>{grupo.elementos.map(filaDe)}</tbody>
+                  </table>
+                </div>
               )}
-              {!loading && connections.map((connection) => (
-                <tr key={connection.id} onClick={() => open(connection)} style={{ cursor: 'pointer' }}>
-                  <td style={{ fontWeight: 600 }}>
-                    {renombrando?.id === connection.id ? (
-                      // El clic se detiene en el formulario, y tiene que ser en el FORMULARIO y no en
-                      // cada control: la fila entera abre el detalle, así que un clic en «Guardar»
-                      // llegaba a la fila, ponía `busy` y deshabilitaba el botón antes de que el
-                      // formulario llegara a enviarse. El nombre no se guardaba y no se decía por qué.
-                      <form
-                        onSubmit={guardarNombre}
-                        onClick={(e) => e.stopPropagation()}
-                        style={{ display: 'flex', gap: 6 }}
-                      >
-                        <input
-                          className="input input-sm"
-                          value={renombrando.name}
-                          onChange={(e) => setRenombrando({ ...renombrando, name: e.target.value })}
-                          aria-label={`Nombre de ${connection.name}`}
-                          autoFocus
-                        />
-                        <button type="submit" className="btn btn-sm btn-primary" disabled={busy}>
-                          Guardar
-                        </button>
-                        <button type="button" className="btn btn-sm" onClick={() => setRenombrando(null)}>
-                          Cancelar
-                        </button>
-                      </form>
-                    ) : connection.name}
-                    {/* Para CI-DS no se muestra: la conexión no es de pruebas ni productiva, es las
-                        dos, y la marca de la fila solo confundiría. */}
-                    {connection.kind !== 'cids' && connection.isProduction && (
-                      <span className="tag tag-accent" style={{ marginLeft: 8 }}>Productivo</span>
-                    )}
-                    {connection.kind === 'cids' && (
-                      <span className="tag tag-muted" style={{ marginLeft: 8 }}>Pruebas + Productivo</span>
-                    )}
-                    {connection.kind === 'ci' && connection.ibpConnectionName && (
-                      <span className="tag tag-muted" style={{ marginLeft: 8 }} title="IBP de destino">→ {connection.ibpConnectionName}</span>
-                    )}
-                  </td>
-                  <td><span className="tag">{NOMBRE_DEL_TIPO[connection.kind] ?? connection.kind}</span></td>
-                  <td className="mono" style={{ color: 'var(--text2)', maxWidth: 320, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {connection.baseUrl}
-                  </td>
-                  <td>{connection.agreementCount}</td>
-                  <td style={{ textAlign: 'right' }}>
-                    <button
-                      className="btn btn-sm"
-                      disabled={busy}
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setRenombrando({ id: connection.id, name: connection.name })
-                      }}
-                    >
-                      Renombrar
-                    </button>
-                    <button
-                      className="btn btn-sm btn-danger"
-                      disabled={busy}
-                      style={{ marginLeft: 6 }}
-                      onClick={(e) => { e.stopPropagation(); removeConnection(connection) }}
-                    >
-                      Borrar
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+            </SeccionPlegable>
+          ))}
         </div>
       </div>
 
@@ -389,9 +407,13 @@ export default function ConnectionsTab({ clientId }) {
         </div>
       )}
 
-      <div className="card">
-        <div className="card-title">Nueva conexión</div>
-        <form onSubmit={createConnection} style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 12 }}>
+      <SeccionPlegable
+        titulo="+ Nueva conexión"
+        plegada={!nuevaAbierta}
+        onAlternar={() => setNuevaAbierta((v) => !v)}
+        resumen="Dar de alta una conexión a SAP"
+      >
+        <form onSubmit={createConnection} style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
           <div className="field" style={{ flex: '0 0 140px' }}>
             <label htmlFor="kind">Tipo</label>
             {/* select-fijo: lista cerrada y corta, no crece con los datos */}
@@ -462,7 +484,7 @@ export default function ConnectionsTab({ clientId }) {
           La dirección se comprueba al guardar: si no corresponde a un tenant de SAP, no se crea.
           {nueva.kind === 'ci' && ' En Cloud Integration es el endpoint completo del iFlow, con su ruta: cada ambiente (desarrollo, calidad, producción) es una conexión.'}
         </p>
-      </div>
+      </SeccionPlegable>
     </div>
   )
 }

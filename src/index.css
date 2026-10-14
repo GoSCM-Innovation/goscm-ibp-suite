@@ -3231,6 +3231,14 @@ a { color: var(--cyan); }
 }
 .seccion-plegable-cuerpo { margin-top: 12px; }
 
+/* Administración: listas agrupadas. Más compactas que las secciones de configuración: son filas de una lista, no bloques. */
+.admin-grupos .seccion-plegable { margin-bottom: 6px; padding: 6px 12px; }
+.admin-grupos .seccion-plegable-nombre { font-size: 11px; }
+.admin-grupos .seccion-plegable-cuerpo { margin-top: 6px; }
+.admin-grupos .table th { padding: 4px 8px; }
+.admin-grupos .table td { padding: 5px 8px; }
+.admin-grupos .tag { padding: 1px 7px; }
+
 /* ── Cabecera de tabla con orden, reordenado y filtro de página ────────────────────────────────
    Portada de `DataViewer/DataGrid.jsx` de v8: pulsar ordena, arrastrar reordena, y el campo de
    abajo filtra las filas que ya están a la vista. */

@@ -39,13 +39,21 @@ let contenedor
 let raiz
 
 /** Monta la pestaña y espera a que la lista haya llegado. */
-async function montar() {
+async function montar({ abrirGrupos = true } = {}) {
   contenedor = document.createElement('div')
   document.body.appendChild(contenedor)
   await act(async () => {
     raiz = createRoot(contenedor)
     raiz.render(createElement(ConnectionsTab, { clientId: 'cli-1' }))
   })
+  for (let i = 0; i < 5; i += 1) await act(async () => { await Promise.resolve() })
+  // La lista va agrupada por tipo y los grupos empiezan cerrados: estas pruebas miran las filas, así que los abren.
+  if (!abrirGrupos) return
+  const cabeceras = [...contenedor.querySelectorAll('[aria-expanded="false"]')]
+    .filter((una) => /^(SAP IBP|CI-DS|Cloud Integration)/.test(una.textContent.replace('▾', '').trim()))
+  for (const cabecera of cabeceras) {
+    await act(async () => { cabecera.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })) })
+  }
 }
 
 /** El botón cuyo texto visible es `texto`. */
