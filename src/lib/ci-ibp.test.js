@@ -106,6 +106,7 @@ describe('las opciones de los selectores', () => {
     expect(conValorActual(base, 'AREA1')).toBe(base)
     expect(conValorActual(base, '')).toBe(base)
     expect(conValorActual(base, 'VIEJA').at(-1)).toEqual({ value: 'VIEJA', label: 'VIEJA (no está en IBP)' })
+    expect(conValorActual(base, 'VIEJA', 'no está en la lista').at(-1).label).toBe('VIEJA (no está en la lista)')
   })
 
   it('reconoce las variables y el 409 de «sin IBP de destino»', () => {

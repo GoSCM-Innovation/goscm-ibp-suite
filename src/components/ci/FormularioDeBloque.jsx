@@ -10,15 +10,19 @@
 //     acepta uno que aquí no se conoce, no se pierde ni se bloquea.
 //   - Los valores que no son texto (un número, una lista) se muestran pero no se editan aquí: se tocan en JSON.
 //
-// Con `ibp` (lo que IBP dice de este body, ver `useIbpDelBody`) el área, la versión y la tabla se eligen de las de
-// IBP, los campos se eligen de la tabla o del área y los valores del filtro se sugieren. Todo sigue siendo
+// El tipo de dato manda sobre qué campos tiene el formulario: al cambiarlo se quitan los campos que solo valen para
+// el otro tipo y aparecen, vacíos, los del nuevo (con confirmación si lo que se quita tiene valor).
+//
+// Con `ibp` (lo que IBP dice de este body, ver `useIbpDelBody`) el área, la versión y el tipo de maestro se eligen de
+// los de IBP, los campos se eligen de la tabla o del área y los valores del filtro se sugieren. Todo sigue siendo
 // editable a mano: sin `ibp` el formulario es el de siempre.
 
+import { useState } from 'react'
 import { leerBody } from '../../../core/ci/body.js'
-import { CAMPOS_ESPECIALES, NOMBRES_CON_CONTROL, TIPOS_DE_DATO, camposDe } from '../../../core/ci/campos.js'
+import { CAMPOS_CONOCIDOS, CAMPOS_ESPECIALES, NOMBRES_CON_CONTROL, TIPOS_DE_DATO, camposDe } from '../../../core/ci/campos.js'
 import { CAMPO_DE_PERIODO } from '../../../core/ci/ibp-nombres.js'
 import { esVariable, opcionesDeAreas, opcionesDeTipos, opcionesDeVersiones } from '../../lib/ci-ibp.js'
-import CampoConIbp from './CampoConIbp.jsx'
+import CampoConLista from './CampoConLista.jsx'
 import ConstructorDeFiltro from './ConstructorDeFiltro.jsx'
 import TablaDeMapeo from './TablaDeMapeo.jsx'
 
@@ -32,6 +36,41 @@ function conCampo(bloque, campo, valor) {
 const conCampos = (bloque, campos) => Object.entries(campos).reduce((acumulado, [campo, valor]) => conCampo(acumulado, campo, valor), bloque)
 
 const sinCampo = (bloque, campo) => Object.fromEntries(Object.entries(bloque).filter(([clave]) => clave !== campo))
+
+/** Lo que dicen los controles cuya lista sale de IBP. */
+const TEXTOS_DE_IBP = { lista: 'Elegir de IBP', aviso: 'No está en IBP.', sufijo: 'no está en IBP' }
+
+/** Las opciones del tipo de dato: las dos familias, con su nombre y el valor que se envía. */
+const OPCIONES_DE_TIPO_DE_DATO = [
+  { value: '', label: '— Elige un tipo —' },
+  ...Object.entries(TIPOS_DE_DATO).map(([valor, nombre]) => ({ value: valor, label: `${nombre} (${valor})` })),
+]
+
+/** Las opciones de un campo con lista de sugerencias: la lista, con «sin elegir» primero. */
+const opcionesDeSugerencias = (sugerencias, sinElegir) => [
+  { value: '', label: sinElegir },
+  ...sugerencias.map((valor) => ({ value: valor, label: valor })),
+]
+
+/**
+ * El bloque con otro tipo de dato: se quitan los campos que solo valen para los otros tipos, el tipo cambia y los
+ * campos propios del nuevo tipo que no estaban se agregan vacíos justo después de `TypeOfData`. Lo demás no se toca.
+ */
+function conTipoDeDato(bloque, nuevo, quitar, agregar) {
+  const resultado = {}
+  const nuevos = Object.fromEntries(agregar.map((campo) => [campo, '']))
+  let puesto = false
+  for (const [clave, valor] of Object.entries(bloque)) {
+    if (quitar.includes(clave)) continue
+    resultado[clave] = clave === 'TypeOfData' ? nuevo : valor
+    if (clave === 'TypeOfData') {
+      Object.assign(resultado, nuevos)
+      puesto = true
+    }
+  }
+  if (!puesto) Object.assign(resultado, { TypeOfData: nuevo }, nuevos)
+  return resultado
+}
 
 export default function FormularioDeBloque({ texto, onCambiar, deshabilitado = false, ibp = null, nivelesDeTiempo = [] }) {
   const leido = leerBody(texto)
@@ -70,11 +109,12 @@ export default function FormularioDeBloque({ texto, onCambiar, deshabilitado = f
 
     if (ibp && campo.campo === 'PlanningArea' && ibp.areas.length > 0) {
       return (
-        <CampoConIbp
+        <CampoConLista
           id={id}
           valor={textoDe('PlanningArea')}
           opciones={opcionesDeAreas(ibp.areas)}
           deshabilitado={deshabilitado}
+          textos={TEXTOS_DE_IBP}
           titulo="Área de planificación"
           onCambiar={(valor) => poner('PlanningArea', valor)}
         />
@@ -83,11 +123,12 @@ export default function FormularioDeBloque({ texto, onCambiar, deshabilitado = f
 
     if (ibp && campo.campo === 'PlanningAreaVersion' && area) {
       return (
-        <CampoConIbp
+        <CampoConLista
           id={id}
           valor={textoDe('PlanningAreaVersion')}
           opciones={opcionesDeVersiones(area)}
           deshabilitado={deshabilitado}
+          textos={TEXTOS_DE_IBP}
           titulo="Versión"
           onCambiar={(valor) => poner('PlanningAreaVersion', valor)}
         />
@@ -98,11 +139,12 @@ export default function FormularioDeBloque({ texto, onCambiar, deshabilitado = f
     // rellena también el prefijo. Escribirlo a mano sigue siendo posible y no toca el prefijo.
     if (ibp && campo.campo === 'MasterDataType' && tiposDelArea.length > 1) {
       return (
-        <CampoConIbp
+        <CampoConLista
           id={id}
           valor={textoDe('MasterDataType')}
           opciones={tiposDelArea}
           deshabilitado={deshabilitado}
+          textos={TEXTOS_DE_IBP}
           titulo="Tipo de maestro"
           onCambiar={(valor) => poner('MasterDataType', valor)}
           alElegir={elegirTipo}
@@ -110,26 +152,63 @@ export default function FormularioDeBloque({ texto, onCambiar, deshabilitado = f
       )
     }
 
-    const sugerencias = campo.campo === 'TargetTimeProfileLevelinSAPIBP' && nivelesDeTiempo.length > 0
-      ? nivelesDeTiempo
-      : campo.sugerencias
-    return (
-      <>
-        <input
+    // Un campo con lista de valores (el comando, el nivel de tiempo) se elige de la lista COMPLETA. Un cuadro de texto
+    // con sugerencias del navegador filtra por lo que ya está escrito y esconde las demás opciones.
+    if (campo.campo === 'BatchCommand' && campo.sugerencias) {
+      return (
+        <CampoConLista
           id={id}
-          className="input mono"
-          list={sugerencias ? `ci-sug-${campo.campo}` : undefined}
-          value={textoDe(campo.campo)}
-          disabled={deshabilitado}
-          onChange={(evento) => poner(campo.campo, evento.target.value)}
+          valor={textoDe('BatchCommand')}
+          opciones={opcionesDeSugerencias(campo.sugerencias, '— Elige un comando —')}
+          deshabilitado={deshabilitado}
+          textos={{ aviso: 'No es uno de los comandos conocidos.' }}
+          titulo="Comando"
+          onCambiar={(valor) => poner('BatchCommand', valor)}
         />
-        {sugerencias && (
-          <datalist id={`ci-sug-${campo.campo}`}>
-            {sugerencias.map((valor) => <option key={valor} value={valor} />)}
-          </datalist>
-        )}
-      </>
+      )
+    }
+
+    // El nivel de tiempo es libre: un valor que ninguna otra integración usa es válido, así que no se avisa.
+    if (campo.campo === 'TargetTimeProfileLevelinSAPIBP' && nivelesDeTiempo.length > 0) {
+      return (
+        <CampoConLista
+          id={id}
+          valor={textoDe('TargetTimeProfileLevelinSAPIBP')}
+          opciones={opcionesDeSugerencias(nivelesDeTiempo, '— Elige un nivel —')}
+          deshabilitado={deshabilitado}
+          textos={{ aviso: '', sufijo: 'no lo usa otra integración' }}
+          titulo="Nivel del perfil de tiempo"
+          onCambiar={(valor) => poner('TargetTimeProfileLevelinSAPIBP', valor)}
+        />
+      )
+    }
+
+    return (
+      <input
+        id={id}
+        className="input mono"
+        value={textoDe(campo.campo)}
+        disabled={deshabilitado}
+        onChange={(evento) => poner(campo.campo, evento.target.value)}
+      />
     )
+  }
+
+  /**
+   * Cambiar el tipo de dato cambia los campos del formulario: se quitan los que solo valen para el otro tipo y
+   * aparecen vacíos los del nuevo. Si lo que se quita tiene valor se pregunta antes: nada se guarda hasta «Guardar»,
+   * pero un clic suelto no debería borrar lo escrito.
+   */
+  function cambiarTipoDeDato(nuevo) {
+    if (nuevo === '' || nuevo === tipo) return
+    const aQuitar = CAMPOS_CONOCIDOS.filter((una) => una.solo && una.solo !== nuevo && Object.hasOwn(bloque, una.campo))
+    const conValor = aQuitar.filter((una) => bloque[una.campo] !== '')
+    if (conValor.length > 0) {
+      const lista = conValor.map((una) => una.campo).join(', ')
+      if (!window.confirm(`Al cambiar a «${TIPOS_DE_DATO[nuevo]}» se quitan estos campos, que tienen valor: ${lista}. ¿Cambiar?`)) return
+    }
+    const aAgregar = CAMPOS_CONOCIDOS.filter((una) => una.solo === nuevo && !Object.hasOwn(bloque, una.campo))
+    emitir(conTipoDeDato(bloque, nuevo, aQuitar.map((una) => una.campo), aAgregar.map((una) => una.campo)))
   }
 
   /** Elegir el tipo de la lista de IBP rellena también el prefijo, que en el body va aparte. */
@@ -160,18 +239,17 @@ export default function FormularioDeBloque({ texto, onCambiar, deshabilitado = f
 
         <div className="field">
           <label htmlFor="ci-tipo">Tipo de dato</label>
-          <input
+          <CampoConLista
             id="ci-tipo"
-            className="input mono"
-            list="ci-tipos-de-dato"
-            value={tipo}
-            disabled={deshabilitado}
-            onChange={(evento) => poner('TypeOfData', evento.target.value)}
+            valor={tipo}
+            opciones={OPCIONES_DE_TIPO_DE_DATO}
+            deshabilitado={deshabilitado}
+            textos={{ aviso: 'No es uno de los tipos conocidos.' }}
+            titulo="Tipo de dato"
+            onCambiar={(valor) => poner('TypeOfData', valor)}
+            alElegir={cambiarTipoDeDato}
           />
-          <datalist id="ci-tipos-de-dato">
-            {Object.entries(TIPOS_DE_DATO).map(([valor, nombre]) => <option key={valor} value={valor}>{nombre}</option>)}
-          </datalist>
-          <span className="card-hint">Decide qué campos se muestran: {Object.keys(TIPOS_DE_DATO).join(' o ')}.</span>
+          <span className="card-hint">Al cambiarlo, el formulario cambia los campos que corresponden a ese tipo.</span>
         </div>
       </div>
 
@@ -185,7 +263,7 @@ export default function FormularioDeBloque({ texto, onCambiar, deshabilitado = f
               <span className="card-hint mono">
                 {campo.campo}{campo.ayuda ? ` · ${campo.ayuda}` : ''}
                 {ibp && campo.campo === 'MasterDataType' && tiposDelArea.length > 1 && ' · al elegir de la lista se rellena también el prefijo'}
-                {campo.campo === 'TargetTimeProfileLevelinSAPIBP' && nivelesDeTiempo.length > 0 && ' · se sugieren los que ya usan otras integraciones de esta conexión'}
+                {campo.campo === 'TargetTimeProfileLevelinSAPIBP' && nivelesDeTiempo.length > 0 && ' · la lista trae los que ya usan otras integraciones de esta conexión'}
               </span>
             </div>
           ))}
@@ -223,9 +301,10 @@ export default function FormularioDeBloque({ texto, onCambiar, deshabilitado = f
         </p>
       </section>
 
-      {(otros.length > 0 || deOtraFamilia.length > 0 || !deshabilitado) && (
+      {(otros.length > 0 || deOtraFamilia.length > 0) && (
         <section className="ci-seccion">
           <h3 className="ci-seccion-titulo">Otros campos</h3>
+          <p className="card-hint">Campos del body que este formulario no conoce. Se conservan y se envían tal cual.</p>
           {[...deOtraFamilia, ...otros].map((campo) => (
             <div className="ci-otro" key={campo}>
               <code className="mono ci-otro-nombre">{campo}</code>
@@ -258,7 +337,33 @@ export default function FormularioDeBloque({ texto, onCambiar, deshabilitado = f
           {!deshabilitado && <CampoNuevo existentes={Object.keys(bloque)} onAgregar={(campo) => poner(campo, '')} />}
         </section>
       )}
+
+      {/* Sin campos extra no hay sección: solo el enlace, para agregar uno a mano sin pasar por el JSON. */}
+      {otros.length === 0 && deOtraFamilia.length === 0 && !deshabilitado && (
+        <AgregarCampoExtra existentes={Object.keys(bloque)} onAgregar={(campo) => poner(campo, '')} />
+      )}
     </div>
+  )
+}
+
+/** El enlace que abre el formulario para agregar un campo que el formulario no conoce, cuando todavía no hay ninguno. */
+function AgregarCampoExtra({ existentes, onAgregar }) {
+  const [abierto, setAbierto] = useState(false)
+  if (!abierto) {
+    return (
+      <div>
+        <button type="button" className="ci-enlace" onClick={() => setAbierto(true)}>
+          + Agregar un campo que no está en el formulario
+        </button>
+      </div>
+    )
+  }
+  return (
+    <section className="ci-seccion">
+      <h3 className="ci-seccion-titulo">Campo extra</h3>
+      <p className="card-hint">Escribe el nombre exacto del campo, como lo espera el iFlow. Después le pones el valor.</p>
+      <CampoNuevo existentes={existentes} onAgregar={onAgregar} />
+    </section>
   )
 }
 

@@ -8,16 +8,20 @@
 //   - que lo que el body trae y el formulario no conoce se conserve.
 
 import { createElement, useState } from 'react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { leerBody } from '../../../core/ci/body.js'
 import ConstructorDeFiltro from './ConstructorDeFiltro.jsx'
 import FormularioDeBloque from './FormularioDeBloque.jsx'
 import TablaDeMapeo from './TablaDeMapeo.jsx'
 import {
-  boton, desmontar, dom, escribir, montar, porEtiqueta, pulsar, teclear, todosPorEtiqueta,
+  boton, desmontar, dom, elegir, escribir, montar, porEtiqueta, pulsar, teclear, texto, todosPorEtiqueta,
 } from './ayudas-de-prueba.js'
 
-afterEach(desmontar)
+beforeEach(() => { vi.spyOn(window, 'confirm').mockReturnValue(true) })
+afterEach(async () => {
+  await desmontar()
+  vi.restoreAllMocks()
+})
 
 /** Un padre con estado, como el editor: guarda el texto que le mandan y lo vuelve a pasar. */
 function ConFiltro({ inicial, alCambiar }) {
@@ -260,11 +264,14 @@ describe('FormularioDeBloque', () => {
   it('cambiar el tipo cambia los campos que se ofrecen, sin perder los que ya tenía', async () => {
     const cambios = []
     await montar(ConFormulario, { inicial: BODY, alCambiar: (t) => cambios.push(t) })
-    await escribir(dom().querySelector('#ci-tipo'), 'MASTERDATA')
+    await elegir(dom().querySelector('#ci-tipo'), 'MASTERDATA')
 
     expect(dom().querySelector('#ci-MasterDataType')).not.toBeNull()
     expect(dom().querySelector('#ci-FileName')).toBeNull()
     expect(leerBody(cambios.at(-1)).bloque.TypeOfData).toBe('MASTERDATA')
+    // Lo que no depende del tipo se queda.
+    expect(leerBody(cambios.at(-1)).bloque.CampoRaro).toBe('valor raro')
+    expect(leerBody(cambios.at(-1)).bloque.PlanningArea).toBe('AREA_DEMO')
   })
 
   // El iFlow puede aceptar campos que esta lista no conoce: no se pierden ni se bloquean.
@@ -308,5 +315,196 @@ describe('FormularioDeBloque', () => {
     await montar(ConFormulario, { inicial: '{ roto' })
     expect(dom().textContent).toContain('no se puede mostrar como formulario')
     expect(dom().textContent).toContain('JSON')
+  })
+})
+
+describe('el tipo de dato y el comando son desplegables con todas las opciones', () => {
+  // Un cuadro de texto con sugerencias del navegador filtra por lo escrito: con «MASTERDATA» puesto solo ofrecería
+  // ese, y no había cómo llegar a «KEYFIGURES».
+  it('el tipo de dato ofrece los dos tipos aunque ya tenga uno', async () => {
+    await montar(ConFormulario, { inicial: BODY })
+    const tipo = dom().querySelector('#ci-tipo')
+    expect(tipo.tagName).toBe('SELECT')
+    expect([...tipo.options].map((o) => [o.value, o.textContent])).toEqual([
+      ['', '— Elige un tipo —'],
+      ['MASTERDATA', 'Dato maestro (MASTERDATA)'],
+      ['KEYFIGURES', 'Cifras clave (KEYFIGURES)'],
+    ])
+    expect(tipo.value).toBe('KEYFIGURES')
+  })
+
+  it('el comando ofrece INSERT_UPDATE y REPLACE aunque ya tenga uno, y elegir cambia solo el comando', async () => {
+    const cambios = []
+    await montar(ConFormulario, { inicial: BODY, alCambiar: (t) => cambios.push(t) })
+    const comando = dom().querySelector('#ci-BatchCommand')
+    expect(comando.tagName).toBe('SELECT')
+    expect([...comando.options].map((o) => o.value)).toEqual(['', 'INSERT_UPDATE', 'REPLACE'])
+    expect(comando.value).toBe('REPLACE')
+
+    await elegir(comando, 'INSERT_UPDATE')
+    const bloque = leerBody(cambios.at(-1)).bloque
+    expect(bloque.BatchCommand).toBe('INSERT_UPDATE')
+    expect(bloque.TypeOfData).toBe('KEYFIGURES')
+  })
+
+  it('un comando que no es de la lista se conserva, escribible, con el aviso', async () => {
+    const cuerpo = JSON.stringify({ A: { TypeOfData: 'MASTERDATA', BatchCommand: 'DELETE' } })
+    await montar(ConFormulario, { inicial: cuerpo })
+    const comando = dom().querySelector('#ci-BatchCommand')
+    expect(comando.tagName).toBe('INPUT')
+    expect(comando.value).toBe('DELETE')
+    expect(texto()).toContain('No es uno de los comandos conocidos.')
+  })
+
+  it('«A mano» deja escribir otro comando', async () => {
+    const cambios = []
+    await montar(ConFormulario, { inicial: BODY, alCambiar: (t) => cambios.push(t) })
+    await pulsar(dom().querySelector('#ci-BatchCommand').parentElement.querySelector('button'))
+    await escribir(dom().querySelector('#ci-BatchCommand'), 'OTRO')
+    expect(leerBody(cambios.at(-1)).bloque.BatchCommand).toBe('OTRO')
+  })
+})
+
+describe('cambiar el tipo de dato cambia el formulario', () => {
+  const MAESTRO = (cambios = {}) => JSON.stringify({
+    PRODUCT: {
+      BatchCommand: 'INSERT_UPDATE', BatchName: 'PRODUCTOS', TypeOfData: 'MASTERDATA', MasterDataPrefix: '', MasterDataType: '',
+      PlanningArea: 'AREA_DEMO', FieldMapping: 'A:A', CampoRaro: 'x', ...cambios,
+    },
+  }, null, 2)
+  const CIFRAS = (cambios = {}) => JSON.stringify({
+    KEYFIGURE: {
+      BatchCommand: 'REPLACE', BatchName: 'FACTURAS', TypeOfData: 'KEYFIGURES', TargetTimeProfileLevelinSAPIBP: '',
+      PlanningArea: 'AREA_DEMO', FileName: '', FieldMapping: 'A:A', ...cambios,
+    },
+  }, null, 2)
+
+  it('de dato maestro a cifras clave: se quitan los campos del maestro y aparecen vacíos los de cifras', async () => {
+    const cambios = []
+    await montar(ConFormulario, { inicial: MAESTRO(), alCambiar: (t) => cambios.push(t) })
+    expect(dom().querySelector('#ci-MasterDataType')).not.toBeNull()
+    expect(dom().querySelector('#ci-TargetTimeProfileLevelinSAPIBP')).toBeNull()
+
+    await elegir(dom().querySelector('#ci-tipo'), 'KEYFIGURES')
+
+    const bloque = leerBody(cambios.at(-1)).bloque
+    expect(bloque).not.toHaveProperty('MasterDataPrefix')
+    expect(bloque).not.toHaveProperty('MasterDataType')
+    expect(bloque).toMatchObject({ TypeOfData: 'KEYFIGURES', TargetTimeProfileLevelinSAPIBP: '', FileName: '' })
+    expect(dom().querySelector('#ci-MasterDataType')).toBeNull()
+    expect(dom().querySelector('#ci-TargetTimeProfileLevelinSAPIBP')).not.toBeNull()
+    expect(dom().querySelector('#ci-FileName')).not.toBeNull()
+    // Sin valores que perder no se pregunta nada.
+    expect(window.confirm).not.toHaveBeenCalled()
+  })
+
+  it('los campos nuevos aparecen justo después de TypeOfData, y lo demás se queda en su sitio', async () => {
+    const cambios = []
+    await montar(ConFormulario, { inicial: MAESTRO(), alCambiar: (t) => cambios.push(t) })
+    await elegir(dom().querySelector('#ci-tipo'), 'KEYFIGURES')
+
+    const bloque = leerBody(cambios.at(-1)).bloque
+    expect(Object.keys(bloque)).toEqual([
+      'BatchCommand', 'BatchName', 'TypeOfData', 'TargetTimeProfileLevelinSAPIBP', 'FileName', 'PlanningArea', 'FieldMapping', 'CampoRaro',
+    ])
+    expect(bloque.BatchName).toBe('PRODUCTOS')
+    expect(bloque.FieldMapping).toBe('A:A')
+  })
+
+  it('de cifras clave a dato maestro, al revés', async () => {
+    const cambios = []
+    await montar(ConFormulario, { inicial: CIFRAS(), alCambiar: (t) => cambios.push(t) })
+    await elegir(dom().querySelector('#ci-tipo'), 'MASTERDATA')
+
+    const bloque = leerBody(cambios.at(-1)).bloque
+    expect(bloque).not.toHaveProperty('TargetTimeProfileLevelinSAPIBP')
+    expect(bloque).not.toHaveProperty('FileName')
+    expect(bloque).toMatchObject({ TypeOfData: 'MASTERDATA', MasterDataPrefix: '', MasterDataType: '' })
+  })
+
+  it('no cambia el comando por su cuenta', async () => {
+    const cambios = []
+    await montar(ConFormulario, { inicial: MAESTRO(), alCambiar: (t) => cambios.push(t) })
+    await elegir(dom().querySelector('#ci-tipo'), 'KEYFIGURES')
+    expect(leerBody(cambios.at(-1)).bloque.BatchCommand).toBe('INSERT_UPDATE')
+  })
+
+  it('si lo que se quita tiene valor, pregunta con los nombres; si se acepta, se quita', async () => {
+    const cambios = []
+    await montar(ConFormulario, { inicial: MAESTRO({ MasterDataPrefix: 'SB', MasterDataType: 'PRODUCT' }), alCambiar: (t) => cambios.push(t) })
+    await elegir(dom().querySelector('#ci-tipo'), 'KEYFIGURES')
+
+    expect(window.confirm).toHaveBeenCalledTimes(1)
+    expect(window.confirm.mock.calls[0][0]).toContain('Cifras clave')
+    expect(window.confirm.mock.calls[0][0]).toContain('MasterDataPrefix, MasterDataType')
+    expect(leerBody(cambios.at(-1)).bloque).not.toHaveProperty('MasterDataType')
+  })
+
+  it('si se rechaza, no cambia nada', async () => {
+    window.confirm.mockReturnValue(false)
+    const cambios = []
+    await montar(ConFormulario, { inicial: MAESTRO({ MasterDataType: 'PRODUCT' }), alCambiar: (t) => cambios.push(t) })
+    await elegir(dom().querySelector('#ci-tipo'), 'KEYFIGURES')
+
+    expect(cambios).toEqual([])
+    expect(dom().querySelector('#ci-MasterDataType').value).toBe('PRODUCT')
+  })
+
+  it('solo pregunta por los campos que tienen valor, no por los vacíos', async () => {
+    await montar(ConFormulario, { inicial: MAESTRO({ MasterDataPrefix: '', MasterDataType: 'PRODUCT' }) })
+    await elegir(dom().querySelector('#ci-tipo'), 'KEYFIGURES')
+    const pregunta = window.confirm.mock.calls[0][0]
+    expect(pregunta).toContain('MasterDataType')
+    expect(pregunta).not.toContain('MasterDataPrefix')
+  })
+
+  it('elegir el mismo tipo, o «sin elegir», no hace nada', async () => {
+    const cambios = []
+    await montar(ConFormulario, { inicial: MAESTRO(), alCambiar: (t) => cambios.push(t) })
+    await elegir(dom().querySelector('#ci-tipo'), 'MASTERDATA')
+    await elegir(dom().querySelector('#ci-tipo'), '')
+    expect(cambios).toEqual([])
+  })
+
+  it('un campo que no es de ningún tipo (uno extra) no se toca al cambiar de tipo', async () => {
+    const cambios = []
+    await montar(ConFormulario, { inicial: MAESTRO({ CampoRaro: 'se queda' }), alCambiar: (t) => cambios.push(t) })
+    await elegir(dom().querySelector('#ci-tipo'), 'KEYFIGURES')
+    expect(leerBody(cambios.at(-1)).bloque.CampoRaro).toBe('se queda')
+  })
+})
+
+describe('«Otros campos»', () => {
+  const SIN_EXTRAS = JSON.stringify({ A: { TypeOfData: 'MASTERDATA', BatchCommand: 'INSERT_UPDATE' } })
+
+  it('sin campos extra no hay sección: solo el enlace para agregar uno', async () => {
+    await montar(ConFormulario, { inicial: SIN_EXTRAS })
+    expect(texto()).not.toContain('Otros campos')
+    expect(boton('+ Agregar un campo que no está en el formulario')).toBeDefined()
+    expect(porEtiqueta('Nombre del campo nuevo')).toBeNull()
+  })
+
+  it('el enlace abre el formulario del campo extra, y al agregarlo aparece la sección con él', async () => {
+    const cambios = []
+    await montar(ConFormulario, { inicial: SIN_EXTRAS, alCambiar: (t) => cambios.push(t) })
+    await pulsar(boton('+ Agregar un campo que no está en el formulario'))
+
+    await escribir(porEtiqueta('Nombre del campo nuevo'), 'NuevoCampo')
+    await pulsar(boton('+ Agregar campo'))
+
+    expect(leerBody(cambios.at(-1)).bloque.NuevoCampo).toBe('')
+    expect(texto()).toContain('Otros campos')
+    expect(porEtiqueta('NuevoCampo')).not.toBeNull()
+  })
+
+  // Pegar un JSON con un campo que el formulario no tiene: aparece solo, sin hacer nada.
+  it('un campo que viene en el body y el formulario no conoce aparece solo, con la explicación', async () => {
+    const cuerpo = JSON.stringify({ A: { TypeOfData: 'MASTERDATA', CampoDelIflow: 'valor' } })
+    await montar(ConFormulario, { inicial: cuerpo })
+
+    expect(texto()).toContain('Otros campos')
+    expect(texto()).toContain('Campos del body que este formulario no conoce. Se conservan y se envían tal cual.')
+    expect(porEtiqueta('CampoDelIflow').value).toBe('valor')
+    expect(texto()).not.toContain('+ Agregar un campo que no está en el formulario')
   })
 })

@@ -76,9 +76,9 @@ export function opcionesDeTipos(area, version) {
  * Agrega a las opciones el valor que el body ya tiene si IBP no lo conoce, para que el selector no lo esconda ni lo
  * cambie por otro sin que nadie lo decida.
  */
-export function conValorActual(opciones, valor) {
+export function conValorActual(opciones, valor, sufijo = 'no está en IBP') {
   if (valor === '' || valor == null || opciones.some((una) => una.value === valor)) return opciones
-  return [...opciones, { value: valor, label: `${valor} (no está en IBP)` }]
+  return [...opciones, { value: valor, label: `${valor} (${sufijo})` }]
 }
 
 // ─── Campos y mapeo ─────────────────────────────────────────────────────────────────────────────

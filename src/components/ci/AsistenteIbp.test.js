@@ -282,8 +282,10 @@ describe('con IBP: área, versión y tabla', () => {
     const cifras = { TypeOfData: 'KEYFIGURES', TargetTimeProfileLevelinSAPIBP: '', PlanningArea: 'AREA1', PlanningAreaVersion: '' }
     await abrir({ body: cuerpo(cifras, 'KEYFIGURE'), nivelesDeTiempo: ['0000000002', '0000000003'] })
 
-    const opciones = [...dom().querySelectorAll('#ci-sug-TargetTimeProfileLevelinSAPIBP option')].map((o) => o.value)
-    expect(opciones).toEqual(['0000000002', '0000000003'])
+    // Una lista completa, no un cuadro de texto con sugerencias que filtran por lo escrito.
+    const nivel = campo('ci-TargetTimeProfileLevelinSAPIBP')
+    expect(nivel.tagName).toBe('SELECT')
+    expect([...nivel.options].map((o) => o.value)).toEqual(['', '0000000002', '0000000003'])
   })
 })
 

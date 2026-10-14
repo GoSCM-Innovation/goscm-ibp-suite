@@ -101,7 +101,7 @@ core/orchestrations adaptador `ci` (adapters.js) y camino «síncrono» del moto
 handlers/ci/        integrations  run  runs  orchestration-info  ibp   → api/ci/[...ruta].js (la octava función de Vercel)
 src/components/ci/  CiTools  Integraciones  EditorDeIntegracion  FormularioDeBloque  ConstructorDeFiltro
                     TablaDeMapeo  DialogoDeEjecucion  OrquestacionesCi  EditorDeOrquestacion  Historial
-                    BarraIbp  CampoConIbp  ConstructorDeCifra  RevisionIbp  useCatalogoIbp  useIbpDelBody
+                    BarraIbp  CampoConLista  ConstructorDeCifra  RevisionIbp  useCatalogoIbp  useIbpDelBody
 src/lib/            ci.js  ci-ibp.js  ci-etapas.js  useFilasLocales.js
 core/persistence/migrations/006_ci_tools.sql                      módulo y tipo de conexión nuevos, `ci_integrations`, `ci_runs`
 core/persistence/migrations/007_ci_ibp_destino.sql                `connections.ibp_connection_id`: el IBP de destino de una conexión de CI
@@ -118,7 +118,17 @@ Un body es `{ "NOMBRE_DEL_BLOQUE": { …campos… } }`. Se guarda como **texto**
 envía como el JSON que la persona escribió.
 
 - **Formulario por tipo de dato.** Se vieron dos familias (`MASTERDATA` y `KEYFIGURES`); cada una enseña sus
-  campos. Lo que el formulario no conoce sale en «Otros campos» y se conserva: el iFlow puede aceptar más.
+  campos. «Tipo de dato» es un desplegable y **cambiarlo cambia el formulario**: se quitan los campos que solo valen
+  para el otro tipo (`MasterDataPrefix` y `MasterDataType` en cifras; `TargetTimeProfileLevelinSAPIBP` y `FileName` en
+  maestro) y aparecen vacíos los del nuevo, justo después de `TypeOfData`. Si lo que se quita tiene valor, se pregunta
+  antes; nada se guarda hasta «Guardar». **No cambia el comando por su cuenta.**
+- **Comando.** Desplegable con `INSERT_UPDATE` y `REPLACE`, los dos que se vieron en los bodies reales (más «A mano»
+  para otro). **No se sabe qué otros acepta el iFlow**: no se inventaron. Los desplegables muestran todas las opciones
+  a la vez; un cuadro de texto con las sugerencias del navegador (`<datalist>`) filtra por lo que ya está escrito y
+  esconde las demás, y así dejó de poderse llegar a «KEYFIGURES».
+- **Otros campos.** Lo que el body trae y el formulario no conoce (por ejemplo, al pegar un JSON con un campo más)
+  aparece solo en «Otros campos», se conserva y se envía tal cual: el iFlow puede aceptar más. Sin campos extra la
+  sección no se muestra; queda un enlace para agregar uno a mano.
 - **Tabla de campos.** `SourceFieldsfromAddon`, `TargetFieldsInSAPIBP` y `FieldMapping` dicen lo mismo tres
   veces. Se edita UNA tabla origen → destino y las tres listas salen de ella. Si un body pegado las trae
   desalineadas, se avisa y se ofrece alinearlas; no se arreglan solas.
