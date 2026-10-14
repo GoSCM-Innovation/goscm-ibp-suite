@@ -16,9 +16,8 @@
 
 import { leerBody } from '../../../core/ci/body.js'
 import { CAMPOS_ESPECIALES, NOMBRES_CON_CONTROL, TIPOS_DE_DATO, camposDe } from '../../../core/ci/campos.js'
-import { CAMPO_DE_PERIODO, componerTipo, descomponerTipo } from '../../../core/ci/ibp-nombres.js'
-import { conValorActual, opcionesDeAreas, opcionesDeTablas, opcionesDeVersiones, tablasDeVersion, esVariable } from '../../lib/ci-ibp.js'
-import SelectorDeLista from '../ui/SelectorDeLista.jsx'
+import { CAMPO_DE_PERIODO } from '../../../core/ci/ibp-nombres.js'
+import { esVariable, opcionesDeAreas, opcionesDeTipos, opcionesDeVersiones } from '../../lib/ci-ibp.js'
 import CampoConIbp from './CampoConIbp.jsx'
 import ConstructorDeFiltro from './ConstructorDeFiltro.jsx'
 import TablaDeMapeo from './TablaDeMapeo.jsx'
@@ -63,8 +62,7 @@ export default function FormularioDeBloque({ texto, onCambiar, deshabilitado = f
 
   // Lo que se elige de IBP. El área manda: sin ella (o con una que IBP no tiene) no hay versiones ni tablas que ofrecer.
   const area = ibp?.area ?? null
-  const tablasDelArea = area ? tablasDeVersion(area, esVariable(textoDe('PlanningAreaVersion')) ? '' : textoDe('PlanningAreaVersion')) : []
-  const tablaActual = componerTipo(textoDe('MasterDataPrefix'), textoDe('MasterDataType'))
+  const tiposDelArea = area ? opcionesDeTipos(area, esVariable(textoDe('PlanningAreaVersion')) ? '' : textoDe('PlanningAreaVersion')) : []
 
   /** El control de un campo general: el de IBP si lo hay, y si no el cuadro de texto de siempre. */
   function controlDe(campo) {
@@ -96,6 +94,22 @@ export default function FormularioDeBloque({ texto, onCambiar, deshabilitado = f
       )
     }
 
+    // El tipo de maestro es la tabla de IBP: se elige de las que se pueden cargar en esa versión del área, y elegirla
+    // rellena también el prefijo. Escribirlo a mano sigue siendo posible y no toca el prefijo.
+    if (ibp && campo.campo === 'MasterDataType' && tiposDelArea.length > 1) {
+      return (
+        <CampoConIbp
+          id={id}
+          valor={textoDe('MasterDataType')}
+          opciones={tiposDelArea}
+          deshabilitado={deshabilitado}
+          titulo="Tipo de maestro"
+          onCambiar={(valor) => poner('MasterDataType', valor)}
+          alElegir={elegirTipo}
+        />
+      )
+    }
+
     const sugerencias = campo.campo === 'TargetTimeProfileLevelinSAPIBP' && nivelesDeTiempo.length > 0
       ? nivelesDeTiempo
       : campo.sugerencias
@@ -118,11 +132,11 @@ export default function FormularioDeBloque({ texto, onCambiar, deshabilitado = f
     )
   }
 
-  /** Elegir la tabla de IBP rellena el prefijo y el tipo, que en el body van aparte. */
-  function elegirTabla(tabla) {
-    if (tabla === '') return
-    const { prefijo, tipo: tipoDeMaestro } = descomponerTipo(tabla, area.prefijo)
-    emitir(conCampos(bloque, { MasterDataPrefix: prefijo, MasterDataType: tipoDeMaestro }))
+  /** Elegir el tipo de la lista de IBP rellena también el prefijo, que en el body va aparte. */
+  function elegirTipo(tipoDeMaestro) {
+    const opcion = tiposDelArea.find((una) => una.value === tipoDeMaestro)
+    if (!opcion || opcion.value === '') return
+    emitir(conCampos(bloque, { MasterDataPrefix: opcion.prefijo, MasterDataType: opcion.value }))
   }
 
   return (
@@ -170,26 +184,11 @@ export default function FormularioDeBloque({ texto, onCambiar, deshabilitado = f
               {controlDe(campo)}
               <span className="card-hint mono">
                 {campo.campo}{campo.ayuda ? ` · ${campo.ayuda}` : ''}
+                {ibp && campo.campo === 'MasterDataType' && tiposDelArea.length > 1 && ' · al elegir de la lista se rellena también el prefijo'}
                 {campo.campo === 'TargetTimeProfileLevelinSAPIBP' && nivelesDeTiempo.length > 0 && ' · se sugieren los que ya usan otras integraciones de esta conexión'}
               </span>
             </div>
           ))}
-
-          {ibp && tipo === 'MASTERDATA' && area && (
-            <div className="field">
-              <label htmlFor="ci-tabla-ibp">Tabla de IBP</label>
-              <SelectorDeLista
-                id="ci-tabla-ibp"
-                className="select"
-                value={tablaActual}
-                options={conValorActual(opcionesDeTablas(tablasDelArea), tablaActual)}
-                disabled={deshabilitado}
-                titulo="Tabla de dato maestro"
-                onChange={elegirTabla}
-              />
-              <span className="card-hint">Rellena el prefijo y el tipo de maestro, que también se pueden escribir a mano.</span>
-            </div>
-          )}
         </div>
       </section>
 

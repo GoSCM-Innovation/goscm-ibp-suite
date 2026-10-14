@@ -188,16 +188,55 @@ describe('con IBP: área, versión y tabla', () => {
     expect(campo('ci-PlanningAreaVersion').tagName).toBe('INPUT')
   })
 
-  it('elegir la tabla rellena el prefijo y el tipo, y solo ofrece las de esa versión', async () => {
+  // Un solo control: el tipo de maestro ES la tabla de IBP (prefijo + tipo). No hay un segundo selector que apunte a lo mismo.
+  it('el tipo de maestro se elige de las tablas de IBP de esa versión, sin prefijo, y elegirlo rellena también el prefijo', async () => {
     await abrir({ body: cuerpo(bloqueMaestro({ MasterDataPrefix: '', MasterDataType: '', PlanningAreaVersion: 'PVSMD' })) })
 
-    const tabla = campo('ci-tabla-ibp')
-    expect([...tabla.options].map((o) => o.value)).toEqual(['', 'ABPRODUCT'])
+    const tipo = campo('ci-MasterDataType')
+    expect(tipo.tagName).toBe('SELECT')
+    expect([...tipo.options].map((o) => o.value)).toEqual(['', 'PRODUCT'])
+    expect(campo('ci-tabla-ibp')).toBeNull()
 
-    await elegir(tabla, 'ABPRODUCT')
+    await elegir(tipo, 'PRODUCT')
     const bloque = await bloqueActual()
     expect(bloque.MasterDataPrefix).toBe('AB')
     expect(bloque.MasterDataType).toBe('PRODUCT')
+  })
+
+  it('cambiar el tipo de la lista cambia el tipo y deja el prefijo del área', async () => {
+    await abrir({ body: cuerpo(bloqueMaestro()) })
+    await elegir(campo('ci-MasterDataType'), 'LOCATION')
+
+    const bloque = await bloqueActual()
+    expect(bloque.MasterDataType).toBe('LOCATION')
+    expect(bloque.MasterDataPrefix).toBe('AB')
+  })
+
+  it('«A mano» deja escribir el tipo, y escribirlo NO toca el prefijo', async () => {
+    await abrir({ body: cuerpo(bloqueMaestro({ MasterDataPrefix: 'XX' })) })
+    await pulsar(campo('ci-MasterDataType').parentElement.querySelector('button'))
+
+    const tipo = campo('ci-MasterDataType')
+    expect(tipo.tagName).toBe('INPUT')
+    await escribir(tipo, 'LOCATION')
+
+    const bloque = await bloqueActual()
+    expect(bloque.MasterDataType).toBe('LOCATION')
+    expect(bloque.MasterDataPrefix).toBe('XX')
+  })
+
+  it('un tipo que la versión elegida no tiene se conserva, escribible, con el aviso', async () => {
+    await abrir({ body: cuerpo(bloqueMaestro({ MasterDataType: 'LOCATION', PlanningAreaVersion: 'PVSMD' })) })
+
+    const tipo = campo('ci-MasterDataType')
+    expect(tipo.tagName).toBe('INPUT')
+    expect(tipo.value).toBe('LOCATION')
+    expect(texto()).toContain('La tabla «ABLOCATION» no está entre las que se pueden cargar en esa versión del área.')
+  })
+
+  it('sin un área que IBP tenga, el tipo de maestro es el cuadro de texto de siempre', async () => {
+    await abrir({ body: cuerpo(bloqueMaestro({ PlanningArea: 'VIEJA' })) })
+    expect(campo('ci-MasterDataType').tagName).toBe('INPUT')
   })
 
   it('un valor que el body ya tenía y IBP no conoce se conserva, escribible, con el aviso', async () => {

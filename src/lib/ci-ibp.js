@@ -8,7 +8,7 @@
 // Lo que se lee de IBP no se guarda en el navegador: vive en memoria mientras la pantalla está abierta
 // (`useCatalogoIbp`) y el servidor lo guarda 30 minutos por cliente. Ver `core/ci/ibp-catalogo.js`.
 
-import { CAMPO_DE_PERIODO, CAMPO_DE_VALOR, VERSION_BASE, componerTipo, versionDelBody } from '../../core/ci/ibp-nombres.js'
+import { CAMPO_DE_PERIODO, CAMPO_DE_VALOR, VERSION_BASE, componerTipo, descomponerTipo, versionDelBody } from '../../core/ci/ibp-nombres.js'
 import { motivoDeValorDeFiltroInvalido } from '../../core/ci/filter.js'
 import { api } from './api.js'
 
@@ -58,11 +58,19 @@ export function tablasDeVersion(area, version) {
   return (Object.hasOwn(area.tipos, clave) ? area.tipos[clave] : area.tipos[VERSION_BASE]) ?? []
 }
 
-/** Las tablas como opciones de un selector, con «sin elegir» primero. */
-export const opcionesDeTablas = (tablas) => [
-  { value: '', label: '— Elige una tabla —' },
-  ...tablas.map((tabla) => ({ value: tabla, label: tabla })),
-]
+/**
+ * Los tipos de dato maestro que se pueden cargar en una versión de un área, como opciones de un selector: tal como
+ * van en el body (`PRODUCT`, sin el prefijo del área). Cada opción lleva el `prefijo` con el que se carga, porque elegir
+ * el tipo rellena también el prefijo. La primera, vacía, es «sin elegir».
+ */
+export function opcionesDeTipos(area, version) {
+  const opciones = [{ value: '', label: '— Elige un tipo —', prefijo: '' }]
+  for (const tabla of tablasDeVersion(area, version)) {
+    const { prefijo, tipo } = descomponerTipo(tabla, area.prefijo)
+    if (!opciones.some((una) => una.value === tipo)) opciones.push({ value: tipo, label: tipo, prefijo })
+  }
+  return opciones
+}
 
 /**
  * Agrega a las opciones el valor que el body ya tiene si IBP no lo conoce, para que el selector no lo esconda ni lo

@@ -9,7 +9,7 @@ import {
   infoDeDestino,
   leerCifraDeFilas,
   opcionesDeAreas,
-  opcionesDeTablas,
+  opcionesDeTipos,
   opcionesDeVersiones,
   revisarContraIbp,
   tablasDeVersion,
@@ -75,8 +75,30 @@ describe('las opciones de los selectores', () => {
     expect(tablasDeVersion(AREAS[0], '__proto__')).toEqual(['ABLOCATION', 'ABPRODUCT'])
   })
 
-  it('las tablas llevan «sin elegir» primero', () => {
-    expect(opcionesDeTablas(['A', 'B']).map((una) => una.value)).toEqual(['', 'A', 'B'])
+  it('los tipos de maestro se ven como van en el body, sin el prefijo del área, y cada uno lleva su prefijo', () => {
+    expect(opcionesDeTipos(AREAS[0], '')).toEqual([
+      { value: '', label: '— Elige un tipo —', prefijo: '' },
+      { value: 'LOCATION', label: 'LOCATION', prefijo: 'AB' },
+      { value: 'PRODUCT', label: 'PRODUCT', prefijo: 'AB' },
+    ])
+    expect(opcionesDeTipos(AREAS[0], 'PVSMD').map((una) => una.value)).toEqual(['', 'PRODUCT'])
+  })
+
+  it('un área sin prefijo ofrece el identificador entero como tipo, con prefijo vacío', () => {
+    const sinPrefijo = { ...AREAS[1], tipos: { '': ['PRODUCT'] } }
+    expect(opcionesDeTipos(sinPrefijo, '')).toEqual([
+      { value: '', label: '— Elige un tipo —', prefijo: '' },
+      { value: 'PRODUCT', label: 'PRODUCT', prefijo: '' },
+    ])
+  })
+
+  it('una tabla que no empieza por el prefijo del área se ofrece entera y sin prefijo; no se repite un tipo', () => {
+    const mezclada = { ...AREAS[0], tipos: { '': ['ABPRODUCT', 'PRODUCT', 'ABLOCATION'] } }
+    expect(opcionesDeTipos(mezclada, '')).toEqual([
+      { value: '', label: '— Elige un tipo —', prefijo: '' },
+      { value: 'PRODUCT', label: 'PRODUCT', prefijo: 'AB' },
+      { value: 'LOCATION', label: 'LOCATION', prefijo: 'AB' },
+    ])
   })
 
   it('un valor que IBP no conoce se agrega, marcado, para no esconderlo', () => {

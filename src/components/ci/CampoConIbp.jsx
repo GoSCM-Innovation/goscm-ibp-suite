@@ -10,7 +10,9 @@ import { useState } from 'react'
 import { conValorActual, esVariable } from '../../lib/ci-ibp.js'
 import SelectorDeLista from '../ui/SelectorDeLista.jsx'
 
-export default function CampoConIbp({ id, valor, opciones, onCambiar, deshabilitado = false, titulo, ariaLabel }) {
+// `onCambiar` recibe lo que se ESCRIBE a mano. `alElegir` recibe lo que se elige de la lista (por omisión, lo mismo):
+// sirve para que elegir de IBP pueda hacer más que escribir, como rellenar otro campo.
+export default function CampoConIbp({ id, valor, opciones, onCambiar, alElegir = onCambiar, deshabilitado = false, titulo, ariaLabel }) {
   const conocido = valor === '' || opciones.some((una) => una.value === valor)
   const [aMano, setAMano] = useState(!conocido)
 
@@ -40,7 +42,7 @@ export default function CampoConIbp({ id, valor, opciones, onCambiar, deshabilit
           disabled={deshabilitado}
           titulo={titulo}
           ariaLabel={ariaLabel}
-          onChange={onCambiar}
+          onChange={alElegir}
         />
       )}
       {!deshabilitado && (
