@@ -6,7 +6,8 @@ qué tabla mover, de dónde, adónde y con qué filtro. Antes esos bodies vivía
 ahora viven en el servidor, por cliente, se ejecutan desde la Suite y se encadenan en orquestaciones.
 
 - Módulo: id `ci`, nombre visible «CI Tools», icono 🔗. Se contrata aparte, como los otros tres.
-- Rama de trabajo: `feat/ci-tools`.
+- Fusionado a `main` el 2026-10-14 (la rama `feat/ci-tools` se borró). **Decisión del usuario: CI Tools se sigue
+  trabajando directo en producción**, sin rama, porque es un módulo aparte que nadie más tiene contratado.
 - Plan acordado con el usuario: ver «Decisiones» abajo.
 
 ## Qué se puede hacer

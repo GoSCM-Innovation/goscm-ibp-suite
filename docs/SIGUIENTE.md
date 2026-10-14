@@ -7,7 +7,8 @@ actualiza al terminar cada sesión, y su orden es el de prioridad acordada.
 
 ## Dónde estamos
 
-- **CI Tools, el cuarto módulo (2026-10-14), en la rama `feat/ci-tools`, sin fusionar a `main`.** Integraciones de
+- **CI Tools, el cuarto módulo (2026-10-14), ya en `main` y en producción** (la rama `feat/ci-tools` se fusionó y se
+  borró; **el usuario decidió trabajarlo directo en producción**, por ser un módulo aparte). Integraciones de
   Cloud Integration que cargan datos a IBP: biblioteca con carpetas, formulario y JSON, ejecutar, historial y
   orquestaciones por etapas sobre el mismo motor. Detalle, decisiones del usuario y garantías en
   [`CI-TOOLS.md`](CI-TOOLS.md). **Nada se ha ejecutado contra un tenant de CPI** (su sección «Sin estrenar» es la
@@ -204,7 +205,7 @@ actualiza al terminar cada sesión, y su orden es el de prioridad acordada.
   ```bash
   vercel --prod --yes
   ```
-- **4.410 pruebas** (2026-10-14, en la rama de CI Tools), lint y build limpios, y el build **sin ningún aviso**.
+- **4.413 pruebas** (2026-10-14, con CI Tools), lint y build limpios, y el build **sin ningún aviso**.
 - Los tres proyectos previos están portados en funcionalidad.
 - **La interfaz de los TRES está restaurada tal cual era.** Es una decisión del usuario y ahora es
   regla del proyecto: ver [«Respetar la interfaz de origen»](../CLAUDE.md#respetar-la-interfaz-de-origen).
