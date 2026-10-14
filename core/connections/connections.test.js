@@ -7,6 +7,7 @@ import {
   getConnection,
   getCredentials,
   listConnections,
+  setIbpConnection,
   upsertAgreement,
 } from './connections.js'
 import { queryOneScoped, queryScoped } from '../persistence/tenant-scope.js'
@@ -312,5 +313,80 @@ describe('renameConnection', () => {
     const sql = queryScoped.mock.calls.at(-1)[1]
     expect(sql).not.toContain('base_url =')
     expect(sql).not.toContain('kind =')
+  })
+})
+
+describe('a qué IBP carga una conexión de Cloud Integration', () => {
+  const IBP = '22222222-2222-4222-8222-222222222222'
+  const deCi = { id: CONEXION, kind: 'ci', name: 'CI STARBRANDS DEV', base_url: 'https://x', organization: null, is_production: false }
+  const deIbp = { id: IBP, kind: 'ibp', name: 'IBP STARBRANDS QAS', base_url: 'https://y', organization: null, is_production: false }
+
+  it('la lista y el detalle piden el vínculo con el nombre del IBP, y siempre filtrando por cliente', async () => {
+    await listConnections(CLIENTE)
+    expect(queryScoped.mock.calls[0][1]).toContain('c.ibp_connection_id')
+    expect(queryScoped.mock.calls[0][1]).toContain('ibp_connection_name')
+    expect(queryScoped.mock.calls[0][1]).toContain('i.client_id = c.client_id')
+
+    queryOneScoped.mockResolvedValue(null)
+    await getConnection(CLIENTE, CONEXION)
+    expect(queryOneScoped.mock.calls[0][1]).toContain('ibp_connection_name')
+  })
+
+  it('el mapper entrega el vínculo y su nombre, y nada más del IBP', async () => {
+    queryScoped.mockResolvedValue([{ ...deCi, ibp_connection_id: IBP, ibp_connection_name: 'IBP STARBRANDS QAS', agreement_count: 1 }])
+    const [una] = await listConnections(CLIENTE)
+    expect(una).toMatchObject({ ibpConnectionId: IBP, ibpConnectionName: 'IBP STARBRANDS QAS' })
+    expect(JSON.stringify(una)).not.toMatch(/https:\/\/y|secret|password/)
+  })
+
+  it('una conexión sin vínculo lo dice con null, no con «undefined»', async () => {
+    queryScoped.mockResolvedValue([{ ...deCi, ibp_connection_id: null, ibp_connection_name: null }])
+    const [una] = await listConnections(CLIENTE)
+    expect(una.ibpConnectionId).toBeNull()
+    expect(una.ibpConnectionName).toBeNull()
+  })
+
+  it('vincula una conexión de CI con una de IBP del mismo cliente', async () => {
+    queryOneScoped.mockResolvedValueOnce(deCi).mockResolvedValueOnce(deIbp)
+    queryScoped.mockResolvedValue([{ ...deCi, ibp_connection_id: IBP, created_at: new Date(0) }])
+    const guardada = await setIbpConnection(CLIENTE, CONEXION, IBP)
+
+    const [clienteDeLaConsulta, sql, params] = queryScoped.mock.calls.at(-1)
+    expect(clienteDeLaConsulta).toBe(CLIENTE)
+    expect(sql).toContain('client_id = $2')
+    expect(params).toEqual([CONEXION, CLIENTE, IBP])
+    expect(guardada.ibpConnectionId).toBe(IBP)
+  })
+
+  it('con null o vacío quita el vínculo', async () => {
+    queryOneScoped.mockResolvedValueOnce(deCi)
+    queryScoped.mockResolvedValue([{ ...deCi, ibp_connection_id: null, created_at: new Date(0) }])
+    await setIbpConnection(CLIENTE, CONEXION, '')
+    expect(queryScoped.mock.calls.at(-1)[2]).toEqual([CONEXION, CLIENTE, null])
+  })
+
+  it('solo una conexión de Cloud Integration lleva un IBP de destino', async () => {
+    queryOneScoped.mockResolvedValueOnce(deIbp)
+    await expect(setIbpConnection(CLIENTE, IBP, IBP)).rejects.toThrow(/Solo una conexión de Cloud Integration/)
+    expect(queryScoped).not.toHaveBeenCalled()
+  })
+
+  it('el destino tiene que ser de IBP, y se dice cuál no lo es', async () => {
+    queryOneScoped.mockResolvedValueOnce(deCi).mockResolvedValueOnce({ ...deCi, id: IBP, name: 'Otra CI' })
+    await expect(setIbpConnection(CLIENTE, CONEXION, IBP)).rejects.toThrow(/«Otra CI» no es una conexión de SAP IBP/)
+    expect(queryScoped).not.toHaveBeenCalled()
+  })
+
+  // Aislamiento: una conexión de otro cliente «no existe» porque la búsqueda lleva el cliente.
+  it('una conexión de IBP de otro cliente no se puede vincular', async () => {
+    queryOneScoped.mockResolvedValueOnce(deCi).mockResolvedValueOnce(null)
+    await expect(setIbpConnection(CLIENTE, CONEXION, IBP)).rejects.toThrow(/no existe/)
+    expect(queryScoped).not.toHaveBeenCalled()
+  })
+
+  it('un identificador que no es UUID no llega a la base', async () => {
+    queryOneScoped.mockResolvedValueOnce(deCi)
+    await expect(setIbpConnection(CLIENTE, CONEXION, "1' or '1'='1")).rejects.toThrow(/no existe/)
+    expect(queryScoped).not.toHaveBeenCalled()
   })
 })

@@ -9,9 +9,17 @@
 //   - Los campos que el formulario no conoce: salen en «Otros campos», se pueden editar y quitar. Si el iFlow
 //     acepta uno que aquí no se conoce, no se pierde ni se bloquea.
 //   - Los valores que no son texto (un número, una lista) se muestran pero no se editan aquí: se tocan en JSON.
+//
+// Con `ibp` (lo que IBP dice de este body, ver `useIbpDelBody`) el área, la versión y la tabla se eligen de las de
+// IBP, los campos se eligen de la tabla o del área y los valores del filtro se sugieren. Todo sigue siendo
+// editable a mano: sin `ibp` el formulario es el de siempre.
 
 import { leerBody } from '../../../core/ci/body.js'
 import { CAMPOS_ESPECIALES, NOMBRES_CON_CONTROL, TIPOS_DE_DATO, camposDe } from '../../../core/ci/campos.js'
+import { CAMPO_DE_PERIODO, componerTipo, descomponerTipo } from '../../../core/ci/ibp-nombres.js'
+import { conValorActual, opcionesDeAreas, opcionesDeTablas, opcionesDeVersiones, tablasDeVersion, esVariable } from '../../lib/ci-ibp.js'
+import SelectorDeLista from '../ui/SelectorDeLista.jsx'
+import CampoConIbp from './CampoConIbp.jsx'
 import ConstructorDeFiltro from './ConstructorDeFiltro.jsx'
 import TablaDeMapeo from './TablaDeMapeo.jsx'
 
@@ -26,7 +34,7 @@ const conCampos = (bloque, campos) => Object.entries(campos).reduce((acumulado, 
 
 const sinCampo = (bloque, campo) => Object.fromEntries(Object.entries(bloque).filter(([clave]) => clave !== campo))
 
-export default function FormularioDeBloque({ texto, onCambiar, deshabilitado = false }) {
+export default function FormularioDeBloque({ texto, onCambiar, deshabilitado = false, ibp = null, nivelesDeTiempo = [] }) {
   const leido = leerBody(texto)
 
   if (!leido.ok) {
@@ -52,6 +60,70 @@ export default function FormularioDeBloque({ texto, onCambiar, deshabilitado = f
     NOMBRES_CON_CONTROL.has(campo) && !CAMPOS_ESPECIALES.includes(campo) && campo !== 'TypeOfData'
     && !generales.some((una) => una.campo === campo)
   ))
+
+  // Lo que se elige de IBP. El área manda: sin ella (o con una que IBP no tiene) no hay versiones ni tablas que ofrecer.
+  const area = ibp?.area ?? null
+  const tablasDelArea = area ? tablasDeVersion(area, esVariable(textoDe('PlanningAreaVersion')) ? '' : textoDe('PlanningAreaVersion')) : []
+  const tablaActual = componerTipo(textoDe('MasterDataPrefix'), textoDe('MasterDataType'))
+
+  /** El control de un campo general: el de IBP si lo hay, y si no el cuadro de texto de siempre. */
+  function controlDe(campo) {
+    const id = `ci-${campo.campo}`
+
+    if (ibp && campo.campo === 'PlanningArea' && ibp.areas.length > 0) {
+      return (
+        <CampoConIbp
+          id={id}
+          valor={textoDe('PlanningArea')}
+          opciones={opcionesDeAreas(ibp.areas)}
+          deshabilitado={deshabilitado}
+          titulo="Área de planificación"
+          onCambiar={(valor) => poner('PlanningArea', valor)}
+        />
+      )
+    }
+
+    if (ibp && campo.campo === 'PlanningAreaVersion' && area) {
+      return (
+        <CampoConIbp
+          id={id}
+          valor={textoDe('PlanningAreaVersion')}
+          opciones={opcionesDeVersiones(area)}
+          deshabilitado={deshabilitado}
+          titulo="Versión"
+          onCambiar={(valor) => poner('PlanningAreaVersion', valor)}
+        />
+      )
+    }
+
+    const sugerencias = campo.campo === 'TargetTimeProfileLevelinSAPIBP' && nivelesDeTiempo.length > 0
+      ? nivelesDeTiempo
+      : campo.sugerencias
+    return (
+      <>
+        <input
+          id={id}
+          className="input mono"
+          list={sugerencias ? `ci-sug-${campo.campo}` : undefined}
+          value={textoDe(campo.campo)}
+          disabled={deshabilitado}
+          onChange={(evento) => poner(campo.campo, evento.target.value)}
+        />
+        {sugerencias && (
+          <datalist id={`ci-sug-${campo.campo}`}>
+            {sugerencias.map((valor) => <option key={valor} value={valor} />)}
+          </datalist>
+        )}
+      </>
+    )
+  }
+
+  /** Elegir la tabla de IBP rellena el prefijo y el tipo, que en el body van aparte. */
+  function elegirTabla(tabla) {
+    if (tabla === '') return
+    const { prefijo, tipo: tipoDeMaestro } = descomponerTipo(tabla, area.prefijo)
+    emitir(conCampos(bloque, { MasterDataPrefix: prefijo, MasterDataType: tipoDeMaestro }))
+  }
 
   return (
     <div className="ci-formulario">
@@ -95,22 +167,29 @@ export default function FormularioDeBloque({ texto, onCambiar, deshabilitado = f
           {generales.map((campo) => (
             <div className="field" key={campo.campo}>
               <label htmlFor={`ci-${campo.campo}`}>{campo.etiqueta}</label>
-              <input
-                id={`ci-${campo.campo}`}
-                className="input mono"
-                list={campo.sugerencias ? `ci-sug-${campo.campo}` : undefined}
-                value={textoDe(campo.campo)}
-                disabled={deshabilitado}
-                onChange={(evento) => poner(campo.campo, evento.target.value)}
-              />
-              {campo.sugerencias && (
-                <datalist id={`ci-sug-${campo.campo}`}>
-                  {campo.sugerencias.map((valor) => <option key={valor} value={valor} />)}
-                </datalist>
-              )}
-              <span className="card-hint mono">{campo.campo}{campo.ayuda ? ` · ${campo.ayuda}` : ''}</span>
+              {controlDe(campo)}
+              <span className="card-hint mono">
+                {campo.campo}{campo.ayuda ? ` · ${campo.ayuda}` : ''}
+                {campo.campo === 'TargetTimeProfileLevelinSAPIBP' && nivelesDeTiempo.length > 0 && ' · se sugieren los que ya usan otras integraciones de esta conexión'}
+              </span>
             </div>
           ))}
+
+          {ibp && tipo === 'MASTERDATA' && area && (
+            <div className="field">
+              <label htmlFor="ci-tabla-ibp">Tabla de IBP</label>
+              <SelectorDeLista
+                id="ci-tabla-ibp"
+                className="select"
+                value={tablaActual}
+                options={conValorActual(opcionesDeTablas(tablasDelArea), tablaActual)}
+                disabled={deshabilitado}
+                titulo="Tabla de dato maestro"
+                onChange={elegirTabla}
+              />
+              <span className="card-hint">Rellena el prefijo y el tipo de maestro, que también se pueden escribir a mano.</span>
+            </div>
+          )}
         </div>
       </section>
 
@@ -119,6 +198,15 @@ export default function FormularioDeBloque({ texto, onCambiar, deshabilitado = f
         <TablaDeMapeo
           bloque={bloque}
           deshabilitado={deshabilitado}
+          ibp={ibp && {
+            tipo: ibp.tipo,
+            area: area?.id ?? '',
+            entidad: ibp.tabla,
+            campos: ibp.campos,
+            cifras: ibp.cifras,
+            cargando: ibp.cargando,
+            error: ibp.error,
+          }}
           onCambiar={(listas) => emitir(conCampos(bloque, listas))}
         />
       </section>
@@ -128,6 +216,7 @@ export default function FormularioDeBloque({ texto, onCambiar, deshabilitado = f
         <ConstructorDeFiltro
           valor={textoDe('FilterForTheDataSource')}
           deshabilitado={deshabilitado}
+          ibp={ibp && valoresDeIbp(ibp)}
           onCambiar={(filtro) => poner('FilterForTheDataSource', filtro)}
         />
         <p className="card-hint">
@@ -172,6 +261,27 @@ export default function FormularioDeBloque({ texto, onCambiar, deshabilitado = f
       )}
     </div>
   )
+}
+
+/**
+ * Cómo el filtro pide a IBP los valores de un campo.
+ *
+ * `puede` dice si vale la pena ofrecerlo: `false` si el campo seguro no es de IBP, `null` si no se sabe (se ofrece y
+ * el servidor dice qué hay). En dato maestro se pregunta a la tabla elegida; en cifras clave, al área, que busca el
+ * campo en sus tablas de atributos. La fecha del periodo nunca: es un rango, no una lista.
+ */
+function valoresDeIbp(ibp) {
+  return {
+    puede: (campo) => {
+      if (campo.toUpperCase() === CAMPO_DE_PERIODO) return false
+      if (ibp.tipo === 'MASTERDATA') {
+        if (!ibp.tabla) return false
+        return ibp.campos ? ibp.campos.some((uno) => uno.campo.toUpperCase() === campo.toUpperCase()) : null
+      }
+      return ibp.tipo === 'KEYFIGURES' && ibp.area ? null : false
+    },
+    leer: (campo) => ibp.leer('valores', ibp.tipo === 'MASTERDATA' ? { entidad: ibp.tabla, campo } : { area: ibp.area.id, campo }),
+  }
 }
 
 /** Agrega un campo que el formulario no conoce. */

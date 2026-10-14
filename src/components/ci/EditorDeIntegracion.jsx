@@ -7,11 +7,16 @@
 
 import { useEffect, useState } from 'react'
 import { leerBody, resumenDeBody } from '../../../core/ci/body.js'
+import BarraIbp from './BarraIbp.jsx'
 import FormularioDeBloque from './FormularioDeBloque.jsx'
+import RevisionIbp from './RevisionIbp.jsx'
+import { useIbpDelBody } from './useIbpDelBody.js'
 
 export default function EditorDeIntegracion({
   integracion,
   carpetas = [],
+  catalogo = null,
+  nivelesDeTiempo = [],
   guardando = false,
   error = '',
   onGuardar,
@@ -28,6 +33,8 @@ export default function EditorDeIntegracion({
   const leido = leerBody(texto)
   const resumen = resumenDeBody(texto)
   const sucio = nombre !== integracion.name || carpeta !== integracion.folder || texto !== integracion.body
+  // Lo que IBP dice de lo que está escrito ahora (no de lo guardado): el aviso aparece mientras se edita.
+  const ibp = useIbpDelBody(catalogo, texto)
   const puedeGuardar = sucio && leido.ok && nombre.trim() !== '' && !guardando
 
   // Avisa al armazón de que hay cambios sin guardar, para que pregunte antes de tirarlos.
@@ -77,7 +84,7 @@ export default function EditorDeIntegracion({
           <button
             type="button"
             className="btn btn-primary"
-            onClick={onEjecutar}
+            onClick={() => onEjecutar(ibp?.avisos ?? [])}
             disabled={sucio || !leido.ok}
             title={sucio ? 'Guarda los cambios antes de ejecutar: se ejecuta lo guardado.' : 'Ejecutar esta integración'}
           >
@@ -106,6 +113,9 @@ export default function EditorDeIntegracion({
         </div>
       )}
 
+      <BarraIbp catalogo={catalogo} />
+      <RevisionIbp avisos={ibp?.avisos} />
+
       <div className="tabs ci-tabs-editor" role="tablist">
         {[['formulario', 'Formulario'], ['json', 'JSON']].map(([id, etiqueta]) => (
           <button
@@ -122,7 +132,7 @@ export default function EditorDeIntegracion({
       </div>
 
       {vista === 'formulario' ? (
-        <FormularioDeBloque texto={texto} onCambiar={setTexto} />
+        <FormularioDeBloque texto={texto} onCambiar={setTexto} ibp={ibp} nivelesDeTiempo={nivelesDeTiempo} />
       ) : (
         <div className="ci-json">
           <textarea

@@ -136,3 +136,91 @@ describe('renombrar una conexión', () => {
     expect(api.patch).not.toHaveBeenCalled()
   })
 })
+
+describe('el IBP de destino de una conexión de Cloud Integration', () => {
+  const IBP = { id: 'ibp-1', kind: 'ibp', name: 'IBP QAS', baseUrl: 'https://my400444-api.scmibp1.ondemand.com', isProduction: false, agreementCount: 1 }
+  const CI = {
+    id: 'ci-1', kind: 'ci', name: 'CPI dev', baseUrl: 'https://acme.it-cpi034-rt.cfapps.us10-002.hana.ondemand.com/http/IBP2',
+    isProduction: false, agreementCount: 1, ibpConnectionId: null, ibpConnectionName: null,
+  }
+
+  /** La lista trae todas las conexiones; el detalle (con `id`) trae la que se pidió. */
+  const servir = (ci = CI) => api.get.mockImplementation(async (_ruta, params) => (
+    params?.id ? { connection: { ...(params.id === ci.id ? ci : IBP), agreements: [] } } : { connections: [IBP, ci] }
+  ))
+
+  const abrirDetalleDe = async (nombre) => {
+    const fila = [...contenedor.querySelectorAll('tbody tr')].find((una) => una.textContent.includes(nombre))
+    await pulsar(fila)
+  }
+
+  const elegir = async (selector, valor) => {
+    const asignar = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value').set
+    await act(async () => {
+      asignar.call(selector, valor)
+      selector.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+  }
+
+  it('solo las conexiones de Cloud Integration lo ofrecen', async () => {
+    servir()
+    await montar()
+    await abrirDetalleDe('IBP QAS')
+    expect(contenedor.querySelector('#ibpDeDestino')).toBeNull()
+
+    await abrirDetalleDe('CPI dev')
+    expect(contenedor.querySelector('#ibpDeDestino')).not.toBeNull()
+  })
+
+  it('ofrece las conexiones de IBP de la empresa, y «Ninguno»', async () => {
+    servir()
+    await montar()
+    await abrirDetalleDe('CPI dev')
+
+    const opciones = [...contenedor.querySelector('#ibpDeDestino').options].map((o) => [o.value, o.textContent])
+    expect(opciones).toEqual([['', '— Ninguno —'], ['ibp-1', 'IBP QAS']])
+  })
+
+  it('elegir uno manda el PATCH con el identificador del IBP', async () => {
+    servir()
+    api.patch.mockResolvedValue({ connection: { ...CI, ibpConnectionId: 'ibp-1' } })
+    await montar()
+    await abrirDetalleDe('CPI dev')
+
+    await elegir(contenedor.querySelector('#ibpDeDestino'), 'ibp-1')
+
+    expect(api.patch).toHaveBeenCalledWith('/api/admin/connections', {
+      clientId: 'cli-1', connectionId: 'ci-1', ibpConnectionId: 'ibp-1',
+    })
+  })
+
+  it('«Ninguno» lo quita, con null', async () => {
+    servir({ ...CI, ibpConnectionId: 'ibp-1', ibpConnectionName: 'IBP QAS' })
+    api.patch.mockResolvedValue({ connection: CI })
+    await montar()
+    await abrirDetalleDe('CPI dev')
+
+    expect(contenedor.querySelector('#ibpDeDestino').value).toBe('ibp-1')
+    await elegir(contenedor.querySelector('#ibpDeDestino'), '')
+
+    expect(api.patch).toHaveBeenCalledWith('/api/admin/connections', {
+      clientId: 'cli-1', connectionId: 'ci-1', ibpConnectionId: null,
+    })
+  })
+
+  it('la lista dice a qué IBP carga cada conexión de Cloud Integration', async () => {
+    servir({ ...CI, ibpConnectionId: 'ibp-1', ibpConnectionName: 'IBP QAS' })
+    await montar()
+    const fila = [...contenedor.querySelectorAll('tbody tr')].find((una) => una.textContent.includes('CPI dev'))
+    expect(fila.textContent).toContain('→ IBP QAS')
+  })
+
+  it('si falla el guardado lo dice', async () => {
+    servir()
+    api.patch.mockRejectedValue(new Error('La conexión de destino no es de SAP IBP.'))
+    await montar()
+    await abrirDetalleDe('CPI dev')
+    await elegir(contenedor.querySelector('#ibpDeDestino'), 'ibp-1')
+    expect(contenedor.textContent).toContain('La conexión de destino no es de SAP IBP.')
+  })
+})

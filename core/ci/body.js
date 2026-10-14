@@ -189,7 +189,9 @@ export function resumenDeBody(texto) {
     comando: texto1('BatchCommand'),
     areaDePlanificacion: texto1('PlanningArea'),
     version: texto1('PlanningAreaVersion'),
+    prefijoDeMaestro: texto1('MasterDataPrefix'),
     tipoDeMaestro: texto1('MasterDataType'),
+    nivelDeTiempo: texto1('TargetTimeProfileLevelinSAPIBP'),
     nombreDeLote: texto1('BatchName'),
     variables: variablesDeBody(texto),
   }

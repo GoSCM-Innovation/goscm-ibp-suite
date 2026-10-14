@@ -7,13 +7,22 @@ actualiza al terminar cada sesión, y su orden es el de prioridad acordada.
 
 ## Dónde estamos
 
+- **CI Tools con sugerencias de IBP (2026-10-14)**, directo en `main`. Cada conexión de Cloud Integration tiene un
+  **IBP de destino** (Administración → Conexiones) y, con él, el formulario elige el área, la versión y la tabla de las
+  de IBP, elige campos de la tabla o arma la tabla de una carga de cifras, sugiere valores del filtro y avisa de lo que
+  no cuadra (sin bloquear). Todo editable a mano; sin IBP, igual que antes. **Migración 007 aplicada** y «CI STARBRANDS
+  DEV» vinculada a «STARBRANDS QAS»; leído contra ese tenant real (solo lectura). Detalle y reglas en la sección
+  «Sugerencias de IBP» de [`CI-TOOLS.md`](CI-TOOLS.md). **Falta probarlo en la pantalla con el usuario delante.**
+  Sin hacer: sugerir el nivel de tiempo desde IBP (no se sabe su correspondencia con `PERIODIDn`) y revisar contra IBP
+  dentro de una orquestación.
+
 - **CI Tools, el cuarto módulo (2026-10-14), ya en `main` y en producción** (la rama `feat/ci-tools` se fusionó y se
   borró; **el usuario decidió trabajarlo directo en producción**, por ser un módulo aparte). Integraciones de
   Cloud Integration que cargan datos a IBP: biblioteca con carpetas, formulario y JSON, ejecutar, historial y
   orquestaciones por etapas sobre el mismo motor. Detalle, decisiones del usuario y garantías en
   [`CI-TOOLS.md`](CI-TOOLS.md). **Nada se ha ejecutado contra un tenant de CPI** (su sección «Sin estrenar» es la
   lista de lo que hay que mirar con el usuario delante). **La migración 006 ya está aplicada** (2026-10-14), el
-  módulo `ci` está activo para GoSCM y existe la conexión «CI STARBRANDS DEV» sin credenciales. Probado contra la base,
+  módulo `ci` está activo para GoSCM y existe la conexión «CI STARBRANDS DEV» (las credenciales las escribe el usuario). Probado contra la base,
   Redis y el CPI real con credenciales de mentira (401): ver «Lo que ya se comprobó» en `CI-TOOLS.md`. **Falta la
   primera carga con las credenciales reales.** Pendiente de otro lado: el detalle del error por MPL ID
   (necesita otro acceso a CPI) y la programación (necesita reloj).

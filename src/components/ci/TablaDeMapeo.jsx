@@ -6,22 +6,41 @@
 //
 // Si un body que se pega trae las tres desalineadas, se AVISA y se ofrece alinearlas con un botón: no se
 // arregla solo, porque no se sabe cuál de las tres era la buena.
+//
+// Con `ibp` (lo que IBP dice de la tabla o del área del body) la tabla se puede llenar eligiendo campos de IBP, y
+// cada fila dice qué es su destino en IBP o avisa de que no existe. Sin `ibp` es la tabla de siempre.
 
 import { useState } from 'react'
 import { escribirMapeo, leerMapeo, leerPegado } from '../../../core/ci/mapping.js'
+import { aplicarCamposDeMaestro, camposPreseleccionados, infoDeDestino } from '../../lib/ci-ibp.js'
 import { useFilasLocales } from '../../lib/useFilasLocales.js'
+import VentanaDeSeleccion from '../ui/VentanaDeSeleccion.jsx'
+import ConstructorDeCifra from './ConstructorDeCifra.jsx'
 
 /** Las tres listas del bloque, en un solo texto comparable. */
 const textoDeListas = (bloque) => JSON.stringify([
   bloque.SourceFieldsfromAddon ?? '', bloque.TargetFieldsInSAPIBP ?? '', bloque.FieldMapping ?? '',
 ])
 
-export default function TablaDeMapeo({ bloque, onCambiar, deshabilitado = false }) {
+/** Cómo se enseña lo que IBP dice del campo destino de una fila. */
+function EnIbp({ info }) {
+  if (!info) return null
+  if (info.estado === 'falta') return <span className="ci-ibp-falta" title="IBP no tiene este campo">⚠ No existe en IBP</span>
+  if (info.estado === 'sistema') return <span className="ci-ibp-falta" title="SAP lo rellena solo">⚠ Lo rellena SAP: no se carga</span>
+  if (info.estado === 'carga') return <span className="card-hint">Campo de la carga, no de IBP</span>
+  return <span className="card-hint">{info.etiqueta}</span>
+}
+
+export default function TablaDeMapeo({ bloque, onCambiar, deshabilitado = false, ibp = null }) {
   const externo = textoDeListas(bloque)
   const [filas, ponerFilas] = useFilasLocales(externo, () => leerMapeo(bloque).filas)
   const { coherente, avisos } = leerMapeo(bloque)
   const [pegando, setPegando] = useState(false)
   const [pegado, setPegado] = useState('')
+  const [eligiendo, setEligiendo] = useState(false)
+
+  // Lo que IBP dice de la tabla (dato maestro) o del área (cifras clave); `null` mientras no se leyó.
+  const detalle = ibp && (ibp.campos || ibp.cifras) ? { tipo: ibp.tipo, campos: ibp.campos, cifras: ibp.cifras } : null
 
   /** Cambia las filas y avisa de las tres listas que resultan. */
   function cambiarFilas(nuevas) {
@@ -49,11 +68,38 @@ export default function TablaDeMapeo({ bloque, onCambiar, deshabilitado = false 
           {filas.length !== completas && ` (y ${filas.length - completas} sin completar: no se envían)`}
         </span>
         {!deshabilitado && (
-          <button type="button" className="btn btn-ghost btn-sm" onClick={() => setPegando((v) => !v)}>
-            {pegando ? 'Cancelar' : 'Pegar lista'}
-          </button>
+          <div className="ci-mapeo-acciones">
+            {ibp?.tipo === 'MASTERDATA' && (
+              <button
+                type="button"
+                className="btn btn-sm"
+                onClick={() => setEligiendo(true)}
+                disabled={!ibp.campos}
+                title={ibp.campos ? `Elegir entre los campos de ${ibp.entidad}` : 'Elige primero la tabla de IBP'}
+              >
+                Elegir campos de IBP
+              </button>
+            )}
+            {ibp?.tipo === 'KEYFIGURES' && (
+              <button
+                type="button"
+                className="btn btn-sm"
+                onClick={() => setEligiendo(true)}
+                disabled={!ibp.cifras}
+                title={ibp.cifras ? 'Armar la tabla con una cifra y sus dimensiones' : 'Elige primero el área de IBP'}
+              >
+                Armar desde IBP
+              </button>
+            )}
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setPegando((v) => !v)}>
+              {pegando ? 'Cancelar' : 'Pegar lista'}
+            </button>
+          </div>
         )}
       </div>
+
+      {ibp?.cargando && <span className="card-hint">Leyendo los campos de IBP…</span>}
+      {ibp?.error && <span className="ci-aviso-fila">No se pudieron leer los campos de IBP: {ibp.error}</span>}
 
       {!coherente && (
         <div className="notice notice-error" role="alert">
@@ -88,7 +134,11 @@ export default function TablaDeMapeo({ bloque, onCambiar, deshabilitado = false 
         <div className="table-wrap ci-mapeo-tabla">
           <table className="table">
             <thead>
-              <tr><th>Campo de origen</th><th aria-hidden="true" /><th>Campo en SAP IBP</th><th /></tr>
+              <tr>
+                <th>Campo de origen</th><th aria-hidden="true" /><th>Campo en SAP IBP</th>
+                {detalle && <th>En IBP</th>}
+                <th />
+              </tr>
             </thead>
             <tbody>
               {filas.map((fila, i) => (
@@ -113,6 +163,7 @@ export default function TablaDeMapeo({ bloque, onCambiar, deshabilitado = false 
                       onChange={(evento) => cambiarFila(i, { destino: evento.target.value.trim() })}
                     />
                   </td>
+                  {detalle && <td className="ci-mapeo-ibp"><EnIbp info={infoDeDestino(fila.destino, detalle)} /></td>}
                   <td style={{ textAlign: 'right' }}>
                     {!deshabilitado && (
                       <button
@@ -141,6 +192,30 @@ export default function TablaDeMapeo({ bloque, onCambiar, deshabilitado = false 
         >
           + Campo
         </button>
+      )}
+
+      {eligiendo && ibp?.tipo === 'MASTERDATA' && ibp.campos && (
+        <VentanaDeSeleccion
+          titulo={`Campos de ${ibp.entidad}`}
+          opciones={ibp.campos.map((uno) => uno.campo)}
+          etiquetas={Object.fromEntries(ibp.campos.map((uno) => [uno.campo, uno.etiqueta]))}
+          seleccion={camposPreseleccionados(filas, ibp.campos)}
+          sufijoDeConteo="campo(s) seleccionado(s)"
+          insignia={(campo) => (ibp.campos.find((uno) => uno.campo === campo)?.sistema ? <span className="tag tag-muted">sistema</span> : null)}
+          aviso="Los marcados «sistema» los rellena SAP y no se cargan."
+          onGuardar={(elegidos) => { cambiarFilas(aplicarCamposDeMaestro(filas, ibp.campos, elegidos)); setEligiendo(false) }}
+          onCerrar={() => setEligiendo(false)}
+        />
+      )}
+
+      {eligiendo && ibp?.tipo === 'KEYFIGURES' && ibp.cifras && (
+        <ConstructorDeCifra
+          cifras={ibp.cifras}
+          filas={filas}
+          area={ibp.area}
+          onAplicar={(nuevas) => { cambiarFilas(nuevas); setEligiendo(false) }}
+          onCerrar={() => setEligiendo(false)}
+        />
       )}
     </div>
   )

@@ -12,6 +12,7 @@ import {
   renameConnection,
   getConnection,
   listConnections,
+  setIbpConnection,
   upsertAgreement,
 } from '../../core/connections/connections.js'
 
@@ -51,8 +52,13 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'PATCH') {
-      const { connectionId, name } = req.body ?? {}
+      const { connectionId, name, ibpConnectionId } = req.body ?? {}
       if (!connectionId) return res.status(400).json({ error: 'Falta la conexión.' })
+      // A qué SAP IBP carga una conexión de Cloud Integration. Solo se manda `ibpConnectionId` (con `null` para
+      // quitarlo), así que no se confunde con renombrar.
+      if (ibpConnectionId !== undefined) {
+        return res.status(200).json({ connection: await setIbpConnection(clientId, connectionId, ibpConnectionId) })
+      }
       // Solo el nombre: cambiar la dirección la convertiría en otro tenant conservando sus
       // credenciales. Ver `renameConnection`.
       return res.status(200).json({ connection: await renameConnection(clientId, connectionId, name) })

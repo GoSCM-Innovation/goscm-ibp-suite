@@ -18,5 +18,6 @@ export {
   getCredentials,
   listConnections,
   renameConnection,
+  setIbpConnection,
   upsertAgreement,
 } from './connections.js'

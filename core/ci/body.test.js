@@ -209,6 +209,14 @@ describe('resumenDeBody', () => {
     })
   })
 
+  it('saca también el prefijo, el tipo de maestro y el nivel de tiempo, para sugerir y revisar contra IBP', () => {
+    const maestro = { PRODUCT: { TypeOfData: 'MASTERDATA', MasterDataPrefix: 'SB', MasterDataType: 'PRODUCT' } }
+    expect(resumenDeBody(texto(maestro))).toMatchObject({ prefijoDeMaestro: 'SB', tipoDeMaestro: 'PRODUCT', nivelDeTiempo: '' })
+
+    const cifras = { KEYFIGURE: { TypeOfData: 'KEYFIGURES', TargetTimeProfileLevelinSAPIBP: '0000000002' } }
+    expect(resumenDeBody(texto(cifras))).toMatchObject({ nivelDeTiempo: '0000000002', prefijoDeMaestro: '', tipoDeMaestro: '' })
+  })
+
   it('un body roto dice por qué', () => {
     expect(resumenDeBody('{ no')).toMatchObject({ valido: false })
   })

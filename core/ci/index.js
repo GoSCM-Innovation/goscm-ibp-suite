@@ -56,4 +56,6 @@ export {
 
 export { CANDADO_SEGUNDOS, executeIntegration } from './execute.js'
 
+export { ACUERDOS_IBP, leerCatalogo } from './ibp-catalogo.js'
+
 export { defaultsDeCi, infoDeOrquestacion, pasosDeIntegracion, validarInicio } from './orquestacion.js'

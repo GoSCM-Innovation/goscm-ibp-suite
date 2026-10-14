@@ -10,10 +10,16 @@
 // las muestra en el mismo orden en que se envían.
 //
 // «Ver como texto» abre la cadena entera para editarla a mano; es la salida para todo lo que las filas no cubren.
+//
+// Con `ibp` (una función para saber si un campo es de IBP y otra para leer sus valores) cada fila «campo = valores»
+// ofrece «Valores de IBP»: se eligen de los que IBP tiene para ese campo. Escribirlos a mano sigue siendo posible, y
+// un campo que no es de IBP (los del filtro suelen ser del sistema de origen) no ofrece nada.
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { escribirFiltro, leerFiltro, motivoDeValorDeFiltroInvalido } from '../../../core/ci/filter.js'
+import { valoresParaFiltro } from '../../lib/ci-ibp.js'
 import { useFilasLocales } from '../../lib/useFilasLocales.js'
+import VentanaDeSeleccion from '../ui/VentanaDeSeleccion.jsx'
 
 /** Parte lo que se pega («A B, C\nD») en valores sueltos. */
 const valoresDe = (texto) => String(texto).split(/[\s,]+/).map((uno) => uno.trim()).filter(Boolean)
@@ -71,9 +77,40 @@ function Fichas({ valores, onCambiar, deshabilitado }) {
   )
 }
 
-export default function ConstructorDeFiltro({ valor, onCambiar, deshabilitado = false }) {
+/** Lo que se avisa en la ventana de valores de IBP: lo que dijo el servidor, lo descartado y si la lista está recortada. */
+function avisoDeValores({ motivo, truncado }, descartados) {
+  return [
+    motivo,
+    descartados > 0 ? `${descartados} ${descartados === 1 ? 'valor no se ofrece' : 'valores no se ofrecen'}: llevan comillas simples o comas, que cortarían el filtro.` : '',
+    truncado ? 'La lista está recortada: escribe a mano los que falten.' : '',
+  ].filter(Boolean).join(' ')
+}
+
+export default function ConstructorDeFiltro({ valor, onCambiar, deshabilitado = false, ibp = null }) {
   const [filas, ponerFilas] = useFilasLocales(valor, leerFiltro)
   const [comoTexto, setComoTexto] = useState(false)
+  // La ventana de valores de IBP: qué fila y qué se leyó. `peticion` descarta una respuesta que llega tarde.
+  const [ventana, setVentana] = useState(null)
+  const peticion = useRef(0)
+
+  async function abrirValores(indice, campo) {
+    const esta = peticion.current + 1
+    peticion.current = esta
+    setVentana({ fila: indice, campo, cargando: true, valores: [], aviso: '', error: '' })
+    try {
+      const leido = await ibp.leer(campo)
+      if (peticion.current !== esta) return
+      const { usables, descartados } = valoresParaFiltro(leido.valores)
+      setVentana((actual) => actual && { ...actual, cargando: false, valores: usables, aviso: avisoDeValores(leido, descartados) })
+    } catch (fallo) {
+      if (peticion.current === esta) setVentana((actual) => actual && { ...actual, cargando: false, error: fallo.message })
+    }
+  }
+
+  function cerrarValores() {
+    peticion.current += 1
+    setVentana(null)
+  }
 
   /** Cambia las filas y avisa del texto que resulta. */
   function cambiarFilas(nuevas) {
@@ -155,6 +192,17 @@ export default function ConstructorDeFiltro({ valor, onCambiar, deshabilitado = 
                   ) : (
                     <Fichas valores={fila.valores} deshabilitado={deshabilitado} onCambiar={(valores) => cambiarFila(i, { valores })} />
                   )}
+                  {!deshabilitado && ibp && fila.tipo === 'igual' && fila.campo !== '' && ibp.puede(fila.campo) !== false && (
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm"
+                      onClick={() => abrirValores(i, fila.campo)}
+                      aria-label={`Valores de IBP de ${fila.campo}`}
+                      title="Elegir entre los valores que IBP tiene para este campo"
+                    >
+                      Valores de IBP
+                    </button>
+                  )}
                 </>
               )}
               {!deshabilitado && (
@@ -179,6 +227,22 @@ export default function ConstructorDeFiltro({ valor, onCambiar, deshabilitado = 
       )}
 
       {valor && !comoTexto && <div className="ci-filtro-vista mono" title="Lo que se envía">{valor}</div>}
+
+      {ventana && (
+        <VentanaDeSeleccion
+          titulo={`Valores de ${ventana.campo}`}
+          opciones={ventana.valores}
+          seleccion={filas[ventana.fila]?.valores ?? []}
+          sufijoDeConteo="valor(es) seleccionado(s)"
+          cargando={ventana.cargando}
+          mensajeDeCarga="Leyendo los valores de IBP… puede tardar unos segundos."
+          error={ventana.error}
+          aviso={ventana.aviso}
+          textoVacio="IBP no tiene valores para este campo."
+          onGuardar={(elegidos) => { cambiarFila(ventana.fila, { valores: elegidos }); cerrarValores() }}
+          onCerrar={cerrarValores}
+        />
+      )}
     </div>
   )
 }

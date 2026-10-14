@@ -53,6 +53,10 @@ const toConnection = (row) => row && ({
   organization: row.organization,
   isProduction: row.is_production,
   createdAt: row.created_at,
+  // A qué IBP carga una conexión de Cloud Integration (ver la migración 007). Solo viaja cuando la consulta lo
+  // pidió, y NUNCA lleva nada del IBP más que su identificador y su nombre: sus credenciales no salen de aquí.
+  ...(row.ibp_connection_id === undefined ? {} : { ibpConnectionId: row.ibp_connection_id ?? null }),
+  ...(row.ibp_connection_name === undefined ? {} : { ibpConnectionName: row.ibp_connection_name ?? null }),
   ...(row.agreement_count === undefined ? {} : { agreementCount: row.agreement_count }),
   // QUÉ acuerdos tiene, no solo cuántos. Es lo que permite esconder una pestaña que no puede
   // funcionar: en v8, sin `SAP_COM_0068` no existía «Resource Stats». Una pestaña que al abrirse
@@ -101,6 +105,9 @@ export async function listConnections(clientId, { kind = null } = {}) {
   const rows = await queryScoped(
     clientId,
     `select c.id, c.kind, c.name, c.base_url, c.organization, c.is_production, c.created_at,
+            c.ibp_connection_id,
+            (select i.name from connections i where i.id = c.ibp_connection_id and i.client_id = c.client_id)
+              as ibp_connection_name,
             count(a.id)::int as agreement_count,
             coalesce(array_agg(a.agreement) filter (where a.agreement is not null), '{}') as agreements
      from connections c
@@ -117,8 +124,10 @@ export async function listConnections(clientId, { kind = null } = {}) {
 export async function getConnection(clientId, connectionId) {
   const connection = await queryOneScoped(
     clientId,
-    `select id, kind, name, base_url, organization, is_production, created_at
-     from connections where id = $1 and client_id = $2`,
+    `select c.id, c.kind, c.name, c.base_url, c.organization, c.is_production, c.created_at, c.ibp_connection_id,
+            (select i.name from connections i where i.id = c.ibp_connection_id and i.client_id = c.client_id)
+              as ibp_connection_name
+     from connections c where c.id = $1 and c.client_id = $2`,
     [connectionId, clientId],
   )
   if (!connection) return null
@@ -187,6 +196,42 @@ export async function renameConnection(clientId, connectionId, name) {
   )
   if (rows.length === 0) throw new Error('Esa conexión no existe.')
   return toConnection(rows[0])
+}
+
+const FORMA_DE_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/**
+ * Dice a qué SAP IBP carga una conexión de Cloud Integration (o lo quita con `null`).
+ *
+ * Es lo que permite a CI Tools sugerir áreas, versiones, tablas, campos y cifras clave al armar un body: sin
+ * este vínculo no sabe a qué IBP preguntarle. Las dos conexiones tienen que ser de ESTE cliente (se buscan con el
+ * filtro de cliente, así que una ajena «no existe») y la de destino tiene que ser de IBP.
+ *
+ * Cambiarlo no mueve credenciales ni abre ningún camino nuevo: las de IBP se descifran en el servidor, para leer
+ * del tenant de IBP que ya estaba dado de alta, y solo el catálogo sale hacia el navegador.
+ */
+export async function setIbpConnection(clientId, connectionId, ibpConnectionId) {
+  const origen = await getConnectionTarget(clientId, connectionId)
+  if (origen.kind !== 'ci') {
+    throw new Error('Solo una conexión de Cloud Integration lleva un IBP de destino.')
+  }
+
+  const destinoId = ibpConnectionId || null
+  if (destinoId !== null) {
+    if (!FORMA_DE_UUID.test(String(destinoId))) throw new Error('Esa conexión de IBP no existe.')
+    const destino = await getConnectionTarget(clientId, destinoId)
+    if (destino.kind !== 'ibp') throw new Error(`«${destino.name}» no es una conexión de SAP IBP.`)
+  }
+
+  const filas = await queryScoped(
+    clientId,
+    `update connections set ibp_connection_id = $3
+      where id = $1 and client_id = $2
+      returning id, kind, name, base_url, organization, is_production, created_at, ibp_connection_id`,
+    [connectionId, clientId, destinoId],
+  )
+  if (filas.length === 0) throw new Error('Esa conexión no existe.')
+  return toConnection(filas[0])
 }
 
 export async function deleteConnection(clientId, connectionId) {
@@ -295,7 +340,7 @@ export async function getAnyCredentials(clientId, connectionId, agreements) {
 export async function getConnectionTarget(clientId, connectionId) {
   const row = await queryOneScoped(
     clientId,
-    `select id, kind, name, base_url, organization, is_production
+    `select id, kind, name, base_url, organization, is_production, ibp_connection_id
      from connections where id = $1 and client_id = $2`,
     [connectionId, clientId],
   )

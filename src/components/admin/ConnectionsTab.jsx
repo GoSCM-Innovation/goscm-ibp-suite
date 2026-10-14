@@ -7,6 +7,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../../lib/api.js'
 import { ACUERDOS_IBP, acuerdoIbp } from '../../lib/requisitos-tecnicos.js'
+import SelectorDeLista from '../ui/SelectorDeLista.jsx'
 
 // Valor del desplegable para un acuerdo que no está en la lista: SAP publica acuerdos nuevos y
 // `core/connections` no restringe el código, así que se puede escribir.
@@ -104,6 +105,15 @@ export default function ConnectionsTab({ clientId }) {
     })
   }
 
+  // A qué SAP IBP carga una conexión de Cloud Integration. CI Tools lo lee (solo lectura) para sugerir áreas,
+  // versiones, tablas y campos. Vacío lo quita.
+  const guardarIbpDeDestino = (ibpConnectionId) => run(async () => {
+    await api.patch('/api/admin/connections', { clientId, connectionId: detail.id, ibpConnectionId: ibpConnectionId || null })
+    const data = await api.get('/api/admin/connections', { ...(params ?? {}), id: detail.id })
+    setDetail(data.connection)
+    recargar()
+  })
+
   const removeConnection = (connection) => run(async () => {
     await api.del('/api/admin/connections', { clientId, connectionId: connection.id })
     setDetail(null)
@@ -199,6 +209,9 @@ export default function ConnectionsTab({ clientId }) {
                     )}
                     {connection.kind === 'cids' && (
                       <span className="tag tag-muted" style={{ marginLeft: 8 }}>Pruebas + Productivo</span>
+                    )}
+                    {connection.kind === 'ci' && connection.ibpConnectionName && (
+                      <span className="tag tag-muted" style={{ marginLeft: 8 }} title="IBP de destino">→ {connection.ibpConnectionName}</span>
                     )}
                   </td>
                   <td><span className="tag">{NOMBRE_DEL_TIPO[connection.kind] ?? connection.kind}</span></td>
@@ -352,6 +365,27 @@ export default function ConnectionsTab({ clientId }) {
               </p>
             )}
           </form>
+
+          {detail.kind === 'ci' && (
+            <div className="field" style={{ marginTop: 18, maxWidth: 460 }}>
+              <label htmlFor="ibpDeDestino">IBP de destino</label>
+              <SelectorDeLista
+                id="ibpDeDestino"
+                value={detail.ibpConnectionId ?? ''}
+                disabled={busy}
+                titulo="IBP de destino"
+                options={[
+                  { value: '', label: '— Ninguno —' },
+                  ...connections.filter((una) => una.kind === 'ibp').map((una) => ({ value: una.id, label: una.name })),
+                ]}
+                onChange={guardarIbpDeDestino}
+              />
+              <span className="card-hint">
+                A qué SAP IBP carga esta conexión. CI Tools lo lee, solo lectura, para sugerir áreas, versiones, tablas y
+                campos al armar un body. Sin elegir, el formulario funciona igual, sin sugerencias.
+              </span>
+            </div>
+          )}
         </div>
       )}
 

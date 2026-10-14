@@ -22,6 +22,7 @@ import { hostDe } from '../../lib/nombre-de-conexion.js'
 import BotonCopiar from '../ui/BotonCopiar.jsx'
 import EstadoDeCarga from '../ui/EstadoDeCarga.jsx'
 import Modal from '../ui/Modal.jsx'
+import RevisionIbp from './RevisionIbp.jsx'
 
 /** El resultado de una ejecución, como se lee. */
 export function ResultadoDeEjecucion({ run }) {
@@ -57,6 +58,7 @@ export default function DialogoDeEjecucion({
   integraciones,
   variables = [],
   iniciales = {},
+  avisos = [],
   esOrquestacion = false,
   onEjecutar,
   onCerrar,
@@ -115,6 +117,7 @@ export default function DialogoDeEjecucion({
 
       {fase !== 'listo' && (
         <>
+          <RevisionIbp avisos={avisos} />
           <div className="ci-seccion">
             <h3 className="ci-seccion-titulo">
               {esOrquestacion ? `Se ejecutarán, por etapas (${integraciones.length})` : 'Se ejecutará'}

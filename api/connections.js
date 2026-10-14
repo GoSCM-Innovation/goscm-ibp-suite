@@ -48,8 +48,19 @@ export default async function handler(req, res) {
       // salir de aquí: viven cifradas y solo el servidor las descifra.
       // La organización (`orgName` de CI-DS) acompaña a la dirección por el mismo motivo: la cabecera
       // de CI-DS Tools dice «dirección · organización · Producción|Sandbox», como la de v9.
-      connections: connections.map(({ id, name, baseUrl, organization, isProduction, agreements }) => (
-        { id, name, baseUrl, organization: organization ?? null, isProduction, agreements: agreements ?? [] }
+      // `ibpConnectionId` y su nombre: a qué IBP carga una conexión de Cloud Integration (CI Tools lo usa para sugerir
+      // áreas, versiones y campos). Solo el identificador y el nombre: de ese IBP no sale ni su dirección.
+      connections: connections.map(({ id, name, baseUrl, organization, isProduction, agreements, ibpConnectionId, ibpConnectionName }) => (
+        {
+          id,
+          name,
+          baseUrl,
+          organization: organization ?? null,
+          isProduction,
+          agreements: agreements ?? [],
+          ibpConnectionId: ibpConnectionId ?? null,
+          ibpConnectionName: ibpConnectionName ?? null,
+        }
       )),
     })
   } catch (error) {

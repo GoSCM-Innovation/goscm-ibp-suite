@@ -23,6 +23,54 @@ su usuario y su biblioteca. Se dan de alta en Administración → Conexiones, ti
 dirección completa del endpoint del iFlow (`https://…it-cpi034-rt.cfapps.us10-002.hana.ondemand.com/http/IBP2`)
 y, aparte, el usuario y la contraseña (Basic Auth). La contraseña queda cifrada y no vuelve a salir.
 
+## Sugerencias de IBP (2026-10-14)
+
+Armar un body a mano pide cosas que la Suite ya sabe leer de IBP: el área, la versión, la tabla de dato maestro, sus
+campos, las cifras clave y los valores de un filtro. CI Tools las lee del **IBP de destino** de la conexión y las
+ofrece como ayuda. Pedido del usuario: «reutiliza las conexiones a IBP para enriquecer y automatizar la creación
+del JSON».
+
+**Cómo se enlaza.** Cada conexión de Cloud Integration tiene un **IBP de destino** (Administración → Conexiones →
+abrir la conexión de CI → «IBP de destino»): una conexión de IBP del mismo cliente. Es de la conexión y no de cada
+integración, porque un ambiente de CPI carga a un solo IBP. Se guarda en `connections.ibp_connection_id`
+(migración 007, aplicada el 2026-10-14) y `core/connections` comprueba que sea del mismo cliente y de tipo `ibp`.
+Con el vínculo puesto, las credenciales de ese IBP las descifra el servidor y no salen: al navegador solo llega el
+catálogo. **«CI STARBRANDS DEV» está vinculada a «STARBRANDS QAS».** Un cliente con solo el módulo `ci` puede leer
+el catálogo de SU IBP vinculado y nada más (solo lectura, `requireModule('ci')`).
+
+**Qué ofrece el formulario** (todo sigue siendo editable a mano; sin IBP el formulario es el de siempre):
+
+| Dónde | Qué hace |
+|---|---|
+| Franja sobre el editor | Dice contra qué IBP se sugiere, con «↺ Actualizar»; sin vínculo, o con IBP caído, lo dice y no estorba. |
+| Planning Area y Versión | Se eligen de las de IBP (la base se ve «Versión base (vacío)» y vale vacío, que es lo que lleva el body). «A mano» pasa a texto; un valor que el body ya tenía y IBP no conoce se conserva tal cual con un aviso. |
+| Tabla de IBP (dato maestro) | Ofrece las tablas **que se pueden cargar** en esa versión del área; al elegir una rellena `MasterDataPrefix` y `MasterDataType`. |
+| Campos y mapeo | Dato maestro: «Elegir campos de IBP» (marca todos menos los de sistema si la tabla está vacía; al aplicar conserva el origen de lo que ya estaba y lo propio del origen). Cifras clave: «Armar desde IBP» (cifra + dimensiones; genera dimensiones, `KEYFIGUREDATE:KEYFIGUREDATE` y `KFVALUE:<cifra>`). Una columna «En IBP» da la etiqueta de cada destino y marca lo que no existe. |
+| Filtro | «Valores de IBP» en cada fila `campo = valores` cuyo campo es de IBP; no se ofrecen los valores con comillas simples o comas (cortarían el filtro). |
+| Nivel del perfil de tiempo | Sugiere los valores que ya usan otras integraciones de la conexión: **no se sabe a qué `PERIODIDn` corresponde cada código**, así que no se calcula. |
+| Revisión contra IBP | Avisos (área, versión, tabla o campo que no existen, campos de sistema). **No bloquean guardar ni ejecutar**; el diálogo de ejecución los repite. Las variables `{{…}}` no se comparan. |
+
+**Reglas que se codificaron**
+
+- Solo lectura y por el mismo camino que IBP Tools (`core/ibp`): no hay una segunda implementación.
+- Lo leído se guarda 30 minutos en Redis **por cliente y por IBP** (`tenantKey(cliente, 'ci-ibp', …)`); si Redis falla se
+  lee igual. **Los valores de un campo no se guardan**: son datos del cliente. En el navegador, nada se guarda: vive en
+  memoria mientras la pantalla está abierta.
+- Los campos de una tabla y las cifras de un área se leen **solo si IBP tiene esa tabla o esa área**. Si no, escribir el
+  tipo de maestro a medias (`S`, `SB`, `SBP`…) bajaría el `$metadata` de dato maestro (varios megas) en cada tecla.
+- Los nombres que se pegan en una dirección (tabla, área, campo) pasan por `esNombreSeguro` antes de llegar a IBP.
+- Cada servicio se habilita por separado en el acuerdo: si uno no contesta, se arma lo posible con el otro y el motivo
+  sale en los avisos de la franja.
+
+**Comprobado contra STARBRANDS QAS (2026-10-14, solo lectura)**: 2 áreas (`STARBRANDS`, prefijo `SB`, 5 versiones, 46
+tablas cargables; `UNIPA`, prefijo `UPA`); `SBPRODUCT` con 67 campos (65 con etiqueta, 4 de sistema); el área
+`STARBRANDS` con 228 dimensiones, 611 cifras y 6 niveles de periodo; `MATTYPEID` con 9 valores en 0,7 s. Dos cosas que
+solo se vieron con el tenant real: un campo que la tabla no tiene contesta **404** («Resource not found for the
+segment»), no 400, y los valores «por área» (para filtros de cifras) tardaron unos 19 s en el área grande.
+
+**Sin hacer**: sugerir el nivel de tiempo desde IBP (falta saber la correspondencia con `PERIODIDn`), y revisar el body
+de una integración **dentro de una orquestación** (el aviso aparece al editarla y al ejecutarla suelta).
+
 ## Decisiones del usuario
 
 Tomadas durante el diseño (2026-10-13 y 2026-10-14). Si alguna se quiere revertir, es del usuario:
@@ -45,14 +93,18 @@ Tomadas durante el diseño (2026-10-13 y 2026-10-14). Si alguna se quiere revert
 
 ```
 core/ci/            body.js  filter.js  mapping.js  campos.js      puras: las comparte la pantalla
+                    ibp-nombres.js                                 puras: prefijo y tipo de tabla, versión base, campos de sistema
                     call.js  integrations.js  history.js           la llamada a CPI, la biblioteca, el historial
                     execute.js  orquestacion.js                    ejecutar una integración / lo que pide una orquestación
+                    ibp-catalogo.js  ibp-campos.js                 lo que se lee del IBP de destino (solo lectura) y sus campos
 core/orchestrations adaptador `ci` (adapters.js) y camino «síncrono» del motor (runner.js)
-handlers/ci/        integrations  run  runs  orchestration-info   → api/ci/[...ruta].js (la octava función de Vercel)
+handlers/ci/        integrations  run  runs  orchestration-info  ibp   → api/ci/[...ruta].js (la octava función de Vercel)
 src/components/ci/  CiTools  Integraciones  EditorDeIntegracion  FormularioDeBloque  ConstructorDeFiltro
                     TablaDeMapeo  DialogoDeEjecucion  OrquestacionesCi  EditorDeOrquestacion  Historial
-src/lib/            ci.js  ci-etapas.js  useFilasLocales.js
+                    BarraIbp  CampoConIbp  ConstructorDeCifra  RevisionIbp  useCatalogoIbp  useIbpDelBody
+src/lib/            ci.js  ci-ibp.js  ci-etapas.js  useFilasLocales.js
 core/persistence/migrations/006_ci_tools.sql                      módulo y tipo de conexión nuevos, `ci_integrations`, `ci_runs`
+core/persistence/migrations/007_ci_ibp_destino.sql                `connections.ibp_connection_id`: el IBP de destino de una conexión de CI
 ```
 
 Las orquestaciones reutilizan el **mismo motor** que CI-DS e IBP (`/api/orchestrations`, `/api/orchestration-run`):

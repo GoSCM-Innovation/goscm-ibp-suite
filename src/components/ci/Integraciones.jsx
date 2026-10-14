@@ -26,6 +26,7 @@ import BotonActualizar from '../ui/BotonActualizar.jsx'
 import Modal from '../ui/Modal.jsx'
 import DialogoDeEjecucion from './DialogoDeEjecucion.jsx'
 import EditorDeIntegracion from './EditorDeIntegracion.jsx'
+import { useCatalogoIbp } from './useCatalogoIbp.js'
 
 const PREGUNTA_DESCARTAR = 'Hay cambios sin guardar. ¿Descartarlos?'
 
@@ -103,6 +104,10 @@ export default function Integraciones({ connection }) {
   const [nueva, setNueva] = useState(null)
   const [aEjecutar, setAEjecutar] = useState(null)
 
+  // Lo que IBP dice de su sistema (áreas, versiones, tablas), leído una vez por conexión y compartido por todas las
+  // integraciones que se abran, para no pedirlo al cambiar de una a otra.
+  const catalogo = useCatalogoIbp(connection)
+
   // Cada vez que cambia `version` se vuelve a leer la lista. El efecto solo lanza la petición: el estado se toca
   // al volver la respuesta, que es lo que pide la regla de efectos de React.
   const [version, setVersion] = useState(0)
@@ -124,6 +129,11 @@ export default function Integraciones({ connection }) {
   const integraciones = useMemo(() => lista ?? [], [lista])
   const arbol = useMemo(() => arbolDeCarpetas(integraciones, filtro), [integraciones, filtro])
   const carpetas = useMemo(() => carpetasExistentes(integraciones), [integraciones])
+  // Los niveles de tiempo que ya usan las integraciones de esta conexión: se sugieren al escribir uno nuevo.
+  const nivelesDeTiempo = useMemo(
+    () => [...new Set(integraciones.map((una) => una.resumen?.nivelDeTiempo).filter(Boolean))].sort(),
+    [integraciones],
+  )
 
   const confirmarDescarte = () => !sinGuardar || window.confirm(PREGUNTA_DESCARTAR)
 
@@ -237,7 +247,7 @@ export default function Integraciones({ connection }) {
   }
 
   /** Prepara el diálogo: lee los valores de la última vez y dice qué se va a ejecutar. */
-  async function pedirEjecucion() {
+  async function pedirEjecucion(avisosIbp = []) {
     let iniciales = {}
     try {
       iniciales = await ultimasVariablesDeIntegracion(abierta.id)
@@ -246,6 +256,7 @@ export default function Integraciones({ connection }) {
     }
     const resumen = resumenDeBody(abierta.body)
     setAEjecutar({
+      avisos: avisosIbp,
       iniciales,
       variables: resumen.valido ? resumen.variables : [],
       integraciones: [{ nombre: abierta.name, comando: resumen.valido ? resumen.comando : '' }],
@@ -311,6 +322,8 @@ export default function Integraciones({ connection }) {
             key={abierta.id}
             integracion={abierta}
             carpetas={carpetas}
+            catalogo={catalogo}
+            nivelesDeTiempo={nivelesDeTiempo}
             guardando={guardando}
             error={errorAlGuardar}
             onGuardar={guardar}
@@ -345,6 +358,7 @@ export default function Integraciones({ connection }) {
           integraciones={aEjecutar.integraciones}
           variables={aEjecutar.variables}
           iniciales={aEjecutar.iniciales}
+          avisos={aEjecutar.avisos}
           onEjecutar={(variables) => ejecutarIntegracion({ connectionId: connection.id, integrationId: abierta.id, variables })}
           onCerrar={() => setAEjecutar(null)}
         />

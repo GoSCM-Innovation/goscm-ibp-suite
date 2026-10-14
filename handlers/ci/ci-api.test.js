@@ -7,6 +7,7 @@ vi.mock('../../core/auth/guards.js', () => ({ requireModule: vi.fn() }))
 vi.mock('../../core/connections/index.js', () => ({ getConnectionTarget: vi.fn() }))
 vi.mock('../../core/orchestrations/orchestrations.js', () => ({ getOrchestration: vi.fn() }))
 vi.mock('../../core/ci/index.js', () => ({
+  ACUERDOS_IBP: ['SAP_COM_0720', 'SAP_COM_0326'],
   createIntegration: vi.fn(),
   deleteIntegration: vi.fn(),
   duplicateIntegration: vi.fn(),
@@ -14,6 +15,7 @@ vi.mock('../../core/ci/index.js', () => ({
   executeIntegration: vi.fn(),
   getIntegration: vi.fn(),
   infoDeOrquestacion: vi.fn(),
+  leerCatalogo: vi.fn(),
   listIntegrations: vi.fn(),
   listarEjecuciones: vi.fn(),
   renameFolder: vi.fn(),
@@ -52,6 +54,7 @@ describe('el módulo se exige en el servidor', () => {
     ['run', { method: 'POST', body: { connectionId: 'x', integrationId: 'y' } }],
     ['runs', { method: 'GET', query: { connectionId: 'x' } }],
     ['orchestration-info', { method: 'GET', query: { id: 'x' } }],
+    ['ibp', { method: 'GET', query: { connectionId: 'x', accion: 'resumen' } }],
   ])('%s sin el módulo contratado no hace nada', async (nombre, req) => {
     requireModule.mockResolvedValue(null)
     const res = respuesta()
@@ -192,6 +195,68 @@ describe('/api/ci/integrations', () => {
     await RUTAS.integrations({ method: 'POST', body: { connectionId: 'c', name: 'N', body: '{}' } }, res)
     expect(res.codigo).toBe(400)
     expect(res.cuerpo.error).toMatch(/2 bloques/)
+  })
+})
+
+describe('GET /api/ci/ibp', () => {
+  const pedir = async (query, metodo = 'GET') => {
+    const res = respuesta()
+    await RUTAS.ibp({ method: metodo, query }, res)
+    return res
+  }
+
+  it('lee el catálogo con el cliente de la SESIÓN y lo que viene en la dirección', async () => {
+    ci.leerCatalogo.mockResolvedValue({ ibp: { id: 'i', nombre: 'IBP QAS' }, areas: [] })
+    const res = await pedir({ connectionId: 'conn-1', accion: 'campos-maestro', entidad: 'SBPRODUCT', clientId: 'otro' })
+
+    expect(ci.leerCatalogo).toHaveBeenCalledWith({
+      clientId: 'c-1', connectionId: 'conn-1', accion: 'campos-maestro',
+      area: undefined, entidad: 'SBPRODUCT', campo: undefined, actualizar: false,
+    })
+    expect(res.codigo).toBe(200)
+    expect(res.cuerpo.ibp.nombre).toBe('IBP QAS')
+  })
+
+  it.each([['1', true], ['true', true], ['0', false], [undefined, false]])('actualizar=%j es %j', async (valor, esperado) => {
+    ci.leerCatalogo.mockResolvedValue({})
+    await pedir({ connectionId: 'c', accion: 'resumen', actualizar: valor })
+    expect(ci.leerCatalogo.mock.calls[0][0].actualizar).toBe(esperado)
+  })
+
+  it('exige la conexión y qué leer', async () => {
+    expect((await pedir({ accion: 'resumen' })).codigo).toBe(400)
+    expect((await pedir({ connectionId: 'c' })).codigo).toBe(400)
+    expect(ci.leerCatalogo).not.toHaveBeenCalled()
+  })
+
+  it('solo acepta GET', async () => {
+    expect((await pedir({ connectionId: 'c', accion: 'resumen' }, 'POST')).codigo).toBe(405)
+    expect(ci.leerCatalogo).not.toHaveBeenCalled()
+  })
+
+  // Una conexión recién creada no tiene IBP de destino: es un estado esperado, no un fallo.
+  it('sin IBP de destino es 409 con el código, y sin llenar el registro de errores', async () => {
+    ci.leerCatalogo.mockRejectedValue(Object.assign(new Error('«CPI» no tiene un IBP de destino.'), { statusCode: 409, codigo: 'sin-vinculo' }))
+    const res = await pedir({ connectionId: 'c', accion: 'resumen' })
+
+    expect(res.codigo).toBe(409)
+    expect(res.cuerpo).toEqual({ error: '«CPI» no tiene un IBP de destino.', codigo: 'sin-vinculo' })
+    expect(console.error).not.toHaveBeenCalled()
+  })
+
+  it('un 403 de SAP dice qué acuerdo revisar', async () => {
+    ci.leerCatalogo.mockRejectedValue(Object.assign(new Error('SAP devolvió 403'), { status: 403 }))
+    const res = await pedir({ connectionId: 'c', accion: 'resumen' })
+
+    expect(res.codigo).toBe(400)
+    expect(res.cuerpo.error).toMatch(/SAP devolvió 403.*SAP_COM_0720 o SAP_COM_0326/)
+  })
+
+  it('cualquier otro fallo es 400 con el mensaje', async () => {
+    ci.leerCatalogo.mockRejectedValue(new Error('El nombre de la tabla no es válido.'))
+    const res = await pedir({ connectionId: 'c', accion: 'campos-maestro', entidad: 'A/B' })
+    expect(res.codigo).toBe(400)
+    expect(res.cuerpo).toEqual({ error: 'El nombre de la tabla no es válido.' })
   })
 })
 
