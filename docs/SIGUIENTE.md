@@ -20,11 +20,12 @@ actualiza al terminar cada sesión, y su orden es el de prioridad acordada.
   borró; **el usuario decidió trabajarlo directo en producción**, por ser un módulo aparte). Integraciones de
   Cloud Integration que cargan datos a IBP: biblioteca con carpetas, formulario y JSON, ejecutar, historial y
   orquestaciones por etapas sobre el mismo motor. Detalle, decisiones del usuario y garantías en
-  [`CI-TOOLS.md`](CI-TOOLS.md). **Nada se ha ejecutado contra un tenant de CPI** (su sección «Sin estrenar» es la
-  lista de lo que hay que mirar con el usuario delante). **La migración 006 ya está aplicada** (2026-10-14), el
+  [`CI-TOOLS.md`](CI-TOOLS.md). Ya se ejecutó una carga real contra CPI (ver más abajo); su sección «Sin estrenar» es la
+  lista de lo que falta mirar con el usuario delante. **La migración 006 ya está aplicada** (2026-10-14), el
   módulo `ci` está activo para GoSCM y existe la conexión «CI STARBRANDS DEV» (las credenciales las escribe el usuario). Probado contra la base,
-  Redis y el CPI real con credenciales de mentira (401): ver «Lo que ya se comprobó» en `CI-TOOLS.md`. **Falta la
-  primera carga con las credenciales reales.** Pendiente de otro lado: el detalle del error por MPL ID
+  Redis y el CPI real con credenciales de mentira (401): ver «Lo que ya se comprobó» en `CI-TOOLS.md`. **La
+  primera carga real funcionó** (2026-10-14, integración `UOMTO`: HTTP 200 en 20 s, ver «Sin estrenar» en
+  `CI-TOOLS.md`); faltan cifras clave y una carga grande. Pendiente de otro lado: el detalle del error por MPL ID
   (necesita otro acceso a CPI) y la programación (necesita reloj).
 
 - **Auditoría del backend (2026-10-08)**: ningún camino confirmado para tocar datos de otro cliente a través de

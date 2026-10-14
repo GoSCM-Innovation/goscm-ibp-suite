@@ -196,7 +196,11 @@ Cada una tiene prueba; la lista es para que nadie las quite sin saber por qué e
 
 ## Sin estrenar
 
-**Nunca ha entrado una carga a IBP por esta vía**: falta ejecutar una integración con las credenciales reales.
+**Primera carga real (2026-10-14).** El usuario ejecutó desde la Suite la integración `UOMTO` de «CI STARBRANDS DEV»
+(dato maestro, `INSERT_UPDATE`, 2 campos) y **funcionó**: Basic Auth con sus credenciales, HTTP 200, **20 s**, resultado
+«Completada» en el historial. Lo que CPI contestó es un XML que repite los parámetros enviados
+(`<ROOT><IBPRead BatchCommand=… BatchName=… DataSource=…>`) y **no trae MPL ID**: así se ve un 200. Ese 200 dice que
+CPI aceptó la llamada; qué entró en IBP se mira en IBP o en el monitor de CPI (la Suite todavía no lo consulta).
 
 ### Lo que ya se comprobó contra el sistema real (2026-10-14)
 
@@ -215,8 +219,8 @@ reales, y la dirección real del CPI de desarrollo con credenciales de mentira:
 
 ### Lo que sigue sin estrenar
 
-1. **La carga real**: que Basic Auth con el usuario correcto entre y qué responde CPI cuando sale bien (el cuerpo no
-   se conoce: solo se vio el 500 con el MPL ID) y cuánto tarda.
+1. ~~**La carga real**~~ Hecha el 2026-10-14 con `UOMTO` (ver arriba): entra, contesta 200 con un XML y tardó 20 s. Falta
+   probar una carga de **cifras clave** y una grande (más campos, más filas).
 2. **Los 300 s** de la función en el plan Hobby (IBP ya los declara, pero no se ha medido una llamada de ese tamaño).
 4. **Una pestaña cerrada a mitad de una vuelta**: se asume que la función sigue hasta terminar o que el paso queda
    «sin confirmar»; no se ha visto cuál de las dos pasa en Vercel.
