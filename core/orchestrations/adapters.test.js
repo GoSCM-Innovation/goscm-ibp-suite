@@ -7,14 +7,17 @@ vi.mock('../connections/index.js', () => ({
 vi.mock('../cids/operations.js', () => ({ runCidsOperation: vi.fn() }))
 vi.mock('../ibp/job-schedule.js', () => ({ scheduleJob: vi.fn() }))
 vi.mock('../ibp/job-runs.js', () => ({ readJobRun: vi.fn(), cancelJobRun: vi.fn(), readLatestTemplateRun: vi.fn() }))
+vi.mock('../ci/execute.js', () => ({ executeIntegration: vi.fn() }))
 
 const { getCredentials } = await import('../connections/index.js')
 const { runCidsOperation } = await import('../cids/operations.js')
 const { scheduleJob } = await import('../ibp/job-schedule.js')
 const { cancelJobRun, readJobRun, readLatestTemplateRun } = await import('../ibp/job-runs.js')
+const { executeIntegration } = await import('../ci/execute.js')
 const {
   ESPERA_ANTES_DE_BUSCAR_MS,
   ESPERA_ANTES_DE_RELANZAR_MS,
+  POLITICA_CI,
   POLITICA_IBP,
   adaptadorPara,
   mergeVariables,
@@ -25,9 +28,10 @@ const destino = { clientId: 'c-1', connectionId: 'x-1', production: false }
 beforeEach(() => { vi.clearAllMocks() })
 
 describe('adaptadorPara', () => {
-  it('conoce los dos tipos', () => {
+  it('conoce los tres tipos', () => {
     expect(adaptadorPara('cids')).toBeTruthy()
     expect(adaptadorPara('ibp')).toBeTruthy()
+    expect(adaptadorPara('ci')).toBeTruthy()
   })
 
   // Un tipo que no se sabe orquestar tiene que decirlo, no fallar más tarde de forma rara.
@@ -316,5 +320,76 @@ describe('adaptador de IBP', () => {
 describe('política de CI-DS', () => {
   it('no trae ninguna: el motor usa la suya, que es la de v9', () => {
     expect(adaptadorPara('cids').politica).toBeUndefined()
+  })
+})
+
+describe('adaptador de CI Tools', () => {
+  const ci = adaptadorPara('ci')
+  const nodo = { id: 'a', data: { integrationId: 'int-1' } }
+  const bien = { runId: 'r', resultado: 'success', enviado: true, httpStatus: 200, duracionMs: 21_000, mplId: null, mensaje: 'OK' }
+
+  it('es síncrono: la llamada a CPI es el resultado', () => {
+    expect(ci.sincrono).toBe(true)
+    expect(ci.lanzar).toBeUndefined()
+  })
+
+  it('no le pide nada a CPI al cortar, y una carga fallida para la cadena', () => {
+    expect(POLITICA_CI).toMatchObject({ cancelInSap: false, exhaustedRetryBlocks: true })
+  })
+
+  it('ejecuta la integración del paso, con las variables de la ejecución y quién la lanzó', async () => {
+    executeIntegration.mockResolvedValue(bien)
+    await ci.ejecutar(destino, nodo, { variables: { D: '1' }, startedBy: { id: 'u-1', email: 'a@x.com' } }, { sapRunId: 'run-1', orchestrationId: 'orq-1' })
+
+    expect(executeIntegration).toHaveBeenCalledWith({
+      clientId: 'c-1', connectionId: 'x-1', integrationId: 'int-1', variables: { D: '1' },
+      origin: 'orchestration', orchestrationId: 'orq-1', user: { id: 'u-1', email: 'a@x.com' }, runId: 'run-1',
+    })
+  })
+
+  it('un 2xx es SUCCESS y trae la duración', async () => {
+    executeIntegration.mockResolvedValue(bien)
+    expect(await ci.ejecutar(destino, nodo, {}, {})).toMatchObject({
+      statusCode: 'SUCCESS', duracionMs: 21_000, sinConfirmar: false, textoDeError: null,
+      detalle: { httpStatus: 200, enviado: true },
+    })
+  })
+
+  it('un error es ERROR con el código y el MPL ID en el texto y en el detalle', async () => {
+    executeIntegration.mockResolvedValue({ ...bien, resultado: 'error', httpStatus: 500, mplId: 'MPL-1', mensaje: 'boom' })
+    expect(await ci.ejecutar(destino, nodo, {}, {})).toMatchObject({
+      statusCode: 'ERROR', textoDeError: 'HTTP 500: boom', sinConfirmar: false, detalle: { mplId: 'MPL-1' },
+    })
+  })
+
+  it('una carga en duda es ERROR marcada «sin confirmar»', async () => {
+    executeIntegration.mockResolvedValue({ ...bien, resultado: 'unconfirmed', httpStatus: null, mensaje: 'sin respuesta' })
+    expect(await ci.ejecutar(destino, nodo, {}, {})).toMatchObject({ statusCode: 'ERROR', sinConfirmar: true })
+  })
+
+  it('un paso sin integración no llama a nada', async () => {
+    const salida = await ci.ejecutar(destino, { id: 'a', data: {} }, {}, {})
+    expect(executeIntegration).not.toHaveBeenCalled()
+    expect(salida).toMatchObject({ statusCode: 'ERROR', textoDeError: expect.stringMatching(/qué integración/) })
+    expect(salida.detalle.enviado).toBe(false)
+  })
+
+  it('el detalle guarda un recorte de la respuesta, no entera', async () => {
+    executeIntegration.mockResolvedValue({ ...bien, mensaje: 'x'.repeat(1500) })
+    expect((await ci.ejecutar(destino, nodo, {}, {})).detalle.mensaje).toHaveLength(300)
+  })
+
+  it('si no se sabe quién la lanzó, no inventa un usuario', async () => {
+    executeIntegration.mockResolvedValue(bien)
+    await ci.ejecutar(destino, nodo, {}, {})
+    expect(executeIntegration.mock.calls[0][0].user).toBeNull()
+  })
+
+  // Lo que queda «en marcha» al empezar una vuelta nueva es lo que nadie recogió: no se sabe cómo terminó.
+  it('consultar lee un paso huérfano como «sin confirmar», sin preguntarle nada a CPI', async () => {
+    const estado = await ci.consultar(destino, 'huerfano')
+    expect(estado).toMatchObject({ statusCode: 'ERROR', sinConfirmar: true })
+    expect(estado.textoDeError).toMatch(/Sin confirmar/)
+    expect(executeIntegration).not.toHaveBeenCalled()
   })
 })

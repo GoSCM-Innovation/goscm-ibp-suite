@@ -13,13 +13,14 @@
 
 import { hasModule, requireSession } from '../core/auth/guards.js'
 import { getConnectionTarget } from '../core/connections/index.js'
+import { defaultsDeCi, validarInicio } from '../core/ci/orquestacion.js'
 import { getOrchestration } from '../core/orchestrations/orchestrations.js'
 import { cancelRun, getRun, resumeRun, startRun, tickRun } from '../core/orchestrations/runner.js'
 
 const ACCIONES = new Set(['start', 'tick', 'resume', 'cancel'])
 
 /** Qué módulo hay que tener contratado para orquestar cada tipo de conexión. */
-const MODULO_DE = Object.freeze({ cids: 'cids', ibp: 'jobs' })
+const MODULO_DE = Object.freeze({ cids: 'cids', ibp: 'jobs', ci: 'ci' })
 
 export default async function handler(req, res) {
   const session = await requireSession(req, res)
@@ -32,16 +33,18 @@ export default async function handler(req, res) {
    * Se mira por la CONEXIÓN y no por la ruta: encadenar tareas de CI-DS y encadenar Application Jobs
    * son la misma cosa por dentro, pero se contratan por separado, y esto es lo que impide que quien
    * tenga uno solo llegue a las del otro.
+   *
+   * Devuelve la orquestación y su conexión, o `null` si no existe para este cliente.
    */
   async function exigirModulo(id) {
     const orquestacion = await getOrchestration(clientId, id)
-    if (!orquestacion) return false
+    if (!orquestacion) return null
 
     const conexion = await getConnectionTarget(clientId, orquestacion.connectionId)
     const modulo = MODULO_DE[conexion.kind]
     if (!modulo) throw new Error(`No hay forma de orquestar una conexión de tipo "${conexion.kind}".`)
     if (!(await hasModule(clientId, modulo))) throw new Error('Tu empresa no tiene contratado ese módulo.')
-    return true
+    return { orquestacion, conexion }
   }
 
   try {
@@ -59,11 +62,21 @@ export default async function handler(req, res) {
       if (!ACCIONES.has(action)) {
         return res.status(400).json({ error: `Acción desconocida: "${action}".` })
       }
-      if (!(await exigirModulo(id))) return res.status(404).json({ error: 'La orquestación no existe.' })
+      const destino = await exigirModulo(id)
+      if (!destino) return res.status(404).json({ error: 'La orquestación no existe.' })
 
       // `defaults` son el agente, la configuración y las variables que valen para todos los pasos
       // que no traigan los suyos. Los elige quien lanza, en el diálogo de ejecución.
-      if (action === 'start') return res.status(200).json({ run: await startRun(clientId, id, { defaults }) })
+      if (action === 'start') {
+        // En CI Tools, además, se comprueba ANTES del primer paso que se pueda lanzar entera (que cada paso
+        // apunte a una integración que exista y que cada variable traiga su valor), y quién la lanzó sale de
+        // la sesión: el historial dice quién ejecutó, y eso no lo decide el cuerpo de la petición.
+        const valores = destino.conexion.kind === 'ci'
+          ? defaultsDeCi(defaults, { id: session.userId, email: session.email })
+          : defaults
+        if (destino.conexion.kind === 'ci') await validarInicio(clientId, destino.orquestacion, valores)
+        return res.status(200).json({ run: await startRun(clientId, id, { defaults: valores }) })
+      }
       if (action === 'resume') return res.status(200).json({ run: await resumeRun(clientId, id) })
       if (action === 'cancel') return res.status(200).json({ run: await cancelRun(clientId, id) })
       return res.status(200).json({ run: await tickRun(clientId, id) })

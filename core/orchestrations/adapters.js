@@ -10,6 +10,7 @@
 
 import { getConnectionTarget, getCredentials } from '../connections/index.js'
 import { runCidsOperation } from '../cids/operations.js'
+import { executeIntegration } from '../ci/execute.js'
 import {
   CODIGO_CANCELADO,
   estadoParaElMotor,
@@ -213,8 +214,111 @@ const adaptadorIbp = {
   },
 }
 
+/**
+ * Las reglas de ejecución de las integraciones de CPI (CI Tools). Lo que difiere de CI-DS:
+ *
+ *   - Cortar no le pide nada a CPI: no hay forma de detener una carga que ya salió. Lo que se corta es la
+ *     orquestación, y lo que ya se envió termina por su cuenta.
+ *   - Un paso que agotó sus reintentos PARA la cadena, como en IBP: lo que viene detrás de una carga fallida no
+ *     puede darse por bueno.
+ *
+ * El resto es lo de siempre: un paso fallado con «Continuar si falla» deja la ejecución en error al final
+ * (decir que una carga salió bien cuando una falló sería mentir) y cortar deja lo no arrancado «omitido».
+ */
+export const POLITICA_CI = Object.freeze({
+  cancelInSap: false,
+  exhaustedRetryBlocks: true,
+})
+
+/** Cuánto de la respuesta de CPI se guarda en el paso. El historial conserva el resto. */
+const DETALLE_MAX = 300
+
+/**
+ * El resultado de una integración, en el idioma del motor. `SUCCESS` y `ERROR` son los códigos que
+ * `nextStepState` entiende; lo demás es lo que la pantalla enseña de cada paso.
+ */
+function estadoDelMotor(salida) {
+  const correcta = salida.resultado === 'success'
+  const sinConfirmar = salida.resultado === 'unconfirmed'
+  const recorte = String(salida.mensaje ?? '').slice(0, DETALLE_MAX)
+  return {
+    statusCode: correcta ? 'SUCCESS' : 'ERROR',
+    statusMsg: recorte,
+    duracionMs: salida.duracionMs,
+    sinConfirmar,
+    textoDeError: correcta ? null : (salida.httpStatus ? `HTTP ${salida.httpStatus}: ${recorte}` : recorte),
+    detalle: {
+      httpStatus: salida.httpStatus ?? null,
+      mplId: salida.mplId ?? null,
+      mensaje: recorte,
+      sinConfirmar,
+      enviado: salida.enviado !== false,
+      bloqueada: Boolean(salida.bloqueada),
+      ejecucionId: salida.runId ?? null,
+    },
+  }
+}
+
+const adaptadorCi = {
+  politica: POLITICA_CI,
+
+  // La llamada a CPI ES el resultado: no hay un «lanzar» y un «cómo va». Ver `avanzarNivel` en `runner.js`.
+  sincrono: true,
+
+  /**
+   * Ejecuta la integración del paso y espera la respuesta de CPI.
+   *
+   * Las variables salen de la ejecución (`porOmision.variables`, validadas al arrancar) y quien la lanzó, del
+   * servidor (`porOmision.startedBy`): lo que queda en el historial no lo decide el navegador.
+   */
+  async ejecutar(destino, nodo, porOmision = {}, { sapRunId, orchestrationId } = {}) {
+    const integrationId = nodo.data?.integrationId
+    if (!integrationId) {
+      return estadoDelMotor({
+        resultado: 'error', enviado: false, mensaje: 'El paso no dice qué integración ejecutar.', duracionMs: 0,
+      })
+    }
+
+    const quien = porOmision.startedBy
+    const salida = await executeIntegration({
+      clientId: destino.clientId,
+      connectionId: destino.connectionId,
+      integrationId,
+      variables: porOmision.variables ?? {},
+      origin: 'orchestration',
+      orchestrationId: orchestrationId ?? null,
+      user: quien?.email ? { id: quien.id ?? null, email: quien.email } : null,
+      runId: sapRunId,
+    })
+    return estadoDelMotor(salida)
+  },
+
+  /**
+   * Un paso que sigue «en marcha» al empezar una vuelta nueva es uno cuya respuesta nadie recogió: la vuelta que
+   * lo envió esperaba a CPI dentro de sí misma, así que si terminó, el paso ya no está en marcha. El cerrojo
+   * de esa vuelta (330 s) venció, por lo tanto murió. No se sabe cómo terminó la carga.
+   */
+  async consultar() {
+    const texto = 'Sin confirmar: se interrumpió la ejecución antes de recibir la respuesta de CPI. La carga pudo '
+      + 'haber entrado: revísala en Cloud Integration antes de retomar.'
+    return {
+      statusCode: 'ERROR',
+      statusMsg: texto,
+      duracionMs: 0,
+      sinConfirmar: true,
+      textoDeError: texto,
+      detalle: { httpStatus: null, mplId: null, mensaje: texto, sinConfirmar: true, enviado: true, bloqueada: false },
+    }
+  },
+
+  // Cortar una orquestación no detiene una carga que ya salió (`cancelInSap: false`): nunca se llama.
+  async cancelar() {
+    return null
+  },
+}
+
 /** Los adaptadores, por el tipo de conexión contra la que corre la orquestación. */
-export const ADAPTADORES = Object.freeze({ cids: adaptadorCids, ibp: adaptadorIbp })
+export const ADAPTADORES = Object.freeze({ cids: adaptadorCids, ibp: adaptadorIbp, ci: adaptadorCi })
 
 /** El adaptador de un tipo de conexión. Un tipo desconocido es un error, no un silencio. */
 export function adaptadorPara(kind) {

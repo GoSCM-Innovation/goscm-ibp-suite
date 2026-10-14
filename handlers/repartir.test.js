@@ -14,6 +14,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { mostrador, nombreDeLaRuta } from './repartir.js'
 import { RUTAS as RUTAS_ADMIN } from './admin/index.js'
 import { RUTAS as RUTAS_AUTH } from './auth/index.js'
+import { RUTAS as RUTAS_CI } from './ci/index.js'
 import { RUTAS as RUTAS_CIDS } from './cids/index.js'
 import { RUTAS as RUTAS_IBP } from './ibp/index.js'
 
@@ -22,6 +23,7 @@ const AQUI = dirname(fileURLToPath(import.meta.url))
 const AREAS = [
   ['admin', RUTAS_ADMIN],
   ['auth', RUTAS_AUTH],
+  ['ci', RUTAS_CI],
   ['cids', RUTAS_CIDS],
   ['ibp', RUTAS_IBP],
 ]

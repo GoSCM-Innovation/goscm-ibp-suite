@@ -1,0 +1,318 @@
+/* CI Tools: la biblioteca de integraciones, el editor, el diálogo de ejecutar, el historial y las orquestaciones.
+   Usa solo las variables de color del tema, así que sirve en claro y en oscuro sin reglas aparte. */
+
+.ci-tools { min-height: 0; }
+.ci-sistema { display: flex; flex: 1; flex-direction: column; min-height: 0; }
+.ci-vistas { flex-shrink: 0; }
+.ci-vista { display: flex; flex: 1; flex-direction: column; min-height: 0; padding-top: 12px; }
+.ci-cargando { padding: 30px; }
+
+/* ─── Biblioteca: árbol a la izquierda, editor a la derecha ─────────────── */
+
+.ci-biblioteca,
+.ci-orq { display: flex; flex: 1; gap: 14px; min-height: 0; }
+
+.ci-arbol {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  max-height: 100%;
+  min-height: 0;
+  width: 280px;
+}
+.ci-arbol-cabeza { align-items: center; display: flex; justify-content: space-between; padding: 10px 10px 6px 12px; }
+.ci-arbol-botones { align-items: center; display: flex; gap: 2px; }
+.ci-arbol-buscar { padding: 0 10px 8px; }
+.ci-arbol-cuerpo { flex: 1; min-height: 0; overflow-y: auto; padding-bottom: 8px; }
+
+.ci-arbol-carpeta { align-items: center; display: flex; padding-right: 6px; }
+.ci-arbol-carpeta .ci-arbol-fila { flex: 1; }
+.ci-arbol-renombrar { opacity: 0; padding: 2px 6px; }
+.ci-arbol-carpeta:hover .ci-arbol-renombrar,
+.ci-arbol-renombrar:focus-visible { opacity: 1; }
+
+.ci-arbol-fila {
+  align-items: center;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  color: var(--text2);
+  cursor: pointer;
+  display: flex;
+  font-size: 12.5px;
+  gap: 6px;
+  min-width: 0;
+  padding: 6px 10px 6px 8px;
+  text-align: left;
+  width: 100%;
+}
+.ci-arbol-fila:hover { background: var(--surface-glass-soft); color: var(--text); }
+.ci-arbol-fila:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.ci-arbol-integracion.active { background: var(--accent-bg-soft); box-shadow: inset 2px 0 0 var(--accent); color: var(--text); }
+.ci-arbol-flecha { color: var(--text3); font-size: 10px; width: 10px; }
+.ci-arbol-nombre { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ci-arbol-comando { color: var(--text3); font-size: 10px; }
+.ci-arbol-alerta {
+  background: var(--red);
+  border-radius: 50%;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  height: 15px;
+  line-height: 15px;
+  text-align: center;
+  width: 15px;
+}
+
+.ci-biblioteca-cuerpo { display: flex; flex: 1; flex-direction: column; gap: 10px; min-height: 0; min-width: 0; overflow-y: auto; }
+
+.ci-nueva-boton { color: var(--accent); font-size: 18px; line-height: 1; }
+.ci-vacio { color: var(--text2); font-size: 11.5px; padding: 20px 14px; text-align: center; }
+.ci-enlace { background: none; border: none; color: var(--accent); cursor: pointer; font-size: inherit; padding: 0; }
+.ci-enlace:hover { text-decoration: underline; }
+.ci-sin-seleccion { align-items: center; color: var(--text3); display: flex; flex: 1; justify-content: center; text-align: center; }
+.ci-sin-seleccion-icono { font-size: 40px; margin-bottom: 10px; opacity: .4; }
+
+/* ─── Editor de una integración ─────────────────────────────────────────── */
+
+.ci-editor { display: flex; flex-direction: column; gap: 12px; padding-bottom: 24px; }
+.ci-editor-cabeza { align-items: flex-end; display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; }
+.ci-editor-nombres { display: flex; flex: 1; flex-wrap: wrap; gap: 12px; min-width: 260px; }
+.ci-editor-nombres .field { flex: 1 1 200px; }
+.ci-editor-acciones { align-items: center; display: flex; flex-wrap: wrap; gap: 6px; }
+.ci-sin-guardar { color: var(--accent); font-size: 11.5px; font-weight: 600; }
+.ci-tabs-editor { margin-top: 2px; }
+
+.ci-variables-usadas { align-items: center; display: flex; flex-wrap: wrap; gap: 6px; }
+.ci-variable {
+  background: var(--accent-bg-soft);
+  border: 1px solid var(--accent-border-soft);
+  border-radius: 5px;
+  color: var(--accent);
+  padding: 1px 6px;
+}
+
+.ci-json { display: flex; flex-direction: column; gap: 6px; }
+.ci-json-texto { line-height: 1.5; min-height: 420px; resize: vertical; tab-size: 2; white-space: pre; width: 100%; }
+.ci-json-pie { align-items: center; display: flex; justify-content: space-between; }
+.ci-json-ok { color: var(--green); font-size: 12px; }
+.ci-json-mal { color: var(--red); font-size: 12px; }
+
+/* ─── Formulario ────────────────────────────────────────────────────────── */
+
+.ci-formulario { display: flex; flex-direction: column; gap: 18px; }
+.ci-form-grid { display: grid; gap: 12px 16px; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+.ci-seccion { display: flex; flex-direction: column; gap: 8px; }
+.ci-seccion-titulo {
+  border-bottom: 1px solid var(--border);
+  color: var(--text2);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  margin: 0;
+  padding-bottom: 5px;
+  text-transform: uppercase;
+}
+.ci-texto-largo { line-height: 1.5; resize: vertical; width: 100%; }
+/* Los botones de agregar no se estiran a todo el ancho de la columna. */
+.ci-mapeo > .btn { align-self: flex-start; }
+/* Dentro de un diálogo, las secciones se separan para que cada título se lea como suyo. */
+.modal-body .ci-seccion + .ci-seccion { margin-top: 16px; }
+.ci-quitar { color: var(--text3); }
+.ci-quitar:hover { color: var(--red); }
+.ci-aviso-fila { color: var(--red); font-size: 11.5px; }
+.ci-avisos { margin: 6px 0 8px; padding-left: 18px; }
+
+.ci-otro { align-items: center; display: flex; gap: 8px; }
+.ci-otro-nombre { color: var(--text2); flex: 0 0 220px; overflow: hidden; text-overflow: ellipsis; }
+.ci-otro .input { flex: 1; }
+.ci-otro-valor { color: var(--text3); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ci-otro-nuevo { display: flex; gap: 8px; margin-top: 4px; }
+.ci-otro-nuevo .input { max-width: 260px; }
+
+/* Filtro */
+.ci-filtro { display: flex; flex-direction: column; gap: 6px; }
+.ci-filtro-cabeza { align-items: center; display: flex; justify-content: space-between; }
+.ci-filtro-fila { align-items: flex-start; display: flex; flex-wrap: wrap; gap: 8px; }
+.ci-filtro-campo { flex: 0 0 200px; }
+.ci-filtro-op { color: var(--accent); font-weight: 700; padding-top: 6px; width: 24px; }
+.ci-filtro-valor { flex: 0 0 140px; }
+.ci-filtro-texto { flex: 1 1 360px; }
+.ci-filtro-agregar { display: flex; gap: 8px; }
+.ci-filtro-vista {
+  background: var(--bg2);
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  color: var(--text3);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+  padding: 6px 8px;
+}
+.ci-fichas { align-items: center; display: flex; flex: 1; flex-wrap: wrap; gap: 4px; min-width: 200px; }
+.ci-ficha {
+  align-items: center;
+  background: var(--surface-glass);
+  border: 1px solid var(--border2);
+  border-radius: 12px;
+  display: inline-flex;
+  font-size: 12px;
+  gap: 4px;
+  padding: 1px 4px 1px 9px;
+}
+.ci-ficha-quitar { background: none; border: none; color: var(--text3); cursor: pointer; font-size: 14px; line-height: 1; padding: 0 3px; }
+.ci-ficha-quitar:hover { color: var(--red); }
+.ci-ficha-nueva { max-width: 120px; }
+
+/* Mapeo */
+.ci-mapeo { display: flex; flex-direction: column; gap: 8px; }
+.ci-mapeo-tabla { max-height: 380px; overflow-y: auto; }
+.ci-mapeo .table td { padding: 4px 8px; }
+.ci-flecha { color: var(--text3); text-align: center; width: 30px; }
+.ci-pegar { display: flex; flex-direction: column; gap: 6px; }
+.ci-pegar .btn { align-self: flex-start; }
+
+/* ─── Estados, resultado y diálogo de ejecutar ──────────────────────────── */
+
+.ci-estado { border-radius: 10px; font-size: 11px; font-weight: 600; padding: 2px 9px; white-space: nowrap; }
+.ci-estado-bien { background: color-mix(in srgb, var(--green) 16%, transparent); color: var(--green); }
+.ci-estado-mal { background: color-mix(in srgb, var(--red) 16%, transparent); color: var(--red); }
+/* «Sin confirmar» y «cancelado» no son ni éxito ni error: color propio, el de aviso. */
+.ci-estado-duda { background: var(--accent-bg-soft); color: var(--accent); }
+.ci-estado-en-curso { background: color-mix(in srgb, var(--cyan) 16%, transparent); color: var(--cyan); }
+.ci-estado-espera { background: var(--surface-glass); color: var(--text2); }
+
+.ci-resultado { display: flex; flex-direction: column; gap: 10px; }
+.ci-resultado-cabeza { align-items: center; display: flex; flex-wrap: wrap; gap: 10px; }
+.ci-resultado-mpl { align-items: center; display: inline-flex; flex-wrap: wrap; gap: 8px; }
+.ci-resultado-mensaje {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin: 0;
+  max-height: 240px;
+  overflow: auto;
+  padding: 8px 10px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.ci-ambiente {
+  align-items: center;
+  background: var(--surface-glass-soft);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 12.5px;
+  gap: 10px;
+  margin-bottom: 14px;
+  padding: 8px 12px;
+}
+.ci-ambiente-prod { background: color-mix(in srgb, var(--red) 12%, transparent); border-color: var(--red); }
+.ci-ambiente-prod strong { color: var(--red); }
+.ci-lista-ejecutar { display: flex; flex-direction: column; gap: 4px; list-style: none; margin: 0; padding: 0; }
+.ci-lista-ejecutar li { align-items: center; display: flex; gap: 10px; justify-content: space-between; }
+.ci-lista-ejecutar code { color: var(--text2); }
+.ci-confirmar-prod { align-items: flex-start; display: flex; font-size: 12.5px; gap: 8px; margin: 14px 0 6px; }
+.ci-nueva { display: flex; flex-direction: column; gap: 12px; }
+.ci-etiqueta { color: var(--text2); font-size: 11.5px; font-weight: 600; }
+.ci-opciones { align-items: center; display: flex; flex-wrap: wrap; gap: 6px 14px; }
+.ci-opcion { align-items: center; display: inline-flex; font-size: 12.5px; gap: 6px; }
+
+/* ─── Historial ─────────────────────────────────────────────────────────── */
+
+.ci-historial { display: flex; flex-direction: column; gap: 10px; min-height: 0; overflow-y: auto; }
+.ci-historial-barra { align-items: center; display: flex; flex-wrap: wrap; gap: 10px; }
+.ci-historial-barra .input { flex: 1 1 260px; }
+.ci-historial-detalle td { background: var(--surface-glass-soft); }
+.ci-historial-detalle .ci-resultado-mpl,
+.ci-historial-detalle .ci-variables-usadas { margin-bottom: 6px; }
+
+/* ─── Orquestaciones ────────────────────────────────────────────────────── */
+
+.ci-orq-item { align-items: center; display: flex; padding-right: 4px; }
+.ci-orq-item .ci-arbol-fila { flex: 1; }
+.ci-orq-item.active { background: var(--accent-bg-soft); box-shadow: inset 2px 0 0 var(--accent); }
+.ci-orq-item.active .ci-arbol-fila { color: var(--text); }
+
+.ci-orq-editor { display: flex; flex-direction: column; gap: 12px; padding-bottom: 28px; }
+.ci-orq-cabeza { align-items: center; display: flex; flex-wrap: wrap; gap: 12px; }
+.ci-orq-nombre { flex: 1 1 260px; font-weight: 600; max-width: 420px; }
+.ci-guardado { color: var(--text3); font-size: 11.5px; }
+.ci-guardado-guardado { color: var(--green); }
+.ci-guardado-error { color: var(--red); }
+.ci-orq-cabeza .ci-editor-acciones { margin-left: auto; }
+
+.ci-run-barra {
+  align-items: center;
+  background: var(--surface-glass-soft);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 12.5px;
+  gap: 8px 12px;
+  padding: 8px 12px;
+}
+
+.ci-etapas { display: flex; flex-direction: column; gap: 10px; }
+.ci-etapa {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+}
+/* La flecha entre etapas deja claro que una espera a la anterior. */
+.ci-etapa + .ci-etapa { position: relative; }
+.ci-etapa + .ci-etapa::before {
+  color: var(--text3);
+  content: '↓';
+  font-size: 14px;
+  left: 50%;
+  position: absolute;
+  top: -14px;
+  transform: translateX(-50%);
+}
+.ci-etapa-nueva { background: transparent; border-style: dashed; }
+.ci-etapa-cabeza { align-items: center; display: flex; justify-content: space-between; }
+.ci-etapa-titulo { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.ci-etapa-mover { display: inline-flex; gap: 2px; }
+.ci-etapa-agregar { max-width: 360px; }
+
+.ci-paso {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left-width: 3px;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+}
+.ci-paso-running { border-left-color: var(--cyan); }
+.ci-paso-success { border-left-color: var(--green); }
+.ci-paso-error { border-left-color: var(--red); }
+.ci-paso-cancelled,
+.ci-paso-success_with_errors { border-left-color: var(--accent); }
+.ci-paso-fila { align-items: center; display: flex; flex-wrap: wrap; gap: 10px 16px; justify-content: space-between; }
+.ci-paso-nombre { display: flex; flex-direction: column; gap: 2px; min-width: 200px; }
+.ci-paso-controles { align-items: flex-end; display: flex; flex-wrap: wrap; gap: 8px 12px; }
+.ci-paso-control { display: flex; flex-direction: column; gap: 2px; }
+.ci-paso-control .input { width: 76px; }
+.ci-paso-nota { margin: 0; }
+.ci-paso-resultado { align-items: center; display: flex; flex-wrap: wrap; gap: 6px 12px; }
+.ci-paso-resultado .notice { flex-basis: 100%; }
+.ci-paso-error { color: var(--red); flex-basis: 100%; font-size: 12px; overflow-wrap: anywhere; }
+
+@media (max-width: 720px) {
+  .ci-biblioteca,
+  .ci-orq { flex-direction: column; }
+  .ci-arbol { max-height: 240px; width: 100%; }
+  .ci-otro-nombre { flex-basis: 120px; }
+}

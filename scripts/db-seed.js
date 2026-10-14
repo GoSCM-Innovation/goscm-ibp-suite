@@ -15,7 +15,7 @@ import { fileURLToPath } from 'node:url'
 import { loadLocalEnv } from './load-env.js'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-const MODULOS_VALIDOS = ['explorer', 'jobs', 'cids']
+const MODULOS_VALIDOS = ['explorer', 'jobs', 'cids', 'ci']
 
 function parseArgs(argv) {
   const args = {}

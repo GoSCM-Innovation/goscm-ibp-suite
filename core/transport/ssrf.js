@@ -35,6 +35,17 @@ export const DEFAULT_IBP_HOST_PATTERN = /^[a-z0-9-]+-api\.scmibp\d*\.ondemand\.c
 export const DEFAULT_CIDS_HOST_PATTERN =
   /^([a-z0-9-]+\.)+(kyma\.ondemand\.com|hana\.ondemand\.com|hcs\.cloud\.sap|cids\.cloud\.sap)$/i
 
+// El runtime de Cloud Integration (CPI) en Cloud Foundry, donde viven los endpoints HTTPS de los iFlows:
+// `<tenant>.it-cpi034-rt.cfapps.us10-002.hana.ondemand.com`. El patrón es MÁS ESTRECHO que el de CI-DS a
+// propósito: cualquier cliente de SAP BTP puede publicar una aplicación en `*.cfapps.<región>.hana.ondemand.com`,
+// así que aceptar todo ese dominio permitiría apuntar una conexión a una aplicación ajena y mandarle las
+// credenciales. Exigir el segmento `it-cpi<número>` lo limita a los tenants de Integration Suite.
+//
+// Se midió con UN tenant (`it-cpi034-rt`). Si otro cliente vive en un host de otra forma, se abre sin tocar
+// el código con la variable de entorno `ALLOWED_CI_HOST_REGEX`.
+export const DEFAULT_CI_HOST_PATTERN =
+  /^[a-z0-9-]+\.it-cpi\d+(-[a-z0-9]+)?\.cfapps\.[a-z0-9-]+\.hana\.ondemand\.com$/i
+
 // Servicios de OData que la aplicación tiene permitido llamar. Es el equivalente del patrón
 // de host, un nivel más abajo: aunque el tenant sea legítimo, no se llama a un servicio que
 // no esté en esta lista.
@@ -145,8 +156,8 @@ function nombreDelServicio(pathname) {
  * antes de guardarla, cuando todavía no hay ningún servicio en la ruta.
  */
 export async function validateSapHost(rawUrl, { kind } = {}) {
-  if (kind !== 'ibp' && kind !== 'cids') {
-    throw new Error(`Destino desconocido: "${kind}". Debe ser 'ibp' o 'cids'.`)
+  if (kind !== 'ibp' && kind !== 'cids' && kind !== 'ci') {
+    throw new Error(`Destino desconocido: "${kind}". Debe ser 'ibp', 'cids' o 'ci'.`)
   }
 
   let parsed
@@ -166,9 +177,11 @@ export async function validateSapHost(rawUrl, { kind } = {}) {
     return 'Host no permitido: hay que llamar al tenant por su nombre, no por su dirección'
   }
 
-  const pattern = kind === 'ibp'
-    ? patternFrom('ALLOWED_IBP_HOST_REGEX', DEFAULT_IBP_HOST_PATTERN)
-    : patternFrom('ALLOWED_CIDS_HOST_REGEX', DEFAULT_CIDS_HOST_PATTERN)
+  const pattern = {
+    ibp: () => patternFrom('ALLOWED_IBP_HOST_REGEX', DEFAULT_IBP_HOST_PATTERN),
+    cids: () => patternFrom('ALLOWED_CIDS_HOST_REGEX', DEFAULT_CIDS_HOST_PATTERN),
+    ci: () => patternFrom('ALLOWED_CI_HOST_REGEX', DEFAULT_CI_HOST_PATTERN),
+  }[kind]()
 
   if (!pattern.test(host)) return 'Host no permitido'
 

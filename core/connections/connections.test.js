@@ -126,6 +126,34 @@ describe('createConnection', () => {
     expect(queryOneScoped.mock.calls[0][2].at(-1)).toBe(false)
   })
 
+  describe('tipo ci (Cloud Integration)', () => {
+    const endpoint = 'https://acme.it-cpi034-rt.cfapps.us10-002.hana.ondemand.com/http/IBP2'
+    const deCi = { kind: 'ci', name: 'CPI desarrollo', baseUrl: endpoint }
+
+    it('valida el host con el patrón de ci y guarda el endpoint completo', async () => {
+      queryOneScoped.mockResolvedValue({ id: CONEXION })
+      await createConnection(CLIENTE, deCi)
+      expect(assertSapHost).toHaveBeenCalledWith(endpoint, { kind: 'ci' })
+      expect(queryOneScoped.mock.calls[0][2]).toContain(endpoint)
+    })
+
+    // Una conexión de CI es de UN ambiente: el endpoint de desarrollo y el de producción son otros hosts.
+    it('respeta la marca de productiva', async () => {
+      queryOneScoped.mockResolvedValue({ id: CONEXION })
+      await createConnection(CLIENTE, { ...deCi, isProduction: true })
+      expect(queryOneScoped.mock.calls[0][2].at(-1)).toBe(true)
+    })
+
+    it.each([
+      ['sin ruta', 'https://acme.it-cpi034-rt.cfapps.us10-002.hana.ondemand.com/', /ruta/],
+      ['con usuario en la dirección', 'https://u:p@acme.it-cpi034-rt.cfapps.us10-002.hana.ondemand.com/http/X', /usuario/],
+      ['con parámetros', 'https://acme.it-cpi034-rt.cfapps.us10-002.hana.ondemand.com/http/X?a=1', /parámetros/],
+    ])('rechaza una dirección %s', async (_motivo, baseUrl, mensaje) => {
+      await expect(createConnection(CLIENTE, { ...deCi, baseUrl })).rejects.toThrow(mensaje)
+      expect(queryOneScoped).not.toHaveBeenCalled()
+    })
+  })
+
   it('en IBP la respeta, porque ahí el tenant productivo es otra dirección', async () => {
     queryOneScoped.mockResolvedValue({ id: CONEXION })
     await createConnection(CLIENTE, { ...nueva, isProduction: true })

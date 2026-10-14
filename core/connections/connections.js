@@ -14,7 +14,7 @@ import { queryOneScoped, queryScoped } from '../persistence/tenant-scope.js'
 import { assertSapHost } from '../transport/ssrf.js'
 import { decryptSecret, encryptSecret } from './crypto.js'
 
-export const CONNECTION_KINDS = Object.freeze(['ibp', 'cids'])
+export const CONNECTION_KINDS = Object.freeze(['ibp', 'cids', 'ci'])
 
 /**
  * Los acuerdos de comunicación que usan las apps actuales. Es una ayuda para la interfaz, no
@@ -35,6 +35,12 @@ export const KNOWN_AGREEMENTS = Object.freeze([
  * simplemente usuario y contraseña.
  */
 export const CIDS_AGREEMENT = 'CIDS'
+
+/**
+ * Lo mismo para CI Tools: el endpoint de un iFlow de Cloud Integration se llama con un usuario y una
+ * contraseña (Basic Auth), sin acuerdos de comunicación. Se guardan en la misma tabla con este nombre fijo.
+ */
+export const CI_AGREEMENT = 'CI'
 
 // Traducción de los nombres de la base al estilo del resto de la aplicación. Se hace en la
 // frontera para que ninguna pantalla tenga que saber cómo se llaman las columnas.
@@ -62,9 +68,26 @@ const toAgreement = (row) => row && ({
   updatedAt: row.updated_at,
 })
 
+/** Comprueba que la dirección de una conexión de CI sea el endpoint de un iFlow y no solo un host. */
+export function assertEndpointDeCi(baseUrl) {
+  let url
+  try {
+    url = new URL(String(baseUrl).trim())
+  } catch {
+    throw new Error('La dirección del endpoint no es válida.')
+  }
+  if (url.username || url.password) {
+    throw new Error('La dirección no puede llevar usuario ni contraseña: se guardan aparte, cifrados.')
+  }
+  if (url.search || url.hash) throw new Error('La dirección del endpoint no puede llevar parámetros ni «#».')
+  if (url.pathname.replace(/\/+$/, '') === '') {
+    throw new Error('Falta la ruta del endpoint, por ejemplo https://…hana.ondemand.com/http/IBP2.')
+  }
+}
+
 function assertKind(kind) {
   if (!CONNECTION_KINDS.includes(kind)) {
-    throw new Error(`Tipo de conexión desconocido: "${kind}". Debe ser 'ibp' o 'cids'.`)
+    throw new Error(`Tipo de conexión desconocido: "${kind}". Debe ser 'ibp', 'cids' o 'ci'.`)
   }
 }
 
@@ -125,6 +148,11 @@ export async function createConnection(clientId, { kind, name, baseUrl, organiza
   // Se valida al guardar, no solo al llamar: un error de escritura se descubre ahora, con el
   // administrador delante, y no dentro de meses cuando alguien intente usar la conexión.
   await assertSapHost(baseUrl, { kind })
+
+  // En CI la dirección ES el endpoint del iFlow, con su ruta (`…/http/IBP2`): sin ruta no hay a qué llamar.
+  // Y no lleva usuario ni parámetros: las credenciales viven cifradas y un parámetro en la dirección
+  // quedaría en los registros de cualquiera que la vea.
+  if (kind === 'ci') assertEndpointDeCi(baseUrl)
 
   return toConnection(await queryOneScoped(
     clientId,

@@ -39,9 +39,9 @@ docs/      Arquitectura y decisiones.
 ### Por qué `api/` y `handlers/` están separados
 
 Vercel cuenta **una función por archivo de `api/`**, y su plan gratuito permite 12. Este backend tiene
-29 operaciones, así que un archivo por operación no se puede desplegar. En `api/` hay un mostrador por
+33 operaciones, así que un archivo por operación no se puede desplegar. En `api/` hay un mostrador por
 área (`api/ibp/[...ruta].js` y sus hermanos) que reparte con la tabla de `handlers/<área>/index.js`;
-las tres operaciones de la raíz siguen siendo archivos sueltos. Son **7 funciones**.
+las tres operaciones de la raíz siguen siendo archivos sueltos. Son **8 funciones**.
 
 Las direcciones no cambiaron: `/api/ibp/master-data` sigue siendo `/api/ibp/master-data`.
 

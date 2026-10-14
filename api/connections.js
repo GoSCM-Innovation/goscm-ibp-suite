@@ -19,6 +19,7 @@ import { listConnections } from '../core/connections/connections.js'
 const MODULES_BY_KIND = Object.freeze({
   ibp: ['explorer', 'jobs'],
   cids: ['cids'],
+  ci: ['ci'],
 })
 
 export default async function handler(req, res) {
@@ -30,7 +31,7 @@ export default async function handler(req, res) {
   const kind = req.query?.kind
   const habilitantes = MODULES_BY_KIND[kind]
   if (!habilitantes) {
-    return res.status(400).json({ error: "Falta el tipo de conexión ('ibp' o 'cids')." })
+    return res.status(400).json({ error: "Falta el tipo de conexión ('ibp', 'cids' o 'ci')." })
   }
 
   try {

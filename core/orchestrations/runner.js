@@ -49,6 +49,14 @@ export { RUN_STATE_SECONDS, TERMINAL_RUN_STATUSES, getRun, listActiveRuns }
  */
 export const RUN_LOCK_SECONDS = 15
 
+/**
+ * Cuánto dura el cerrojo cuando el adaptador es síncrono (CI Tools): la vuelta espera la respuesta de CPI, que
+ * puede tardar hasta los 270 s de la llamada. Con los 15 s de siempre, el cerrojo vencería a mitad de la carga
+ * y otra pestaña podría empezar una vuelta nueva mientras la primera sigue enviando. Son 330 s: más que lo que
+ * dura la función (300 s), para que un cerrojo que se quedó puesto porque la función murió venza solo.
+ */
+export const RUN_LOCK_SINCRONO_SECONDS = 330
+
 /** Cuánto se espera entre un intento de cortar y el siguiente, si una vuelta tiene el cerrojo. */
 export const ESPERA_ENTRE_INTENTOS_DE_CORTAR_MS = 500
 
@@ -93,15 +101,74 @@ async function conCerrojo(clientId, orchestrationId, hacer) {
 const politicaDe = (adaptador) => ({ ...DEFAULT_RUN_POLICY, ...(adaptador?.politica ?? {}) })
 
 /**
+ * Un paso que quedó en duda no se reintenta solo, aunque su estrategia sea «reintentar»: se envió y no se sabe
+ * si entró. Repetirlo podría duplicar la carga; la persona decide con «Retomar», viendo el aviso. Se baja a
+ * «parar» SOLO para decidir su estado: lo que decide si lo de detrás corre es `exhaustedRetryBlocks`.
+ */
+const sinReintentos = (config = {}) => (
+  config.errorStrategy === 'retry' ? { ...config, errorStrategy: 'stop' } : config
+)
+
+/**
+ * Aplica a un paso lo que SAP (o CPI) contestó. Es lo mismo para los dos caminos: preguntar cómo va una
+ * ejecución en marcha y recibir el resultado de un envío que se esperó.
+ *
+ * Lo que se agrega para los adaptadores síncronos (los que traen `ejecutar`):
+ *   - `detalle`: datos del resultado que la pantalla enseña (código HTTP, MPL ID…). Se guardan en el paso.
+ *   - `textoDeError`: el mensaje que se lee en el paso en vez del «SAP: ERROR - …» genérico.
+ *   - `sinConfirmar`: ver `sinReintentos`.
+ */
+function aplicarEstado(paso, sapStatus, config, instante, politica) {
+  // Lo que el adaptador sabe además del estado: el identificador ya completo —un trabajo de IBP que se lanzó
+  // sin número de repetición lo gana al contarlo SAP— y la letra de SAP tal cual, que la pantalla de IBP enseña
+  // junto al trabajo. CI-DS no manda ninguno de los dos.
+  if (sapStatus?.sapRunId) paso.sapRunId = sapStatus.sapRunId
+  if (sapStatus?.codigoSap) paso.sapStatus = sapStatus.codigoSap
+
+  Object.assign(paso, nextStepState(
+    paso,
+    sapStatus,
+    sapStatus?.sinConfirmar ? sinReintentos(config) : config,
+    instante,
+    politica,
+  ))
+
+  if (sapStatus?.detalle) paso.detalle = sapStatus.detalle
+  if (sapStatus?.textoDeError && (paso.status === 'error' || paso.status === 'pending')) {
+    paso.error = paso.status === 'pending'
+      ? `${sapStatus.textoDeError} (intento ${paso.retryCount}/${config?.maxRetries ?? 0})`
+      : sapStatus.textoDeError
+  }
+}
+
+/**
  * Avanza un nivel de pasos: el primer nivel de la orquestación, o los hijos de un grupo.
  *
  * Es la misma lógica en los dos casos, y por eso está una sola vez. Modifica `estados` en el sitio;
  * quien llama lo guarda.
+ *
+ * Hay dos formas de lanzar un paso, según el adaptador:
+ *
+ *   - Con `lanzar`: SAP devuelve un identificador y después se le pregunta cómo va (CI-DS, IBP). Es lo de
+ *     siempre.
+ *   - Con `ejecutar` (`sincrono`, CI Tools): la llamada a CPI ES el resultado y tarda lo que tarde la carga.
+ *     Aquí hay que hacer algo que en la otra forma no hace falta: **guardar el estado ANTES de enviar**
+ *     (`guardarAntes`). El estado se guarda al final de cada vuelta, y una vuelta con una carga larga puede
+ *     durar minutos; si la función muere a mitad, sin esto el paso seguiría «pendiente» en lo guardado y la
+ *     vuelta siguiente lo enviaría OTRA VEZ, con la primera carga ya dentro de IBP. Con esto queda «en marcha»
+ *     y, si nadie recogió su respuesta, la vuelta siguiente lo lee como «sin confirmar» (ver `consultar` del
+ *     adaptador) y NO lo repite.
  */
-async function avanzarNivel({ nodos, aristas, estados, destino, adaptador, porOmision, ahora, politica }) {
+async function avanzarNivel({
+  nodos, aristas, estados, destino, adaptador, porOmision, ahora, politica, orchestrationId, guardarAntes,
+}) {
   const predecesores = directPredecessors(nodos, aristas)
   const configPorId = Object.fromEntries(nodos.map((nodo) => [nodo.id, nodo.data ?? {}]))
   const porId = Object.fromEntries(nodos.map((nodo) => [nodo.id, nodo]))
+
+  const sincrono = Boolean(adaptador.sincrono)
+  /** Los pasos marcados en esta vuelta que hay que enviar, una vez guardado el estado. Solo con `sincrono`. */
+  const aEnviar = []
 
   const arrancar = async (id) => {
     const paso = estados[id]
@@ -114,6 +181,14 @@ async function avanzarNivel({ nodos, aristas, estados, destino, adaptador, porOm
 
     // La letra de SAP de un intento anterior no es de esta ejecución nueva.
     if ('sapStatus' in paso) paso.sapStatus = null
+
+    if (sincrono) {
+      // Todavía NO se envía: se marca, y se envía cuando todos los de esta vuelta están marcados y guardados.
+      paso.sapRunId = randomUUID()
+      paso.detalle = null
+      aEnviar.push(id)
+      return
+    }
 
     try {
       paso.sapRunId = await adaptador.lanzar(destino, porId[id], porOmision)
@@ -137,12 +212,7 @@ async function avanzarNivel({ nodos, aristas, estados, destino, adaptador, porOm
       } catch {
         return // No se pudo preguntar: se vuelve a intentar en la vuelta siguiente.
       }
-      // Lo que el adaptador sabe además del estado: el identificador ya completo —un trabajo de IBP
-      // que se lanzó sin número de repetición lo gana al contarlo SAP— y la letra de SAP tal cual,
-      // que la pantalla de IBP enseña junto al trabajo. CI-DS no manda ninguno de los dos.
-      if (sapStatus?.sapRunId) paso.sapRunId = sapStatus.sapRunId
-      if (sapStatus?.codigoSap) paso.sapStatus = sapStatus.codigoSap
-      Object.assign(paso, nextStepState(paso, sapStatus, configPorId[nodo.id], ahora, politica))
+      aplicarEstado(paso, sapStatus, configPorId[nodo.id], ahora, politica)
       return
     }
 
@@ -165,6 +235,30 @@ async function avanzarNivel({ nodos, aristas, estados, destino, adaptador, porOm
       return
     }
     await arrancar(nodo.id)
+  }))
+
+  // 3. (Solo síncronos.) Con todo marcado, se guarda y recién entonces se envía. Si guardar falla, la vuelta
+  // entera falla y NO se envía nada: lo marcado en memoria se pierde y los pasos siguen pendientes en lo
+  // guardado, que es lo seguro.
+  if (aEnviar.length === 0) return
+  await guardarAntes?.()
+
+  await Promise.allSettled(aEnviar.map(async (id) => {
+    const paso = estados[id]
+    let sapStatus
+    try {
+      sapStatus = await adaptador.ejecutar(destino, porId[id], porOmision, { sapRunId: paso.sapRunId, orchestrationId })
+    } catch (fallo) {
+      // Que `ejecutar` lance no es lo esperado (sus fallos conocidos los devuelve) y no se sabe si el envío
+      // llegó a salir: se trata como «sin confirmar», que es lo que no se reintenta sola.
+      sapStatus = {
+        statusCode: 'ERROR', statusMsg: fallo.message, textoDeError: fallo.message, sinConfirmar: true,
+      }
+    }
+    // El fin es el comienzo de la vuelta más lo que duró la llamada: así lo que se anota es lo que tardó CPI y
+    // no el tiempo que esperó una vuelta paralela.
+    const fin = ahora + Math.max(0, Number(sapStatus?.duracionMs) || 0)
+    aplicarEstado(paso, sapStatus, configPorId[id], fin, politica)
   }))
 }
 
@@ -215,6 +309,19 @@ export async function tickRun(clientId, orchestrationId, ahora = Date.now()) {
     const politica = politicaDe(adaptador)
     const primerNivel = nodes.filter((nodo) => !nodo.parentId)
 
+    // Un adaptador síncrono espera a CPI dentro de esta vuelta: el cerrojo tiene que durar lo que la espera.
+    if (adaptador.sincrono) await getRedis().expire(lockKey(clientId, orchestrationId), RUN_LOCK_SINCRONO_SECONDS)
+
+    // Guardar ANTES de enviar (solo lo usan los adaptadores síncronos; ver `avanzarNivel`). En una cola: varios
+    // grupos pueden pedirlo a la vez, y dos escrituras sueltas podrían llegar a Redis en orden cambiado y dejar
+    // la más vieja encima. En cola, cada una guarda el estado tal como está cuando le toca, que es siempre el
+    // más nuevo.
+    let colaDeGuardado = Promise.resolve()
+    const guardarAntes = () => {
+      colaDeGuardado = colaDeGuardado.then(() => guardarRun(clientId, orchestrationId, run))
+      return colaDeGuardado
+    }
+
     // Los grupos que ya arrancaron avanzan por dentro antes de mirar el primer nivel: así un grupo
     // que termina en esta misma vuelta desbloquea a lo que venía detrás sin esperar a la siguiente.
     await Promise.allSettled(primerNivel
@@ -231,6 +338,8 @@ export async function tickRun(clientId, orchestrationId, ahora = Date.now()) {
           porOmision,
           ahora,
           politica,
+          orchestrationId,
+          guardarAntes,
         })
         const resultado = groupOutcome(hijos.map((hijo) => hijo.id), estadoGrupo.children, politica)
         if (resultado !== 'running') {
@@ -248,6 +357,8 @@ export async function tickRun(clientId, orchestrationId, ahora = Date.now()) {
       porOmision,
       ahora,
       politica,
+      orchestrationId,
+      guardarAntes,
     })
 
     // Un grupo recién arrancado no lanza tareas: `avanzarNivel` lo puso en marcha y sus hijos

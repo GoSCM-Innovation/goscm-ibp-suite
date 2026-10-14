@@ -4,7 +4,7 @@
 // los de la base. El icono viene del estilo de v7: un emoji por módulo, reconocible de un
 // vistazo y sin depender de ninguna librería.
 
-// Los identificadores (`explorer`, `jobs`, `cids`) son los que viajan a la base y a las
+// Los identificadores (`explorer`, `jobs`, `cids`, `ci`) son los que viajan a la base y a las
 // guardas del servidor: NO se tocan. Lo que se ve por pantalla es `name`, y cambiarlo no
 // exige ninguna migración.
 
@@ -109,6 +109,12 @@ export const MODULES = [
     name: 'CI-DS Tools',
     icon: '🧪',
     summary: 'Monitoreo y orquestación de tareas, explorador de integraciones y documentación.',
+  },
+  {
+    id: 'ci',
+    name: 'CI Tools',
+    icon: '🔗',
+    summary: 'Integraciones de Cloud Integration que cargan datos a SAP IBP: configúralas, ejecútalas y encadénalas en orquestaciones.',
   },
 ]
 
