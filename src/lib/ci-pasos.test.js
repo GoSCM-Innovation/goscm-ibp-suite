@@ -11,7 +11,6 @@ import {
   grafoDePasos,
   grupoNuevo,
   idsDeEjecucion,
-  idsDeNodos,
   moverHijo,
   moverPaso,
   nuevoIdDePaso,
@@ -337,17 +336,24 @@ describe('contar e identificar', () => {
     expect(totalDeIntegraciones([])).toBe(0)
   })
 
-  it('idsDeNodos y idsDeEjecucion hablan de los mismos nodos', () => {
+  it('una ejecución es de la misma versión si tiene los mismos nodos que el grafo guardado', () => {
     const run = { nodes: { a: { status: 'success' }, g: { type: 'group', children: { b: {}, c: {} } }, vacio: { type: 'group', children: {} } } }
-    expect([...idsDeNodos(lista())].sort()).toEqual(['a', 'b', 'c', 'g', 'vacio'])
     expect([...idsDeEjecucion(run)].sort()).toEqual(['a', 'b', 'c', 'g', 'vacio'])
-    expect(esDeLaMismaVersion(lista(), run)).toBe(true)
+    expect(esDeLaMismaVersion(grafoDePasos(lista()).nodes, run)).toBe(true)
   })
 
   it('una ejecución con otros nodos no es de esta lista', () => {
-    expect(esDeLaMismaVersion(lista(), { nodes: { viejo: { status: 'error' } } })).toBe(false)
-    expect(esDeLaMismaVersion([paso('a')], { nodes: { a: {}, b: {} } })).toBe(false)
-    expect(esDeLaMismaVersion([paso('a'), paso('b')], { nodes: { a: {} } })).toBe(false)
+    const nodos = grafoDePasos(lista()).nodes
+    expect(esDeLaMismaVersion(nodos, { nodes: { viejo: { status: 'error' } } })).toBe(false)
+    expect(esDeLaMismaVersion([{ id: 'a' }], { nodes: { a: {}, b: {} } })).toBe(false)
+    expect(esDeLaMismaVersion([{ id: 'a' }, { id: 'b' }], { nodes: { a: {} } })).toBe(false)
     expect(esDeLaMismaVersion([], null)).toBe(true)
+    expect(esDeLaMismaVersion(undefined, null)).toBe(true)
+  })
+
+  // Una orquestación del editor de etapas no tiene grupos en el grafo guardado, y sus ejecuciones tampoco.
+  it('una orquestación de etapas y su ejecución son de la misma versión aunque la pantalla las enseñe con grupos', () => {
+    const guardada = grafoDeEtapas([[paso('a')], [paso('b'), paso('c')]])
+    expect(esDeLaMismaVersion(guardada.nodes, { nodes: { a: {}, b: {}, c: {} } })).toBe(true)
   })
 })

@@ -289,6 +289,28 @@ describe('retomar', () => {
   })
 })
 
+// Las ejecuciones del editor de etapas no tienen el grupo: sus integraciones están sueltas en el primer nivel.
+describe('una ejecución del editor de etapas', () => {
+  const sueltas = () => ejecucion('error', {
+    p1: estado('success', { detalle: { httpStatus: 200 } }),
+    p2: estado('error', { error: 'HTTP 500: x', detalle: { httpStatus: 500, mplId: 'MPL-7' } }),
+    p3: estado('success', { detalle: { httpStatus: 200 } }),
+    p4: estado('skipped'),
+  })
+
+  it('enseña las integraciones del grupo aunque la ejecución no tenga el grupo', async () => {
+    await montar(VistaDeEjecucion, props(sueltas()))
+    const filas = [...dom().querySelectorAll('.ci-orq-fila')].map((fila) => fila.textContent)
+    expect(filas).toHaveLength(4)
+    expect(filas[1]).toContain('FACTURAS')
+    expect(filas[1]).toContain('MPL-7')
+    expect(filas[2]).toContain('PRODUCCION')
+    expect(dom().querySelector('.ci-orq-grupo-fila').textContent).toContain('Cifras')
+    // El grupo no tiene estado propio: no inventa uno.
+    expect(dom().querySelector('.ci-orq-grupo-fila .ci-orq-fila-estado')).toBeNull()
+  })
+})
+
 describe('sin ejecución', () => {
   it('no dibuja nada', async () => {
     await montar(VistaDeEjecucion, { ...props(enMarcha()), run: null })

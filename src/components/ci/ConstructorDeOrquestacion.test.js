@@ -498,14 +498,14 @@ describe('la cabecera', () => {
     expect(boton('Salir de pantalla completa')).toBeDefined()
   })
 
-  it('«Ver última ejecución» solo está si hay una', async () => {
+  it('«Última ejecución» solo está si hay una', async () => {
     await montar(ConstructorDeOrquestacion, props())
-    expect(boton('Ver última ejecución')).toBeUndefined()
+    expect(boton('Última ejecución')).toBeUndefined()
     await desmontar()
 
     const p = props({ hayEjecucion: true })
     await montar(ConstructorDeOrquestacion, p)
-    await pulsar(boton('Ver última ejecución'))
+    await pulsar(boton('Última ejecución'))
     expect(p.onVerEjecucion).toHaveBeenCalledTimes(1)
   })
 })

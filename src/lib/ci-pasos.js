@@ -368,15 +368,17 @@ export const totalDeIntegraciones = (pasos) => pasos.reduce(
   0,
 )
 
-/** Los identificadores de todos los nodos de la lista: pasos, grupos y las integraciones de cada grupo. */
-export const idsDeNodos = (pasos) => new Set(pasos.flatMap((una) => [una.id, ...(esGrupo(una) ? (una.children ?? []).map((hijo) => hijo.id) : [])]))
-
 /** Los identificadores de una ejecución: los de su primer nivel y los de las integraciones dentro de cada grupo. */
 export const idsDeEjecucion = (run) => new Set(Object.entries(run?.nodes ?? {}).flatMap(([id, paso]) => [id, ...Object.keys(paso?.children ?? {})]))
 
-/** ¿La ejecución es de ESTA lista? Retomar sigue una ejecución concreta: con otros pasos ya no tiene sentido. */
-export function esDeLaMismaVersion(pasos, run) {
-  const de = idsDeNodos(pasos)
+/**
+ * ¿La ejecución es de ESTOS nodos? Retomar sigue una ejecución concreta: con otros pasos ya no tiene sentido.
+ *
+ * Se compara con los nodos GUARDADOS (`orquestacion.nodes`) y no con la lista que dibuja la pantalla: una orquestación del editor
+ * de etapas se enseña con grupos que en el grafo guardado no existen, y su ejecución tampoco los tiene.
+ */
+export function esDeLaMismaVersion(nodes, run) {
+  const de = new Set((nodes ?? []).map((nodo) => String(nodo.id)))
   const ejecucion = idsDeEjecucion(run)
   return de.size === ejecucion.size && [...ejecucion].every((id) => de.has(id))
 }

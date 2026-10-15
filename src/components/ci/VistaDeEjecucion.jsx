@@ -164,6 +164,25 @@ export default function VistaDeEjecucion({
       <div className="ci-orq-ejecucion-pasos">
         {pasos.map((paso, i) => {
           const estado = run.nodes?.[paso.id]
+
+          // Una ejecución del editor de etapas no tiene el grupo: sus integraciones están sueltas en el primer nivel. Se enseñan
+          // igual, bajo un grupo sin estado propio.
+          if (!estado && esGrupo(paso) && (paso.children ?? []).some((hijo) => run.nodes?.[hijo.id])) {
+            return (
+              <div key={paso.id}>
+                <div className="ci-orq-grupo-fila">
+                  <div className="ci-orq-fila-icono cuadrado ci-orq-icono-espera" aria-hidden="true">⊞</div>
+                  <div><span className="ci-orq-grupo-nombre">{paso.label || `Grupo paralelo · paso ${i + 1}`}</span></div>
+                </div>
+                {paso.children.map((hijo) => {
+                  const integracion = porId.get(hijo.integrationId)
+                  return (
+                    <FilaDeIntegracion key={hijo.id} estado={run.nodes[hijo.id]} etiqueta={integracion ? integracion.name : hijo.label} integracion={integracion} hijo />
+                  )
+                })}
+              </div>
+            )
+          }
           if (!estado) return null
 
           if (!esGrupo(paso)) {

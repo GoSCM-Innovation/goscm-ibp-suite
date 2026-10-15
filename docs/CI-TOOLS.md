@@ -129,7 +129,7 @@ rehízo con componentes propios de CI Tools (el código de IBP no se tocó), con
   se ejecutará («Paso 2 (a la vez)»).
 - **La ejecución reemplaza al editor**: icono de estado por paso, tiempo en vivo, HTTP y MPL ID, «⊘ Cancelar», «↺ Retomar» y
   «← Volver al editor». Una ejecución en marcha se ve siempre, y al terminar su resultado se queda a la vista hasta volver al editor
-  («Ver última ejecución» la recupera). Con una en marcha no se abre, crea, duplica ni elimina otra orquestación (como en IBP): la
+  («Última ejecución» la recupera). Con una en marcha no se abre, crea, duplica ni elimina otra orquestación (como en IBP): la
   pantalla es quien la empuja.
 
 Lo propio de CI Tools, que IBP no tiene: el guardado automático a los 800 ms (no hay botón), «Retomar», «Completado con

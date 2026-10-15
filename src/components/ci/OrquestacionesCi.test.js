@@ -349,7 +349,7 @@ describe('lanzar la orquestación', () => {
     expect(texto()).toContain('En ejecución')
   })
 
-  it('«← Volver al editor» regresa al editor, que ofrece «Ver última ejecución»', async () => {
+  it('«← Volver al editor» regresa al editor, que ofrece «Última ejecución»', async () => {
     orquestaciones.startRun.mockResolvedValue(ejecucion('success', { p1: estado('success'), p2: estado('success') }))
     await montarCon([dosPasos()])
     await abrir('Carga diaria')
@@ -364,7 +364,7 @@ describe('lanzar la orquestación', () => {
     await pulsar(boton('← Volver al editor'))
     expect(campoDeNombre()).not.toBeNull()
 
-    await pulsar(boton('Ver última ejecución'))
+    await pulsar(boton('Última ejecución'))
     expect(dom().querySelector('.ci-orq-ejecucion')).not.toBeNull()
   })
 })
@@ -476,12 +476,12 @@ describe('una ejecución en marcha', () => {
     await montarCon([dosPasos(), unPaso()])
     await abrir('Carga diaria')
     await pasar(0)
-    expect(boton('Ver última ejecución')).toBeDefined()
+    expect(boton('Última ejecución')).toBeDefined()
 
     await abrir('Cierre mensual')
     await pasar(10_000)
     expect(campoDeNombre().value).toBe('Cierre mensual')
-    expect(boton('Ver última ejecución')).toBeUndefined()
+    expect(boton('Última ejecución')).toBeUndefined()
     expect(orquestaciones.tickRun).not.toHaveBeenCalled()
   })
 
@@ -509,7 +509,7 @@ describe('el resultado de la ejecución', () => {
     await abrir(orquestacion.name)
     await pasar(0)
     // Una ejecución que ya terminó no se enseña sola: se pide.
-    await pulsar(boton('Ver última ejecución'))
+    await pulsar(boton('Última ejecución'))
   }
 
   it('un error de CPI enseña el código, el MPL ID y el mensaje; lo siguiente queda omitido', async () => {
@@ -595,6 +595,28 @@ describe('el resultado de la ejecución', () => {
     }))
     expect(boton('↺ Retomar')).toBeUndefined()
     expect(texto()).toContain('La orquestación cambió después de esta ejecución')
+  })
+
+  // Una orquestación del editor de etapas se enseña con un grupo que en el grafo guardado no existe, y su ejecución tampoco lo tiene:
+  // es la MISMA versión, y se puede retomar.
+  it('la ejecución de una orquestación del editor de etapas se ve y se puede retomar', async () => {
+    const deEtapas = {
+      id: 'o-7', name: 'De etapas', connectionId: 'conn-1', createdAt: '2026-10-15T10:00:00.000Z',
+      nodes: [
+        { id: 'a', type: 'task', data: { label: 'MAESTRO', integrationId: 'int-a', errorStrategy: 'stop', maxRetries: 0, retryDelaySeconds: 60 } },
+        { id: 'b', type: 'task', data: { label: 'FACTURAS', integrationId: 'int-b', errorStrategy: 'stop', maxRetries: 0, retryDelaySeconds: 60 } },
+      ],
+      edges: [],
+    }
+    await abrirConResultado(ejecucion('error', {
+      a: estado('success', { detalle: { httpStatus: 200 } }),
+      b: estado('error', { error: 'HTTP 500: x', detalle: { httpStatus: 500, mplId: 'MPL-7' } }),
+    }), deEtapas)
+
+    expect(texto()).toContain('FACTURAS')
+    expect(texto()).toContain('MPL-7')
+    expect(texto()).not.toContain('La orquestación cambió después')
+    expect(boton('↺ Retomar')).toBeDefined()
   })
 
   it('una ejecución cancelada también se puede retomar', async () => {

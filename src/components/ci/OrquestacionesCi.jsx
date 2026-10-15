@@ -47,7 +47,7 @@ export default function OrquestacionesCi({ connection, visible = true }) {
   const [cargando, setCargando] = useState(false)
   const [plegada, setPlegada] = useState(false)
   const [pantallaCompleta, setPantallaCompleta] = useState(false)
-  // Si se ve la ejecución en lugar del editor: al lanzarla, con «Ver última ejecución» o cuando hay una en marcha, y se quita
+  // Si se ve la ejecución en lugar del editor: al lanzarla, con «Última ejecución» o cuando hay una en marcha, y se quita
   // con «← Volver al editor».
   const [verEjecucion, setVerEjecucion] = useState(false)
   const [vistaMovil, setVistaMovil] = useState('lista')
@@ -97,7 +97,7 @@ export default function OrquestacionesCi({ connection, visible = true }) {
   const mostrarEjecucion = Boolean(abierta) && Boolean(run) && (ejecucion.enMarcha || verEjecucion)
   const enPantallaCompleta = pantallaCompleta && Boolean(abierta) && !mostrarEjecucion
   // Retomar sigue una ejecución concreta: solo tiene sentido si la orquestación tiene los MISMOS pasos que cuando se lanzó.
-  const mismaVersion = esDeLaMismaVersion(pasosDeAbierta, run)
+  const mismaVersion = esDeLaMismaVersion(abierta?.nodes, run)
   const puedeRetomar = Boolean(run) && !ejecucion.enMarcha && mismaVersion && (run.status === 'error' || run.status === 'cancelled')
 
   function seleccionar(id) {

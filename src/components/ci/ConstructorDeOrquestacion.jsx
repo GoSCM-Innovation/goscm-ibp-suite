@@ -38,7 +38,7 @@ import TarjetaDePaso from './TarjetaDePaso.jsx'
 const ESPERA_DE_GUARDADO_MS = 800
 
 /** El ancho de la paleta: el que trae, el mínimo y el máximo a los que se puede arrastrar, y lo que mueve una flecha. */
-const ANCHO_DE_LA_PALETA = 260
+const ANCHO_DE_LA_PALETA = 240
 const ANCHO_MINIMO = 180
 const ANCHO_MAXIMO = 520
 const PASO_DEL_TECLADO = 16
@@ -359,7 +359,7 @@ export default function ConstructorDeOrquestacion({
           />
           <span className={`ci-guardado ci-guardado-${estadoDeGuardado}`} role="status">{TEXTO_DE_GUARDADO[estadoDeGuardado]}</span>
           {hayEjecucion && (
-            <button type="button" className="ci-orq-boton" onClick={onVerEjecucion}>Ver última ejecución</button>
+            <button type="button" className="ci-orq-boton" onClick={onVerEjecucion}>Última ejecución</button>
           )}
           {onAlternarPantallaCompleta && (
             <button
