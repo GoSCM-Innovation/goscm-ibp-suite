@@ -136,6 +136,26 @@ describe('ejecutar una integración', () => {
     expect(texto()).toContain('An internal server error occured')
   })
 
+  // Pedido del usuario (2026-10-15): una respuesta distinta de OK no es necesariamente un error; IBP pudo rechazar un registro.
+  it('una respuesta distinta de OK se enseña como advertencia, no como error, y dice qué mirar', async () => {
+    const p = props({
+      onEjecutar: vi.fn(async () => ({ resultado: 'warning', httpStatus: 500, duracionMs: 16_000, mplId: 'AGrOoIkGv-d7sJej0DVu0bhXLV8K', mensaje: 'An internal server error occured' })),
+    })
+    await montar(DialogoDeEjecucion, p)
+    await pulsar(boton('▶ Ejecutar'))
+    await asentar()
+
+    expect(texto()).toContain('Con advertencias')
+    expect(texto()).not.toContain('Error')
+    expect(dom().querySelector('.ci-estado-aviso')).not.toBeNull()
+    expect(texto()).toContain('HTTP 500')
+    expect(texto()).toContain('AGrOoIkGv-d7sJej0DVu0bhXLV8K')
+    expect(texto()).toContain('CPI respondió 500 y no 200 (OK)')
+    expect(texto()).toContain('no es necesariamente un error')
+    // No es una alerta: no hay nada que repetir a ciegas ni que corregir de inmediato.
+    expect(dom().querySelector('[role="alert"]')).toBeNull()
+  })
+
   // No es lo mismo que un error: la carga pudo haber entrado.
   it('una carga sin confirmar avisa de revisar antes de repetir', async () => {
     const p = props({

@@ -71,6 +71,24 @@ segment»), no 400, y los valores «por área» (para filtros de cifras) tardaro
 **Sin hacer**: sugerir el nivel de tiempo desde IBP (falta saber la correspondencia con `PERIODIDn`), y revisar el body
 de una integración **dentro de una orquestación** (el aviso aparece al editarla y al ejecutarla suelta).
 
+## Cuatro resultados, no tres (2026-10-15)
+
+Pedido del usuario: una respuesta distinta de OK no es necesariamente un error. En su historial, 3 de 5 cargas terminaron con
+HTTP 500 y «The MPL ID for the failed message is…» y se marcaban «Error», pero duraban lo mismo que las buenas: el iFlow SÍ
+procesó la carga y lo que pasó es que IBP pudo rechazar algún registro.
+
+| Resultado | Cuándo |
+|---|---|
+| **Completada** (`success`) | CPI contestó **200** (OK). |
+| **Completada con advertencias** (`warning`) | Una respuesta que no es OK pero **trae el MPL ID** de un mensaje (un 500, un 400…), o un 2xx que no es 200. |
+| **Error** | 401, 403 y 404 (credenciales, permiso o dirección: la llamada no se procesó) aunque traigan MPL ID, un error **sin** MPL ID, una redirección, o la llamada que no salió. |
+| **Sin confirmar** | Se agotó el tiempo o se cortó la conexión: no se sabe cómo terminó. |
+
+Una advertencia cuenta en una orquestación como paso **completado**: no se reintenta, no cuenta como fallo y no frena lo que viene
+detrás (el motor lo trata como `success_with_errors`). La pantalla la enseña en ámbar, con el MPL ID y una explicación de qué mirar
+(el monitor de Cloud Integration). Migración 008 (aplicada el 2026-10-15): `warning` en `ci_runs.status`. Las ejecuciones anteriores
+no se tocaron: siguen como «Error».
+
 ## Pantalla compacta (2026-10-15)
 
 Pedido del usuario: aprovechar el espacio. Lo que se hizo, por si alguien lo quiere deshacer:

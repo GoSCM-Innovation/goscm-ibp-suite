@@ -239,15 +239,19 @@ const DETALLE_MAX = 300
  */
 function estadoDelMotor(salida) {
   const correcta = salida.resultado === 'success'
+  // «Completada con advertencias»: CPI procesó la carga y contestó algo distinto de OK (p. ej. IBP rechazó un registro). Para
+  // el motor es un paso COMPLETADO (`success_with_errors`): no se reintenta, no cuenta como fallo y no frena lo que sigue.
+  const conAdvertencias = salida.resultado === 'warning'
   const sinConfirmar = salida.resultado === 'unconfirmed'
   const recorte = String(salida.mensaje ?? '').slice(0, DETALLE_MAX)
   return {
-    statusCode: correcta ? 'SUCCESS' : 'ERROR',
+    statusCode: correcta ? 'SUCCESS' : conAdvertencias ? 'SUCCESS_WITH_ERRORS_E' : 'ERROR',
     statusMsg: recorte,
     duracionMs: salida.duracionMs,
     sinConfirmar,
-    textoDeError: correcta ? null : (salida.httpStatus ? `HTTP ${salida.httpStatus}: ${recorte}` : recorte),
+    textoDeError: correcta || conAdvertencias ? null : (salida.httpStatus ? `HTTP ${salida.httpStatus}: ${recorte}` : recorte),
     detalle: {
+      advertencia: conAdvertencias,
       httpStatus: salida.httpStatus ?? null,
       mplId: salida.mplId ?? null,
       mensaje: recorte,

@@ -244,6 +244,9 @@
 .ci-estado-mal { background: color-mix(in srgb, var(--red) 16%, transparent); color: var(--red); }
 /* «Sin confirmar» y «cancelado» no son ni éxito ni error: color propio, el de aviso. */
 .ci-estado-duda { background: var(--accent-bg-soft); color: var(--accent); }
+/* Completada con advertencias: ámbar, como «sin confirmar», porque ninguno de los dos es ni una cosa ni la otra. */
+.ci-estado-aviso { background: var(--accent-bg-soft); color: var(--accent); }
+.notice-aviso { background: var(--accent-bg-soft); border-left-color: var(--accent); color: var(--text); }
 .ci-estado-en-curso { background: color-mix(in srgb, var(--cyan) 16%, transparent); color: var(--cyan); }
 .ci-estado-espera { background: var(--surface-glass); color: var(--text2); }
 

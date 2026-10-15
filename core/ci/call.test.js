@@ -77,22 +77,47 @@ describe('CPI contesta', () => {
   })
 
   it('202 y 204 también son éxito', async () => {
-    for (const codigo of [202, 204]) {
-      const fetchImpl = vi.fn().mockResolvedValue(respuesta(codigo))
-      expect((await llamarEndpoint({ url: URL_CI, credentials: credenciales, cuerpo, fetchImpl })).resultado).toBe('success')
-    }
+    // Solo el 200 es «OK»: cualquier otro 2xx se enseña como advertencia (ver abajo).
+    const fetchImpl = vi.fn().mockResolvedValue(respuesta(200))
+    expect((await llamarEndpoint({ url: URL_CI, credentials: credenciales, cuerpo, fetchImpl })).resultado).toBe('success')
   })
 
-  // El mensaje real de la captura de Postman.
-  it('un 500 es error y saca el MPL ID del texto', async () => {
+  // El mensaje real de la captura de Postman. Pedido del usuario (2026-10-15): CPI contesta así cuando IBP rechazó algún
+  // registro, y eso no es necesariamente un error. En su historial, 3 de 5 cargas terminaron así.
+  it('un 500 con el MPL ID de un mensaje es una advertencia, no un error: el iFlow procesó la carga', async () => {
     const texto = 'An internal server error occured: The MPL ID for the failed message is : AGrOoIkGv-d7sJej0DVu0bhXLV8K'
     const fetchImpl = vi.fn().mockResolvedValue(respuesta(500, texto))
     const salida = await llamarEndpoint({ url: URL_CI, credentials: credenciales, cuerpo, fetchImpl })
 
     expect(salida).toMatchObject({
-      resultado: 'error', enviado: true, httpStatus: 500, mplId: 'AGrOoIkGv-d7sJej0DVu0bhXLV8K',
+      resultado: 'warning', enviado: true, httpStatus: 500, mplId: 'AGrOoIkGv-d7sJej0DVu0bhXLV8K',
     })
     expect(salida.mensaje).toContain('internal server error')
+  })
+
+  it.each([202, 204, 207])('un %i, que es 2xx pero no 200 (OK), es una advertencia', async (codigo) => {
+    const fetchImpl = vi.fn().mockResolvedValue(respuesta(codigo, ''))
+    const salida = await llamarEndpoint({ url: URL_CI, credentials: credenciales, cuerpo, fetchImpl })
+    expect(salida.resultado).toBe('warning')
+    expect(salida.mensaje).toContain(String(codigo))
+  })
+
+  it('un 400 con MPL ID también es advertencia; sin MPL ID es error', async () => {
+    const conMpl = vi.fn().mockResolvedValue(respuesta(400, 'The MPL ID for the failed message is : AGrXXXXXXXXXXXX'))
+    const sinMpl = vi.fn().mockResolvedValue(respuesta(400, 'Bad Request'))
+    expect((await llamarEndpoint({ url: URL_CI, credentials: credenciales, cuerpo, fetchImpl: conMpl })).resultado).toBe('warning')
+    expect((await llamarEndpoint({ url: URL_CI, credentials: credenciales, cuerpo, fetchImpl: sinMpl })).resultado).toBe('error')
+  })
+
+  it('un 500 SIN MPL ID sigue siendo error: no hay prueba de que el iFlow procesara nada', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(respuesta(500, 'Internal Server Error'))
+    expect((await llamarEndpoint({ url: URL_CI, credentials: credenciales, cuerpo, fetchImpl })).resultado).toBe('error')
+  })
+
+  // Dicen que la llamada ni siquiera se procesó: credenciales, permiso o dirección. Aunque el texto traiga un MPL ID.
+  it.each([401, 403, 404])('un %i es error aunque la respuesta traiga un MPL ID', async (codigo) => {
+    const fetchImpl = vi.fn().mockResolvedValue(respuesta(codigo, 'The MPL ID for the failed message is : AGrXXXXXXXXXXXX'))
+    expect((await llamarEndpoint({ url: URL_CI, credentials: credenciales, cuerpo, fetchImpl })).resultado).toBe('error')
   })
 
   it.each([400, 401, 403, 404, 502, 503])('un %i es error', async (codigo) => {

@@ -9,8 +9,9 @@ import { ESTADOS_DE_EJECUCION, fechaLegible, listarEjecuciones } from '../../lib
 import { copyText } from '../../lib/clipboard.js'
 import BotonActualizar from '../ui/BotonActualizar.jsx'
 import BotonCopiar from '../ui/BotonCopiar.jsx'
+import { AvisoDeAdvertencia } from './DialogoDeEjecucion.jsx'
 
-const ESTADOS_DEL_FILTRO = [['', 'Todas'], ['error', 'Con error'], ['unconfirmed', 'Sin confirmar'], ['success', 'Completadas']]
+const ESTADOS_DEL_FILTRO = [['', 'Todas'], ['error', 'Con error'], ['warning', 'Con advertencias'], ['unconfirmed', 'Sin confirmar'], ['success', 'Completadas']]
 
 export default function Historial({ connection }) {
   const [ejecuciones, setEjecuciones] = useState(null)
@@ -141,6 +142,7 @@ function FilaDeHistorial({ una, meta, desplegada, onAlternar }) {
                 ))}
               </div>
             )}
+            {una.status === 'warning' && <AvisoDeAdvertencia httpStatus={una.httpStatus} />}
             {una.message ? <pre className="ci-resultado-mensaje mono">{una.message}</pre> : <span className="card-hint">Sin mensaje.</span>}
           </td>
         </tr>

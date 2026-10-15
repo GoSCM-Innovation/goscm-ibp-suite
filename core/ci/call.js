@@ -2,11 +2,16 @@
 //
 // Es el equivalente de pulsar «Send» en Postman: un POST con el body y Basic Auth, que CPI contesta cuando
 // termina de procesar. No hay segunda llamada para preguntar cómo salió: la respuesta ES el resultado. Por
-// eso este archivo decide, con lo que llegó, en cuál de tres estados queda lo que se envió:
+// eso este archivo decide, con lo que llegó, en cuál de cuatro estados queda lo que se envió:
 //
-//   success      CPI contestó 2xx.
-//   error        CPI contestó con un error (4xx, 5xx), o la llamada ni siquiera salió (el host no responde, la
-//                dirección no pasó el portero). Está claro qué pasó.
+//   success      CPI contestó 200 (OK).
+//   warning      CPI contestó algo distinto de OK pero el iFlow SÍ procesó la carga: lo que pasó puede ser que IBP rechazara
+//                algún registro, y eso no es necesariamente un error. Es una respuesta que trae el MPL ID de un mensaje
+//                (CPI lo da al reportar un mensaje fallido, p. ej. un 500) o un 2xx que no es 200. El usuario lo pidió el
+//                2026-10-15: en el historial real, 3 de 5 cargas terminaron así y se marcaban «Error».
+//   error        CPI no llegó a procesar la carga: rechazó las credenciales o el permiso (401, 403), no encontró el
+//                endpoint (404), contestó un error sin MPL ID, una redirección, o la llamada ni siquiera salió (el host
+//                no responde, la dirección no pasó el portero). Está claro qué pasó.
 //   unconfirmed  Se envió y NO se sabe cómo terminó: se agotó el tiempo, o se cortó la conexión a mitad. La carga
 //                pudo haber entrado, entera o a medias. No se da por buena ni por mala, y quien llama NO debe
 //                reintentarla sola: repetir una carga que sí entró es de los errores más caros que hay aquí.
@@ -132,11 +137,20 @@ export async function llamarEndpoint({
     }
   }
 
-  if (httpStatus >= 200 && httpStatus < 300) {
+  if (httpStatus === 200) {
     return { resultado: 'success', enviado: true, httpStatus, duracionMs: duracion(), mplId, mensaje }
   }
 
+  // Un 2xx que no es 200, o cualquier respuesta con el MPL ID de un mensaje (menos 401, 403 y 404, que dicen que la llamada
+  // ni siquiera se procesó): el iFlow trabajó, y lo que haya que revisar está en el monitor de CPI.
   const motivo = MOTIVO_DE_ERROR[httpStatus]
+  if ((httpStatus > 200 && httpStatus < 300) || (!motivo && mplId)) {
+    return {
+      resultado: 'warning', enviado: true, httpStatus, duracionMs: duracion(), mplId,
+      mensaje: mensaje || `CPI respondió ${httpStatus} sin mensaje.`,
+    }
+  }
+
   return {
     resultado: 'error', enviado: true, httpStatus, duracionMs: duracion(), mplId,
     mensaje: motivo

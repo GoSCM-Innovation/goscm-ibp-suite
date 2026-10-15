@@ -362,6 +362,16 @@ describe('adaptador de CI Tools', () => {
     })
   })
 
+  // «Con advertencias» = CPI procesó la carga y contestó algo distinto de OK: el motor lo cuenta como paso COMPLETADO.
+  it('una advertencia es un paso completado con advertencias: ni error ni reintento, con el MPL ID en el detalle', async () => {
+    executeIntegration.mockResolvedValue({ ...bien, resultado: 'warning', httpStatus: 500, mplId: 'MPL-1', mensaje: 'rechazo' })
+    const salida = await ci.ejecutar(destino, nodo, {}, {})
+    expect(salida).toMatchObject({
+      statusCode: 'SUCCESS_WITH_ERRORS_E', textoDeError: null, sinConfirmar: false,
+      detalle: { advertencia: true, httpStatus: 500, mplId: 'MPL-1', mensaje: 'rechazo' },
+    })
+  })
+
   it('una carga en duda es ERROR marcada «sin confirmar»', async () => {
     executeIntegration.mockResolvedValue({ ...bien, resultado: 'unconfirmed', httpStatus: null, mensaje: 'sin respuesta' })
     expect(await ci.ejecutar(destino, nodo, {}, {})).toMatchObject({ statusCode: 'ERROR', sinConfirmar: true })

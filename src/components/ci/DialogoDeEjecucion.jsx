@@ -24,6 +24,19 @@ import EstadoDeCarga from '../ui/EstadoDeCarga.jsx'
 import Modal from '../ui/Modal.jsx'
 import RevisionIbp from './RevisionIbp.jsx'
 
+/**
+ * Qué quiere decir «con advertencias». CPI contestó algo distinto de OK pero procesó la carga: puede que IBP haya rechazado
+ * algún registro, y eso no es necesariamente un error. Se dice así, y qué mirar, para que nadie lo lea como un fallo.
+ */
+export function AvisoDeAdvertencia({ httpStatus }) {
+  return (
+    <div className="notice notice-aviso" role="status">
+      CPI respondió {httpStatus ?? 'algo distinto de OK'} y no 200 (OK). La carga se procesó, pero IBP pudo rechazar algún
+      registro: no es necesariamente un error. Revisa el detalle con el MPL ID en el monitor de Cloud Integration.
+    </div>
+  )
+}
+
 /** El resultado de una ejecución, como se lee. */
 export function ResultadoDeEjecucion({ run }) {
   const estado = ESTADOS_DE_EJECUCION[run.resultado] ?? { texto: run.resultado, clase: 'espera' }
@@ -41,6 +54,7 @@ export function ResultadoDeEjecucion({ run }) {
           <BotonCopiar titulo="Copiar el MPL ID" onCopiar={() => copyText(run.mplId)} />
         </div>
       )}
+      {run.resultado === 'warning' && <AvisoDeAdvertencia httpStatus={run.httpStatus} />}
       {run.resultado === 'unconfirmed' && (
         <div className="notice notice-error" role="alert">
           No se sabe cómo terminó. La carga pudo haber entrado, entera o a medias: revísala en Cloud Integration

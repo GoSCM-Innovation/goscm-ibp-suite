@@ -53,7 +53,7 @@ const sinEnviar = (mensaje, extra = {}) => ({
 /**
  * Ejecuta una integración y devuelve cómo salió:
  *
- *   { runId, nombre, resultado: 'success' | 'error' | 'unconfirmed', enviado, httpStatus, duracionMs, mplId,
+ *   { runId, nombre, resultado: 'success' | 'warning' | 'error' | 'unconfirmed', enviado, httpStatus, duracionMs, mplId,
  *     mensaje, bloqueada? }
  *
  * No lanza por problemas de la ejecución: los devuelve como `error` para que un paso de una orquestación los

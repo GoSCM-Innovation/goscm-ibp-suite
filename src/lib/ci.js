@@ -87,6 +87,7 @@ export function infoDeOrquestacion(id) {
 export const ESTADOS_DE_EJECUCION = Object.freeze({
   running: { texto: 'En curso', clase: 'en-curso' },
   success: { texto: 'Completada', clase: 'bien' },
+  warning: { texto: 'Con advertencias', clase: 'aviso' },
   error: { texto: 'Error', clase: 'mal' },
   unconfirmed: { texto: 'Sin confirmar', clase: 'duda' },
 })
@@ -96,7 +97,7 @@ export const ESTADOS_DE_PASO = Object.freeze({
   pending: { texto: 'Pendiente', clase: 'espera' },
   running: { texto: 'En curso', clase: 'en-curso' },
   success: { texto: 'Completado', clase: 'bien' },
-  success_with_errors: { texto: 'Completado con errores', clase: 'duda' },
+  success_with_errors: { texto: 'Completado con advertencias', clase: 'aviso' },
   error: { texto: 'Error', clase: 'mal' },
   skipped: { texto: 'Omitido', clase: 'espera' },
   cancelled: { texto: 'Cancelado', clase: 'duda' },

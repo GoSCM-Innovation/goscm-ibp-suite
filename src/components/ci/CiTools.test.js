@@ -103,6 +103,7 @@ describe('el historial', () => {
   const EJECUCIONES = [
     { id: 'r-1', integrationName: 'FACTURAS', folder: 'AREA', origin: 'manual', userEmail: 'ana@x.com', status: 'success', httpStatus: 200, durationMs: 21_430, mplId: null, message: 'OK', variables: { DESDE: '20261005' }, startedAt: '2026-10-14T12:00:00Z', orchestrationName: null },
     { id: 'r-2', integrationName: 'PRODUCTOS', folder: '', origin: 'orchestration', orchestrationName: 'Carga diaria', userEmail: 'luis@x.com', status: 'error', httpStatus: 500, durationMs: 3_000, mplId: 'AGrOoIkGv-d7sJej0DVu0bhXLV8K', message: 'An internal server error occured', variables: {}, startedAt: '2026-10-14T11:00:00Z' },
+    { id: 'r-4', integrationName: 'COMPRAS', folder: '', origin: 'manual', userEmail: 'ana@x.com', status: 'warning', httpStatus: 500, durationMs: 16_000, mplId: 'AGrQ7v_6UBQKvhh8PDiK', message: 'The MPL ID for the failed message is : AGrQ7v_6UBQKvhh8PDiK', variables: {}, startedAt: '2026-10-14T12:30:00Z' },
     { id: 'r-3', integrationName: 'INVENTARIO', folder: '', origin: 'manual', userEmail: 'ana@x.com', status: 'unconfirmed', httpStatus: null, durationMs: null, mplId: null, message: 'No quedó registrada la respuesta', variables: {}, startedAt: '2026-10-14T10:00:00Z' },
   ]
 
@@ -119,6 +120,22 @@ describe('el historial', () => {
     expect(texto()).toContain('Completada')
     expect(texto()).toContain('Error')
     expect(dom().querySelectorAll('.ci-historial-fila')[1].textContent).toContain('500')
+  })
+
+  // Una respuesta distinta de OK con el MPL ID de un mensaje: IBP pudo rechazar un registro, y no es necesariamente un error.
+  it('«con advertencias» tiene su propio estado, su filtro y su explicación, y no se cuenta como error', async () => {
+    await montarHistorial()
+    expect(dom().querySelectorAll('.ci-estado-aviso')).toHaveLength(1)
+    expect(texto()).toContain('Con advertencias')
+
+    await pulsar(boton('Con advertencias'))
+    expect(dom().querySelectorAll('.ci-historial-fila')).toHaveLength(1)
+    expect(texto()).toContain('COMPRAS')
+    expect(texto()).not.toContain('PRODUCTOS')
+
+    await pulsar(dom().querySelector('.ci-historial-fila'))
+    expect(texto()).toContain('no es necesariamente un error')
+    expect(texto()).toContain('AGrQ7v_6UBQKvhh8PDiK')
   })
 
   // Lo que quedó en duda no se pinta como éxito ni como error.
