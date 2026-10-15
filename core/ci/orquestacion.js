@@ -9,7 +9,7 @@
 //     las cuatro primeras cargas ya hechas.
 
 import { getIntegrations } from './integrations.js'
-import { esNombreDeVariable, motivoDeValorInvalido, variablesDeBody } from './body.js'
+import { esNombreDeVariable, leerBody, motivoDeValorInvalido, variablesDeBody, variablesDeFechaDeBloque } from './body.js'
 
 /** Los pasos de una orquestación que ejecutan algo (no los grupos), en el orden en que se dibujaron. */
 export const pasosDeIntegracion = (orquestacion) => (orquestacion?.nodes ?? []).filter((nodo) => nodo.type !== 'group')
@@ -18,7 +18,9 @@ export const pasosDeIntegracion = (orquestacion) => (orquestacion?.nodes ?? []).
  * Qué lleva una orquestación: sus pasos con la integración de cada uno, las variables que piden entre todos
  * y qué pasos apuntan a una integración que no existe.
  *
- * `{ pasos: [{ nodeId, label, integrationId, integracion|null, variables }], variables: [...], rotos: [nodeId] }`
+ * `{ pasos: [{ nodeId, label, integrationId, integracion|null, variables, variablesDeFecha }], variables: [...],
+ *    variablesDeFecha: [...], rotos: [nodeId] }`. `variablesDeFecha` son las variables que en TODOS los pasos donde aparecen
+ * son una fecha (condición sobre `KEYFIGUREDATE`): se piden con un calendario.
  */
 export async function infoDeOrquestacion(clientId, orquestacion) {
   const nodos = pasosDeIntegracion(orquestacion)
@@ -35,12 +37,16 @@ export async function infoDeOrquestacion(clientId, orquestacion) {
       integrationId: nodo.data?.integrationId ?? null,
       integracion: valida ? integracion : null,
       variables: valida ? variablesDeBody(integracion.body) : [],
+      variablesDeFecha: valida ? variablesDeFechaDeBloque(leerBody(integracion.body).bloque) : [],
     }
   })
 
+  const variables = [...new Set(pasos.flatMap((paso) => paso.variables))].sort()
+
   return {
     pasos,
-    variables: [...new Set(pasos.flatMap((paso) => paso.variables))].sort(),
+    variables,
+    variablesDeFecha: variables.filter((nombre) => pasos.every((paso) => !paso.variables.includes(nombre) || paso.variablesDeFecha.includes(nombre))),
     rotos: pasos.filter((paso) => paso.integracion === null).map((paso) => paso.nodeId),
   }
 }

@@ -71,6 +71,18 @@ segment»), no 400, y los valores «por área» (para filtros de cifras) tardaro
 **Sin hacer**: sugerir el nivel de tiempo desde IBP (falta saber la correspondencia con `PERIODIDn`), y revisar el body
 de una integración **dentro de una orquestación** (el aviso aparece al editarla y al ejecutarla suelta).
 
+## Calendario para las fechas (2026-10-15)
+
+`KEYFIGUREDATE` es una fecha y se elige con el calendario del navegador. En el body va como `AAAAMMDD` (`20261005`, el formato de los
+bodies reales); el calendario trabaja con `AAAA-MM-DD` y se traduce en los dos sentidos (`src/lib/fechas.js`).
+
+- **En el filtro**: una condición sobre `KEYFIGUREDATE` muestra calendarios en «Desde / Hasta» (o un calendario que agrega fichas, si
+  es de un solo valor). «+ Rango de fechas» agrega la fila ya con el campo puesto. Una fecha puede ser fija o una **variable**
+  (`{{FECHA_DESDE}}`): el botón «Variable» / «Calendario» pasa de una a otra, y lo que ya era una variable no se pierde.
+- **Al ejecutar**: las variables que van en una condición sobre `KEYFIGUREDATE` se piden con un calendario (propone la última fecha
+  usada). Una variable que además se usa en otro sitio no es solo una fecha y se pide como texto (`variablesDeFechaDeBloque`).
+  En una orquestación es fecha la variable que lo es en TODOS los pasos donde aparece.
+
 ## Cuatro resultados, no tres (2026-10-15)
 
 Pedido del usuario: una respuesta distinta de OK no es necesariamente un error. En su historial, 3 de 5 cargas terminaron con

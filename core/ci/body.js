@@ -15,6 +15,7 @@
 //   - Las variables (`{{FECHA_DESDE}}`) se sustituyen sobre los VALORES de texto ya leídos, nunca sobre el
 //     texto crudo: así un valor no puede cerrar una cadena ni abrir otra clave.
 
+import { leerFiltro } from './filter.js'
 import { componerTipo } from './ibp-nombres.js'
 import { leerMapeo } from './mapping.js'
 
@@ -105,6 +106,36 @@ export function variablesDeBody(texto) {
     for (const coincidencia of cadena.matchAll(TOKEN)) nombres.add(coincidencia[1])
   }
   return [...nombres].sort()
+}
+
+/** Los nombres de variable que hay dentro de un texto suelto, sin repetir. */
+export function variablesDeTexto(texto) {
+  const nombres = new Set()
+  for (const coincidencia of String(texto ?? '').matchAll(TOKEN)) nombres.add(coincidencia[1])
+  return [...nombres]
+}
+
+/**
+ * Las variables de un bloque que son FECHAS: las que se usan dentro de una condición sobre `KEYFIGUREDATE` del filtro. Al
+ * ejecutar se piden con un calendario. Una variable que además se usa en otro sitio (otro campo, otra condición) no es solo una
+ * fecha y se pide como texto: el calendario solo deja elegir fechas.
+ */
+export function variablesDeFechaDeBloque(bloque) {
+  const enFechas = new Set()
+  const fuera = new Set()
+
+  for (const fila of leerFiltro(bloque?.FilterForTheDataSource ?? '')) {
+    const esFecha = fila.tipo !== 'texto' && String(fila.campo ?? '').trim().toUpperCase() === 'KEYFIGUREDATE'
+    const textos = fila.tipo === 'texto' ? [fila.texto] : fila.tipo === 'entre' ? [fila.campo, fila.desde, fila.hasta] : [fila.campo, ...fila.valores]
+    for (const texto of textos) for (const nombre of variablesDeTexto(texto)) (esFecha ? enFechas : fuera).add(nombre)
+  }
+
+  for (const [campo, valor] of Object.entries(bloque ?? {})) {
+    if (campo === 'FilterForTheDataSource') continue
+    for (const cadena of typeof valor === 'string' ? [valor] : []) for (const nombre of variablesDeTexto(cadena)) fuera.add(nombre)
+  }
+
+  return [...enFechas].filter((nombre) => !fuera.has(nombre)).sort()
 }
 
 /**
@@ -218,6 +249,7 @@ export function resumenDeBody(texto) {
     tipoDeMaestro: texto1('MasterDataType'),
     nivelDeTiempo: texto1('TargetTimeProfileLevelinSAPIBP'),
     ...destinoDeBloque(bloque),
+    variablesDeFecha: variablesDeFechaDeBloque(bloque),
     nombreDeLote: texto1('BatchName'),
     variables: variablesDeBody(texto),
   }

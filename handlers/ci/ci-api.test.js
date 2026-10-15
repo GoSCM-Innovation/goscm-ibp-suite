@@ -302,6 +302,16 @@ describe('/api/ci/orchestration-info', () => {
     expect(res.codigo).toBe(400)
   })
 
+  it('dice cuáles variables son fechas, para pedirlas con un calendario', async () => {
+    getOrchestration.mockResolvedValue(orquestacion)
+    getConnectionTarget.mockResolvedValue({ kind: 'ci' })
+    ci.infoDeOrquestacion.mockResolvedValue({ pasos: [], variables: ['DESDE', 'LOTE'], variablesDeFecha: ['DESDE'], rotos: [] })
+    ci.ultimasVariables.mockResolvedValue({})
+    const res = respuesta()
+    await RUTAS['orchestration-info']({ method: 'GET', query: { id: 'o-1' } }, res)
+    expect(res.cuerpo.variablesDeFecha).toEqual(['DESDE'])
+  })
+
   it('devuelve los pasos SIN el body de cada integración, las variables y los últimos valores', async () => {
     getOrchestration.mockResolvedValue(orquestacion)
     getConnectionTarget.mockResolvedValue({ kind: 'ci' })

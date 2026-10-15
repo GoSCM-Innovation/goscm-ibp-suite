@@ -54,8 +54,10 @@ describe('ConstructorDeFiltro', () => {
 
     expect(todosPorEtiqueta('Campo').map((c) => c.value)).toEqual(['MATTYPEID', 'KEYFIGUREDATE'])
     expect(dom().querySelectorAll('.ci-ficha')).toHaveLength(2)
-    expect(porEtiqueta('Desde').value).toBe('20261005')
-    expect(porEtiqueta('Hasta').value).toBe('20270412')
+    // Las fechas del periodo se ven en un calendario (AAAA-MM-DD) y en el body siguen siendo AAAAMMDD.
+    expect(porEtiqueta('Desde').type).toBe('date')
+    expect(porEtiqueta('Desde').value).toBe('2026-10-05')
+    expect(porEtiqueta('Hasta').value).toBe('2027-04-12')
   })
 
   it('quitar una ficha cambia el texto que se envía', async () => {
@@ -117,8 +119,8 @@ describe('ConstructorDeFiltro', () => {
     await montar(ConFiltro, { inicial: '', alCambiar: (t) => cambios.push(t) })
     await pulsar(boton('+ Rango (BT)'))
     await escribir(porEtiqueta('Campo'), 'KEYFIGUREDATE')
-    await escribir(porEtiqueta('Desde'), '20260101')
-    await escribir(porEtiqueta('Hasta'), '20261231')
+    await escribir(porEtiqueta('Desde'), '2026-01-01')
+    await escribir(porEtiqueta('Hasta'), '2026-12-31')
     expect(cambios.at(-1)).toBe("KEYFIGUREDATE BT '20260101' '20261231'")
   })
 
@@ -506,5 +508,78 @@ describe('«Otros campos»', () => {
     expect(texto()).toContain('Campos del body que este formulario no conoce. Se conservan y se envían tal cual.')
     expect(porEtiqueta('CampoDelIflow').value).toBe('valor')
     expect(texto()).not.toContain('+ Agregar un campo que no está en el formulario')
+  })
+})
+
+describe('el calendario de KEYFIGUREDATE', () => {
+  it('«+ Rango de fechas» agrega una fila de KEYFIGUREDATE con dos calendarios', async () => {
+    const cambios = []
+    await montar(ConFiltro, { inicial: '', alCambiar: (t) => cambios.push(t) })
+    await pulsar(boton('+ Rango de fechas'))
+
+    expect(porEtiqueta('Campo').value).toBe('KEYFIGUREDATE')
+    expect(porEtiqueta('Desde').type).toBe('date')
+    expect(porEtiqueta('Hasta').type).toBe('date')
+
+    await escribir(porEtiqueta('Desde'), '2026-10-05')
+    await escribir(porEtiqueta('Hasta'), '2027-04-12')
+    expect(cambios.at(-1)).toBe("KEYFIGUREDATE BT '20261005' '20270412'")
+  })
+
+  it('elegir una fecha escribe AAAAMMDD, y borrarla la quita', async () => {
+    const cambios = []
+    await montar(ConFiltro, { inicial: "KEYFIGUREDATE BT '20261005' '20270412'", alCambiar: (t) => cambios.push(t) })
+    await escribir(porEtiqueta('Desde'), '2026-11-20')
+    expect(cambios.at(-1)).toBe("KEYFIGUREDATE BT '20261120' '20270412'")
+  })
+
+  // Un campo que no es de fecha no se toca: sus valores son texto.
+  it('otro campo sigue con cuadros de texto', async () => {
+    await montar(ConFiltro, { inicial: "MATTYPEID BT 'A' 'Z'" })
+    expect(porEtiqueta('Desde').type).not.toBe('date')
+    expect(porEtiqueta('Desde').value).toBe('A')
+  })
+
+  it('el campo se reconoce sin distinguir mayúsculas', async () => {
+    await montar(ConFiltro, { inicial: "keyfiguredate BT '20261005' '20270412'" })
+    expect(porEtiqueta('Desde').type).toBe('date')
+  })
+
+  it('una variable no se pierde: se ve como texto, con un botón para pasar al calendario', async () => {
+    const cambios = []
+    await montar(ConFiltro, { inicial: "KEYFIGUREDATE BT '{{FECHA_DESDE}}' '{{FECHA_HASTA}}'", alCambiar: (t) => cambios.push(t) })
+    expect(porEtiqueta('Desde').type).not.toBe('date')
+    expect(porEtiqueta('Desde').value).toBe('{{FECHA_DESDE}}')
+    expect(cambios).toEqual([])
+    expect(boton('Calendario')).toBeDefined()
+  })
+
+  it('pasar de una variable al calendario la vacía, y de una fecha a «Variable» deja escribir una variable', async () => {
+    const cambios = []
+    await montar(ConFiltro, { inicial: "KEYFIGUREDATE BT '{{FECHA_DESDE}}' '20270412'", alCambiar: (t) => cambios.push(t) })
+    await pulsar(boton('Calendario'))
+    expect(porEtiqueta('Desde').type).toBe('date')
+    expect(porEtiqueta('Desde').value).toBe('')
+
+    await escribir(porEtiqueta('Desde'), '2026-10-05')
+    expect(cambios.at(-1)).toBe("KEYFIGUREDATE BT '20261005' '20270412'")
+
+    // «Hasta» pasa a variable.
+    const botonesVariable = [...dom().querySelectorAll('button')].filter((b) => b.textContent.trim() === 'Variable')
+    await pulsar(botonesVariable[1])
+    await escribir(porEtiqueta('Hasta'), '{{FECHA_HASTA}}')
+    expect(cambios.at(-1)).toBe("KEYFIGUREDATE BT '20261005' '{{FECHA_HASTA}}'")
+  })
+
+  it('con una sola fecha (KEYFIGUREDATE EQ), el calendario agrega una ficha por cada fecha elegida', async () => {
+    const cambios = []
+    await montar(ConFiltro, { inicial: "KEYFIGUREDATE EQ '20261005'", alCambiar: (t) => cambios.push(t) })
+    await escribir(porEtiqueta('Agregar una fecha'), '2026-10-06')
+    expect(cambios.at(-1)).toBe("KEYFIGUREDATE EQ '20261005',KEYFIGUREDATE EQ '20261006'")
+  })
+
+  it('un campo de otro tipo no ofrece calendario de fichas', async () => {
+    await montar(ConFiltro, { inicial: "MATTYPEID EQ 'ZFER'" })
+    expect(porEtiqueta('Agregar una fecha')).toBeNull()
   })
 })

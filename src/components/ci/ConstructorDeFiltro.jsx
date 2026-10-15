@@ -18,13 +18,15 @@
 import { useRef, useState } from 'react'
 import { escribirFiltro, leerFiltro, motivoDeValorDeFiltroInvalido } from '../../../core/ci/filter.js'
 import { valoresParaFiltro } from '../../lib/ci-ibp.js'
+import { deFechaDelCalendario, esCampoDeFecha } from '../../lib/fechas.js'
 import { useFilasLocales } from '../../lib/useFilasLocales.js'
 import VentanaDeSeleccion from '../ui/VentanaDeSeleccion.jsx'
+import CampoDeFecha from './CampoDeFecha.jsx'
 
 /** Parte lo que se pega («A B, C\nD») en valores sueltos. */
 const valoresDe = (texto) => String(texto).split(/[\s,]+/).map((uno) => uno.trim()).filter(Boolean)
 
-function Fichas({ valores, onCambiar, deshabilitado }) {
+function Fichas({ valores, onCambiar, deshabilitado, conFecha = false }) {
   const [escrito, setEscrito] = useState('')
   const [aviso, setAviso] = useState('')
 
@@ -57,6 +59,16 @@ function Fichas({ valores, onCambiar, deshabilitado }) {
           )}
         </span>
       ))}
+      {/* Las fechas se agregan con un calendario: al elegir una, entra como una ficha más. */}
+      {!deshabilitado && conFecha && (
+        <input
+          type="date"
+          className="input input-sm mono"
+          value=""
+          aria-label="Agregar una fecha"
+          onChange={(evento) => { const fecha = deFechaDelCalendario(evento.target.value); if (fecha) onCambiar([...valores, fecha]) }}
+        />
+      )}
       {!deshabilitado && (
         <input
           className="input input-sm ci-ficha-nueva mono"
@@ -171,26 +183,39 @@ export default function ConstructorDeFiltro({ valor, onCambiar, deshabilitado = 
                   />
                   <span className="ci-filtro-op mono">{fila.tipo === 'entre' ? 'BT' : 'EQ'}</span>
                   {fila.tipo === 'entre' ? (
-                    <>
-                      <input
-                        className="input input-sm mono ci-filtro-valor"
-                        value={fila.desde}
-                        placeholder="desde"
-                        disabled={deshabilitado}
-                        aria-label="Desde"
-                        onChange={(evento) => cambiarFila(i, { desde: evento.target.value.trim() })}
-                      />
-                      <input
-                        className="input input-sm mono ci-filtro-valor"
-                        value={fila.hasta}
-                        placeholder="hasta"
-                        disabled={deshabilitado}
-                        aria-label="Hasta"
-                        onChange={(evento) => cambiarFila(i, { hasta: evento.target.value.trim() })}
-                      />
-                    </>
+                    esCampoDeFecha(fila.campo) ? (
+                      // La fecha del periodo se elige en un calendario (o se deja como variable, que se pide al ejecutar).
+                      <>
+                        <CampoDeFecha valor={fila.desde} ariaLabel="Desde" deshabilitado={deshabilitado} onCambiar={(desde) => cambiarFila(i, { desde })} />
+                        <CampoDeFecha valor={fila.hasta} ariaLabel="Hasta" deshabilitado={deshabilitado} onCambiar={(hasta) => cambiarFila(i, { hasta })} />
+                      </>
+                    ) : (
+                      <>
+                        <input
+                          className="input input-sm mono ci-filtro-valor"
+                          value={fila.desde}
+                          placeholder="desde"
+                          disabled={deshabilitado}
+                          aria-label="Desde"
+                          onChange={(evento) => cambiarFila(i, { desde: evento.target.value.trim() })}
+                        />
+                        <input
+                          className="input input-sm mono ci-filtro-valor"
+                          value={fila.hasta}
+                          placeholder="hasta"
+                          disabled={deshabilitado}
+                          aria-label="Hasta"
+                          onChange={(evento) => cambiarFila(i, { hasta: evento.target.value.trim() })}
+                        />
+                      </>
+                    )
                   ) : (
-                    <Fichas valores={fila.valores} deshabilitado={deshabilitado} onCambiar={(valores) => cambiarFila(i, { valores })} />
+                    <Fichas
+                      valores={fila.valores}
+                      deshabilitado={deshabilitado}
+                      conFecha={esCampoDeFecha(fila.campo)}
+                      onCambiar={(valores) => cambiarFila(i, { valores })}
+                    />
                   )}
                   {!deshabilitado && ibp && fila.tipo === 'igual' && fila.campo !== '' && ibp.puede(fila.campo) !== false && (
                     <button
@@ -220,6 +245,14 @@ export default function ConstructorDeFiltro({ valor, onCambiar, deshabilitado = 
               </button>
               <button type="button" className="btn btn-sm" onClick={() => agregarFila({ tipo: 'entre', campo: '', desde: '', hasta: '' })}>
                 + Rango (BT)
+              </button>
+              <button
+                type="button"
+                className="btn btn-sm"
+                title="Un rango de fechas del periodo (KEYFIGUREDATE), con calendario"
+                onClick={() => agregarFila({ tipo: 'entre', campo: 'KEYFIGUREDATE', desde: '', hasta: '' })}
+              >
+                + Rango de fechas
               </button>
             </div>
           )}

@@ -41,6 +41,7 @@ export default async function handler(req, res) {
         },
       })),
       variables: info.variables,
+      variablesDeFecha: info.variablesDeFecha ?? [],
       rotos: info.rotos,
       ultimas,
     })

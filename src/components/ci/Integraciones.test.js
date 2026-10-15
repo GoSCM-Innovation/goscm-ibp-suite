@@ -269,7 +269,9 @@ describe('ejecutar', () => {
     expect(texto()).toContain('Ejecutar «FACTURAS»')
     expect(texto()).toContain('CPI desarrollo')
     expect(texto()).toContain('REPLACE')
-    expect(dom().querySelector('#ci-var-DESDE').value).toBe('20261005')
+    // DESDE y HASTA van en una condición sobre KEYFIGUREDATE: son fechas y se piden con un calendario.
+    expect(dom().querySelector('#ci-var-DESDE').type).toBe('date')
+    expect(dom().querySelector('#ci-var-DESDE').value).toBe('2026-10-05')
 
     const confirmar = [...dom().querySelectorAll('.modal button')].find((uno) => uno.textContent.trim() === '▶ Ejecutar')
     await pulsar(confirmar)
@@ -287,6 +289,19 @@ describe('ejecutar', () => {
     await pulsar(boton('▶ Ejecutar'))
     await asentar()
     expect(dom().querySelector('#ci-var-DESDE').value).toBe('')
+  })
+
+  it('elegir una fecha en el calendario manda AAAAMMDD', async () => {
+    ci.ejecutarIntegracion.mockResolvedValue({ resultado: 'success', httpStatus: 200, duracionMs: 1, mensaje: 'OK' })
+    await abrirFacturas()
+    await pulsar(boton('▶ Ejecutar'))
+    await asentar()
+
+    await escribir(dom().querySelector('#ci-var-DESDE'), '2026-11-20')
+    const confirmar = [...dom().querySelectorAll('.modal button')].find((uno) => uno.textContent.trim() === '▶ Ejecutar')
+    await pulsar(confirmar)
+    await asentar()
+    expect(ci.ejecutarIntegracion.mock.calls[0][0].variables).toEqual({ DESDE: '20261120', HASTA: '20270412' })
   })
 
   it('en una conexión productiva el diálogo lo dice y pide confirmar', async () => {

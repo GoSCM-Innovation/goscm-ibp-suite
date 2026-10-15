@@ -22,6 +22,7 @@ import { hostDe } from '../../lib/nombre-de-conexion.js'
 import BotonCopiar from '../ui/BotonCopiar.jsx'
 import EstadoDeCarga from '../ui/EstadoDeCarga.jsx'
 import Modal from '../ui/Modal.jsx'
+import CampoDeFecha from './CampoDeFecha.jsx'
 import RevisionIbp from './RevisionIbp.jsx'
 
 /**
@@ -71,6 +72,7 @@ export default function DialogoDeEjecucion({
   conexion,
   integraciones,
   variables = [],
+  variablesDeFecha = [],
   iniciales = {},
   avisos = [],
   esOrquestacion = false,
@@ -156,14 +158,26 @@ export default function DialogoDeEjecucion({
                 {variables.map((nombre) => (
                   <div className="field" key={nombre}>
                     <label htmlFor={`ci-var-${nombre}`}>{`{{${nombre}}}`}</label>
-                    <input
-                      id={`ci-var-${nombre}`}
-                      className="input mono"
-                      value={valores[nombre]}
-                      disabled={fase === 'ejecutando'}
-                      aria-invalid={Boolean(motivos[nombre])}
-                      onChange={(evento) => setValores({ ...valores, [nombre]: evento.target.value })}
-                    />
+                    {variablesDeFecha.includes(nombre) ? (
+                      // Una variable que va en una condición sobre KEYFIGUREDATE es una fecha: se elige en un calendario.
+                      <CampoDeFecha
+                        id={`ci-var-${nombre}`}
+                        valor={valores[nombre]}
+                        ariaLabel={nombre}
+                        conVariable={false}
+                        deshabilitado={fase === 'ejecutando'}
+                        onCambiar={(fecha) => setValores({ ...valores, [nombre]: fecha })}
+                      />
+                    ) : (
+                      <input
+                        id={`ci-var-${nombre}`}
+                        className="input mono"
+                        value={valores[nombre]}
+                        disabled={fase === 'ejecutando'}
+                        aria-invalid={Boolean(motivos[nombre])}
+                        onChange={(evento) => setValores({ ...valores, [nombre]: evento.target.value })}
+                      />
+                    )}
                     {motivos[nombre] && limpios[nombre] !== '' && <span className="ci-aviso-fila">{motivos[nombre]}</span>}
                   </div>
                 ))}

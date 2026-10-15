@@ -238,3 +238,39 @@ async function act0(funcion) {
   const { act } = await import('react')
   await act(async () => { funcion() })
 }
+
+describe('las variables que son fechas', () => {
+  const conFechas = (extra = {}) => props({ variables: ['DESDE', 'HASTA', 'LOTE'], variablesDeFecha: ['DESDE', 'HASTA'], iniciales: { DESDE: '20261005' }, ...extra })
+
+  it('se piden con un calendario, con la última fecha como propuesta; las demás, como texto', async () => {
+    await montar(DialogoDeEjecucion, conFechas())
+    expect(dom().querySelector('#ci-var-DESDE').type).toBe('date')
+    expect(dom().querySelector('#ci-var-DESDE').value).toBe('2026-10-05')
+    expect(dom().querySelector('#ci-var-HASTA').type).toBe('date')
+    expect(dom().querySelector('#ci-var-HASTA').value).toBe('')
+    expect(dom().querySelector('#ci-var-LOTE').type).not.toBe('date')
+  })
+
+  it('sin fecha no se puede ejecutar, y con ella se manda AAAAMMDD', async () => {
+    const p = conFechas()
+    await montar(DialogoDeEjecucion, p)
+    await escribir(dom().querySelector('#ci-var-LOTE'), 'L1')
+    expect(boton('▶ Ejecutar').disabled).toBe(true)
+
+    await escribir(dom().querySelector('#ci-var-HASTA'), '2027-04-12')
+    expect(boton('▶ Ejecutar').disabled).toBe(false)
+    await pulsar(boton('▶ Ejecutar'))
+    expect(p.onEjecutar).toHaveBeenCalledWith({ DESDE: '20261005', HASTA: '20270412', LOTE: 'L1' })
+  })
+
+  it('un valor de la vez anterior que no era una fecha no se pierde: se ve como texto', async () => {
+    await montar(DialogoDeEjecucion, conFechas({ iniciales: { DESDE: 'ayer' } }))
+    expect(dom().querySelector('#ci-var-DESDE').type).not.toBe('date')
+    expect(dom().querySelector('#ci-var-DESDE').value).toBe('ayer')
+  })
+
+  it('no hay botón para cambiar la fecha por una variable: aquí se pide una fecha', async () => {
+    await montar(DialogoDeEjecucion, conFechas())
+    expect(boton('Variable')).toBeUndefined()
+  })
+})

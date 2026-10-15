@@ -11,6 +11,7 @@ import {
   normalizarBody,
   resumenDeBody,
   variablesDeBody,
+  variablesDeFechaDeBloque,
 } from './body.js'
 
 // Un body de cifras clave como los que se pegan en Postman (con otro nombre de área).
@@ -287,5 +288,41 @@ describe('extraerMplId', () => {
   it('sin identificador, null', () => {
     expect(extraerMplId('Todo bien')).toBeNull()
     expect(extraerMplId(null)).toBeNull()
+  })
+})
+
+describe('variablesDeFechaDeBloque: qué variables son fechas', () => {
+  const con = (filtro, otros = {}) => ({ TypeOfData: 'KEYFIGURES', FilterForTheDataSource: filtro, ...otros })
+
+  it('las de una condición sobre KEYFIGUREDATE, en un rango o en un valor', () => {
+    expect(variablesDeFechaDeBloque(con("KEYFIGUREDATE BT '{{DESDE}}' '{{HASTA}}'"))).toEqual(['DESDE', 'HASTA'])
+    expect(variablesDeFechaDeBloque(con("KEYFIGUREDATE EQ '{{DIA}}'"))).toEqual(['DIA'])
+  })
+
+  it('las de otros campos no son fechas', () => {
+    expect(variablesDeFechaDeBloque(con("MATTYPEID EQ '{{TIPO}}',KEYFIGUREDATE BT '{{DESDE}}' '{{HASTA}}'"))).toEqual(['DESDE', 'HASTA'])
+  })
+
+  it('una variable que además se usa en otro sitio no es solo una fecha', () => {
+    expect(variablesDeFechaDeBloque(con("KEYFIGUREDATE BT '{{DESDE}}' '{{HASTA}}'", { BatchName: 'CARGA_{{DESDE}}' }))).toEqual(['HASTA'])
+    expect(variablesDeFechaDeBloque(con("KEYFIGUREDATE EQ '{{X}}',MATTYPEID EQ '{{X}}'"))).toEqual([])
+  })
+
+  it('el campo se reconoce sin distinguir mayúsculas', () => {
+    expect(variablesDeFechaDeBloque(con("keyfiguredate BT '{{DESDE}}' '20270101'"))).toEqual(['DESDE'])
+  })
+
+  it('una condición que el constructor no entiende cuenta como «otro sitio»: se conserva como texto', () => {
+    expect(variablesDeFechaDeBloque(con("KEYFIGUREDATE NE '{{DESDE}}'"))).toEqual([])
+  })
+
+  it('sin filtro, o sin bloque, ninguna', () => {
+    expect(variablesDeFechaDeBloque(con(''))).toEqual([])
+    expect(variablesDeFechaDeBloque(undefined)).toEqual([])
+  })
+
+  it('el resumen de la lista las trae', () => {
+    const texto = JSON.stringify({ K: con("KEYFIGUREDATE BT '{{DESDE}}' '{{HASTA}}'") })
+    expect(resumenDeBody(texto)).toMatchObject({ variables: ['DESDE', 'HASTA'], variablesDeFecha: ['DESDE', 'HASTA'] })
   })
 })

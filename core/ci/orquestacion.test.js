@@ -42,6 +42,25 @@ describe('infoDeOrquestacion', () => {
     expect(info.rotos).toEqual([])
   })
 
+  // Se piden con un calendario al ejecutar la orquestación.
+  it('las variables de fecha son las que, en todos los pasos donde aparecen, van en una condición sobre KEYFIGUREDATE', async () => {
+    getIntegrations.mockResolvedValue([
+      integracion('i-1', "KEYFIGUREDATE BT '{{DESDE}}' '{{HASTA}}',MATTYPEID EQ '{{TIPO}}'"),
+      // Aquí DESDE se usa en otro campo: en esta orquestación ya no es solo una fecha.
+      integracion('i-2', "KEYFIGUREDATE BT '{{DESDE}}' '{{HASTA}}',ZVIGENTE EQ '{{DESDE}}'"),
+    ])
+    const info = await infoDeOrquestacion(CLIENTE, orq([paso('a', 'i-1'), paso('b', 'i-2')]))
+    expect(info.variables).toEqual(['DESDE', 'HASTA', 'TIPO'])
+    expect(info.variablesDeFecha).toEqual(['HASTA'])
+    expect(info.pasos[0].variablesDeFecha).toEqual(['DESDE', 'HASTA'])
+  })
+
+  it('un paso roto no aporta variables ni fechas', async () => {
+    const info = await infoDeOrquestacion(CLIENTE, orq([paso('a', 'borrada')]))
+    expect(info.variablesDeFecha).toEqual([])
+    expect(info.pasos[0].variablesDeFecha).toEqual([])
+  })
+
   it('un paso que apunta a una integración que no existe está roto', async () => {
     getIntegrations.mockResolvedValue([integracion('i-1')])
     const info = await infoDeOrquestacion(CLIENTE, orq([paso('a', 'i-1'), paso('b', 'borrada')]))

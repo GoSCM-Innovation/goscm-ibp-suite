@@ -203,6 +203,9 @@
 .ci-filtro-campo { flex: 0 0 200px; }
 .ci-filtro-op { color: var(--accent); font-weight: 700; padding-top: 6px; width: 24px; }
 .ci-filtro-valor { flex: 0 0 140px; }
+/* Una fecha: el calendario y, al lado, el botón que la cambia por una variable (o al revés). */
+.ci-fecha { align-items: center; display: inline-flex; gap: 4px; }
+.ci-fecha .input { flex: 0 0 150px; }
 .ci-filtro-texto { flex: 1 1 360px; }
 .ci-filtro-agregar { display: flex; gap: 8px; }
 .ci-filtro-vista {

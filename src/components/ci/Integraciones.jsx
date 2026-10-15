@@ -363,6 +363,7 @@ export default function Integraciones({ connection }) {
       avisos: avisosIbp,
       iniciales,
       variables: resumen.valido ? resumen.variables : [],
+      variablesDeFecha: resumen.valido ? resumen.variablesDeFecha : [],
       integraciones: [{ nombre: abierta.name, comando: resumen.valido ? resumen.comando : '' }],
     })
   }
@@ -506,6 +507,7 @@ export default function Integraciones({ connection }) {
           conexion={connection}
           integraciones={aEjecutar.integraciones}
           variables={aEjecutar.variables}
+          variablesDeFecha={aEjecutar.variablesDeFecha}
           iniciales={aEjecutar.iniciales}
           avisos={aEjecutar.avisos}
           onEjecutar={(variables) => ejecutarIntegracion({ connectionId: connection.id, integrationId: abierta.id, variables })}
