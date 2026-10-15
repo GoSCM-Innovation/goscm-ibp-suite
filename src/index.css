@@ -421,6 +421,16 @@ a { color: var(--cyan); }
 /* Glosario Analyzers va de lado a lado, como en v7: sin cinta de presentación y sin el relleno de
    `.content`, que deshace igual que IBP Tools. */
 .glosario-pagina { height: calc(100% + 44px); margin: -22px; min-height: 0; }
+/* Ese `height` en porcentaje NO se cumple (`#root` solo tiene `min-height`: ver `.module-page-a-pantalla`), y entonces el glosario
+   crece con su texto en lugar de ser una caja con su propio desplazamiento: el índice marcaba la sección pero el texto no se
+   movía. En pantallas anchas la página ocupa el alto de la ventana y es el contenido el que se desplaza, con el índice quieto, como
+   en v7. Es una columna (y no una altura fija) para que el botón de «Ver logs técnicos» de abajo le quite su sitio en lugar de
+   empujar la página. */
+@media (min-width: 721px) {
+  .content:has(> .glosario-pagina) { display: flex; flex-direction: column; height: 100vh; overflow: hidden; padding: 0; }
+  .content:has(> .glosario-pagina) > .glosario-pagina { flex: 1; height: auto; margin: 0; }
+  .content:has(> .glosario-pagina) > .tech-logs { margin: 0; padding: 6px 22px; }
+}
 
 /* ─── Monitor de tareas ───────────────────────────────────── */
 

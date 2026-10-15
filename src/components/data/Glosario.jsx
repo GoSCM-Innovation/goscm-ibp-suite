@@ -52,8 +52,14 @@ export default function Glosario() {
     const el = document.getElementById(id)
     const cont = contenido.current
     if (el && cont) {
-      const dentro = el.getBoundingClientRect().top - cont.getBoundingClientRect().top
-      cont.scrollTo({ top: cont.scrollTop + dentro - 16, behavior: 'smooth' })
+      if (cont.scrollHeight > cont.clientHeight) {
+        const dentro = el.getBoundingClientRect().top - cont.getBoundingClientRect().top
+        cont.scrollTo({ top: cont.scrollTop + dentro - 16, behavior: 'smooth' })
+      } else {
+        // El texto no es una caja con desplazamiento propio (en pantallas estrechas crece con la página): quien se desplaza es la
+        // página. Sin esto el clic marcaba la sección y no movía nada.
+        el.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
+      }
     }
     setActiva(id)
     temporizador.current = setTimeout(() => { bloqueado.current = false }, 600)
