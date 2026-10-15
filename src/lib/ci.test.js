@@ -131,6 +131,24 @@ describe('arbolDeCarpetas', () => {
   })
 })
 
+describe('opcionesDeCarpeta', () => {
+  it('«Sin carpeta» primero, con valor vacío, y después las existentes tal cual', () => {
+    expect(ci.opcionesDeCarpeta(['A', 'A/B'])).toEqual([
+      { value: '', label: 'Sin carpeta' },
+      { value: 'A', label: 'A' },
+      { value: 'A/B', label: 'A/B' },
+    ])
+  })
+
+  it('sin carpetas, solo «Sin carpeta»', () => {
+    expect(ci.opcionesDeCarpeta([])).toEqual([{ value: '', label: 'Sin carpeta' }])
+  })
+
+  it('crear una carpeta nueva no se trata como error', () => {
+    expect(ci.TEXTOS_DE_CARPETA.aviso).toBe('')
+  })
+})
+
 describe('carpetasExistentes', () => {
   it('incluye las intermedias, ordenadas y sin repetir', () => {
     expect(ci.carpetasExistentes([integracion('a', 'A/B/C'), integracion('b', 'A/B'), integracion('c', ''), integracion('d', 'Z')]))

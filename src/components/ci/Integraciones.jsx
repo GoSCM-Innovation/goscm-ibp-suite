@@ -19,11 +19,14 @@ import {
   getIntegracion,
   guardarIntegracion,
   listIntegraciones,
+  opcionesDeCarpeta,
   renombrarCarpeta,
+  TEXTOS_DE_CARPETA,
   ultimasVariablesDeIntegracion,
 } from '../../lib/ci.js'
 import BotonActualizar from '../ui/BotonActualizar.jsx'
 import Modal from '../ui/Modal.jsx'
+import CampoConLista from './CampoConLista.jsx'
 import DialogoDeEjecucion from './DialogoDeEjecucion.jsx'
 import EditorDeIntegracion from './EditorDeIntegracion.jsx'
 import { useCatalogoIbp } from './useCatalogoIbp.js'
@@ -407,16 +410,15 @@ function NuevaIntegracion({ carpetaInicial, carpetas, onCrear, onCerrar }) {
         </div>
         <div className="field">
           <label htmlFor="ci-nueva-carpeta">Carpeta</label>
-          <input
+          <CampoConLista
             id="ci-nueva-carpeta"
-            className="input"
-            list="ci-nueva-carpetas"
-            value={carpeta}
-            placeholder="Sin carpeta"
-            onChange={(evento) => setCarpeta(evento.target.value)}
+            valor={carpeta}
+            opciones={opcionesDeCarpeta(carpetas)}
+            textos={TEXTOS_DE_CARPETA}
+            titulo="Carpeta"
+            onCambiar={setCarpeta}
           />
-          <datalist id="ci-nueva-carpetas">{carpetas.map((ruta) => <option key={ruta} value={ruta} />)}</datalist>
-          <span className="card-hint">Con «/» se anidan: STARBRANDS/Maestros.</span>
+          <span className="card-hint">Elige una existente, o «Carpeta nueva» para escribirla. Con «/» se anidan: STARBRANDS/Maestros.</span>
         </div>
         <div className="field">
           <span className="ci-etiqueta">Tipo de dato</span>

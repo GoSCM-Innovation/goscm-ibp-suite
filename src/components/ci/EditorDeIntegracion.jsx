@@ -7,6 +7,8 @@
 
 import { useEffect, useState } from 'react'
 import { leerBody, resumenDeBody } from '../../../core/ci/body.js'
+import { TEXTOS_DE_CARPETA, opcionesDeCarpeta } from '../../lib/ci.js'
+import CampoConLista from './CampoConLista.jsx'
 import BarraIbp from './BarraIbp.jsx'
 import FormularioDeBloque from './FormularioDeBloque.jsx'
 import RevisionIbp from './RevisionIbp.jsx'
@@ -66,17 +68,14 @@ export default function EditorDeIntegracion({
           </div>
           <div className="field">
             <label htmlFor="ci-carpeta">Carpeta</label>
-            <input
+            <CampoConLista
               id="ci-carpeta"
-              className="input"
-              list="ci-carpetas"
-              value={carpeta}
-              placeholder="Sin carpeta"
-              onChange={(evento) => setCarpeta(evento.target.value)}
+              valor={carpeta}
+              opciones={opcionesDeCarpeta(carpetas)}
+              textos={TEXTOS_DE_CARPETA}
+              titulo="Carpeta"
+              onCambiar={setCarpeta}
             />
-            <datalist id="ci-carpetas">
-              {carpetas.map((ruta) => <option key={ruta} value={ruta} />)}
-            </datalist>
           </div>
         </div>
 

@@ -16,8 +16,11 @@ import { useState } from 'react'
 import { conValorActual, esVariable } from '../../lib/ci-ibp.js'
 import SelectorDeLista from '../ui/SelectorDeLista.jsx'
 
-/** Lo que el control dice de sí mismo. `aviso` vacío no avisa de un valor que no está en la lista. */
-const TEXTOS = { lista: 'Elegir de la lista', aviso: 'No es uno de los valores de la lista.', sufijo: 'no está en la lista' }
+/**
+ * Lo que el control dice de sí mismo. `lista` es el botón que vuelve al selector, `mano` el que pasa a escribir, `aviso`
+ * lo que se dice de un valor que no está en la lista (vacío, no avisa) y `sufijo` lo que lleva al lado ese valor en el selector.
+ */
+const TEXTOS = { lista: 'Elegir de la lista', mano: 'A mano', aviso: 'No es uno de los valores de la lista.', sufijo: 'no está en la lista' }
 
 export default function CampoConLista({
   id, valor, opciones, onCambiar, alElegir = onCambiar, deshabilitado = false, titulo, ariaLabel, textos = {},
@@ -60,9 +63,9 @@ export default function CampoConLista({
           type="button"
           className="btn btn-ghost btn-sm"
           onClick={() => setAMano((v) => !v)}
-          title={aMano ? dicen.lista : 'Escribir el valor a mano'}
+          title={aMano ? dicen.lista : dicen.mano}
         >
-          {aMano ? dicen.lista : 'A mano'}
+          {aMano ? dicen.lista : dicen.mano}
         </button>
       )}
       {aMano && !conocido && dicen.aviso && !esVariable(valor) && !deshabilitado && <span className="ci-aviso-fila">{dicen.aviso}</span>}

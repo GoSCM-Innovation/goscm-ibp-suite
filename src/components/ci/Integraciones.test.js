@@ -27,7 +27,7 @@ const { default: Integraciones } = await import('./Integraciones.jsx')
 const { plantillaDeBody } = await import('../../../core/ci/campos.js')
 const { resumenDeBody } = await import('../../../core/ci/body.js')
 const {
-  asentar, boton, desmontar, dom, escribir, marcar, montar, porEtiqueta, pulsar, texto,
+  asentar, boton, desmontar, dom, elegir, escribir, marcar, montar, porEtiqueta, pulsar, texto,
 } = await import('./ayudas-de-prueba.js')
 
 const CONEXION = { id: 'conn-1', name: 'CPI desarrollo', baseUrl: 'https://acme.it-cpi034-rt.cfapps.us10-002.hana.ondemand.com/http/IBP2', isProduction: false }
@@ -155,6 +155,48 @@ describe('abrir y guardar', () => {
     expect(texto()).not.toContain('Cambios sin guardar')
   })
 
+  // Antes era un cuadro de texto con las sugerencias del navegador, que no se notaban: no se sabía que se podía elegir.
+  it('la carpeta se elige entre las existentes, con «Sin carpeta» primero, y guarda solo la carpeta', async () => {
+    ci.guardarIntegracion.mockResolvedValue({ ...FACTURAS, folder: 'AREA/Maestros' })
+    await montarBiblioteca()
+    await escribir(porEtiqueta('Buscar integraciones'), 'factu')
+    await abrirIntegracion('FACTURAS')
+
+    const carpeta = dom().querySelector('#ci-carpeta')
+    expect(carpeta.tagName).toBe('SELECT')
+    expect([...carpeta.options].map((o) => o.value)).toEqual(['', 'AREA', 'AREA/Cifras', 'AREA/Maestros'])
+    expect(carpeta.value).toBe('AREA/Cifras')
+
+    await elegir(carpeta, 'AREA/Maestros')
+    await pulsar(boton('Guardar'))
+    await asentar()
+    expect(ci.guardarIntegracion).toHaveBeenCalledWith('i-1', { folder: 'AREA/Maestros' })
+  })
+
+  it('«Carpeta nueva» deja escribir una ruta que no existe, sin avisos', async () => {
+    ci.guardarIntegracion.mockResolvedValue({ ...FACTURAS, folder: 'OTRA/Nueva' })
+    await montarBiblioteca()
+    await escribir(porEtiqueta('Buscar integraciones'), 'factu')
+    await abrirIntegracion('FACTURAS')
+
+    await pulsar(dom().querySelector('#ci-carpeta').parentElement.querySelector('button'))
+    await escribir(dom().querySelector('#ci-carpeta'), 'OTRA/Nueva')
+    expect(dom().querySelector('.ci-aviso-fila')).toBeNull()
+
+    await pulsar(boton('Guardar'))
+    await asentar()
+    expect(ci.guardarIntegracion).toHaveBeenCalledWith('i-1', { folder: 'OTRA/Nueva' })
+  })
+
+  it('una integración sin carpeta se muestra con «Sin carpeta» elegido', async () => {
+    await montarBiblioteca()
+    await abrirIntegracion('SUELTA')
+    const carpeta = dom().querySelector('#ci-carpeta')
+    expect(carpeta.tagName).toBe('SELECT')
+    expect(carpeta.value).toBe('')
+    expect(carpeta.options[carpeta.selectedIndex].textContent).toBe('Sin carpeta')
+  })
+
   it('un error al guardar se dice dentro del editor', async () => {
     ci.guardarIntegracion.mockRejectedValue(new Error('Ya hay una integración con ese nombre en esa carpeta.'))
     await montarBiblioteca()
@@ -269,7 +311,7 @@ describe('crear, duplicar y borrar', () => {
 
     expect(texto()).toContain('Nueva integración')
     await escribir(dom().querySelector('#ci-nueva-nombre'), 'NUEVA')
-    await escribir(dom().querySelector('#ci-nueva-carpeta'), 'AREA/Cifras')
+    await elegir(dom().querySelector('#ci-nueva-carpeta'), 'AREA/Cifras')
     await pulsar(dom().querySelector('input[name="ci-tipo-nuevo"]:not(:checked)'))
     await pulsar(boton('Crear'))
     await asentar()
@@ -278,6 +320,25 @@ describe('crear, duplicar y borrar', () => {
     const body = JSON.parse(ci.crearIntegracion.mock.calls[0][0].body)
     expect(Object.keys(body)).toEqual(['KEYFIGURE'])
     expect(dom().querySelector('#ci-nombre').value).toBe('NUEVA')
+  })
+
+  it('crear: la carpeta se elige entre las existentes, o se escribe una nueva con «Carpeta nueva»', async () => {
+    ci.crearIntegracion.mockResolvedValue(completa('i-9', 'NUEVA', 'OTRA/Sub', plantillaDeBody('MASTERDATA')))
+    await montarBiblioteca()
+    await pulsar(dom().querySelector('.ci-nueva-boton'))
+
+    const carpeta = dom().querySelector('#ci-nueva-carpeta')
+    expect(carpeta.tagName).toBe('SELECT')
+    expect([...carpeta.options].map((o) => o.value)).toEqual(['', 'AREA', 'AREA/Cifras', 'AREA/Maestros'])
+    expect(carpeta.value).toBe('')
+
+    await pulsar(boton('Carpeta nueva'))
+    await escribir(dom().querySelector('#ci-nueva-carpeta'), 'OTRA/Sub')
+    await escribir(dom().querySelector('#ci-nueva-nombre'), 'NUEVA')
+    await pulsar(boton('Crear'))
+    await asentar()
+
+    expect(ci.crearIntegracion).toHaveBeenCalledWith(expect.objectContaining({ folder: 'OTRA/Sub', name: 'NUEVA' }))
   })
 
   it('crear con un nombre repetido enseña el motivo y deja el diálogo abierto', async () => {

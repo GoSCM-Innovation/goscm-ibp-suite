@@ -167,6 +167,20 @@ export function arbolDeCarpetas(integraciones, filtro = '') {
   return raiz
 }
 
+/**
+ * Las carpetas como opciones de un selector: «Sin carpeta» primero (vale vacío) y después las que ya existen, con las
+ * intermedias. Crear una nueva es escribirla a mano.
+ */
+export const opcionesDeCarpeta = (carpetas) => [
+  { value: '', label: 'Sin carpeta' },
+  ...carpetas.map((ruta) => ({ value: ruta, label: ruta })),
+]
+
+/** Lo que dicen los controles de carpeta: una carpeta que no existe todavía no es un error, es una carpeta nueva. */
+export const TEXTOS_DE_CARPETA = Object.freeze({
+  lista: 'Elegir una existente', mano: 'Carpeta nueva', aviso: '', sufijo: 'carpeta nueva',
+})
+
 /** Todas las rutas de carpeta que hay en una lista (incluidas las intermedias), para ofrecerlas al elegir. */
 export function carpetasExistentes(integraciones) {
   const rutas = new Set()
