@@ -115,6 +115,19 @@ export function fechaLegible(iso) {
   return fecha.toLocaleString('es', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
 }
 
+const normalizar = (texto) => String(texto ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+
+/** ¿Una integración contiene lo buscado? En su nombre, carpeta, lote, área, tipo de maestro, destino o clave. */
+function coincideConFiltro(filtro) {
+  const buscado = normalizar(filtro).trim()
+  return (integracion) => {
+    if (buscado === '') return true
+    const r = integracion.resumen ?? {}
+    return [integracion.name, integracion.folder, r.nombreDeLote, r.areaDePlanificacion, r.tipoDeMaestro, r.destino, r.clave]
+      .some((campo) => normalizar(campo).includes(buscado))
+  }
+}
+
 /**
  * El árbol de carpetas de una lista de integraciones.
  *
@@ -126,15 +139,7 @@ export function fechaLegible(iso) {
  * maestro) y solo las carpetas que tienen alguna. Todo en minúsculas y sin distinguir acentos.
  */
 export function arbolDeCarpetas(integraciones, filtro = '') {
-  const normalizar = (texto) => String(texto ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
-  const buscado = normalizar(filtro).trim()
-
-  const coincide = (integracion) => {
-    if (buscado === '') return true
-    const r = integracion.resumen ?? {}
-    return [integracion.name, integracion.folder, r.nombreDeLote, r.areaDePlanificacion, r.tipoDeMaestro, r.clave]
-      .some((campo) => normalizar(campo).includes(buscado))
-  }
+  const coincide = coincideConFiltro(filtro)
 
   const raiz = { ruta: '', nombre: '', carpetas: [], integraciones: [] }
 
@@ -180,6 +185,45 @@ export const opcionesDeCarpeta = (carpetas) => [
 export const TEXTOS_DE_CARPETA = Object.freeze({
   lista: 'Elegir una existente', mano: 'Carpeta nueva', aviso: '', sufijo: 'carpeta nueva',
 })
+
+/** Los grupos de la vista por destino, en el orden en que se enseñan. */
+export const GRUPOS_POR_DESTINO = Object.freeze([
+  { id: 'tabla', titulo: 'Tablas de dato maestro' },
+  { id: 'cifra', titulo: 'Cifras clave' },
+  { id: 'sin', titulo: 'Sin destino' },
+])
+
+/**
+ * Las integraciones agrupadas por A QUÉ CARGAN (ver `destinoDeBloque` en `core/ci/body.js`): primero las tablas de dato
+ * maestro, después las cifras clave y, al final, las que todavía no tienen destino.
+ *
+ * `{ grupos: [{ id, titulo, destinos: [{ destino, integraciones }] }] }`. Los destinos van en orden alfabético y las
+ * integraciones de cada uno, por nombre. Un destino se agrupa sin distinguir mayúsculas (`sbproduct` y `SBPRODUCT` son la
+ * misma tabla) y se enseña como lo escribió la primera. Con `filtro` quedan solo las integraciones que lo contienen y no se
+ * enseñan grupos ni destinos vacíos: sin filtro tampoco, un grupo sin nada no aporta.
+ */
+export function arbolPorDestino(integraciones, filtro = '') {
+  const coincide = coincideConFiltro(filtro)
+  const comparar = (a, b) => a.localeCompare(b, 'es')
+
+  const porGrupo = { tabla: new Map(), cifra: new Map(), sin: new Map() }
+  for (const integracion of integraciones) {
+    if (!coincide(integracion)) continue
+    const { destino = '', claseDeDestino = '' } = integracion.resumen ?? {}
+    const grupo = destino !== '' && (claseDeDestino === 'tabla' || claseDeDestino === 'cifra') ? claseDeDestino : 'sin'
+    const clave = grupo === 'sin' ? '' : destino.toUpperCase()
+    if (!porGrupo[grupo].has(clave)) porGrupo[grupo].set(clave, { destino: grupo === 'sin' ? '' : destino, integraciones: [] })
+    porGrupo[grupo].get(clave).integraciones.push(integracion)
+  }
+
+  const grupos = GRUPOS_POR_DESTINO.map((grupo) => ({
+    ...grupo,
+    destinos: [...porGrupo[grupo.id].values()]
+      .sort((a, b) => comparar(a.destino, b.destino))
+      .map((uno) => ({ ...uno, integraciones: [...uno.integraciones].sort((a, b) => comparar(a.name, b.name)) })),
+  }))
+  return { grupos: grupos.filter((grupo) => grupo.destinos.length > 0) }
+}
 
 /** Todas las rutas de carpeta que hay en una lista (incluidas las intermedias), para ofrecerlas al elegir. */
 export function carpetasExistentes(integraciones) {

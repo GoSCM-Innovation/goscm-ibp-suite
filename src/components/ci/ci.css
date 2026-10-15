@@ -26,6 +26,28 @@
 .ci-arbol-cabeza { align-items: center; display: flex; justify-content: space-between; padding: 10px 10px 6px 12px; }
 .ci-arbol-botones { align-items: center; display: flex; gap: 2px; }
 .ci-arbol-buscar { padding: 0 10px 8px; }
+.ci-arbol-vista { align-items: center; display: flex; gap: 4px; padding: 0 10px 8px; }
+.ci-arbol-vista-boton {
+  background: transparent;
+  border: 1px solid var(--border2);
+  border-radius: 999px;
+  color: var(--text2);
+  cursor: pointer;
+  font-size: 11px;
+  padding: 2px 10px;
+}
+.ci-arbol-vista-boton:hover { color: var(--text); }
+.ci-arbol-vista-boton.active { background: var(--accent-bg-soft); border-color: var(--accent-border-soft); color: var(--accent); }
+.ci-arbol-grupo {
+  color: var(--text3);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .07em;
+  padding: 10px 12px 3px;
+  text-transform: uppercase;
+}
+.ci-arbol-cuenta { color: var(--text3); font-size: 10.5px; }
+.ci-arbol-carpeta-gris { color: var(--text3); font-size: 10.5px; max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ci-arbol-cuerpo { flex: 1; min-height: 0; overflow-y: auto; padding-bottom: 8px; }
 
 .ci-arbol-carpeta { align-items: center; display: flex; padding-right: 6px; }

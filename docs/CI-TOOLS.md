@@ -14,7 +14,7 @@ ahora viven en el servidor, por cliente, se ejecutan desde la Suite y se encaden
 
 | Pantalla | Para qué |
 |---|---|
-| **Integraciones** | La biblioteca de una conexión: árbol de carpetas (como Postman), formulario y vista JSON del body, duplicar, renombrar carpetas, **Ejecutar**. |
+| **Integraciones** | La biblioteca de una conexión: árbol de carpetas (como Postman) u **ordenado por destino** (conmutador «Ordenar por: Carpeta / Destino»), formulario y vista JSON del body, duplicar, renombrar carpetas, **Ejecutar**. |
 | **Orquestaciones** | Integraciones en **etapas**: una fila de etapas y, dentro de cada una, pasos en paralelo. Se guarda sola. Mientras corre no se edita. |
 | **Historial** | Quién ejecutó qué, cuándo, cuánto tardó y cómo salió, con el MPL ID para buscarlo en el monitor de CPI. |
 
@@ -126,6 +126,10 @@ envía como el JSON que la persona escribió.
   para otro). **No se sabe qué otros acepta el iFlow**: no se inventaron. Los desplegables muestran todas las opciones
   a la vez; un cuadro de texto con las sugerencias del navegador (`<datalist>`) filtra por lo que ya está escrito y
   esconde las demás, y así dejó de poderse llegar a «KEYFIGURES».
+- **Destino de una integración.** A qué carga: la tabla de dato maestro (prefijo + tipo, `SBPRODUCT`) o la cifra clave a la
+  que apunta `KFVALUE` en el mapeo (`ZFACTURAS`). Se calcula al leer el body (`destinoDeBloque`), no se guarda. La vista
+  «Destino» agrupa en tablas de dato maestro, cifras clave y «Sin destino» (bodies a medias), cada destino en un nodo que
+  se abre; el buscador también busca por destino. La vista elegida vive solo en memoria.
 - **Otros campos.** Lo que el body trae y el formulario no conoce (por ejemplo, al pegar un JSON con un campo más)
   aparece solo en «Otros campos», se conserva y se envía tal cual: el iFlow puede aceptar más. Sin campos extra la
   sección no se muestra; queda un enlace para agregar uno a mano.

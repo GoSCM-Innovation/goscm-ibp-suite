@@ -3,6 +3,7 @@ import {
   BODY_MAX_BYTES,
   VariableError,
   aplicarVariables,
+  destinoDeBloque,
   esNombreDeVariable,
   extraerMplId,
   leerBody,
@@ -219,6 +220,61 @@ describe('resumenDeBody', () => {
 
   it('un body roto dice por qué', () => {
     expect(resumenDeBody('{ no')).toMatchObject({ valido: false })
+  })
+})
+
+describe('destinoDeBloque: a qué carga una integración', () => {
+  const bloque = (cambios) => ({ TypeOfData: 'MASTERDATA', MasterDataPrefix: 'SB', MasterDataType: 'UOMTO', ...cambios })
+
+  it('dato maestro: la tabla, prefijo más tipo', () => {
+    expect(destinoDeBloque(bloque({}))).toEqual({ destino: 'SBUOMTO', claseDeDestino: 'tabla' })
+  })
+
+  it('dato maestro sin prefijo: el tipo solo', () => {
+    expect(destinoDeBloque(bloque({ MasterDataPrefix: '' }))).toEqual({ destino: 'UOMTO', claseDeDestino: 'tabla' })
+  })
+
+  // Un prefijo suelto no es una tabla.
+  it('dato maestro sin tipo todavía: sin destino, aunque tenga prefijo', () => {
+    expect(destinoDeBloque(bloque({ MasterDataType: '' }))).toEqual({ destino: '', claseDeDestino: '' })
+  })
+
+  it('cifras clave: la cifra a la que apunta KFVALUE en el mapeo', () => {
+    const cifras = {
+      TypeOfData: 'KEYFIGURES', FieldMapping: 'PRDID:PRDID,KEYFIGUREDATE:KEYFIGUREDATE,KFVALUE:ZFACTURAS',
+    }
+    expect(destinoDeBloque(cifras)).toEqual({ destino: 'ZFACTURAS', claseDeDestino: 'cifra' })
+  })
+
+  it('cifras clave sin KFVALUE en el mapeo: sin destino', () => {
+    expect(destinoDeBloque({ TypeOfData: 'KEYFIGURES', FieldMapping: 'PRDID:PRDID' })).toEqual({ destino: '', claseDeDestino: '' })
+    expect(destinoDeBloque({ TypeOfData: 'KEYFIGURES' })).toEqual({ destino: '', claseDeDestino: '' })
+  })
+
+  it('manda el tipo de dato: un body de cifras con un tipo de maestro suelto sigue siendo de cifras', () => {
+    const mixto = { TypeOfData: 'KEYFIGURES', MasterDataType: 'PRODUCT', FieldMapping: 'KFVALUE:ZFACTURAS' }
+    expect(destinoDeBloque(mixto)).toEqual({ destino: 'ZFACTURAS', claseDeDestino: 'cifra' })
+  })
+
+  it('sin un tipo de dato conocido, se infiere de lo que haya', () => {
+    expect(destinoDeBloque({ MasterDataPrefix: 'SB', MasterDataType: 'PRODUCT' })).toEqual({ destino: 'SBPRODUCT', claseDeDestino: 'tabla' })
+    expect(destinoDeBloque({ FieldMapping: 'KFVALUE:ZFACTURAS' })).toEqual({ destino: 'ZFACTURAS', claseDeDestino: 'cifra' })
+    expect(destinoDeBloque({})).toEqual({ destino: '', claseDeDestino: '' })
+  })
+
+  it('KFVALUE se reconoce sin distinguir mayúsculas y el destino se deja como está escrito', () => {
+    expect(destinoDeBloque({ TypeOfData: 'KEYFIGURES', FieldMapping: 'kfvalue:ZFacturas' }).destino).toBe('ZFacturas')
+  })
+
+  it('no rompe con lo que no es un bloque', () => {
+    expect(destinoDeBloque(undefined)).toEqual({ destino: '', claseDeDestino: '' })
+    expect(destinoDeBloque({ MasterDataType: 5, TypeOfData: 7 })).toEqual({ destino: '', claseDeDestino: '' })
+  })
+
+  it('el resumen de la lista lo trae', () => {
+    const texto = JSON.stringify({ A: bloque({}) })
+    expect(resumenDeBody(texto)).toMatchObject({ destino: 'SBUOMTO', claseDeDestino: 'tabla' })
+    expect(resumenDeBody('{ no')).not.toHaveProperty('destino')
   })
 })
 

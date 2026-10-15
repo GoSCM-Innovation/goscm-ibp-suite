@@ -15,6 +15,9 @@
 //   - Las variables (`{{FECHA_DESDE}}`) se sustituyen sobre los VALORES de texto ya leídos, nunca sobre el
 //     texto crudo: así un valor no puede cerrar una cadena ni abrir otra clave.
 
+import { componerTipo } from './ibp-nombres.js'
+import { leerMapeo } from './mapping.js'
+
 /** Tope del body. El de un mapeo de 50 campos pesa 5 KB; medio megabyte es mucho más de lo razonable. */
 export const BODY_MAX_BYTES = 512 * 1024
 
@@ -177,6 +180,28 @@ export function aplicarVariables(texto, valores = {}) {
  * Lo que una lista enseña de una integración sin abrirla. Sale del propio body, así que no puede quedar
  * desactualizado respecto a lo que se enviaría.
  */
+/**
+ * A qué carga una integración: la tabla de dato maestro (prefijo + tipo, `SBPRODUCT`) o la cifra clave a la que apunta
+ * `KFVALUE` en el mapeo (`ZFACTURAS`). Devuelve `{ destino, claseDeDestino }`, con `claseDeDestino` `'tabla'`, `'cifra'` o
+ * vacío si todavía no se sabe (un body a medias). Lo que el body dice, tal cual: no se compara con IBP.
+ *
+ * Manda el tipo de dato. Si no es uno de los dos conocidos, se infiere de lo que haya: un tipo de maestro escrito es una
+ * tabla, y un `KFVALUE` en el mapeo, una cifra.
+ */
+export function destinoDeBloque(bloque) {
+  const texto = (campo) => (typeof bloque?.[campo] === 'string' ? bloque[campo].trim() : '')
+  const tipoDeMaestro = texto('MasterDataType')
+  const tabla = tipoDeMaestro ? componerTipo(texto('MasterDataPrefix'), tipoDeMaestro) : ''
+  const cifra = leerMapeo(bloque ?? {}).filas.find((fila) => fila.origen.toUpperCase() === 'KFVALUE')?.destino ?? ''
+
+  const como = (destino, clase) => (destino ? { destino, claseDeDestino: clase } : { destino: '', claseDeDestino: '' })
+  switch (texto('TypeOfData')) {
+    case 'MASTERDATA': return como(tabla, 'tabla')
+    case 'KEYFIGURES': return como(cifra, 'cifra')
+    default: return tabla ? como(tabla, 'tabla') : como(cifra, 'cifra')
+  }
+}
+
 export function resumenDeBody(texto) {
   const leido = leerBody(texto)
   if (!leido.ok) return { valido: false, error: leido.error }
@@ -192,6 +217,7 @@ export function resumenDeBody(texto) {
     prefijoDeMaestro: texto1('MasterDataPrefix'),
     tipoDeMaestro: texto1('MasterDataType'),
     nivelDeTiempo: texto1('TargetTimeProfileLevelinSAPIBP'),
+    ...destinoDeBloque(bloque),
     nombreDeLote: texto1('BatchName'),
     variables: variablesDeBody(texto),
   }

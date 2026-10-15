@@ -5,12 +5,16 @@
 //
 // Una integración se ejecuta con lo GUARDADO, y antes de pedir confirmación se leen los valores con que se
 // ejecutó la última vez, para proponerlos en el diálogo.
+//
+// El árbol se puede ordenar de dos maneras: por carpeta (como una colección de Postman) o por destino, es decir, por la
+// tabla de dato maestro o la cifra clave a la que carga cada integración.
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { plantillaDeBody, BLOQUE_POR_TIPO } from '../../../core/ci/campos.js'
 import { resumenDeBody } from '../../../core/ci/body.js'
 import {
   arbolDeCarpetas,
+  arbolPorDestino,
   borrarIntegracion,
   carpetasExistentes,
   crearIntegracion,
@@ -32,6 +36,63 @@ import EditorDeIntegracion from './EditorDeIntegracion.jsx'
 import { useCatalogoIbp } from './useCatalogoIbp.js'
 
 const PREGUNTA_DESCARTAR = 'Hay cambios sin guardar. ¿Descartarlos?'
+
+/** Una integración en el árbol. En la vista por destino enseña su carpeta, porque ya no es lo que agrupa. */
+function FilaDeIntegracion({ una, nivel, elegida, onElegir, conCarpeta = false }) {
+  return (
+    <button
+      type="button"
+      className={`ci-arbol-fila ci-arbol-integracion${elegida === una.id ? ' active' : ''}`}
+      style={{ paddingLeft: 22 + nivel * 14 }}
+      onClick={() => onElegir(una.id)}
+      title={una.resumen?.valido ? `${una.resumen.tipo} · ${una.resumen.comando}` : una.resumen?.error}
+    >
+      <span className="ci-arbol-nombre">{una.name}</span>
+      {conCarpeta && una.folder && <span className="ci-arbol-carpeta-gris" title="Carpeta">{una.folder}</span>}
+      {!una.resumen?.valido && <span className="ci-arbol-alerta" title={una.resumen?.error}>!</span>}
+      {una.resumen?.valido && una.resumen.comando && <span className="ci-arbol-comando mono">{una.resumen.comando}</span>}
+    </button>
+  )
+}
+
+/**
+ * El árbol por destino: un grupo de tablas de dato maestro, uno de cifras clave y, si hace falta, uno sin destino. Cada
+ * tabla o cifra es un nodo que se abre para ver las integraciones que cargan a ella.
+ */
+function ArbolPorDestino({ arbol, abiertos, alternar, elegida, onElegir, forzarAbierto }) {
+  return (
+    <>
+      {arbol.grupos.map((grupo) => (
+        <div key={grupo.id}>
+          <div className="ci-arbol-grupo">{grupo.titulo}</div>
+          {/* Sin destino no hay nodos: las integraciones cuelgan directamente del grupo. */}
+          {grupo.id === 'sin'
+            ? grupo.destinos.flatMap((uno) => uno.integraciones).map((una) => (
+              <FilaDeIntegracion key={una.id} una={una} nivel={0} elegida={elegida} onElegir={onElegir} conCarpeta />
+            ))
+            : grupo.destinos.map((uno) => {
+              const clave = `${grupo.id}:${uno.destino}`
+              const abierto = forzarAbierto || abiertos.has(clave)
+              return (
+                <div key={clave}>
+                  <div className="ci-arbol-carpeta" style={{ paddingLeft: 8 }}>
+                    <button type="button" className="ci-arbol-fila" onClick={() => alternar(clave)} aria-expanded={abierto}>
+                      <span className="ci-arbol-flecha" aria-hidden="true">{abierto ? '▾' : '▸'}</span>
+                      <span className="ci-arbol-nombre">{uno.destino}</span>
+                      <span className="ci-arbol-cuenta">{uno.integraciones.length}</span>
+                    </button>
+                  </div>
+                  {abierto && uno.integraciones.map((una) => (
+                    <FilaDeIntegracion key={una.id} una={una} nivel={1} elegida={elegida} onElegir={onElegir} conCarpeta />
+                  ))}
+                </div>
+              )
+            })}
+        </div>
+      ))}
+    </>
+  )
+}
 
 /** Una carpeta del árbol y todo lo que cuelga de ella. */
 function Carpeta({ nodo, nivel, abiertas, alternar, elegida, onElegir, onRenombrar, forzarAbierta }) {
@@ -76,18 +137,7 @@ function Contenido({ nodo, nivel, abiertas, alternar, elegida, onElegir, onRenom
         />
       ))}
       {nodo.integraciones.map((una) => (
-        <button
-          key={una.id}
-          type="button"
-          className={`ci-arbol-fila ci-arbol-integracion${elegida === una.id ? ' active' : ''}`}
-          style={{ paddingLeft: 22 + nivel * 14 }}
-          onClick={() => onElegir(una.id)}
-          title={una.resumen?.valido ? `${una.resumen.tipo} · ${una.resumen.comando}` : una.resumen?.error}
-        >
-          <span className="ci-arbol-nombre">{una.name}</span>
-          {!una.resumen?.valido && <span className="ci-arbol-alerta" title={una.resumen?.error}>!</span>}
-          {una.resumen?.valido && una.resumen.comando && <span className="ci-arbol-comando mono">{una.resumen.comando}</span>}
-        </button>
+        <FilaDeIntegracion key={una.id} una={una} nivel={nivel} elegida={elegida} onElegir={onElegir} />
       ))}
     </>
   )
@@ -99,6 +149,9 @@ export default function Integraciones({ connection }) {
   const [cargando, setCargando] = useState(false)
   const [filtro, setFiltro] = useState('')
   const [abiertas, setAbiertas] = useState(() => new Set())
+  // Cómo se ordena el árbol y qué destinos están abiertos. Solo en memoria: al recargar vuelve a «Carpeta».
+  const [vista, setVista] = useState('carpeta')
+  const [destinosAbiertos, setDestinosAbiertos] = useState(() => new Set())
   const [elegidaId, setElegidaId] = useState(null)
   const [abierta, setAbierta] = useState(null)
   const [sinGuardar, setSinGuardar] = useState(false)
@@ -131,6 +184,7 @@ export default function Integraciones({ connection }) {
 
   const integraciones = useMemo(() => lista ?? [], [lista])
   const arbol = useMemo(() => arbolDeCarpetas(integraciones, filtro), [integraciones, filtro])
+  const porDestino = useMemo(() => arbolPorDestino(integraciones, filtro), [integraciones, filtro])
   const carpetas = useMemo(() => carpetasExistentes(integraciones), [integraciones])
   // Los niveles de tiempo que ya usan las integraciones de esta conexión: se sugieren al escribir uno nuevo.
   const nivelesDeTiempo = useMemo(
@@ -145,6 +199,15 @@ export default function Integraciones({ connection }) {
       const siguientes = new Set(previas)
       if (siguientes.has(ruta)) siguientes.delete(ruta)
       else siguientes.add(ruta)
+      return siguientes
+    })
+  }
+
+  function alternarDestino(clave) {
+    setDestinosAbiertos((previos) => {
+      const siguientes = new Set(previos)
+      if (siguientes.has(clave)) siguientes.delete(clave)
+      else siguientes.add(clave)
       return siguientes
     })
   }
@@ -285,11 +348,26 @@ export default function Integraciones({ connection }) {
             </button>
           </div>
         </div>
+        <div className="ci-arbol-vista" role="group" aria-label="Ordenar las integraciones">
+          <span className="card-hint">Ordenar por</span>
+          {[['carpeta', 'Carpeta', 'Como una colección de Postman'], ['destino', 'Destino', 'Por la tabla de dato maestro o la cifra clave a la que carga']].map(([id, etiqueta, ayuda]) => (
+            <button
+              key={id}
+              type="button"
+              className={`ci-arbol-vista-boton${vista === id ? ' active' : ''}`}
+              aria-pressed={vista === id}
+              title={ayuda}
+              onClick={() => setVista(id)}
+            >
+              {etiqueta}
+            </button>
+          ))}
+        </div>
         <div className="ci-arbol-buscar">
           <input
             className="input input-sm"
             type="search"
-            placeholder="Buscar por nombre, carpeta, lote o área…"
+            placeholder="Buscar por nombre, carpeta, lote, área o destino…"
             value={filtro}
             aria-label="Buscar integraciones"
             onChange={(evento) => setFiltro(evento.target.value)}
@@ -302,19 +380,30 @@ export default function Integraciones({ connection }) {
               <button type="button" className="ci-enlace" onClick={() => setNueva({ carpeta: '' })}>Crea la primera</button>
             </div>
           )}
-          {integraciones.length > 0 && arbol.carpetas.length === 0 && arbol.integraciones.length === 0 && (
+          {integraciones.length > 0 && (vista === 'destino' ? porDestino.grupos.length === 0 : arbol.carpetas.length === 0 && arbol.integraciones.length === 0) && (
             <div className="ci-vacio">Ninguna integración coincide con «{filtro}».</div>
           )}
-          <Contenido
-            nodo={arbol}
-            nivel={0}
-            abiertas={abiertas}
-            alternar={alternar}
-            elegida={elegidaId}
-            onElegir={elegir}
-            onRenombrar={renombrarUnaCarpeta}
-            forzarAbierta={filtro.trim() !== ''}
-          />
+          {vista === 'destino' ? (
+            <ArbolPorDestino
+              arbol={porDestino}
+              abiertos={destinosAbiertos}
+              alternar={alternarDestino}
+              elegida={elegidaId}
+              onElegir={elegir}
+              forzarAbierto={filtro.trim() !== ''}
+            />
+          ) : (
+            <Contenido
+              nodo={arbol}
+              nivel={0}
+              abiertas={abiertas}
+              alternar={alternar}
+              elegida={elegidaId}
+              onElegir={elegir}
+              onRenombrar={renombrarUnaCarpeta}
+              forzarAbierta={filtro.trim() !== ''}
+            />
+          )}
         </div>
       </aside>
 

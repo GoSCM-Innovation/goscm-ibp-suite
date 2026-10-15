@@ -131,6 +131,74 @@ describe('arbolDeCarpetas', () => {
   })
 })
 
+describe('arbolPorDestino', () => {
+  const con = (id, name, folder, destino, claseDeDestino) => ({
+    id, name, folder, resumen: { valido: true, destino, claseDeDestino },
+  })
+  const LISTA = [
+    con('1', 'PRODUCTOS B', 'DM', 'SBPRODUCT', 'tabla'),
+    con('2', 'UOMTO', 'DM', 'SBUOMTO', 'tabla'),
+    con('3', 'PRODUCTOS A', 'PRD/DM', 'SBPRODUCT', 'tabla'),
+    con('4', 'FACTURAS', 'Cifras', 'ZFACTURAS', 'cifra'),
+    con('5', 'A MEDIAS', '', '', ''),
+    { id: '6', name: 'ROTA', folder: '', resumen: { valido: false, error: 'x' } },
+  ]
+  const forma = (arbol) => arbol.grupos.map((g) => [g.id, g.destinos.map((d) => [d.destino, d.integraciones.map((i) => i.name)])])
+
+  it('tablas primero, cifras después y al final las que no tienen destino', () => {
+    expect(forma(ci.arbolPorDestino(LISTA))).toEqual([
+      ['tabla', [['SBPRODUCT', ['PRODUCTOS A', 'PRODUCTOS B']], ['SBUOMTO', ['UOMTO']]]],
+      ['cifra', [['ZFACTURAS', ['FACTURAS']]]],
+      ['sin', [['', ['A MEDIAS', 'ROTA']]]],
+    ])
+  })
+
+  it('las integraciones que cargan a la misma tabla quedan juntas, aunque estén en carpetas distintas', () => {
+    const [tablas] = ci.arbolPorDestino(LISTA).grupos
+    const producto = tablas.destinos.find((d) => d.destino === 'SBPRODUCT')
+    expect(producto.integraciones.map((i) => i.folder).sort()).toEqual(['DM', 'PRD/DM'])
+  })
+
+  it('destinos e integraciones en orden alfabético, sin distinguir acentos en el orden', () => {
+    const desordenada = [con('1', 'b', '', 'ZB', 'cifra'), con('2', 'a', '', 'ZA', 'cifra'), con('3', 'á', '', 'ZA', 'cifra')]
+    expect(forma(ci.arbolPorDestino(desordenada))).toEqual([['cifra', [['ZA', ['a', 'á']], ['ZB', ['b']]]]])
+  })
+
+  it('un destino se agrupa sin distinguir mayúsculas y se enseña como lo escribió la primera', () => {
+    const lista = [con('1', 'x', '', 'SBProduct', 'tabla'), con('2', 'y', '', 'SBPRODUCT', 'tabla')]
+    const [tablas] = ci.arbolPorDestino(lista).grupos
+    expect(tablas.destinos).toHaveLength(1)
+    expect(tablas.destinos[0].destino).toBe('SBProduct')
+    expect(tablas.destinos[0].integraciones).toHaveLength(2)
+  })
+
+  it('no enseña grupos vacíos', () => {
+    expect(ci.arbolPorDestino([con('1', 'x', '', 'SBPRODUCT', 'tabla')]).grupos.map((g) => g.id)).toEqual(['tabla'])
+    expect(ci.arbolPorDestino([]).grupos).toEqual([])
+  })
+
+  it('un destino con una clase que no se conoce va a «Sin destino»: no se pierde', () => {
+    expect(forma(ci.arbolPorDestino([con('1', 'x', '', 'RARO', 'otra')]))).toEqual([['sin', [['', ['x']]]]])
+  })
+
+  it('el filtro deja solo lo que coincide, también por destino, y quita lo vacío', () => {
+    expect(forma(ci.arbolPorDestino(LISTA, 'uomto'))).toEqual([['tabla', [['SBUOMTO', ['UOMTO']]]]])
+    expect(forma(ci.arbolPorDestino(LISTA, 'zfact'))).toEqual([['cifra', [['ZFACTURAS', ['FACTURAS']]]]])
+    expect(ci.arbolPorDestino(LISTA, 'nada que coincida').grupos).toEqual([])
+  })
+
+  it('el filtro de carpetas también busca por destino', () => {
+    const arbol = ci.arbolDeCarpetas(LISTA, 'sbuomto')
+    const nombres = (nodo) => [...nodo.integraciones.map((i) => i.name), ...nodo.carpetas.flatMap(nombres)]
+    expect(nombres(arbol)).toEqual(['UOMTO'])
+  })
+
+  it('no repite ni pierde ninguna integración', () => {
+    const todas = ci.arbolPorDestino(LISTA).grupos.flatMap((g) => g.destinos.flatMap((d) => d.integraciones.map((i) => i.id))).sort()
+    expect(todas).toEqual(['1', '2', '3', '4', '5', '6'])
+  })
+})
+
 describe('opcionesDeCarpeta', () => {
   it('«Sin carpeta» primero, con valor vacío, y después las existentes tal cual', () => {
     expect(ci.opcionesDeCarpeta(['A', 'A/B'])).toEqual([

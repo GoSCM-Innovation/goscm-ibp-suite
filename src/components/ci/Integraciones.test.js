@@ -426,3 +426,115 @@ describe('crear, duplicar y borrar', () => {
     expect(tipos.map((t) => t.checked)).toEqual([true, false])
   })
 })
+
+describe('ordenar por destino', () => {
+  const maestro = (id, name, folder, tipo) => completa(id, name, folder, JSON.stringify({
+    A: { TypeOfData: 'MASTERDATA', BatchCommand: 'INSERT_UPDATE', MasterDataPrefix: 'SB', MasterDataType: tipo },
+  }))
+  const cifra = (id, name, folder, kf) => completa(id, name, folder, JSON.stringify({
+    K: { TypeOfData: 'KEYFIGURES', BatchCommand: 'REPLACE', FieldMapping: `PRDID:PRDID,KFVALUE:${kf}` },
+  }))
+  const DESTINOS = [
+    maestro('m1', 'PRODUCTOS DEV', 'DM', 'PRODUCT'),
+    maestro('m2', 'PRODUCTOS PRD', 'PRD', 'PRODUCT'),
+    maestro('m3', 'UOMTO', 'DM', 'UOMTO'),
+    cifra('k1', 'FACTURAS', 'Cifras', 'ZFACTURAS'),
+    completa('s1', 'A MEDIAS', '', plantillaDeBody('MASTERDATA')),
+  ]
+
+  beforeEach(() => {
+    ci.listIntegraciones.mockResolvedValue(DESTINOS.map(({ id, name, folder, body }) => resumida(id, name, folder, body)))
+    ci.getIntegracion.mockImplementation(async (id) => DESTINOS.find((una) => una.id === id))
+  })
+
+  const nodos = () => [...dom().querySelectorAll('.ci-arbol-carpeta .ci-arbol-fila')]
+  const nodo = (destino) => nodos().find((uno) => uno.querySelector('.ci-arbol-nombre')?.textContent === destino)
+  const verPorDestino = async () => { await pulsar(boton('Destino')) }
+  const nombresVisibles = () => [...dom().querySelectorAll('.ci-arbol-integracion .ci-arbol-nombre')].map((uno) => uno.textContent)
+
+  it('empieza por carpeta, como siempre, y el conmutador dice cuál está activa', async () => {
+    await montarBiblioteca()
+    expect(boton('Carpeta').getAttribute('aria-pressed')).toBe('true')
+    expect(boton('Destino').getAttribute('aria-pressed')).toBe('false')
+    expect(dom().querySelector('.ci-arbol-grupo')).toBeNull()
+  })
+
+  it('por destino: tablas, cifras y «Sin destino», con cada destino cerrado y su cantidad', async () => {
+    await montarBiblioteca()
+    await verPorDestino()
+
+    expect([...dom().querySelectorAll('.ci-arbol-grupo')].map((g) => g.textContent)).toEqual([
+      'Tablas de dato maestro', 'Cifras clave', 'Sin destino',
+    ])
+    expect(nodos().map((n) => n.textContent.replace('▸', ''))).toEqual(['SBPRODUCT2', 'SBUOMTO1', 'ZFACTURAS1'])
+    // Los destinos empiezan cerrados; «Sin destino» no tiene nodos, sus integraciones cuelgan del grupo.
+    expect(nombresVisibles()).toEqual(['A MEDIAS'])
+  })
+
+  it('abrir un destino enseña las integraciones que cargan a él, con su carpeta', async () => {
+    await montarBiblioteca()
+    await verPorDestino()
+    await pulsar(nodo('SBPRODUCT'))
+
+    expect(nombresVisibles()).toEqual(['PRODUCTOS DEV', 'PRODUCTOS PRD', 'A MEDIAS'])
+    const carpetas = [...dom().querySelectorAll('.ci-arbol-carpeta-gris')].map((c) => c.textContent)
+    expect(carpetas).toEqual(['DM', 'PRD'])
+
+    await pulsar(nodo('SBPRODUCT'))
+    expect(nombresVisibles()).toEqual(['A MEDIAS'])
+  })
+
+  it('elegir una integración desde esta vista la abre en el editor', async () => {
+    await montarBiblioteca()
+    await verPorDestino()
+    await pulsar(nodo('SBUOMTO'))
+    await abrirIntegracion('UOMTO')
+
+    expect(ci.getIntegracion).toHaveBeenCalledWith('m3')
+    expect(dom().querySelector('#ci-nombre').value).toBe('UOMTO')
+  })
+
+  it('buscar abre todos los destinos y deja solo lo que coincide, también por destino', async () => {
+    await montarBiblioteca()
+    await verPorDestino()
+    await escribir(porEtiqueta('Buscar integraciones'), 'sbuomto')
+
+    expect(nombresVisibles()).toEqual(['UOMTO'])
+    expect(nodos().map((n) => n.querySelector('.ci-arbol-nombre').textContent)).toEqual(['SBUOMTO'])
+  })
+
+  it('una búsqueda sin resultados lo dice', async () => {
+    await montarBiblioteca()
+    await verPorDestino()
+    await escribir(porEtiqueta('Buscar integraciones'), 'zzz')
+    expect(texto()).toContain('Ninguna integración coincide con «zzz»')
+  })
+
+  it('en esta vista no hay carpetas que renombrar', async () => {
+    await montarBiblioteca()
+    await verPorDestino()
+    expect(dom().querySelector('[aria-label^="Renombrar la carpeta"]')).toBeNull()
+  })
+
+  it('volver a «Carpeta» devuelve el árbol de siempre', async () => {
+    await montarBiblioteca()
+    await verPorDestino()
+    await pulsar(boton('Carpeta'))
+
+    expect(dom().querySelector('.ci-arbol-grupo')).toBeNull()
+    expect(texto()).toContain('DM')
+    expect(dom().querySelector('[aria-label="Renombrar la carpeta DM"]')).not.toBeNull()
+  })
+
+  it('cambiar de vista no toca lo que se está editando', async () => {
+    await montarBiblioteca()
+    await verPorDestino()
+    await pulsar(nodo('SBUOMTO'))
+    await abrirIntegracion('UOMTO')
+    await escribir(dom().querySelector('#ci-nombre'), 'UOMTO NUEVO')
+
+    await pulsar(boton('Carpeta'))
+    expect(dom().querySelector('#ci-nombre').value).toBe('UOMTO NUEVO')
+    expect(texto()).toContain('Cambios sin guardar')
+  })
+})
