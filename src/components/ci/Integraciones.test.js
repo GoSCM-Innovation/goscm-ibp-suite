@@ -25,7 +25,7 @@ vi.mock('../../lib/ci.js', async (importOriginal) => ({ ...(await importOriginal
 
 const { default: Integraciones } = await import('./Integraciones.jsx')
 const { plantillaDeBody } = await import('../../../core/ci/campos.js')
-const { resumenDeBody } = await import('../../../core/ci/body.js')
+const { normalizarBody, resumenDeBody } = await import('../../../core/ci/body.js')
 const {
   asentar, boton, desmontar, dom, elegir, escribir, marcar, montar, porEtiqueta, pulsar, texto,
 } = await import('./ayudas-de-prueba.js')
@@ -536,5 +536,109 @@ describe('ordenar por destino', () => {
     await pulsar(boton('Carpeta'))
     expect(dom().querySelector('#ci-nombre').value).toBe('UOMTO NUEVO')
     expect(texto()).toContain('Cambios sin guardar')
+  })
+})
+
+// El servidor limpia lo que recibe y devuelve esa versión. Si el editor no la muestra, sigue creyendo que hay cambios
+// sin guardar por un espacio o una sangría: «Ejecutar» queda apagado y al salir pregunta si se descartan.
+describe('tras guardar, el editor muestra lo que el servidor guardó', () => {
+  /** Lo que haría el servidor: nombre sin espacios, carpeta ordenada y el body con sangría de 2. */
+  const comoElServidor = (cambios) => ({
+    ...FACTURAS,
+    ...(cambios.name !== undefined ? { name: cambios.name.trim() } : {}),
+    ...(cambios.folder !== undefined ? { folder: cambios.folder.split('/').map((p) => p.trim()).filter(Boolean).join('/') } : {}),
+    ...(cambios.body !== undefined ? { body: normalizarBody(cambios.body) } : {}),
+  })
+
+  beforeEach(() => {
+    ci.guardarIntegracion.mockImplementation(async (_id, cambios) => comoElServidor(cambios))
+  })
+
+  const abrirFacturas = async () => {
+    await montarBiblioteca()
+    await escribir(porEtiqueta('Buscar integraciones'), 'factu')
+    await abrirIntegracion('FACTURAS')
+  }
+  const guardar = async () => { await pulsar(boton('Guardar')); await asentar() }
+
+  it('un body con otra sangría: tras guardar ya no hay cambios sin guardar, «Ejecutar» se enciende y se ve el JSON guardado', async () => {
+    await abrirFacturas()
+    await pulsar([...dom().querySelectorAll('[role="tab"]')].find((t) => t.textContent === 'JSON'))
+    const con4 = JSON.stringify(JSON.parse(BODY_FACTURAS), null, 4)
+    await escribir(porEtiqueta('Body en JSON'), con4)
+    expect(texto()).toContain('Cambios sin guardar')
+    expect(boton('▶ Ejecutar').disabled).toBe(true)
+
+    await guardar()
+    expect(texto()).not.toContain('Cambios sin guardar')
+    expect(boton('▶ Ejecutar').disabled).toBe(false)
+    expect(porEtiqueta('Body en JSON').value).toBe(normalizarBody(con4))
+  })
+
+  it('un nombre con espacios sobrantes: se ve sin ellos', async () => {
+    await abrirFacturas()
+    await escribir(dom().querySelector('#ci-nombre'), '  FACTURAS NUEVAS  ')
+    await guardar()
+
+    expect(dom().querySelector('#ci-nombre').value).toBe('FACTURAS NUEVAS')
+    expect(texto()).not.toContain('Cambios sin guardar')
+  })
+
+  it('una carpeta escrita con espacios y barras sobrantes: se ve ordenada', async () => {
+    await abrirFacturas()
+    await pulsar(dom().querySelector('#ci-carpeta').parentElement.querySelector('button'))
+    await escribir(dom().querySelector('#ci-carpeta'), 'MASTER DATA / Sub/')
+    await guardar()
+
+    expect(dom().querySelector('#ci-carpeta').value).toBe('MASTER DATA/Sub')
+    expect(texto()).not.toContain('Cambios sin guardar')
+  })
+
+  it('después de guardar, cambiar de integración ya no pregunta si se descartan los cambios', async () => {
+    await abrirFacturas()
+    await escribir(dom().querySelector('#ci-nombre'), 'FACTURAS NUEVAS ')
+    await guardar()
+
+    window.confirm.mockClear()
+    await escribir(porEtiqueta('Buscar integraciones'), '')
+    await abrirIntegracion('SUELTA')
+    expect(window.confirm).not.toHaveBeenCalled()
+    expect(dom().querySelector('#ci-nombre').value).toBe('SUELTA')
+  })
+
+  // Lo escrito mientras se guardaba es trabajo nuevo: no se pisa, y sigue contando como cambios sin guardar.
+  it('si se escribe algo mientras se guarda, eso no se pierde y sigue sin guardar', async () => {
+    let terminar
+    ci.guardarIntegracion.mockImplementation((_id, cambios) => new Promise((resolver) => {
+      terminar = () => resolver(comoElServidor(cambios))
+    }))
+    await abrirFacturas()
+    await escribir(dom().querySelector('#ci-nombre'), 'PRIMERO ')
+    await pulsar(boton('Guardar'))
+    await escribir(dom().querySelector('#ci-nombre'), 'PRIMERO Y MÁS')
+
+    terminar()
+    await asentar()
+    expect(dom().querySelector('#ci-nombre').value).toBe('PRIMERO Y MÁS')
+    expect(texto()).toContain('Cambios sin guardar')
+  })
+
+  it('si el guardado falla, no cambia nada: el texto queda como estaba y se dice el error', async () => {
+    ci.guardarIntegracion.mockRejectedValue(new Error('No se pudo guardar.'))
+    await abrirFacturas()
+    await escribir(dom().querySelector('#ci-nombre'), '  CON ESPACIOS  ')
+    await guardar()
+
+    expect(dom().querySelector('#ci-nombre').value).toBe('  CON ESPACIOS  ')
+    expect(texto()).toContain('No se pudo guardar.')
+    expect(texto()).toContain('Cambios sin guardar')
+  })
+
+  it('un guardado normal (sin diferencias) sigue funcionando', async () => {
+    await abrirFacturas()
+    await escribir(dom().querySelector('#ci-nombre'), 'OTRO NOMBRE')
+    await guardar()
+    expect(dom().querySelector('#ci-nombre').value).toBe('OTRO NOMBRE')
+    expect(texto()).not.toContain('Cambios sin guardar')
   })
 })

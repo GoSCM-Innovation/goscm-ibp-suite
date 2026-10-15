@@ -4,6 +4,10 @@
 // guarda aquí es lo que se envía a IBP, y que un cambio a medio escribir se guarde sin que nadie lo decida no
 // es aceptable. Por la misma razón «Ejecutar» exige tener todo guardado: se ejecuta LO GUARDADO, y el
 // historial se refiere a ello.
+//
+// El servidor limpia lo que recibe (quita espacios del nombre, ordena la carpeta, vuelve a escribir el JSON con sangría
+// de 2) y devuelve esa versión. Al guardar con éxito el editor pasa a mostrarla; si no, seguiría creyendo que hay
+// cambios sin guardar por un espacio o una sangría, con «Ejecutar» apagado y la pregunta al salir.
 
 import { useEffect, useState } from 'react'
 import { leerBody, resumenDeBody } from '../../../core/ci/body.js'
@@ -31,6 +35,22 @@ export default function EditorDeIntegracion({
   const [carpeta, setCarpeta] = useState(integracion.folder)
   const [texto, setTexto] = useState(integracion.body)
   const [vista, setVista] = useState('formulario')
+  // Lo último que se mandó a guardar, y la integración con la que se dibujó por última vez.
+  const [enviado, setEnviado] = useState(null)
+  const [base, setBase] = useState(integracion)
+
+  // Llegó la versión guardada. Se muestra, SALVO que se haya escrito algo desde que se pulsó «Guardar»: eso es trabajo
+  // nuevo y no se pisa (y sigue contando como cambios sin guardar). Es el patrón de ajustar el estado al cambiar las
+  // props, sin efectos.
+  if (integracion !== base) {
+    setBase(integracion)
+    if (enviado && enviado.nombre === nombre && enviado.carpeta === carpeta && enviado.texto === texto) {
+      setNombre(integracion.name)
+      setCarpeta(integracion.folder)
+      setTexto(integracion.body)
+    }
+    setEnviado(null)
+  }
 
   const leido = leerBody(texto)
   const resumen = resumenDeBody(texto)
@@ -51,6 +71,7 @@ export default function EditorDeIntegracion({
   }
 
   function guardar() {
+    setEnviado({ nombre, carpeta, texto })
     onGuardar({
       ...(nombre !== integracion.name ? { name: nombre } : {}),
       ...(carpeta !== integracion.folder ? { folder: carpeta } : {}),
