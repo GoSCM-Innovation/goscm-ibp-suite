@@ -358,28 +358,31 @@ export default function ConstructorDeOrquestacion({
             onBlur={terminarNombre}
           />
           <span className={`ci-guardado ci-guardado-${estadoDeGuardado}`} role="status">{TEXTO_DE_GUARDADO[estadoDeGuardado]}</span>
-          {hayEjecucion && (
-            <button type="button" className="ci-orq-boton" onClick={onVerEjecucion}>Última ejecución</button>
-          )}
-          {onAlternarPantallaCompleta && (
+          {/* Los botones se mueven juntos: con poco ancho pasan a una segunda fila, a la derecha, y no se parten. */}
+          <div className="ci-orq-acciones">
+            {hayEjecucion && (
+              <button type="button" className="ci-orq-boton" onClick={onVerEjecucion}>Última ejecución</button>
+            )}
+            {onAlternarPantallaCompleta && (
+              <button
+                type="button"
+                className={`ci-orq-boton${pantallaCompleta ? ' activo' : ''}`}
+                onClick={onAlternarPantallaCompleta}
+                title={pantallaCompleta ? 'Salir de pantalla completa' : 'Pantalla completa'}
+              >
+                {pantallaCompleta ? 'Salir de pantalla completa' : 'Pantalla completa'}
+              </button>
+            )}
             <button
               type="button"
-              className={`ci-orq-boton${pantallaCompleta ? ' activo' : ''}`}
-              onClick={onAlternarPantallaCompleta}
-              title={pantallaCompleta ? 'Salir de pantalla completa' : 'Pantalla completa'}
+              className="ci-orq-ejecutar"
+              onClick={pedirEjecucion}
+              disabled={total === 0 || !exacto || estadoDeGuardado === 'guardando'}
+              title={total === 0 ? 'Agrega al menos una integración para ejecutar' : 'Ejecutar orquestación'}
             >
-              {pantallaCompleta ? 'Salir de pantalla completa' : 'Pantalla completa'}
+              ▶ Ejecutar
             </button>
-          )}
-          <button
-            type="button"
-            className="ci-orq-ejecutar"
-            onClick={pedirEjecucion}
-            disabled={total === 0 || !exacto || estadoDeGuardado === 'guardando'}
-            title={total === 0 ? 'Agrega al menos una integración para ejecutar' : 'Ejecutar orquestación'}
-          >
-            ▶ Ejecutar
-          </button>
+          </div>
         </div>
 
         {alertas && <div className="notice notice-error" role="alert">✕ {alertas}</div>}

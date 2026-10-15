@@ -262,6 +262,18 @@ async function avanzarNivel({
   }))
 }
 
+/**
+ * Cuándo terminó lo que acaba de terminar: el comienzo de la vuelta o, si es posterior, el fin del último de sus pasos.
+ *
+ * Con un adaptador síncrono (CI Tools) el fin de un paso es el comienzo de la vuelta MÁS lo que duró la llamada (ver `avanzarNivel`).
+ * Si un grupo o una ejecución se dieran por terminados con el comienzo de la vuelta, parecerían haber terminado ANTES que su último
+ * paso, y su duración saldría en 0 s aunque una carga haya tardado medio minuto.
+ */
+function finDe(ahora, pasos) {
+  const fines = pasos.map((paso) => Date.parse(paso?.finishedAt)).filter(Number.isFinite)
+  return Math.max(ahora, ...fines)
+}
+
 /** Avanza una orquestación un paso. Devuelve el estado resultante. */
 export async function tickRun(clientId, orchestrationId, ahora = Date.now()) {
   const avanzado = await conCerrojo(clientId, orchestrationId, async () => {
@@ -344,7 +356,7 @@ export async function tickRun(clientId, orchestrationId, ahora = Date.now()) {
         const resultado = groupOutcome(hijos.map((hijo) => hijo.id), estadoGrupo.children, politica)
         if (resultado !== 'running') {
           estadoGrupo.status = resultado
-          estadoGrupo.finishedAt = new Date(ahora).toISOString()
+          estadoGrupo.finishedAt = new Date(finDe(ahora, Object.values(estadoGrupo.children ?? {}))).toISOString()
         }
       }))
 
@@ -378,7 +390,7 @@ export async function tickRun(clientId, orchestrationId, ahora = Date.now()) {
     })
     if (resultado !== 'running') {
       run.status = resultado
-      run.finishedAt = new Date(ahora).toISOString()
+      run.finishedAt = new Date(finDe(ahora, Object.values(run.nodes).flatMap((paso) => [paso, ...Object.values(paso.children ?? {})]))).toISOString()
     }
 
     return guardarRun(clientId, orchestrationId, run)

@@ -607,7 +607,8 @@
   gap: 8px;
   padding: 10px 12px;
 }
-.ci-orq-nombre { flex: 1 1 110px; font-size: 13px; font-weight: 600; min-width: 0; }
+.ci-orq-nombre { flex: 1 1 140px; font-size: 13px; font-weight: 600; min-width: 0; }
+.ci-orq-acciones { align-items: center; display: flex; gap: 8px; margin-left: auto; }
 .ci-guardado { color: var(--text3); font-size: 11.5px; }
 .ci-guardado-guardado { color: var(--green); }
 .ci-guardado-error { color: var(--red); }

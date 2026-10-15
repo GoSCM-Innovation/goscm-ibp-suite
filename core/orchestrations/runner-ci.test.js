@@ -108,6 +108,26 @@ describe('un paso exitoso', () => {
     expect(Date.parse(run.nodes.a.finishedAt) - Date.parse(run.nodes.a.startedAt)).toBe(21_000)
   })
 
+  // El fin de la ejecución es el de su última llamada: con el comienzo de la vuelta saldría «0 s» aunque la carga haya tardado.
+  it('la ejecución termina cuando terminó su última llamada, y su duración no sale en cero', async () => {
+    await arrancar([paso('a')])
+    const run = await avanzar()
+    expect(Date.parse(run.finishedAt)).toBe(Date.parse(run.nodes.a.finishedAt))
+    expect(Date.parse(run.finishedAt) - Date.parse(run.startedAt)).toBe(21_000)
+  })
+
+  it('un grupo también termina cuando terminó su última integración', async () => {
+    getOrchestration.mockResolvedValue(orquestacion(
+      [{ id: 'g', type: 'group', data: { label: '', errorStrategy: 'stop' } }, { ...paso('b'), parentId: 'g' }, { ...paso('c'), parentId: 'g' }],
+    ))
+    await startRun(CLIENTE, ORQ, { defaults: {} }, entorno.ms)
+    await avanzar()
+    const run = await avanzar()
+    expect(run.nodes.g.status).toBe('success')
+    expect(Date.parse(run.nodes.g.finishedAt) - Date.parse(run.nodes.g.startedAt)).toBeGreaterThanOrEqual(21_000)
+    expect(Date.parse(run.finishedAt)).toBeGreaterThanOrEqual(Date.parse(run.nodes.g.finishedAt))
+  })
+
   it('el identificador del paso es el de la ejecución anotada en el historial', async () => {
     await arrancar([paso('a')])
     await avanzar()
