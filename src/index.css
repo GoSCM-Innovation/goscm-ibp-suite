@@ -4740,5 +4740,9 @@ a { color: var(--cyan); }
    (para llegar a ellos con el teclado); sin esto el foco no se vería. */
 .snwv-card:focus-visible,.snwv-tab:focus-visible,.snwv-chip:focus-visible,.snwv-opt:focus-visible,.snwv-btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 
-
-
+/* El menú lateral se queda a la vista aunque la página se desplace: sin esto, con una página larga el pie (quién tiene la sesión,
+   tema, «Salir») quedaba al final y había que bajar hasta él. Los módulos del menú se desplazan dentro (`.sidebar-nav`). En
+   móvil el menú es la barra de abajo y no cambia. */
+@media (min-width: 721px) {
+  .sidebar { align-self: flex-start; height: 100vh; position: sticky; top: 0; }
+}

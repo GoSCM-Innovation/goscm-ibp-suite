@@ -174,7 +174,7 @@ describe('abrir y guardar', () => {
     expect(ci.guardarIntegracion).toHaveBeenCalledWith('i-1', { folder: 'AREA/Maestros' })
   })
 
-  it('«+ Nueva» deja escribir una ruta que no existe, sin avisos', async () => {
+  it('el botón «+» deja escribir una ruta que no existe, sin avisos', async () => {
     ci.guardarIntegracion.mockResolvedValue({ ...FACTURAS, folder: 'OTRA/Nueva' })
     await montarBiblioteca()
     await escribir(porEtiqueta('Buscar integraciones'), 'factu')
@@ -323,7 +323,7 @@ describe('crear, duplicar y borrar', () => {
     expect(dom().querySelector('#ci-nombre').value).toBe('NUEVA')
   })
 
-  it('crear: la carpeta se elige entre las existentes, o se escribe una nueva con «+ Nueva»', async () => {
+  it('crear: la carpeta se elige entre las existentes, o se escribe una nueva con el botón «+»', async () => {
     ci.crearIntegracion.mockResolvedValue(completa('i-9', 'NUEVA', 'OTRA/Sub', plantillaDeBody('MASTERDATA')))
     await montarBiblioteca()
     await pulsar(dom().querySelector('.ci-nueva-boton'))
@@ -333,7 +333,7 @@ describe('crear, duplicar y borrar', () => {
     expect([...carpeta.options].map((o) => o.value)).toEqual(['', 'AREA', 'AREA/Cifras', 'AREA/Maestros'])
     expect(carpeta.value).toBe('')
 
-    await pulsar(boton('+ Nueva'))
+    await pulsar(dom().querySelector('#ci-nueva-carpeta').parentElement.querySelector('button'))
     await escribir(dom().querySelector('#ci-nueva-carpeta'), 'OTRA/Sub')
     await escribir(dom().querySelector('#ci-nueva-nombre'), 'NUEVA')
     await pulsar(boton('Crear'))
@@ -651,20 +651,20 @@ describe('el árbol se adapta a lo que se ve', () => {
     await act(async () => { divisor().dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...extra })) })
   }
 
-  it('el árbol empieza en 340 px, con un divisor que dice cuánto mide', async () => {
+  it('el árbol empieza en 360 px, con un divisor que dice cuánto mide', async () => {
     await montarBiblioteca()
-    expect(ancho()).toBe('340px')
-    expect(divisor().getAttribute('aria-valuenow')).toBe('340')
+    expect(ancho()).toBe('360px')
+    expect(divisor().getAttribute('aria-valuenow')).toBe('360')
   })
 
   it('las flechas lo mueven de 16 en 16 (48 con Mayús), Inicio lo devuelve y no se sale de los límites', async () => {
     await montarBiblioteca()
     await tecla('ArrowRight')
-    expect(ancho()).toBe('356px')
+    expect(ancho()).toBe('376px')
     await tecla('ArrowLeft', { shiftKey: true })
-    expect(ancho()).toBe('308px')
+    expect(ancho()).toBe('328px')
     await tecla('Home')
-    expect(ancho()).toBe('340px')
+    expect(ancho()).toBe('360px')
 
     for (let i = 0; i < 30; i += 1) await tecla('ArrowRight', { shiftKey: true })
     expect(ancho()).toBe('560px')
@@ -676,7 +676,7 @@ describe('el árbol se adapta a lo que se ve', () => {
     await montarBiblioteca()
     await tecla('ArrowRight', { shiftKey: true })
     await act(async () => { divisor().dispatchEvent(new MouseEvent('dblclick', { bubbles: true })) })
-    expect(ancho()).toBe('340px')
+    expect(ancho()).toBe('360px')
   })
 
   it('el nombre completo sale al pasar el cursor, porque en la lista puede cortarse', async () => {

@@ -77,11 +77,11 @@ Pedido del usuario: aprovechar el espacio. Lo que se hizo, por si alguien lo qui
 
 - **Menos aire arriba y a los lados** solo en CI Tools (`.content:has(.ci-tools)`): 8 px arriba y 14 px a los lados, en lugar de los 22 px de las demás pantallas.
 - **Las pestañas «Integraciones / Orquestaciones / Historial» van en la misma fila que las de conexión**, a su derecha (`ConnectionTabs`, prop `derecha`).
-- **El árbol mide 340 px y se ajusta**: un divisor en su borde se arrastra, se mueve con las flechas (16 px; 48 con Mayús), Inicio y doble clic lo devuelven. Entre 220 y 560 px, solo en memoria. El nombre completo sale al pasar el cursor por una fila.
+- **El árbol mide 360 px, se queda a la vista mientras el formulario se desplaza y se ajusta**: un divisor en su borde se arrastra, se mueve con las flechas (16 px; 48 con Mayús), Inicio y doble clic lo devuelven. Entre 220 y 560 px, solo en memoria. El nombre completo sale al pasar el cursor por una fila.
 - **Editor**: nombre, carpeta y botones en una fila; duplicar y eliminar son solo icono. «Cambios sin guardar» va en la fila de las pestañas y la acción principal pasa a ser Guardar mientras hay cambios, y Ejecutar cuando no.
 - **Formulario**: el nombre técnico del campo va en su etiqueta y la explicación, al pasar el cursor, en lugar de una línea de ayuda bajo cada campo.
 - **Estado de IBP**: en una línea a la derecha de las pestañas «Formulario / JSON»; el motivo de un fallo y los avisos, debajo.
-- **Menú lateral** (toda la Suite): 216 px en lugar de 252, filas más bajas, y tema, «Salir» y requisitos técnicos en una fila de tres iconos junto a quién tiene la sesión, abajo. El botón « sigue minimizándolo.
+- **Menú lateral** (toda la Suite): 216 px en lugar de 252, siempre a la vista aunque la página se desplace (su pie con la sesión no queda al final), filas más bajas, y tema, «Salir» y requisitos técnicos en una fila de tres iconos junto a quién tiene la sesión, abajo. El botón « sigue minimizándolo.
 
 ## Decisiones del usuario
 

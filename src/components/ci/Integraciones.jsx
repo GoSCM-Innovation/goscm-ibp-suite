@@ -38,7 +38,7 @@ import { useCatalogoIbp } from './useCatalogoIbp.js'
 const PREGUNTA_DESCARTAR = 'Hay cambios sin guardar. ¿Descartarlos?'
 
 /** El ancho del árbol: el que trae, el mínimo y el máximo a los que se puede arrastrar, y lo que mueve una flecha. */
-const ANCHO_DEL_ARBOL = 340
+const ANCHO_DEL_ARBOL = 360
 const ANCHO_MINIMO = 220
 const ANCHO_MAXIMO = 560
 const PASO_DEL_TECLADO = 16
@@ -50,7 +50,7 @@ function FilaDeIntegracion({ una, nivel, elegida, onElegir, conCarpeta = false }
     <button
       type="button"
       className={`ci-arbol-fila ci-arbol-integracion${elegida === una.id ? ' active' : ''}`}
-      style={{ paddingLeft: 22 + nivel * 14 }}
+      style={{ paddingLeft: 18 + nivel * 10 }}
       onClick={() => onElegir(una.id)}
       // El nombre completo, porque en la lista puede cortarse; y debajo qué es.
       title={`${una.name}\n${una.resumen?.valido ? `${una.resumen.tipo} · ${una.resumen.comando}` : una.resumen?.error}`}
