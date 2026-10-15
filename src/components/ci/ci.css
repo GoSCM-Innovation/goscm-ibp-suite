@@ -4,7 +4,9 @@
 .ci-tools { min-height: 0; }
 /* Menos aire arriba y a los lados que en el resto de la aplicación: aquí el trabajo es una lista y un formulario, y cada
    píxel de alto cuenta. `.content` es de todas las pantallas, así que solo se toca cuando la pantalla es CI Tools. */
-.content:has(.ci-tools) { padding: 8px 14px 10px; }
+/* `overflow: clip` y no el `overflow-y: auto` de `.content`: con `auto` el contenedor pasa a ser quien «se desplaza» y la lista que
+   se queda a la vista (`position: sticky`) se pega a él, no a la ventana, y nunca se queda. */
+.content:has(.ci-tools) { overflow: clip; padding: 8px 14px 10px; }
 .module-page.ci-tools { gap: 0; }
 .ci-sistema { display: flex; flex: 1; flex-direction: column; min-height: 0; }
 .ci-vistas { flex-shrink: 0; }
