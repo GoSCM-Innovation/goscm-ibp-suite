@@ -17,7 +17,9 @@ import {
   arbolPorDestino,
   borrarIntegracion,
   carpetasExistentes,
+  configuracionDeIntegracion,
   crearIntegracion,
+  detalleCompletoDeIntegracion,
   duplicarIntegracion,
   ejecutarIntegracion,
   getIntegracion,
@@ -45,22 +47,22 @@ const PASO_DEL_TECLADO = 16
 const limitarAncho = (ancho) => Math.min(ANCHO_MAXIMO, Math.max(ANCHO_MINIMO, Math.round(ancho)))
 
 /**
- * Una integración en el árbol. LO IMPORTANTE ES EL NOMBRE: ocupa todo el ancho de la fila y no se lo comen ni el comando ni
- * la carpeta (los nombres de las integraciones son largos y se parecen). Lo secundario, solo donde hace falta: en la vista por
- * destino, una segunda línea pequeña con la carpeta (ya no es lo que agrupa) y el comando. En la vista por carpeta, nada más
- * que el nombre; el comando está en el cuadro que sale al pasar el cursor y en el editor.
+ * Una integración en el árbol, en dos líneas, igual por carpeta y por destino. LO IMPORTANTE ES EL NOMBRE: ocupa todo el ancho de
+ * su línea (los nombres son largos y se parecen). Debajo, pequeña, su configuración: planning area, versión, comando y de qué
+ * sistema a cuál va. Ni la carpeta ni el tipo (maestro o transaccional) se repiten: en el árbol ya están separados por ellos.
+ * Al pasar el cursor sale todo, un dato por línea.
  */
-function FilaDeIntegracion({ una, nivel, elegida, onElegir, conCarpeta = false }) {
-  const comando = una.resumen?.valido ? una.resumen.comando : ''
-  const secundario = conCarpeta ? [una.folder, comando].filter(Boolean).join(' · ') : ''
+function FilaDeIntegracion({ una, nivel, elegida, onElegir }) {
+  const secundario = configuracionDeIntegracion(una)
+  const detalle = [detalleCompletoDeIntegracion(una), una.folder && `Carpeta: ${una.folder}`].filter(Boolean).join('\n')
   return (
     <button
       type="button"
       className={`ci-arbol-fila ci-arbol-integracion${elegida === una.id ? ' active' : ''}`}
       style={{ paddingLeft: 18 + nivel * 10 }}
       onClick={() => onElegir(una.id)}
-      // El nombre completo, porque en la lista puede cortarse; y debajo qué es.
-      title={`${una.name}\n${una.resumen?.valido ? `${una.resumen.tipo} · ${una.resumen.comando}` : una.resumen?.error}`}
+      // El nombre completo, porque en la lista puede cortarse; y debajo todo lo que dice el body.
+      title={`${una.name}\n${detalle}`}
     >
       <span className="ci-arbol-texto">
         <span className="ci-arbol-nombre">{una.name}</span>
@@ -84,7 +86,7 @@ function ArbolPorDestino({ arbol, abiertos, alternar, elegida, onElegir, forzarA
           {/* Sin destino no hay nodos: las integraciones cuelgan directamente del grupo. */}
           {grupo.id === 'sin'
             ? grupo.destinos.flatMap((uno) => uno.integraciones).map((una) => (
-              <FilaDeIntegracion key={una.id} una={una} nivel={0} elegida={elegida} onElegir={onElegir} conCarpeta />
+              <FilaDeIntegracion key={una.id} una={una} nivel={0} elegida={elegida} onElegir={onElegir} />
             ))
             : grupo.destinos.map((uno) => {
               const clave = `${grupo.id}:${uno.destino}`
@@ -99,7 +101,7 @@ function ArbolPorDestino({ arbol, abiertos, alternar, elegida, onElegir, forzarA
                     </button>
                   </div>
                   {abierto && uno.integraciones.map((una) => (
-                    <FilaDeIntegracion key={una.id} una={una} nivel={1} elegida={elegida} onElegir={onElegir} conCarpeta />
+                    <FilaDeIntegracion key={una.id} una={una} nivel={1} elegida={elegida} onElegir={onElegir} />
                   ))}
                 </div>
               )
@@ -407,7 +409,7 @@ export default function Integraciones({ connection }) {
             className="input input-sm"
             type="search"
             placeholder="Buscar…"
-            title="Busca por nombre, carpeta, lote, área o destino"
+            title="Busca por nombre, carpeta, planning area, versión, comando, fuente de datos, sistema o destino"
             value={filtro}
             aria-label="Buscar integraciones"
             onChange={(evento) => setFiltro(evento.target.value)}

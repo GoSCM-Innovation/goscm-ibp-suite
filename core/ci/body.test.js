@@ -219,6 +219,12 @@ describe('resumenDeBody', () => {
     expect(resumenDeBody(texto(cifras))).toMatchObject({ nivelDeTiempo: '0000000002', prefijoDeMaestro: '', tipoDeMaestro: '' })
   })
 
+  it('saca la fuente de datos y los sistemas de origen y destino', () => {
+    const cifras = { KEYFIGURE: { TypeOfData: 'KEYFIGURES', DataSource: 'ZIBP_PRODCONF_KF', DestinationforAddon: 'PRD', DestinationforSAPIBP: 'IBP' } }
+    expect(resumenDeBody(texto(cifras))).toMatchObject({ fuenteDeDatos: 'ZIBP_PRODCONF_KF', sistemaOrigen: 'PRD', sistemaDestino: 'IBP' })
+    expect(resumenDeBody(texto({ K: { TypeOfData: 'KEYFIGURES' } }))).toMatchObject({ fuenteDeDatos: '', sistemaOrigen: '', sistemaDestino: '' })
+  })
+
   it('un body roto dice por qué', () => {
     expect(resumenDeBody('{ no')).toMatchObject({ valido: false })
   })

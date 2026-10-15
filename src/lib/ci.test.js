@@ -250,3 +250,61 @@ describe('lo que se muestra', () => {
     expect(ci.fechaLegible('2026-10-14T12:30:00Z')).not.toBe('—')
   })
 })
+
+// La configuración de una integración en una línea: planning area, versión, comando y de qué sistema a cuál va.
+describe('configuracionDeIntegracion', () => {
+  const con = (resumen) => ({ id: 'i', name: 'X', folder: '', resumen: { valido: true, tipo: 'KEYFIGURES', ...resumen } })
+  const COMPLETA = {
+    areaDePlanificacion: 'STARBRANDS', version: 'PVSMD', comando: 'REPLACE', sistemaOrigen: 'PRD', sistemaDestino: 'IBP', fuenteDeDatos: 'ZIBP_PEDIDOSVTA_KF',
+  }
+
+  it('área, versión, comando y de qué sistema a cuál, en ese orden', () => {
+    expect(ci.configuracionDeIntegracion(con(COMPLETA))).toBe('STARBRANDS · PVSMD · REPLACE · PRD → IBP')
+  })
+
+  it('funciona igual con varias áreas y versiones: cada fila dice las suyas', () => {
+    expect(ci.configuracionDeIntegracion(con({ ...COMPLETA, areaDePlanificacion: 'UNIPA', version: 'PLAN1', sistemaOrigen: 'QAS' })))
+      .toBe('UNIPA · PLAN1 · REPLACE · QAS → IBP')
+  })
+
+  it('sin versión, con un área, es la versión base', () => {
+    expect(ci.configuracionDeIntegracion(con({ ...COMPLETA, version: '' }))).toBe('STARBRANDS · base · REPLACE · PRD → IBP')
+  })
+
+  it('sin área tampoco hay versión base que decir', () => {
+    expect(ci.configuracionDeIntegracion(con({ comando: 'INSERT_UPDATE' }))).toBe('INSERT_UPDATE')
+  })
+
+  it('con un solo extremo, la flecha queda abierta para que se vea qué falta', () => {
+    expect(ci.configuracionDeIntegracion(con({ comando: 'REPLACE', sistemaOrigen: 'PRD' }))).toBe('REPLACE · PRD →')
+    expect(ci.configuracionDeIntegracion(con({ comando: 'REPLACE', sistemaDestino: 'IBP' }))).toBe('REPLACE · → IBP')
+  })
+
+  it('no incluye la cifra o tabla destino ni la fuente de datos', () => {
+    const linea = ci.configuracionDeIntegracion(con({ ...COMPLETA, destino: 'OPENORDERSQTY' }))
+    expect(linea).not.toContain('OPENORDERSQTY')
+    expect(linea).not.toContain('ZIBP_PEDIDOSVTA_KF')
+  })
+
+  it('con el body roto, o sin resumen, vacío', () => {
+    expect(ci.configuracionDeIntegracion({ id: 'i', name: 'X', folder: '', resumen: { valido: false, error: 'x' } })).toBe('')
+    expect(ci.configuracionDeIntegracion({ id: 'i', name: 'X', folder: '' })).toBe('')
+  })
+
+  it('el detalle completo trae un dato por línea, con la fuente de datos', () => {
+    expect(ci.detalleCompletoDeIntegracion(con(COMPLETA)).split('\n')).toEqual([
+      'Planning area: STARBRANDS', 'Versión: PVSMD', 'Comando: REPLACE', 'Origen: PRD', 'Destino: IBP', 'Fuente de datos: ZIBP_PEDIDOSVTA_KF',
+    ])
+    expect(ci.detalleCompletoDeIntegracion(con({ ...COMPLETA, version: '' }))).toContain('Versión: base')
+  })
+
+  it('el detalle de un body roto es el motivo', () => {
+    expect(ci.detalleCompletoDeIntegracion({ resumen: { valido: false, error: 'JSON inválido' } })).toBe('JSON inválido')
+  })
+
+  it('detalleDeIntegracion (la paleta y las tarjetas del orquestador) usa la misma línea, o el tipo si no hay nada más', () => {
+    expect(ci.detalleDeIntegracion(con(COMPLETA))).toBe('STARBRANDS · PVSMD · REPLACE · PRD → IBP')
+    expect(ci.detalleDeIntegracion(con({ tipo: 'MASTERDATA' }))).toBe('MASTERDATA')
+    expect(ci.detalleDeIntegracion({ resumen: { valido: false } })).toBe('body inválido')
+  })
+})

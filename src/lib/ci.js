@@ -108,11 +108,42 @@ export const etiquetaDeIntegracion = (integracion) => (
   integracion.folder ? `${integracion.folder} / ${integracion.name}` : integracion.name
 )
 
-/** A qué carga una integración y con qué comando, en una línea: lo que la distingue de las demás de su carpeta. */
+/** La versión de un resumen: la que dice el body o, con un área y sin versión, «base» (es la versión base de esa área). */
+const versionDe = (r) => r.version || (r.areaDePlanificacion ? 'base' : '')
+
+/**
+ * La configuración de una integración en una línea, lo que importa de una carga: planning area, versión, comando y de qué
+ * sistema a cuál va (`STARBRANDS · PVSMD · REPLACE · PRD → IBP`). Lo que el body todavía no dice no se escribe. Con un solo
+ * extremo, la flecha queda abierta (`PRD →`, `→ IBP`) para que se vea qué falta. Sin body válido, vacío.
+ */
+export function configuracionDeIntegracion(integracion) {
+  const r = integracion.resumen
+  if (!r?.valido) return ''
+  const flujo = r.sistemaOrigen && r.sistemaDestino
+    ? `${r.sistemaOrigen} → ${r.sistemaDestino}`
+    : (r.sistemaOrigen && `${r.sistemaOrigen} →`) || (r.sistemaDestino && `→ ${r.sistemaDestino}`) || ''
+  return [r.areaDePlanificacion, versionDe(r), r.comando, flujo].filter(Boolean).join(' · ')
+}
+
+/** La configuración completa, un dato por línea, para el cuadro que sale al pasar el cursor por una integración. */
+export function detalleCompletoDeIntegracion(integracion) {
+  const r = integracion.resumen
+  if (!r?.valido) return r?.error ?? ''
+  return [
+    r.areaDePlanificacion && `Planning area: ${r.areaDePlanificacion}`,
+    versionDe(r) && `Versión: ${versionDe(r)}`,
+    r.comando && `Comando: ${r.comando}`,
+    r.sistemaOrigen && `Origen: ${r.sistemaOrigen}`,
+    r.sistemaDestino && `Destino: ${r.sistemaDestino}`,
+    r.fuenteDeDatos && `Fuente de datos: ${r.fuenteDeDatos}`,
+  ].filter(Boolean).join('\n')
+}
+
+/** Lo que distingue a una integración de las demás de su carpeta, en una línea: su configuración, o el tipo si el body aún no dice nada. */
 export function detalleDeIntegracion(integracion) {
   const r = integracion.resumen
   if (!r?.valido) return 'body inválido'
-  return [r.destino, r.comando].filter(Boolean).join(' · ') || r.tipo
+  return configuracionDeIntegracion(integracion) || r.tipo
 }
 
 /** Fecha y hora como se leen en el historial: día, mes abreviado y hora, sin segundos. */
@@ -125,13 +156,16 @@ export function fechaLegible(iso) {
 
 const normalizar = (texto) => String(texto ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
 
-/** ¿Una integración contiene lo buscado? En su nombre, carpeta, lote, área, tipo de maestro, destino o clave. */
+/** ¿Una integración contiene lo buscado? En su nombre, carpeta, lote, área, versión, comando, fuente de datos, sistemas, tipo de maestro, destino o clave. */
 function coincideConFiltro(filtro) {
   const buscado = normalizar(filtro).trim()
   return (integracion) => {
     if (buscado === '') return true
     const r = integracion.resumen ?? {}
-    return [integracion.name, integracion.folder, r.nombreDeLote, r.areaDePlanificacion, r.tipoDeMaestro, r.destino, r.clave]
+    return [
+      integracion.name, integracion.folder, r.nombreDeLote, r.areaDePlanificacion, r.version, r.comando, r.fuenteDeDatos,
+      r.sistemaOrigen, r.sistemaDestino, r.tipoDeMaestro, r.destino, r.clave,
+    ]
       .some((campo) => normalizar(campo).includes(buscado))
   }
 }

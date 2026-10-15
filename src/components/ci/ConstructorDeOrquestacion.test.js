@@ -24,7 +24,10 @@ const {
 
 const CONEXION = { id: 'conn-1', name: 'CPI desarrollo', baseUrl: 'https://acme.it-cpi034-rt.cfapps.us10-002.hana.ondemand.com/http/IBP2', isProduction: false }
 
-const resumen = (extra) => ({ valido: true, tipo: 'KEYFIGURES', comando: 'REPLACE', destino: '', variables: [], ...extra })
+const resumen = (extra) => ({
+  valido: true, tipo: 'KEYFIGURES', comando: 'REPLACE', destino: '', variables: [],
+  areaDePlanificacion: 'STARBRANDS', version: 'PVSMD', sistemaOrigen: 'PRD', sistemaDestino: 'IBP', ...extra,
+})
 const INTEGRACIONES = [
   { id: 'int-a', name: 'MAESTRO', folder: 'AREA', resumen: resumen({ tipo: 'MASTERDATA', comando: 'INSERT_UPDATE', destino: 'SBPRODUCT' }) },
   { id: 'int-b', name: 'FACTURAS', folder: 'AREA', resumen: resumen({ variables: ['DESDE'], destino: 'SBINVOICE' }) },
@@ -96,7 +99,8 @@ describe('lo que se dibuja', () => {
     expect(dom().querySelectorAll('.ci-orq-tarjeta')).toHaveLength(2)
     expect(texto()).toContain('Grupo paralelo')
     expect(texto()).toContain('2 integraciones')
-    expect(texto()).toContain('AREA · SBPRODUCT · INSERT_UPDATE')
+    // La tarjeta dice la carpeta y la configuración: planning area, versión, comando y de qué sistema a cuál.
+    expect(texto()).toContain('AREA · STARBRANDS · PVSMD · INSERT_UPDATE · PRD → IBP')
     expect(dom().querySelectorAll('.ci-orq-hijo')).toHaveLength(2)
     expect(texto()).toContain('pide {{DESDE}}')
   })
@@ -171,7 +175,7 @@ describe('la paleta', () => {
     const paleta = dom().querySelector('.ci-orq-paleta')
     expect(paleta.textContent).toContain('AREA')
     expect(paleta.textContent).toContain('Sin carpeta')
-    expect(paleta.textContent).toContain('SBPRODUCT · INSERT_UPDATE')
+    expect(paleta.textContent).toContain('STARBRANDS · PVSMD · INSERT_UPDATE · PRD → IBP')
     expect(paleta.querySelectorAll('.ci-orq-paleta-fila')).toHaveLength(3)
   })
 

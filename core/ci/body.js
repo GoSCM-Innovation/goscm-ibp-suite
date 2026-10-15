@@ -251,6 +251,10 @@ export function resumenDeBody(texto) {
     ...destinoDeBloque(bloque),
     variablesDeFecha: variablesDeFechaDeBloque(bloque),
     nombreDeLote: texto1('BatchName'),
+    fuenteDeDatos: texto1('DataSource'),
+    // De qué sistema sale la carga y a cuál llega: «Destino del add-on» (PRD, QAS) y «Destino en SAP IBP» (IBP).
+    sistemaOrigen: texto1('DestinationforAddon'),
+    sistemaDestino: texto1('DestinationforSAPIBP'),
     variables: variablesDeBody(texto),
   }
 }

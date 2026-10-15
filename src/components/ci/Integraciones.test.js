@@ -487,15 +487,16 @@ describe('ordenar por destino', () => {
     expect(nombresVisibles()).toEqual(['A MEDIAS'])
   })
 
-  it('abrir un destino enseña las integraciones que cargan a él, con su carpeta', async () => {
+  it('abrir un destino enseña las integraciones que cargan a él, con su configuración', async () => {
     await montarBiblioteca()
     await verPorDestino()
     await pulsar(nodo('SBPRODUCT'))
 
     expect(nombresVisibles()).toEqual(['PRODUCTOS DEV', 'PRODUCTOS PRD', 'A MEDIAS'])
-    // La segunda línea de cada fila: carpeta y comando. «A MEDIAS» no tiene carpeta, solo el comando.
+    // La segunda línea de cada fila es su configuración, sin la carpeta (ya no es lo que agrupa y se ve en el cuadro al pasar el cursor).
+    // Los dos primeros bodies no dicen área, versión ni sistemas (lo que no dicen no se escribe); «A MEDIAS» es la plantilla, que trae PRD → IBP.
     const secundarios = [...dom().querySelectorAll('.ci-arbol-sub')].map((c) => c.textContent)
-    expect(secundarios).toEqual(['DM · INSERT_UPDATE', 'PRD · INSERT_UPDATE', 'INSERT_UPDATE'])
+    expect(secundarios).toEqual(['INSERT_UPDATE', 'INSERT_UPDATE', 'INSERT_UPDATE · PRD → IBP'])
 
     await pulsar(nodo('SBPRODUCT'))
     expect(nombresVisibles()).toEqual(['A MEDIAS'])
@@ -711,22 +712,30 @@ describe('el árbol se adapta a lo que se ve', () => {
   })
 })
 
-// En el árbol manda el nombre: lo secundario (carpeta, comando) no le quita ancho.
+// En el árbol manda el nombre: su configuración va debajo, en otra línea, y no le quita ancho.
 describe('el nombre manda en cada fila del árbol', () => {
   const filas = () => [...dom().querySelectorAll('.ci-arbol-integracion')]
+  const COMPLETA = completa('i-9', 'COMPLETA', 'AREA/Cifras', JSON.stringify({
+    K: {
+      TypeOfData: 'KEYFIGURES', BatchCommand: 'REPLACE', PlanningArea: 'STARBRANDS', PlanningAreaVersion: 'PVSMD',
+      DataSource: 'ZIBP_PEDIDOSVTA_KF', DestinationforAddon: 'PRD', DestinationforSAPIBP: 'IBP',
+    },
+  }))
 
-  it('por carpeta, la fila es solo el nombre: sin comando ni carpeta al lado', async () => {
+  it('por carpeta, el nombre va en su línea y la configuración en otra, pequeña, debajo', async () => {
     await montarBiblioteca()
     await abrirCarpeta('AREA')
     await abrirCarpeta('Cifras')
     const fila = filas().find((una) => una.textContent.includes('FACTURAS'))
-    expect(fila.textContent).toBe('FACTURAS')
-    expect(fila.querySelector('.ci-arbol-sub')).toBeNull()
-    // El comando sigue al alcance, en el cuadro que sale al pasar el cursor.
-    expect(fila.getAttribute('title')).toContain('REPLACE')
+    const [nombre, secundario] = [...fila.querySelectorAll('.ci-arbol-texto > span')]
+    expect(nombre.className).toBe('ci-arbol-nombre')
+    expect(nombre.textContent).toBe('FACTURAS')
+    expect(secundario.className).toBe('ci-arbol-sub')
+    // Planning area, versión (sin versión en el body: la base) y comando. Este body no dice sistemas.
+    expect(secundario.textContent).toBe('AREA_DEMO · base · REPLACE')
   })
 
-  it('por destino, el nombre va en su línea y la carpeta y el comando en otra, pequeña, debajo', async () => {
+  it('por destino, igual: el nombre en su línea y la configuración debajo, sin la carpeta', async () => {
     await montarBiblioteca()
     await pulsar(boton('Destino'))
     const fila = filas()[0]
@@ -736,6 +745,38 @@ describe('el nombre manda en cada fila del árbol', () => {
     // El nombre es lo único que hay en su línea.
     expect(nombre.textContent).toBe(fila.querySelector('.ci-arbol-nombre').textContent)
     expect(fila.querySelector('.ci-arbol-texto').children[0]).toBe(nombre)
+    expect(secundario.textContent).not.toContain('AREA/')
+  })
+
+  it('con todo lo que dice el body, la línea es «área · versión · comando · origen → destino»', async () => {
+    ci.listIntegraciones.mockResolvedValue([resumida(COMPLETA.id, COMPLETA.name, COMPLETA.folder, COMPLETA.body)])
+    await montarBiblioteca()
+    await abrirCarpeta('AREA')
+    await abrirCarpeta('Cifras')
+    expect(filas()[0].querySelector('.ci-arbol-sub').textContent).toBe('STARBRANDS · PVSMD · REPLACE · PRD → IBP')
+  })
+
+  it('al pasar el cursor sale todo, un dato por línea, con la carpeta', async () => {
+    ci.listIntegraciones.mockResolvedValue([resumida(COMPLETA.id, COMPLETA.name, COMPLETA.folder, COMPLETA.body)])
+    await montarBiblioteca()
+    await abrirCarpeta('AREA')
+    await abrirCarpeta('Cifras')
+    expect(filas()[0].getAttribute('title').split('\n')).toEqual([
+      'COMPLETA', 'Planning area: STARBRANDS', 'Versión: PVSMD', 'Comando: REPLACE', 'Origen: PRD', 'Destino: IBP',
+      'Fuente de datos: ZIBP_PEDIDOSVTA_KF', 'Carpeta: AREA/Cifras',
+    ])
+  })
+
+  it('se busca por la configuración: área, versión, comando, fuente de datos y sistemas', async () => {
+    ci.listIntegraciones.mockResolvedValue([
+      resumida(COMPLETA.id, COMPLETA.name, COMPLETA.folder, COMPLETA.body),
+      resumida('i-8', 'OTRA', 'AREA/Cifras', JSON.stringify({ K: { TypeOfData: 'KEYFIGURES', BatchCommand: 'INSERT_UPDATE' } })),
+    ])
+    await montarBiblioteca()
+    for (const buscado of ['starbrands', 'pvsmd', 'replace', 'pedidosvta', 'prd']) {
+      await escribir(porEtiqueta('Buscar integraciones'), buscado)
+      expect([...dom().querySelectorAll('.ci-arbol-integracion .ci-arbol-nombre')].map((n) => n.textContent), buscado).toEqual(['COMPLETA'])
+    }
   })
 
   it('una integración con el body roto sigue mostrando su «!», sin segunda línea de comando', async () => {
