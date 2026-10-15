@@ -8,6 +8,7 @@
 //   - que no se tiren cambios sin preguntar;
 //   - que el error de borrar una integración en uso diga cuál orquestación la usa.
 
+import { act } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const ci = {
@@ -173,7 +174,7 @@ describe('abrir y guardar', () => {
     expect(ci.guardarIntegracion).toHaveBeenCalledWith('i-1', { folder: 'AREA/Maestros' })
   })
 
-  it('«Carpeta nueva» deja escribir una ruta que no existe, sin avisos', async () => {
+  it('«+ Nueva» deja escribir una ruta que no existe, sin avisos', async () => {
     ci.guardarIntegracion.mockResolvedValue({ ...FACTURAS, folder: 'OTRA/Nueva' })
     await montarBiblioteca()
     await escribir(porEtiqueta('Buscar integraciones'), 'factu')
@@ -322,7 +323,7 @@ describe('crear, duplicar y borrar', () => {
     expect(dom().querySelector('#ci-nombre').value).toBe('NUEVA')
   })
 
-  it('crear: la carpeta se elige entre las existentes, o se escribe una nueva con «Carpeta nueva»', async () => {
+  it('crear: la carpeta se elige entre las existentes, o se escribe una nueva con «+ Nueva»', async () => {
     ci.crearIntegracion.mockResolvedValue(completa('i-9', 'NUEVA', 'OTRA/Sub', plantillaDeBody('MASTERDATA')))
     await montarBiblioteca()
     await pulsar(dom().querySelector('.ci-nueva-boton'))
@@ -332,7 +333,7 @@ describe('crear, duplicar y borrar', () => {
     expect([...carpeta.options].map((o) => o.value)).toEqual(['', 'AREA', 'AREA/Cifras', 'AREA/Maestros'])
     expect(carpeta.value).toBe('')
 
-    await pulsar(boton('Carpeta nueva'))
+    await pulsar(boton('+ Nueva'))
     await escribir(dom().querySelector('#ci-nueva-carpeta'), 'OTRA/Sub')
     await escribir(dom().querySelector('#ci-nueva-nombre'), 'NUEVA')
     await pulsar(boton('Crear'))
@@ -364,7 +365,7 @@ describe('crear, duplicar y borrar', () => {
     await montarBiblioteca()
     await escribir(porEtiqueta('Buscar integraciones'), 'factu')
     await abrirIntegracion('FACTURAS')
-    await pulsar(boton('Duplicar'))
+    await pulsar(porEtiqueta('Duplicar'))
     await asentar()
 
     expect(ci.duplicarIntegracion).toHaveBeenCalledWith('i-1')
@@ -376,7 +377,7 @@ describe('crear, duplicar y borrar', () => {
     await montarBiblioteca()
     await escribir(porEtiqueta('Buscar integraciones'), 'factu')
     await abrirIntegracion('FACTURAS')
-    await pulsar(boton('Eliminar'))
+    await pulsar(porEtiqueta('Eliminar'))
     await asentar()
 
     expect(window.confirm.mock.calls.at(-1)[0]).toContain('FACTURAS')
@@ -391,7 +392,7 @@ describe('crear, duplicar y borrar', () => {
     await montarBiblioteca()
     await escribir(porEtiqueta('Buscar integraciones'), 'factu')
     await abrirIntegracion('FACTURAS')
-    await pulsar(boton('Eliminar'))
+    await pulsar(porEtiqueta('Eliminar'))
     await asentar()
 
     expect(texto()).toContain('la usa «Carga diaria»')
@@ -403,7 +404,7 @@ describe('crear, duplicar y borrar', () => {
     await montarBiblioteca()
     await escribir(porEtiqueta('Buscar integraciones'), 'factu')
     await abrirIntegracion('FACTURAS')
-    await pulsar(boton('Eliminar'))
+    await pulsar(porEtiqueta('Eliminar'))
     expect(ci.borrarIntegracion).not.toHaveBeenCalled()
   })
 
@@ -640,5 +641,56 @@ describe('tras guardar, el editor muestra lo que el servidor guardó', () => {
     await guardar()
     expect(dom().querySelector('#ci-nombre').value).toBe('OTRO NOMBRE')
     expect(texto()).not.toContain('Cambios sin guardar')
+  })
+})
+
+describe('el árbol se adapta a lo que se ve', () => {
+  const divisor = () => dom().querySelector('[role="separator"]')
+  const ancho = () => dom().querySelector('.ci-biblioteca').style.getPropertyValue('--ancho-arbol')
+  const tecla = async (key, extra = {}) => {
+    await act(async () => { divisor().dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...extra })) })
+  }
+
+  it('el árbol empieza en 340 px, con un divisor que dice cuánto mide', async () => {
+    await montarBiblioteca()
+    expect(ancho()).toBe('340px')
+    expect(divisor().getAttribute('aria-valuenow')).toBe('340')
+  })
+
+  it('las flechas lo mueven de 16 en 16 (48 con Mayús), Inicio lo devuelve y no se sale de los límites', async () => {
+    await montarBiblioteca()
+    await tecla('ArrowRight')
+    expect(ancho()).toBe('356px')
+    await tecla('ArrowLeft', { shiftKey: true })
+    expect(ancho()).toBe('308px')
+    await tecla('Home')
+    expect(ancho()).toBe('340px')
+
+    for (let i = 0; i < 30; i += 1) await tecla('ArrowRight', { shiftKey: true })
+    expect(ancho()).toBe('560px')
+    for (let i = 0; i < 30; i += 1) await tecla('ArrowLeft', { shiftKey: true })
+    expect(ancho()).toBe('220px')
+  })
+
+  it('doble clic vuelve al ancho original', async () => {
+    await montarBiblioteca()
+    await tecla('ArrowRight', { shiftKey: true })
+    await act(async () => { divisor().dispatchEvent(new MouseEvent('dblclick', { bubbles: true })) })
+    expect(ancho()).toBe('340px')
+  })
+
+  it('el nombre completo sale al pasar el cursor, porque en la lista puede cortarse', async () => {
+    await montarBiblioteca()
+    await abrirCarpeta('AREA')
+    await abrirCarpeta('Cifras')
+    const fila = [...dom().querySelectorAll('.ci-arbol-integracion')].find((uno) => uno.textContent.includes('FACTURAS'))
+    expect(fila.getAttribute('title').split('\n')[0]).toBe('FACTURAS')
+  })
+
+  it('el buscador es corto de texto y explica al pasar el cursor por qué se puede buscar', async () => {
+    await montarBiblioteca()
+    const buscador = porEtiqueta('Buscar integraciones')
+    expect(buscador.getAttribute('placeholder')).toBe('Buscar…')
+    expect(buscador.getAttribute('title')).toContain('destino')
   })
 })

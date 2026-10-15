@@ -161,3 +161,18 @@ describe('sin nada que enseñar', () => {
     expect(contenedor.querySelector('.conn-tabs-fila')).toBeNull()
   })
 })
+
+describe('el lado derecho de la tira', () => {
+  it('lo que el módulo pasa en `derecha` va en la MISMA fila, a la derecha de las pestañas', async () => {
+    await montar({ derecha: createElement('span', { id: 'extra' }, 'vistas') })
+    const fila = contenedor.querySelector('.conn-tabs-fila')
+    expect(fila.querySelector('.conn-tabs-derecha #extra')).not.toBeNull()
+    expect(fila.children[0].classList.contains('conn-tabs')).toBe(true)
+    expect(fila.children[1].classList.contains('conn-tabs-derecha')).toBe(true)
+  })
+
+  it('sin `derecha` no hay nada a la derecha', async () => {
+    await montar()
+    expect(contenedor.querySelector('.conn-tabs-derecha')).toBeNull()
+  })
+})

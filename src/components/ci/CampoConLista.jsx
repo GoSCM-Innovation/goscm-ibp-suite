@@ -18,7 +18,8 @@ import SelectorDeLista from '../ui/SelectorDeLista.jsx'
 
 /**
  * Lo que el control dice de sí mismo. `lista` es el botón que vuelve al selector, `mano` el que pasa a escribir, `aviso`
- * lo que se dice de un valor que no está en la lista (vacío, no avisa) y `sufijo` lo que lleva al lado ese valor en el selector.
+ * lo que se dice de un valor que no está en la lista (vacío, no avisa) y `sufijo` lo que lleva al lado ese valor en el
+ * selector. `tituloDeLista` y `tituloDeMano` son lo que dicen esos botones al pasar el cursor (por omisión, su texto).
  */
 const TEXTOS = { lista: 'Elegir de la lista', mano: 'A mano', aviso: 'No es uno de los valores de la lista.', sufijo: 'no está en la lista' }
 
@@ -63,7 +64,7 @@ export default function CampoConLista({
           type="button"
           className="btn btn-ghost btn-sm"
           onClick={() => setAMano((v) => !v)}
-          title={aMano ? dicen.lista : dicen.mano}
+          title={aMano ? (dicen.tituloDeLista ?? dicen.lista) : (dicen.tituloDeMano ?? dicen.mano)}
         >
           {aMano ? dicen.lista : dicen.mano}
         </button>

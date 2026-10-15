@@ -2,15 +2,42 @@
    Usa solo las variables de color del tema, así que sirve en claro y en oscuro sin reglas aparte. */
 
 .ci-tools { min-height: 0; }
+/* Menos aire arriba y a los lados que en el resto de la aplicación: aquí el trabajo es una lista y un formulario, y cada
+   píxel de alto cuenta. `.content` es de todas las pantallas, así que solo se toca cuando la pantalla es CI Tools. */
+.content:has(.ci-tools) { padding: 8px 14px 10px; }
+.module-page.ci-tools { gap: 0; }
 .ci-sistema { display: flex; flex: 1; flex-direction: column; min-height: 0; }
 .ci-vistas { flex-shrink: 0; }
-.ci-vista { display: flex; flex: 1; flex-direction: column; min-height: 0; padding-top: 12px; }
+.ci-vista { display: flex; flex: 1; flex-direction: column; min-height: 0; padding-top: 8px; }
 .ci-cargando { padding: 30px; }
 
 /* ─── Biblioteca: árbol a la izquierda, editor a la derecha ─────────────── */
 
 .ci-biblioteca,
-.ci-orq { display: flex; flex: 1; gap: 14px; min-height: 0; }
+.ci-orq { display: flex; flex: 1; gap: 0; min-height: 0; }
+
+/* El borde del árbol, que se arrastra: la línea es fina y la zona que se agarra, ancha. */
+.ci-divisor {
+  cursor: col-resize;
+  flex-shrink: 0;
+  position: relative;
+  touch-action: none;
+  width: 12px;
+}
+.ci-divisor::after {
+  background: transparent;
+  border-radius: 2px;
+  bottom: 12px;
+  content: '';
+  left: 5px;
+  position: absolute;
+  top: 12px;
+  transition: background .15s;
+  width: 2px;
+}
+.ci-divisor:hover::after,
+.ci-divisor:focus-visible::after { background: var(--accent); }
+.ci-divisor:focus-visible { outline: none; }
 
 .ci-arbol {
   background: var(--bg2);
@@ -21,11 +48,12 @@
   flex-shrink: 0;
   max-height: 100%;
   min-height: 0;
-  width: 280px;
+  width: var(--ancho-arbol, 340px);
 }
 .ci-arbol-cabeza { align-items: center; display: flex; justify-content: space-between; padding: 10px 10px 6px 12px; }
 .ci-arbol-botones { align-items: center; display: flex; gap: 2px; }
 .ci-arbol-buscar { padding: 0 10px 8px; }
+.ci-arbol-buscar .input { box-sizing: border-box; width: 100%; }
 .ci-arbol-vista { align-items: center; display: flex; gap: 4px; padding: 0 10px 8px; }
 .ci-arbol-vista-boton {
   background: transparent;
@@ -100,13 +128,21 @@
 
 /* ─── Editor de una integración ─────────────────────────────────────────── */
 
-.ci-editor { display: flex; flex-direction: column; gap: 12px; padding-bottom: 24px; }
-.ci-editor-cabeza { align-items: flex-end; display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; }
-.ci-editor-nombres { display: flex; flex: 1; flex-wrap: wrap; gap: 12px; min-width: 260px; }
-.ci-editor-nombres .field { flex: 1 1 200px; }
+.ci-editor { display: flex; flex-direction: column; gap: 8px; padding-bottom: 24px; }
+.ci-editor-cabeza { align-items: flex-end; display: flex; flex-wrap: wrap; gap: 8px 12px; justify-content: space-between; }
+.ci-editor-nombres { display: flex; flex: 1; flex-wrap: wrap; gap: 8px 12px; min-width: 260px; }
+.ci-editor-nombres .field { flex: 1 1 170px; }
 .ci-editor-acciones { align-items: center; display: flex; flex-wrap: wrap; gap: 6px; }
-.ci-sin-guardar { color: var(--accent); font-size: 11.5px; font-weight: 600; }
-.ci-tabs-editor { margin-top: 2px; }
+.ci-editor-acciones .btn { white-space: nowrap; }
+/* Un botón de solo icono (duplicar, eliminar): cuadrado y sin el relleno de los de texto. */
+.ci-icono { padding: 6px 9px; }
+.ci-sin-guardar { color: var(--accent); font-size: 11.5px; font-weight: 600; white-space: nowrap; }
+
+/* Las pestañas «Formulario / JSON» y, a su derecha en la misma fila, el estado de IBP. */
+.ci-tabs-fila { align-items: center; border-bottom: 1px solid var(--border); display: flex; gap: 12px; margin-top: 2px; }
+.ci-tabs-editor { border-bottom: none; }
+.ci-ibp-estado { align-items: center; color: var(--text2); display: inline-flex; font-size: 11.5px; gap: 6px; margin-left: auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ci-ibp-estado-mal { color: var(--red); }
 
 .ci-variables-usadas { align-items: center; display: flex; flex-wrap: wrap; gap: 6px; }
 .ci-variable {
@@ -125,9 +161,11 @@
 
 /* ─── Formulario ────────────────────────────────────────────────────────── */
 
-.ci-formulario { display: flex; flex-direction: column; gap: 18px; }
-.ci-form-grid { display: grid; gap: 12px 16px; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
-.ci-seccion { display: flex; flex-direction: column; gap: 8px; }
+.ci-formulario { display: flex; flex-direction: column; gap: 12px; }
+.ci-form-grid { display: grid; gap: 8px 14px; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+/* El nombre técnico del campo, en la propia etiqueta, en gris y sin mayúsculas. */
+.ci-campo-tecnico { color: var(--text3); font-family: var(--mono); font-size: 10.5px; font-weight: 400; letter-spacing: 0; margin-left: 6px; text-transform: none; }
+.ci-seccion { display: flex; flex-direction: column; gap: 6px; }
 .ci-seccion-titulo {
   border-bottom: 1px solid var(--border);
   color: var(--text2);
@@ -387,3 +425,10 @@
   overflow-y: auto;
   padding: 8px;
 }
+
+/* Un campo con lista y su botón de «a mano»: en una sola línea. El selector cede ancho antes que mandar el botón abajo; solo el
+   aviso de un valor desconocido ocupa su propia línea. */
+.ci-campo-ibp { flex-wrap: wrap; }
+.ci-campo-ibp .select, .ci-campo-ibp .input, .ci-campo-ibp .selector-lista-boton { flex: 1 1 0; min-width: 60px; }
+.ci-campo-ibp > .btn { flex-shrink: 0; }
+.ci-campo-ibp .ci-aviso-fila { flex-basis: 100%; }

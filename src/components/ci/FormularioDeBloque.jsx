@@ -114,6 +114,15 @@ export default function FormularioDeBloque({ texto, onCambiar, deshabilitado = f
   const area = ibp?.area ?? null
   const tiposDelArea = area ? opcionesDeTipos(area, esVariable(textoDe('PlanningAreaVersion')) ? '' : textoDe('PlanningAreaVersion')) : []
 
+  /** La explicación de un campo, para el cursor: lo que dice el campo y, si hay IBP, lo que hace elegir de la lista. */
+  const ayudaDe = (campo) => [
+    campo.ayuda,
+    ibp && campo.campo === 'MasterDataType' && tiposDelArea.length > 1
+      ? 'Al elegir de la lista se rellenan también el prefijo y los campos del mapeo.' : '',
+    campo.campo === 'TargetTimeProfileLevelinSAPIBP' && nivelesDeTiempo.length > 0
+      ? 'La lista trae los que ya usan otras integraciones de esta conexión.' : '',
+  ].filter(Boolean).join(' ') || undefined
+
   /** El control de un campo general: el de IBP si lo hay, y si no el cuadro de texto de siempre. */
   function controlDe(campo) {
     const id = `ci-${campo.campo}`
@@ -265,7 +274,7 @@ export default function FormularioDeBloque({ texto, onCambiar, deshabilitado = f
     <div className="ci-formulario">
       <div className="ci-form-grid">
         <div className="field">
-          <label htmlFor="ci-clave">Nombre del bloque</label>
+          <label htmlFor="ci-clave" title="La clave de primer nivel del body (PRODUCT, KEYFIGURE…). Se envía tal cual.">Nombre del bloque</label>
           <input
             id="ci-clave"
             className="input mono"
@@ -277,11 +286,10 @@ export default function FormularioDeBloque({ texto, onCambiar, deshabilitado = f
               if (nueva.trim() !== '') emitir(bloque, nueva)
             }}
           />
-          <span className="card-hint">La clave de primer nivel del body (PRODUCT, KEYFIGURE…). Se envía tal cual.</span>
         </div>
 
         <div className="field">
-          <label htmlFor="ci-tipo">Tipo de dato</label>
+          <label htmlFor="ci-tipo" title="Al cambiarlo, el formulario cambia los campos que corresponden a ese tipo.">Tipo de dato</label>
           <CampoConLista
             id="ci-tipo"
             valor={tipo}
@@ -292,7 +300,6 @@ export default function FormularioDeBloque({ texto, onCambiar, deshabilitado = f
             onCambiar={(valor) => poner('TypeOfData', valor)}
             alElegir={cambiarTipoDeDato}
           />
-          <span className="card-hint">Al cambiarlo, el formulario cambia los campos que corresponden a ese tipo.</span>
         </div>
       </div>
 
@@ -301,14 +308,16 @@ export default function FormularioDeBloque({ texto, onCambiar, deshabilitado = f
         <div className="ci-form-grid">
           {generales.map((campo) => (
             <div className="field" key={campo.campo}>
-              <label htmlFor={`ci-${campo.campo}`}>{campo.etiqueta}</label>
+              {/* El nombre técnico va en la propia etiqueta y la explicación, al pasar el cursor: una línea de ayuda
+                  bajo cada campo hacía el formulario el doble de alto. */}
+              <label htmlFor={`ci-${campo.campo}`} title={ayudaDe(campo)}>
+                {campo.etiqueta}
+                <span className="ci-campo-tecnico">{campo.campo}</span>
+              </label>
               {controlDe(campo)}
-              <span className="card-hint mono">
-                {campo.campo}{campo.ayuda ? ` · ${campo.ayuda}` : ''}
-                {ibp && campo.campo === 'MasterDataType' && tiposDelArea.length > 1 && ' · al elegir de la lista se rellenan también el prefijo y los campos del mapeo'}
-                {campo.campo === 'MasterDataType' && leyendoTabla && ` · leyendo los campos de ${leyendoTabla}…`}
-                {campo.campo === 'TargetTimeProfileLevelinSAPIBP' && nivelesDeTiempo.length > 0 && ' · la lista trae los que ya usan otras integraciones de esta conexión'}
-              </span>
+              {campo.campo === 'MasterDataType' && leyendoTabla && (
+                <span className="card-hint">Leyendo los campos de {leyendoTabla}…</span>
+              )}
             </div>
           ))}
         </div>

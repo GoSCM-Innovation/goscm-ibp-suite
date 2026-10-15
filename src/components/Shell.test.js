@@ -284,3 +284,26 @@ describe('el árbol de Data Tools se pliega', () => {
     expect(contenedor.querySelectorAll('.nav-plegar')).toHaveLength(1)
   })
 })
+
+describe('el pie del menú', () => {
+  it('tema, «Salir» y requisitos técnicos van en una sola fila de iconos, con su nombre', async () => {
+    await montar()
+    const acciones = contenedor.querySelector('.sidebar-footer .sidebar-acciones')
+    const botones = [...acciones.querySelectorAll('.nav-item')]
+    expect(botones.map((b) => b.getAttribute('aria-label'))).toEqual(['Tema claro', 'Salir', 'Requisitos técnicos'])
+    expect(botones.every((b) => b.getAttribute('title'))).toBe(true)
+  })
+
+  it('quién tiene la sesión va en el pie, con el nombre completo al pasar el cursor', async () => {
+    await montar()
+    const usuario = contenedor.querySelector('.sidebar-footer .sidebar-usuario')
+    expect(usuario.textContent).toContain('Quien sea')
+    expect(usuario.getAttribute('title')).toBe('Quien sea')
+  })
+
+  it('el menú de módulos ya no lleva el pie dentro', async () => {
+    await montar()
+    expect(contenedor.querySelector('.sidebar-nav .sidebar-usuario')).toBeNull()
+    expect(contenedor.querySelector('.sidebar-nav .sidebar-acciones')).toBeNull()
+  })
+})

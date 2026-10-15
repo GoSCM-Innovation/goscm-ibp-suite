@@ -196,34 +196,42 @@ export default function Shell({ user, modules, theme, onToggleTheme, onSignOut, 
               </>
             )}
 
-            {/* La sesión va a continuación de Gestión y no en la cabecera (pedido el 2026-10-06). */}
-            <div className="sidebar-divider" />
-            <div className="sidebar-usuario">
+          </div>
+
+          {/* ── El pie del menú ──────────────────────────────────────────────────────────────
+              Quién tiene la sesión (pedido el 2026-10-06: a continuación de Gestión y no en la cabecera) y tres
+              acciones en una sola fila de iconos, con su nombre al pasar el cursor: el tema, «Salir» y los requisitos
+              técnicos. Antes eran tres filas del menú. Los requisitos están siempre, no solo con Data Tools: los tres
+              proyectos tenían su panel y ahora los tres están dentro, cada uno en su pestaña. */}
+          <div className="sidebar-footer">
+            <div className="sidebar-usuario" title={user.name || user.email}>
               <span className="sidebar-usuario-nombre">{user.name || user.email}</span>
               {user.isPlatformAdmin && <span className="tag tag-accent">Plataforma</span>}
             </div>
-            <button
-              className="nav-item"
-              onClick={onToggleTheme}
-              title={theme === 'dark' ? 'Cambiar a claro' : 'Cambiar a oscuro'}
-            >
-              <span className="nav-icon">{theme === 'dark' ? '☀️' : '🌙'}</span>
-              <span className="nav-label">{theme === 'dark' ? 'Tema claro' : 'Tema oscuro'}</span>
-            </button>
-            <button className="nav-item" onClick={onSignOut} title="Cerrar sesión">
-              <span className="nav-icon">🚪</span>
-              <span className="nav-label">Salir</span>
-            </button>
-          </div>
-
-          {/* ── El pie del menú, con los requisitos técnicos ────────────────────────────────
-              Está siempre, no solo con Data Tools: los tres proyectos tenían su panel y ahora los
-              tres están dentro, cada uno en su pestaña. */}
-          <div className="sidebar-footer">
-            <button className="nav-item" onClick={() => setAbrirRequisitos(true)}>
-              <span className="nav-icon">⚙</span>
-              <span className="nav-label">Requisitos técnicos</span>
-            </button>
+            <div className="sidebar-acciones">
+              <button
+                className="nav-item"
+                onClick={onToggleTheme}
+                title={theme === 'dark' ? 'Cambiar a claro' : 'Cambiar a oscuro'}
+                aria-label={theme === 'dark' ? 'Tema claro' : 'Tema oscuro'}
+              >
+                <span className="nav-icon">{theme === 'dark' ? '☀️' : '🌙'}</span>
+                <span className="nav-label">{theme === 'dark' ? 'Tema claro' : 'Tema oscuro'}</span>
+              </button>
+              <button className="nav-item" onClick={onSignOut} title="Cerrar sesión" aria-label="Salir">
+                <span className="nav-icon">🚪</span>
+                <span className="nav-label">Salir</span>
+              </button>
+              <button
+                className="nav-item"
+                onClick={() => setAbrirRequisitos(true)}
+                title="Requisitos técnicos"
+                aria-label="Requisitos técnicos"
+              >
+                <span className="nav-icon">⚙</span>
+                <span className="nav-label">Requisitos técnicos</span>
+              </button>
+            </div>
           </div>
         </nav>
 

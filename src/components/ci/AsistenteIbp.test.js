@@ -118,7 +118,7 @@ describe('sin IBP el formulario es el de siempre', () => {
   it('sin IBP de destino lo dice, no pide nada y deja escribir a mano', async () => {
     await abrir({ conexion: CONEXION_SIN_IBP, body: cuerpo(bloqueMaestro({ PlanningArea: '' })) })
 
-    expect(texto()).toContain('no tiene un IBP de destino')
+    expect(texto()).toContain('Sin IBP de destino')
     expect(api.get).not.toHaveBeenCalled()
     expect(campo('ci-PlanningArea').tagName).toBe('INPUT')
     await escribir(campo('ci-PlanningArea'), 'AREA_A_MANO')
@@ -129,7 +129,7 @@ describe('sin IBP el formulario es el de siempre', () => {
     servidor({ resumen: async () => { throw Object.assign(new Error('«CPI dev» no tiene un IBP de destino.'), { status: 409 }) } })
     await abrir({ body: cuerpo(bloqueMaestro()) })
 
-    expect(texto()).toContain('no tiene un IBP de destino')
+    expect(texto()).toContain('Sin IBP de destino')
     expect(dom().querySelector('[role="alert"]')).toBeNull()
   })
 
@@ -138,6 +138,8 @@ describe('sin IBP el formulario es el de siempre', () => {
     await abrir({ body: cuerpo(bloqueMaestro()) })
 
     expect(dom().querySelector('[role="alert"]').textContent).toContain('No se pudo leer IBP: SAP devolvió 403')
+    // El estado es una línea junto a las pestañas; el motivo entero, debajo.
+    expect(dom().querySelector('.ci-tabs-fila').textContent).toContain('IBP no disponible')
     expect(campo('ci-PlanningArea').tagName).toBe('INPUT')
 
     servidor()
@@ -557,11 +559,11 @@ describe('elegir otro tipo de maestro ajusta el mapeo a la nueva tabla', () => {
 
     await elegir(campo('ci-MasterDataType'), 'LOCATION')
     await esperar()
-    expect(texto()).toContain('leyendo los campos de ABLOCATION')
+    expect(texto()).toContain('Leyendo los campos de ABLOCATION')
 
     soltar(respuestaDe('ABLOCATION'))
     await esperar()
-    expect(texto()).not.toContain('leyendo los campos de')
+    expect(texto()).not.toContain('Leyendo los campos de')
   })
 
   // La lectura puede tardar unos segundos: lo que se escribió mientras tanto no se pisa.
@@ -600,5 +602,58 @@ describe('elegir otro tipo de maestro ajusta el mapeo a la nueva tabla', () => {
 
     const bloque = await bloqueActual()
     expect(bloque.MasterDataType).toBe('RESOURCE')
+  })
+})
+
+describe('el editor ocupa lo justo', () => {
+  it('el estado de IBP va en la misma fila que las pestañas «Formulario / JSON»', async () => {
+    await abrir({ body: cuerpo(bloqueMaestro()) })
+    const fila = dom().querySelector('.ci-tabs-fila')
+    expect(fila.querySelector('[role="tablist"]')).not.toBeNull()
+    expect(fila.textContent).toContain('Sugerencias de IBP: IBP QAS')
+  })
+
+  // En la fila de las pestañas y no en una línea aparte ni junto a los botones: ahí no cambia el ancho de la cabecera mientras se escribe.
+  it('«Cambios sin guardar» va en la fila de las pestañas, no en una línea aparte', async () => {
+    await abrir({ body: cuerpo(bloqueMaestro()) })
+    expect(dom().querySelector('.ci-sin-guardar')).toBeNull()
+
+    await escribir(dom().querySelector('#ci-nombre'), 'OTRO NOMBRE')
+    expect(dom().querySelector('.ci-tabs-fila .ci-sin-guardar').textContent).toBe('Cambios sin guardar')
+    expect(dom().querySelectorAll('.ci-sin-guardar')).toHaveLength(1)
+  })
+
+  it('la acción principal es la que toca: con cambios pendientes, Guardar; sin ellos, Ejecutar', async () => {
+    await abrir({ body: cuerpo(bloqueMaestro()) })
+    const ejecutar = () => [...dom().querySelectorAll('.ci-editor-acciones .btn')].find((b) => b.textContent.includes('Ejecutar'))
+    const guardar = () => [...dom().querySelectorAll('.ci-editor-acciones .btn')].find((b) => b.textContent.trim() === 'Guardar')
+    expect(ejecutar().classList.contains('btn-primary')).toBe(true)
+    expect(guardar().classList.contains('btn-primary')).toBe(false)
+
+    await escribir(dom().querySelector('#ci-nombre'), 'OTRO NOMBRE')
+    expect(ejecutar().classList.contains('btn-primary')).toBe(false)
+    expect(guardar().classList.contains('btn-primary')).toBe(true)
+  })
+
+  it('duplicar y eliminar son botones de solo icono, con su nombre para quien no los ve', async () => {
+    await abrir({ body: cuerpo(bloqueMaestro()) })
+    for (const nombre of ['Duplicar', 'Eliminar']) {
+      const boton1 = porEtiqueta(nombre)
+      expect(boton1.classList.contains('ci-icono'), nombre).toBe(true)
+      expect(boton1.getAttribute('title'), nombre).toBeTruthy()
+    }
+  })
+
+  it('cada campo lleva su nombre técnico en la etiqueta y la explicación al pasar el cursor, sin línea de ayuda debajo', async () => {
+    await abrir({ body: cuerpo(bloqueMaestro()) })
+    const etiqueta = dom().querySelector('label[for="ci-BatchCommand"]')
+    expect(etiqueta.querySelector('.ci-campo-tecnico').textContent).toBe('BatchCommand')
+    expect(etiqueta.getAttribute('title')).toContain('INSERT_UPDATE')
+    expect(dom().querySelectorAll('.ci-form-grid .field > .card-hint')).toHaveLength(0)
+  })
+
+  it('la ayuda del tipo de maestro dice, al pasar el cursor, que elegir rellena prefijo y mapeo', async () => {
+    await abrir({ body: cuerpo(bloqueMaestro()) })
+    expect(dom().querySelector('label[for="ci-MasterDataType"]').getAttribute('title')).toContain('se rellenan también el prefijo')
   })
 })

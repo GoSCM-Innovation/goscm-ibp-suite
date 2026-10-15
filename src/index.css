@@ -39,7 +39,7 @@
 
   --font:   'DM Sans', sans-serif;
   --mono:   'JetBrains Mono', monospace;
-  --sidebar-w: 252px;
+  --sidebar-w: 216px;
   --header-h:  52px;
   --radius:    10px;
 }
@@ -260,8 +260,8 @@ a { color: var(--cyan); }
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
-  gap: 3px;
-  padding: 14px 10px;
+  gap: 2px;
+  padding: 10px 8px;
   width: var(--sidebar-w);
 }
 .sidebar-label {
@@ -269,10 +269,10 @@ a { color: var(--cyan); }
   font-size: 10px;
   font-weight: 700;
   letter-spacing: .1em;
-  padding: 10px 10px 4px;
+  padding: 6px 9px 2px;
   text-transform: uppercase;
 }
-.sidebar-divider { background: var(--divider); height: 1px; margin: 8px 6px; }
+.sidebar-divider { background: var(--divider); height: 1px; margin: 5px 6px; }
 
 /* Barra lateral e iconos tomados de v7: cada módulo con su emoji y el candado a la derecha
    para lo que no está disponible. Se reconoce de un vistazo y no arrastra ninguna dependencia
@@ -284,9 +284,9 @@ a { color: var(--cyan); }
   border-radius: 8px;
   color: var(--text2);
   display: flex;
-  font-size: 13px;
-  gap: 10px;
-  padding: 9px 10px;
+  font-size: 12.5px;
+  gap: 8px;
+  padding: 6px 9px;
   text-align: left;
   transition: background .15s ease, color .15s ease;
   width: 100%;
@@ -299,7 +299,7 @@ a { color: var(--cyan); }
   font-weight: 600;
 }
 .nav-item.locked { color: var(--text3); }
-.nav-icon { font-size: 15px; line-height: 1; text-align: center; width: 18px; }
+.nav-icon { font-size: 14px; line-height: 1; text-align: center; width: 17px; }
 .nav-label { flex: 1; }
 .nav-lock { font-size: 11px; opacity: .85; }
 
@@ -2955,7 +2955,7 @@ a { color: var(--cyan); }
 /* La rama plegable de Data Tools: el botón del módulo y, a su derecha, la flecha que pliega o
    despliega sus aplicaciones. Son dos botones hermanos —uno dentro del otro no es HTML válido—. */
 .nav-rama { position: relative; }
-.nav-rama .nav-item { padding-right: 32px; }
+.nav-rama .nav-item { padding-right: 28px; }
 .nav-plegar {
   background: none;
   border: none;
@@ -2972,7 +2972,7 @@ a { color: var(--cyan); }
 }
 .nav-plegar:hover { background: var(--surface-glass); color: var(--text); }
 .sidebar.minimizado .nav-plegar { display: none; }
-.nav-item.nav-app { font-size: 12px; gap: 8px; padding: 7px 8px 7px 24px; }
+.nav-item.nav-app { font-size: 12px; gap: 7px; padding: 4px 6px 4px 20px; }
 .nav-item.nav-app .nav-icon { font-size: 13px; width: 16px; }
 .nav-item.nav-app .nav-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
@@ -3059,23 +3059,33 @@ a { color: var(--cyan); }
 
 /* El menú lateral crece con las aplicaciones desplegadas, así que se desplaza; el pie se queda
    abajo. */
-.sidebar-nav { display: flex; flex-direction: column; gap: 3px; min-height: 0; overflow-y: auto; }
-.sidebar-footer { display: flex; flex-direction: column; gap: 3px; margin-top: auto; padding-top: 8px; border-top: 1px solid var(--border); }
+.sidebar-nav { display: flex; flex-direction: column; gap: 2px; min-height: 0; overflow-y: auto; }
+.sidebar-footer { display: flex; flex-direction: column; gap: 2px; margin-top: auto; padding-top: 6px; border-top: 1px solid var(--border); }
 /* La marca arriba del menú, con el botón de minimizar a su derecha. Minimizado solo cabe el «GO» del
    logo (el 39 % izquierdo de la imagen), recortado. */
-.sidebar-cabecera { align-items: center; display: flex; justify-content: space-between; gap: 8px; padding: 0 2px 6px; }
+.sidebar-cabecera { align-items: center; display: flex; justify-content: space-between; gap: 8px; padding: 0 2px 4px; }
 .sidebar-cabecera .sidebar-minimizar { align-self: center; flex-shrink: 0; }
-.sidebar-marca .header-logo { height: 26px; }
+.sidebar-marca .header-logo { height: 22px; }
 .sidebar-marca .header-sep { height: 16px; }
 .sidebar.minimizado .sidebar-cabecera { flex-direction: column; gap: 10px; }
 .sidebar.minimizado .sidebar-marca .header-sep,
 .sidebar.minimizado .sidebar-marca .marca-texto { display: none; }
 .sidebar.minimizado .sidebar-marca .header-logo { height: 22px; object-fit: cover; object-position: 0 center; width: 34px; }
 /* Quién tiene la sesión abierta. Minimizado y en móvil solo quedan los iconos de tema y salir. */
-.sidebar-usuario { align-items: center; color: var(--text2); display: flex; flex-wrap: wrap; font-size: 12px; gap: 6px; margin-top: 6px; padding: 6px 10px 2px; }
-.sidebar-usuario-nombre { overflow-wrap: anywhere; }
+.sidebar-usuario { align-items: center; color: var(--text2); display: flex; font-size: 11.5px; gap: 6px; padding: 2px 6px 4px; }
+.sidebar-usuario-nombre { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Tema, «Salir» y los requisitos técnicos: tres iconos en una fila, con su nombre al pasar el cursor, en lugar de tres
+   filas del menú. Minimizado se apilan, porque la barra solo mide 56 px. */
+.sidebar-acciones { display: flex; gap: 2px; }
+.sidebar-acciones .nav-item { flex: 1; justify-content: center; padding: 6px 0; }
+.sidebar-acciones .nav-label { display: none; }
+.sidebar.minimizado .sidebar-acciones { flex-direction: column; }
 .sidebar.minimizado .sidebar-usuario { display: none; }
-@media (max-width: 720px) { .sidebar-usuario { display: none; } }
+@media (max-width: 720px) {
+  .sidebar-usuario { display: none; }
+  .sidebar-footer { border-top: none; flex-direction: row; margin-top: 0; padding-top: 0; }
+  .sidebar-acciones .nav-item { min-width: 44px; }
+}
 
 /* ── La tira de pestañas de conexiones ─────────────────────────────────────────────────────────
    Portada de `ConnectionTabs.jsx` de v9, con sus mismas medidas: 38px de alto, 140 a 220 de ancho
@@ -3084,15 +3094,21 @@ a { color: var(--cyan); }
 .conn-tabs-fila {
   background: var(--bg2);
   border-bottom: 1px solid var(--border);
+  display: flex;
   flex-shrink: 0;
   min-height: 38px;
 }
 .conn-tabs {
   align-items: stretch;
   display: flex;
+  flex: 1;
   flex-wrap: wrap;
   min-width: 0;
 }
+/* Lo que un módulo quiere a la derecha de la tira, en la misma fila (CI Tools pone aquí sus tres pestañas). */
+.conn-tabs-derecha { align-items: stretch; border-left: 1px solid var(--border); display: flex; flex-shrink: 0; padding: 0 6px; }
+.conn-tabs-derecha .tabs { border-bottom: none; }
+.conn-tabs-derecha .tab { padding: 0 14px; }
 .conn-tab {
   align-items: center;
   background: transparent;

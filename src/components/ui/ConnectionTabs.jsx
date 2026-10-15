@@ -15,6 +15,9 @@
 // que no sabía que estaba escondida. Si no caben en una línea, pasan a la siguiente: con scroll
 // horizontal la que no se ve es justo la que alguien busca.
 //
+// `derecha`, si viene, es lo que el módulo quiere en la misma fila, a la derecha de las pestañas: CI Tools pone ahí sus
+// pestañas de vista (Integraciones, Orquestaciones, Historial) para no gastar una fila entera.
+//
 // UNA DIFERENCIA CON v9, y por qué: v9 pintaba un punto verde cuando la conexión tenía sesión abierta
 // contra SAP, porque allí la sesión la abría el navegador. Aquí la sesión vive en el servidor y se
 // renueva sola, así que ese punto estaría siempre verde y no diría nada. En su lugar va la marca de
@@ -45,7 +48,7 @@ const tooltipDe = (conexion) => (
  * `detalleDe(conexion)`, si viene, devuelve el detalle de la conexión para su pestaña activa:
  * `{ titulo, filas: [[etiqueta, valor]], enlace: { url, texto } | null }`.
  */
-export default function ConnectionTabs({ conexiones, activa, onElegir, inicio = null, detalleDe = null }) {
+export default function ConnectionTabs({ conexiones, activa, onElegir, inicio = null, detalleDe = null, derecha = null }) {
   // El cuadro de detalle abierto, por id de conexión. Solo se ve mientras esa conexión es la activa:
   // al elegir otra deja de coincidir y se cierra solo.
   const [abierto, setAbierto] = useState(null)
@@ -166,6 +169,7 @@ export default function ConnectionTabs({ conexiones, activa, onElegir, inicio = 
           )
         })}
       </div>
+      {derecha && <div className="conn-tabs-derecha">{derecha}</div>}
     </div>
   )
 }

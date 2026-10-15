@@ -9,7 +9,7 @@
 // El árbol se puede ordenar de dos maneras: por carpeta (como una colección de Postman) o por destino, es decir, por la
 // tabla de dato maestro o la cifra clave a la que carga cada integración.
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { plantillaDeBody, BLOQUE_POR_TIPO } from '../../../core/ci/campos.js'
 import { resumenDeBody } from '../../../core/ci/body.js'
 import {
@@ -37,6 +37,13 @@ import { useCatalogoIbp } from './useCatalogoIbp.js'
 
 const PREGUNTA_DESCARTAR = 'Hay cambios sin guardar. ¿Descartarlos?'
 
+/** El ancho del árbol: el que trae, el mínimo y el máximo a los que se puede arrastrar, y lo que mueve una flecha. */
+const ANCHO_DEL_ARBOL = 340
+const ANCHO_MINIMO = 220
+const ANCHO_MAXIMO = 560
+const PASO_DEL_TECLADO = 16
+const limitarAncho = (ancho) => Math.min(ANCHO_MAXIMO, Math.max(ANCHO_MINIMO, Math.round(ancho)))
+
 /** Una integración en el árbol. En la vista por destino enseña su carpeta, porque ya no es lo que agrupa. */
 function FilaDeIntegracion({ una, nivel, elegida, onElegir, conCarpeta = false }) {
   return (
@@ -45,7 +52,8 @@ function FilaDeIntegracion({ una, nivel, elegida, onElegir, conCarpeta = false }
       className={`ci-arbol-fila ci-arbol-integracion${elegida === una.id ? ' active' : ''}`}
       style={{ paddingLeft: 22 + nivel * 14 }}
       onClick={() => onElegir(una.id)}
-      title={una.resumen?.valido ? `${una.resumen.tipo} · ${una.resumen.comando}` : una.resumen?.error}
+      // El nombre completo, porque en la lista puede cortarse; y debajo qué es.
+      title={`${una.name}\n${una.resumen?.valido ? `${una.resumen.tipo} · ${una.resumen.comando}` : una.resumen?.error}`}
     >
       <span className="ci-arbol-nombre">{una.name}</span>
       {conCarpeta && una.folder && <span className="ci-arbol-carpeta-gris" title="Carpeta">{una.folder}</span>}
@@ -151,6 +159,9 @@ export default function Integraciones({ connection }) {
   const [abiertas, setAbiertas] = useState(() => new Set())
   // Cómo se ordena el árbol y qué destinos están abiertos. Solo en memoria: al recargar vuelve a «Carpeta».
   const [vista, setVista] = useState('carpeta')
+  // El ancho del árbol, que se arrastra desde su borde. Solo en memoria, como la vista.
+  const [anchoArbol, setAnchoArbol] = useState(ANCHO_DEL_ARBOL)
+  const arrastre = useRef(null)
   const [destinosAbiertos, setDestinosAbiertos] = useState(() => new Set())
   const [elegidaId, setElegidaId] = useState(null)
   const [abierta, setAbierta] = useState(null)
@@ -201,6 +212,25 @@ export default function Integraciones({ connection }) {
       else siguientes.add(ruta)
       return siguientes
     })
+  }
+
+  // El borde del árbol se agarra con el puntero (queda «capturado», así que seguir el movimiento no depende de que el
+  // cursor se quede encima) o se mueve con las flechas; doble clic vuelve al ancho original.
+  function empezarArrastre(evento) {
+    arrastre.current = { x: evento.clientX, ancho: anchoArbol }
+    evento.currentTarget.setPointerCapture?.(evento.pointerId)
+  }
+  function seguirArrastre(evento) {
+    if (arrastre.current) setAnchoArbol(limitarAncho(arrastre.current.ancho + evento.clientX - arrastre.current.x))
+  }
+  function soltarArrastre() { arrastre.current = null }
+  function moverConTeclado(evento) {
+    const paso = evento.shiftKey ? PASO_DEL_TECLADO * 3 : PASO_DEL_TECLADO
+    if (evento.key === 'ArrowLeft') setAnchoArbol((a) => limitarAncho(a - paso))
+    else if (evento.key === 'ArrowRight') setAnchoArbol((a) => limitarAncho(a + paso))
+    else if (evento.key === 'Home') setAnchoArbol(ANCHO_DEL_ARBOL)
+    else return
+    evento.preventDefault()
   }
 
   function alternarDestino(clave) {
@@ -332,7 +362,7 @@ export default function Integraciones({ connection }) {
   if (lista === null) return <div className="page-hint ci-cargando">Cargando integraciones…</div>
 
   return (
-    <div className="ci-biblioteca">
+    <div className="ci-biblioteca" style={{ '--ancho-arbol': `${anchoArbol}px` }}>
       <aside className="ci-arbol" aria-label="Integraciones">
         <div className="ci-arbol-cabeza">
           <span className="filtro-titulo">Integraciones</span>
@@ -367,7 +397,8 @@ export default function Integraciones({ connection }) {
           <input
             className="input input-sm"
             type="search"
-            placeholder="Buscar por nombre, carpeta, lote, área o destino…"
+            placeholder="Buscar…"
+            title="Busca por nombre, carpeta, lote, área o destino"
             value={filtro}
             aria-label="Buscar integraciones"
             onChange={(evento) => setFiltro(evento.target.value)}
@@ -406,6 +437,24 @@ export default function Integraciones({ connection }) {
           )}
         </div>
       </aside>
+
+      <div
+        className="ci-divisor"
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Ajustar el ancho de la lista"
+        aria-valuenow={anchoArbol}
+        aria-valuemin={ANCHO_MINIMO}
+        aria-valuemax={ANCHO_MAXIMO}
+        tabIndex={0}
+        title="Arrastra para ajustar el ancho de la lista. Doble clic para volver al original."
+        onPointerDown={empezarArrastre}
+        onPointerMove={seguirArrastre}
+        onPointerUp={soltarArrastre}
+        onPointerCancel={soltarArrastre}
+        onDoubleClick={() => setAnchoArbol(ANCHO_DEL_ARBOL)}
+        onKeyDown={moverConTeclado}
+      />
 
       <section className="ci-biblioteca-cuerpo">
         {error && <div className="notice notice-error" role="alert">✕ {error}</div>}

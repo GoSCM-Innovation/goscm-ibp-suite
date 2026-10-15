@@ -183,3 +183,32 @@ describe('el historial', () => {
     expect(texto()).toContain('Falta la conexión.')
   })
 })
+
+describe('las pestañas de vista suben a la tira de conexiones', () => {
+  const vistasDeLaTira = () => dom().querySelector('.conn-tabs-fila .conn-tabs-derecha')
+  const pestanaDeVista = (nombre) => [...vistasDeLaTira().querySelectorAll('[role="tab"]')].find((t) => t.textContent === nombre)
+
+  it('Integraciones, Orquestaciones e Historial van en la misma fila que las conexiones, no en otra', async () => {
+    await montarModulo()
+    expect([...vistasDeLaTira().querySelectorAll('[role="tab"]')].map((t) => t.textContent)).toEqual(['Integraciones', 'Orquestaciones', 'Historial'])
+    expect(vistasDeLaTira().querySelector('[aria-selected="true"]').textContent).toBe('Integraciones')
+    // Ya no hay una fila de pestañas aparte debajo de la tira.
+    expect(dom().querySelector('.ci-sistema > .ci-vistas')).toBeNull()
+  })
+
+  it('pulsar una cambia de vista', async () => {
+    await montarModulo()
+    await pulsar(pestanaDeVista('Historial'))
+    await asentar()
+    expect(pestanaDeVista('Historial').getAttribute('aria-selected')).toBe('true')
+    expect(ci.listarEjecuciones).toHaveBeenCalled()
+  })
+
+  it('cambiar de conexión vuelve a «Integraciones»', async () => {
+    await montarModulo()
+    await pulsar(pestanaDeVista('Historial'))
+    await pulsar([...dom().querySelectorAll('.conn-tab')][1])
+    await asentar()
+    expect(pestanaDeVista('Integraciones').getAttribute('aria-selected')).toBe('true')
+  })
+})

@@ -183,7 +183,8 @@ export const opcionesDeCarpeta = (carpetas) => [
 
 /** Lo que dicen los controles de carpeta: una carpeta que no existe todavía no es un error, es una carpeta nueva. */
 export const TEXTOS_DE_CARPETA = Object.freeze({
-  lista: 'Elegir una existente', mano: 'Carpeta nueva', aviso: '', sufijo: 'carpeta nueva',
+  lista: 'Existentes', mano: '+ Nueva', aviso: '', sufijo: 'carpeta nueva',
+  tituloDeLista: 'Elegir una carpeta que ya existe', tituloDeMano: 'Escribir una carpeta nueva, con «/» para anidar',
 })
 
 /** Los grupos de la vista por destino, en el orden en que se enseñan. */

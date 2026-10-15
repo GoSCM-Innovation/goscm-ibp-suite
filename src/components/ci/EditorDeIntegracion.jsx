@@ -13,7 +13,7 @@ import { useEffect, useState } from 'react'
 import { leerBody, resumenDeBody } from '../../../core/ci/body.js'
 import { TEXTOS_DE_CARPETA, opcionesDeCarpeta } from '../../lib/ci.js'
 import CampoConLista from './CampoConLista.jsx'
-import BarraIbp from './BarraIbp.jsx'
+import BarraIbp, { DetalleDeIbp } from './BarraIbp.jsx'
 import FormularioDeBloque from './FormularioDeBloque.jsx'
 import RevisionIbp from './RevisionIbp.jsx'
 import { useIbpDelBody } from './useIbpDelBody.js'
@@ -101,30 +101,43 @@ export default function EditorDeIntegracion({
         </div>
 
         <div className="ci-editor-acciones">
+          {/* La acción principal es la que toca: con cambios pendientes, guardar; sin ellos, ejecutar. */}
           <button
             type="button"
-            className="btn btn-primary"
+            className={`btn${sucio ? '' : ' btn-primary'}`}
             onClick={() => onEjecutar(ibp?.avisos ?? [])}
             disabled={sucio || !leido.ok}
             title={sucio ? 'Guarda los cambios antes de ejecutar: se ejecuta lo guardado.' : 'Ejecutar esta integración'}
           >
             ▶ Ejecutar
           </button>
-          <button type="button" className="btn" onClick={guardar} disabled={!puedeGuardar}>
+          <button type="button" className={`btn${sucio ? ' btn-primary' : ''}`} onClick={guardar} disabled={!puedeGuardar}>
             {guardando ? 'Guardando…' : 'Guardar'}
           </button>
-          <button type="button" className="btn btn-ghost" onClick={onDuplicar} disabled={sucio} title="Duplicar">
-            Duplicar
+          {/* Duplicar y eliminar, solo con su icono: con texto la cabecera no cabía en una fila. */}
+          <button
+            type="button"
+            className="btn btn-ghost ci-icono"
+            onClick={onDuplicar}
+            disabled={sucio}
+            title={sucio ? 'Guarda los cambios antes de duplicar' : 'Duplicar esta integración'}
+            aria-label="Duplicar"
+          >
+            ⧉
           </button>
-          <button type="button" className="btn btn-ghost btn-danger" onClick={onBorrar} title="Eliminar">
-            Eliminar
+          <button
+            type="button"
+            className="btn btn-ghost btn-danger ci-icono"
+            onClick={onBorrar}
+            title="Eliminar esta integración"
+            aria-label="Eliminar"
+          >
+            🗑
           </button>
         </div>
       </div>
 
       {error && <div className="notice notice-error" role="alert">✕ {error}</div>}
-
-      {sucio && <div className="ci-sin-guardar">Cambios sin guardar</div>}
 
       {resumen.valido && resumen.variables.length > 0 && (
         <div className="ci-variables-usadas">
@@ -133,23 +146,27 @@ export default function EditorDeIntegracion({
         </div>
       )}
 
-      <BarraIbp catalogo={catalogo} />
-      <RevisionIbp avisos={ibp?.avisos} />
-
-      <div className="tabs ci-tabs-editor" role="tablist">
-        {[['formulario', 'Formulario'], ['json', 'JSON']].map(([id, etiqueta]) => (
-          <button
-            key={id}
-            type="button"
-            role="tab"
-            aria-selected={vista === id}
-            className={`tab${vista === id ? ' active' : ''}`}
-            onClick={() => setVista(id)}
-          >
-            {etiqueta}
-          </button>
-        ))}
+      {/* Las pestañas y, a su derecha, el estado de IBP: una fila y no dos. */}
+      <div className="ci-tabs-fila">
+        <div className="tabs ci-tabs-editor" role="tablist">
+          {[['formulario', 'Formulario'], ['json', 'JSON']].map(([id, etiqueta]) => (
+            <button
+              key={id}
+              type="button"
+              role="tab"
+              aria-selected={vista === id}
+              className={`tab${vista === id ? ' active' : ''}`}
+              onClick={() => setVista(id)}
+            >
+              {etiqueta}
+            </button>
+          ))}
+        </div>
+        {sucio && <span className="ci-sin-guardar">Cambios sin guardar</span>}
+        <BarraIbp catalogo={catalogo} />
       </div>
+      <DetalleDeIbp catalogo={catalogo} />
+      <RevisionIbp avisos={ibp?.avisos} />
 
       {vista === 'formulario' ? (
         <FormularioDeBloque texto={texto} onCambiar={setTexto} ibp={ibp} nivelesDeTiempo={nivelesDeTiempo} />
