@@ -3,9 +3,17 @@
 Este archivo es el punto de entrada cuando la instrucción es **«continuemos»**. Se lee primero, se
 actualiza al terminar cada sesión, y su orden es el de prioridad acordada.
 
-Última actualización: **2026-10-14**.
+Última actualización: **2026-10-15**.
 
 ## Dónde estamos
+
+- **CI Tools, tres pedidos del usuario (2026-10-15)**, directo en `main`: (1) **calendario** para `KEYFIGUREDATE` en el filtro y
+  al ejecutar; (2) **«completada con advertencias»**: una respuesta de CPI distinta de OK que trae MPL ID no es un error (migración
+  008 aplicada); (3) **el orquestador rehecho como el de IBP Tools**: lista plegable, paleta de integraciones, tarjetas con
+  arrastre, grupos paralelos y vista de ejecución. El motor no cambió. Detalle, reglas y lo que no se copió en
+  [`CI-TOOLS.md`](CI-TOOLS.md) («Calendario», «Cuatro resultados», «El orquestador, como el de IBP Tools»). **Falta probarlo con el
+  usuario delante**, sobre todo un grupo paralelo con cargas reales (solo se probó en el motor) y el alto de la pantalla en
+  distintos tamaños de ventana.
 
 - **CI Tools con sugerencias de IBP (2026-10-14)**, directo en `main`. Cada conexión de Cloud Integration tiene un
   **IBP de destino** (Administración → Conexiones) y, con él, el formulario elige el área, la versión y la tabla de las

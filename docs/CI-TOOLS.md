@@ -15,7 +15,7 @@ ahora viven en el servidor, por cliente, se ejecutan desde la Suite y se encaden
 | Pantalla | Para qué |
 |---|---|
 | **Integraciones** | La biblioteca de una conexión: árbol de carpetas (como Postman) u **ordenado por destino** (conmutador «Ordenar por: Carpeta / Destino»), formulario y vista JSON del body, duplicar, renombrar carpetas, **Ejecutar**. |
-| **Orquestaciones** | Integraciones en **etapas**: una fila de etapas y, dentro de cada una, pasos en paralelo. Se guarda sola. Mientras corre no se edita. |
+| **Orquestaciones** | Como el orquestador de IBP Tools: una secuencia de pasos con **grupos paralelos**, «Si falla» por paso, paleta de integraciones y vista de ejecución. Se guarda sola. Mientras corre no se edita. |
 | **Historial** | Quién ejecutó qué, cuándo, cuánto tardó y cómo salió, con el MPL ID para buscarlo en el monitor de CPI. |
 
 Cada conexión de tipo **Cloud Integration** es UN ambiente (desarrollo, calidad o producción): su endpoint,
@@ -114,6 +114,41 @@ Pedido del usuario: aprovechar el espacio. Lo que se hizo, por si alguien lo qui
 - **Estado de IBP**: en una línea a la derecha de las pestañas «Formulario / JSON»; el motivo de un fallo y los avisos, debajo.
 - **Menú lateral** (toda la Suite): 216 px en lugar de 252, siempre a la vista aunque la página se desplace (su pie con la sesión no queda al final), filas más bajas, y tema, «Salir» y requisitos técnicos en una fila de tres iconos junto a quién tiene la sesión, abajo. El botón « sigue minimizándolo.
 
+## El orquestador, como el de IBP Tools (2026-10-15)
+
+Pedido del usuario: el orquestador por etapas «no me agrada del todo»; que se inspire en el de IBP Tools y herede su experiencia. Se
+rehízo con componentes propios de CI Tools (el código de IBP no se tocó), con la misma pantalla y los mismos gestos:
+
+- **La lista de la izquierda se pliega** (240 px, o 36 con las iniciales): «+ Nueva orquestación», «N pasos · fecha» y ⧉ / ✕ en cada
+  fila, y ventanas para crear y eliminar. En el teléfono, la lista y el editor se alternan.
+- **El editor**: a la izquierda la paleta de integraciones (buscador, por carpeta, con a qué cargan cada una; «+» la agrega a la
+  secuencia; «⊞ Nuevo grupo paralelo»; su borde se arrastra) y a la derecha la secuencia: asa ⠿ para arrastrar con su línea de
+  destino, número, «Si falla: detener / continuar / reintentar» y ↑ ↓ ✕. Un **grupo paralelo** es la tarjeta morada plegable, con
+  «+ Agregar integración al grupo» (el «modo grupo» de la paleta).
+- **Nombre editable, «Pantalla completa» y «▶ Ejecutar»**: pide las variables (con calendario para las fechas) y dice el orden en que
+  se ejecutará («Paso 2 (a la vez)»).
+- **La ejecución reemplaza al editor**: icono de estado por paso, tiempo en vivo, HTTP y MPL ID, «⊘ Cancelar», «↺ Retomar» y
+  «← Volver al editor». Una ejecución en marcha se ve siempre, y al terminar su resultado se queda a la vista hasta volver al editor
+  («Ver última ejecución» la recupera). Con una en marcha no se abre, crea, duplica ni elimina otra orquestación (como en IBP): la
+  pantalla es quien la empuja.
+
+Lo propio de CI Tools, que IBP no tiene: el guardado automático a los 800 ms (no hay botón), «Retomar», «Completado con
+advertencias» y «Sin confirmar» como estados de un paso, y que **un grupo ofrece «Detener» y «Continuar», pero no «Reintentar»**: el
+motor reintenta cada integración, no el grupo. Lo que **no** se copió es el archivo de exportar e importar de v8: los identificadores
+de las integraciones son de cada conexión, así que no se pueden mover tal cual a otra.
+
+**Cómo se guarda.** La lista de pasos y grupos se traduce a un grafo: los pasos de primer nivel van encadenados y un grupo es un
+nodo `group` cuyas integraciones llevan `parentId` y no se conectan entre sí, así que el motor las lanza a la vez
+(`src/lib/ci-pasos.js`: la traducción de IBP con integraciones en lugar de plantillas). **El motor no cambió**: los grupos ya eran suyos.
+Se agregaron pruebas de grupos con el adaptador de CI (`runner-ci.test.js`): se envían en la misma vuelta con el estado ya guardado,
+lo de detrás espera al grupo entero, «continuar» y «detener» del grupo, una advertencia no lo detiene y «Retomar» solo repite lo que
+falló dentro de él.
+
+**Las orquestaciones del editor de etapas** (un grafo sin grupos) se siguen leyendo: una etapa con una integración es un paso y una
+con varias es un grupo paralelo. No se reescriben hasta que alguien cambie algo. Con una mezcla de «continuar» y «detener» entre las
+de una etapa, el grupo queda en «detener» (un grupo decide por todas a la vez). Un grafo que no cabe en una lista (dos cadenas
+independientes, por ejemplo) se enseña en su orden de ejecución, sin poder editarse ni ejecutarse hasta pulsar «Convertir a lista».
+
 ## Decisiones del usuario
 
 Tomadas durante el diseño (2026-10-13 y 2026-10-14). Si alguna se quiere revertir, es del usuario:
@@ -143,17 +178,18 @@ core/ci/            body.js  filter.js  mapping.js  campos.js      puras: las co
 core/orchestrations adaptador `ci` (adapters.js) y camino «síncrono» del motor (runner.js)
 handlers/ci/        integrations  run  runs  orchestration-info  ibp   → api/ci/[...ruta].js (la octava función de Vercel)
 src/components/ci/  CiTools  Integraciones  EditorDeIntegracion  FormularioDeBloque  ConstructorDeFiltro
-                    TablaDeMapeo  DialogoDeEjecucion  OrquestacionesCi  EditorDeOrquestacion  Historial
+                    TablaDeMapeo  DialogoDeEjecucion  Historial  useCiRun
+                    OrquestacionesCi  ConstructorDeOrquestacion  PaletaDeIntegraciones  TarjetaDePaso  VistaDeEjecucion
                     BarraIbp  CampoConLista  ConstructorDeCifra  RevisionIbp  useCatalogoIbp  useIbpDelBody
-src/lib/            ci.js  ci-ibp.js  ci-etapas.js  useFilasLocales.js
+src/lib/            ci.js  ci-ibp.js  ci-pasos.js  fechas.js  useFilasLocales.js
 core/persistence/migrations/006_ci_tools.sql                      módulo y tipo de conexión nuevos, `ci_integrations`, `ci_runs`
 core/persistence/migrations/007_ci_ibp_destino.sql                `connections.ibp_connection_id`: el IBP de destino de una conexión de CI
 ```
 
 Las orquestaciones reutilizan el **mismo motor** que CI-DS e IBP (`/api/orchestrations`, `/api/orchestration-run`):
-no hay un segundo motor. Cada orquestación de CI se guarda como un grafo normal; la pantalla de **etapas** es una
-forma de dibujarlo (cada paso de una etapa se conecta con todos los de la siguiente). Si un grafo guardado no tiene
-esa forma, la pantalla lo dice en vez de enseñar etapas que no son lo que se ejecuta.
+no hay un segundo motor. Cada orquestación de CI se guarda como un grafo normal; la pantalla trabaja con la **lista de
+pasos y grupos** de IBP y la traduce (`src/lib/ci-pasos.js`, ver «El orquestador, como el de IBP Tools»). Si un grafo guardado
+no cabe en una lista, la pantalla lo dice en vez de enseñar algo distinto de lo que se ejecuta.
 
 ### El body y sus piezas
 
@@ -233,8 +269,8 @@ Cada una tiene prueba; la lista es para que nadie las quite sin saber por qué e
 - **Una orquestación avanza mientras su pantalla esté abierta** (como las de CI-DS hoy). Si se cierra, queda donde
   estaba y se retoma con «Retomar»: lo que ya salió bien no se repite. Una carga que estuviera esperando a CPI queda
   «sin confirmar» y «Retomar» avisa antes de enviarla otra vez.
-- **Cortar durante una llamada** espera a que esa llamada termine (la vuelta tiene el cerrojo): la Suite dice
-  «prueba de nuevo en unos segundos». Cortar tampoco deshace lo ya cargado ni detiene a CPI; detiene lo que falta.
+- **Cancelar durante una llamada** espera a que esa llamada termine (la vuelta tiene el cerrojo): la Suite dice
+  «prueba de nuevo en unos segundos». Cancelar tampoco deshace lo ya cargado ni detiene a CPI; detiene lo que falta.
 - **Programación (horarios): no está.** Sin un reloj que la dispare, una pantalla de horarios sería un hueco que
   parece una función. El modelo de datos no lo impide: se puede agregar cuando haya reloj (Vercel Pro, o uno externo
   que llame al endpoint `handlers/cids/cron-tick.js` ya protegido con `CRON_SECRET`; habría que ampliarlo para CI).
@@ -276,4 +312,5 @@ reales, y la dirección real del CPI de desarrollo con credenciales de mentira:
    iFlow admite más operadores que `EQ` y `BT`.
 7. **`BatchCommand`**: la Suite solo lo muestra. Qué hace `REPLACE` exactamente en el iFlow lo sabe quien lo escribió.
 8. **Orquestaciones con cargas que salen bien**, y el caso «sin confirmar» (se probó en el motor con pruebas, no con
-   una llamada que de verdad se corte).
+   una llamada que de verdad se corte). Tampoco se ha ejecutado de verdad **un grupo paralelo** contra CPI: se probó en el
+   motor con el adaptador de CI, pero no con dos cargas reales a la vez.

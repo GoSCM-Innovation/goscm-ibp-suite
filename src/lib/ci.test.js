@@ -235,7 +235,7 @@ describe('lo que se muestra', () => {
       expect(ci.ESTADOS_DE_EJECUCION[estado]).toMatchObject({ texto: expect.any(String), clase: expect.any(String) })
     }
     for (const estado of ['pending', 'running', 'success', 'success_with_errors', 'error', 'skipped', 'cancelled']) {
-      expect(ci.ESTADOS_DE_PASO[estado]).toMatchObject({ texto: expect.any(String), clase: expect.any(String) })
+      expect(ci.ESTADOS_DE_PASO[estado]).toMatchObject({ texto: expect.any(String), clase: expect.any(String), icono: expect.any(String) })
     }
   })
 

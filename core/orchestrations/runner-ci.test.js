@@ -10,7 +10,7 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createInMemoryRedis } from '../persistence/redis-in-memory.js'
-import { RUN_LOCK_SINCRONO_SECONDS, getRun, startRun, tickRun } from './runner.js'
+import { RUN_LOCK_SINCRONO_SECONDS, getRun, resumeRun, startRun, tickRun } from './runner.js'
 import { getOrchestration } from './orchestrations.js'
 import { executeIntegration } from '../ci/execute.js'
 
@@ -320,5 +320,122 @@ describe('un paso sin integración', () => {
     expect(executeIntegration).not.toHaveBeenCalled()
     expect(run.nodes.a.status).toBe('error')
     expect(run.nodes.a.error).toMatch(/qué integración/)
+  })
+})
+
+// Un grupo paralelo de CI Tools: varias integraciones que corren a la vez y que lo de detrás espera entero.
+describe('grupos paralelos', () => {
+  const grupo = (id, data = {}) => ({ id, type: 'group', data: { label: '', errorStrategy: 'stop', ...data } })
+  const hijo = (id, padre, data = {}) => ({ ...paso(id, data), parentId: padre })
+  const enviadas = () => executeIntegration.mock.calls.map(([datos]) => datos.integrationId)
+
+  /** a, un grupo con b y c, y d detrás: lo que dibuja la pantalla con un grupo en medio. */
+  const conGrupo = (datosDelGrupo = {}, datosDeB = {}) => arrancar(
+    [paso('a'), grupo('g', datosDelGrupo), hijo('b', 'g', datosDeB), hijo('c', 'g'), paso('d')],
+    [arista('a', 'g'), arista('g', 'd')],
+  )
+
+  it('las integraciones del grupo se envían en la misma vuelta, con lo guardado ya en marcha, y lo de detrás espera al grupo entero', async () => {
+    await conGrupo()
+
+    await avanzar()
+    expect(enviadas()).toEqual(['int-a'])
+    // Arranca el grupo: sus integraciones empiezan en la vuelta siguiente.
+    let run = await avanzar()
+    expect(run.nodes.g.status).toBe('running')
+    expect(enviadas()).toEqual(['int-a'])
+
+    const vistos = []
+    executeIntegration.mockImplementation(async () => {
+      const guardado = await getRun(CLIENTE, ORQ)
+      vistos.push([guardado.nodes.g.children.b.status, guardado.nodes.g.children.c.status])
+      return exito()
+    })
+    run = await avanzar()
+
+    expect(enviadas()).toEqual(['int-a', 'int-b', 'int-c', 'int-d'])
+    // Las dos del grupo estaban «en marcha» en lo guardado cuando salió la primera.
+    expect(vistos[0]).toEqual(['running', 'running'])
+    expect(run.nodes.g.status).toBe('success')
+    expect(run.status).toBe('success')
+  })
+
+  it('con una integración del grupo fallada, el grupo falla y lo de detrás no corre (el grupo detiene)', async () => {
+    executeIntegration.mockImplementation(async ({ integrationId }) => (integrationId === 'int-b' ? fallo() : exito()))
+    await conGrupo()
+    await avanzar()
+    await avanzar()
+    let run = await avanzar()
+
+    expect(run.nodes.g.status).toBe('error')
+    expect(run.nodes.g.children.b.status).toBe('error')
+    expect(run.nodes.g.children.c.status).toBe('success')
+    run = await avanzar()
+    expect(run.nodes.d.status).toBe('skipped')
+    expect(enviadas()).not.toContain('int-d')
+    expect(run.status).toBe('error')
+  })
+
+  it('con «continuar» en el grupo, lo de detrás corre aunque una integración haya fallado, y la ejecución termina en error', async () => {
+    executeIntegration.mockImplementation(async ({ integrationId }) => (integrationId === 'int-b' ? fallo() : exito()))
+    await conGrupo({ errorStrategy: 'continue' })
+    await avanzar()
+    await avanzar()
+    await avanzar()
+    const run = await avanzar()
+
+    expect(enviadas()).toContain('int-d')
+    expect(run.nodes.d.status).toBe('success')
+    // Decir que salió bien cuando una carga falló sería mentir.
+    expect(run.status).toBe('error')
+  })
+
+  // «Completada con advertencias» no es un fallo: no detiene al grupo ni a lo de detrás.
+  it('una integración con advertencias no detiene al grupo', async () => {
+    executeIntegration.mockImplementation(async ({ integrationId }) => (
+      integrationId === 'int-b' ? exito({ resultado: 'warning', httpStatus: 500, mplId: 'MPL-9', mensaje: 'rechazó un registro' }) : exito()
+    ))
+    await conGrupo()
+    await avanzar()
+    await avanzar()
+    await avanzar()
+    const run = await avanzar()
+
+    expect(run.nodes.g.children.b.status).toBe('success_with_errors')
+    expect(run.nodes.g.status).toBe('success')
+    expect(run.nodes.d.status).toBe('success')
+    expect(run.status).toBe('success')
+  })
+
+  it('retomar solo vuelve a enviar lo que falló dentro del grupo: lo que ya cargó no se repite', async () => {
+    executeIntegration.mockImplementation(async ({ integrationId }) => (integrationId === 'int-c' ? fallo() : exito()))
+    await conGrupo()
+    await avanzar()
+    await avanzar()
+    await avanzar()
+    await avanzar()
+    expect((await getRun(CLIENTE, ORQ)).status).toBe('error')
+
+    executeIntegration.mockReset()
+    executeIntegration.mockResolvedValue(exito())
+    await resumeRun(CLIENTE, ORQ)
+    let run = await getRun(CLIENTE, ORQ)
+    expect(run.nodes.g.children.b.status).toBe('success')
+    expect(run.nodes.g.children.c.status).toBe('pending')
+
+    for (let i = 0; i < 4; i += 1) run = await avanzar()
+    // `a` y `b` ya habían salido bien: solo se envían `c` y lo que estaba detrás del grupo.
+    expect(enviadas()).toEqual(['int-c', 'int-d'])
+    expect(run.status).toBe('success')
+  })
+
+  it('un grupo vacío termina en el acto y no frena a lo de detrás', async () => {
+    await arrancar([paso('a'), grupo('g'), paso('d')], [arista('a', 'g'), arista('g', 'd')])
+    let run
+    for (let i = 0; i < 4; i += 1) run = await avanzar()
+
+    expect(run.nodes.g.status).toBe('success')
+    expect(enviadas()).toEqual(['int-a', 'int-d'])
+    expect(run.status).toBe('success')
   })
 })

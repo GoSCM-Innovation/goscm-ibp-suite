@@ -92,21 +92,28 @@ export const ESTADOS_DE_EJECUCION = Object.freeze({
   unconfirmed: { texto: 'Sin confirmar', clase: 'duda' },
 })
 
-/** Y los de un PASO de una orquestación, que son los del motor. */
+/** Y los de un PASO de una orquestación, que son los del motor, con el icono de la vista de ejecución. */
 export const ESTADOS_DE_PASO = Object.freeze({
-  pending: { texto: 'Pendiente', clase: 'espera' },
-  running: { texto: 'En curso', clase: 'en-curso' },
-  success: { texto: 'Completado', clase: 'bien' },
-  success_with_errors: { texto: 'Completado con advertencias', clase: 'aviso' },
-  error: { texto: 'Error', clase: 'mal' },
-  skipped: { texto: 'Omitido', clase: 'espera' },
-  cancelled: { texto: 'Cancelado', clase: 'duda' },
+  pending: { texto: 'Pendiente', clase: 'espera', icono: '○' },
+  running: { texto: 'En ejecución', clase: 'en-curso', icono: '◉' },
+  success: { texto: 'Completado', clase: 'bien', icono: '✓' },
+  success_with_errors: { texto: 'Completado con advertencias', clase: 'aviso', icono: '⚠' },
+  error: { texto: 'Error', clase: 'mal', icono: '✕' },
+  skipped: { texto: 'Omitido', clase: 'espera', icono: '–' },
+  cancelled: { texto: 'Cancelado', clase: 'duda', icono: '⊘' },
 })
 
 /** La etiqueta de una integración donde hay que distinguirla de otras: con su carpeta. */
 export const etiquetaDeIntegracion = (integracion) => (
   integracion.folder ? `${integracion.folder} / ${integracion.name}` : integracion.name
 )
+
+/** A qué carga una integración y con qué comando, en una línea: lo que la distingue de las demás de su carpeta. */
+export function detalleDeIntegracion(integracion) {
+  const r = integracion.resumen
+  if (!r?.valido) return 'body inválido'
+  return [r.destino, r.comando].filter(Boolean).join(' · ') || r.tipo
+}
 
 /** Fecha y hora como se leen en el historial: día, mes abreviado y hora, sin segundos. */
 export function fechaLegible(iso) {

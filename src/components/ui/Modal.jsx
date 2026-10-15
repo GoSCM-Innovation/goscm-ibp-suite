@@ -10,11 +10,12 @@ export default function Modal({ title, subtitle, onClose, children, footer, wide
   const caja = useRef(null)
 
   // Escape cierra, y el foco entra en el diálogo para que el teclado no siga en la tabla de
-  // detrás.
+  // detrás. Si un campo de dentro ya lo tiene (un `autoFocus`), se queda ahí: quitárselo obligaría a hacer
+  // clic en el campo antes de escribir.
   useEffect(() => {
     const alTeclear = (evento) => { if (evento.key === 'Escape') onClose() }
     document.addEventListener('keydown', alTeclear)
-    caja.current?.focus()
+    if (!caja.current?.contains(document.activeElement)) caja.current?.focus()
     return () => document.removeEventListener('keydown', alTeclear)
   }, [onClose])
 

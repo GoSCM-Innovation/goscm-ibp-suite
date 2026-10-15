@@ -21,7 +21,11 @@ export const VUELTA_MS = 5000
 export const LECTURA_MS = 3000
 
 export function useCiRun(orchestrationId, nombre) {
-  const [run, setRun] = useState(null)
+  // La ejecución se guarda junto a la orquestación a la que pertenece. Quien usa esto puede elegir otra orquestación
+  // sin desmontarlo, y lo que quedó de la anterior no se puede leer como si fuera de la nueva: con una en marcha se
+  // empujaría la equivocada.
+  const [guardada, setGuardada] = useState({ id: null, run: null })
+  const run = guardada.id === orchestrationId ? guardada.run : null
   // Dos errores y no uno: el de una vuelta se borra solo en la siguiente vuelta buena (un fallo de red pasajero
   // no debe dejar una franja roja para siempre), pero el de una acción (arrancar, cortar) lo causó alguien y se
   // queda hasta la próxima acción.
@@ -40,16 +44,18 @@ export function useCiRun(orchestrationId, nombre) {
       avisarFinDeCorrida(nombreActual.current, siguiente?.status)
     }
     estadoAnterior.current = siguiente?.status ?? null
-    setRun(siguiente)
-  }, [])
+    setGuardada({ id: orchestrationId, run: siguiente })
+  }, [orchestrationId])
 
   useEffect(() => {
+    // Sin orquestación elegida no hay nada que leer.
+    if (!orchestrationId) return undefined
     let abandonado = false
     getRun(orchestrationId)
       .then((estado) => {
         if (abandonado) return
         estadoAnterior.current = estado?.status ?? null
-        setRun(estado)
+        setGuardada({ id: orchestrationId, run: estado })
       })
       // Sin ejecución previa no es un error: es lo normal la primera vez.
       .catch(() => {})

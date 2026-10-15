@@ -50,9 +50,23 @@ describe('qué se va a ejecutar y dónde', () => {
       esOrquestacion: true,
       integraciones: [FACTURAS, { nombre: 'PRODUCTOS', comando: 'INSERT_UPDATE' }],
     }))
-    expect(texto()).toContain('Se ejecutarán, por etapas (2)')
+    expect(texto()).toContain('Se ejecutarán, en este orden (2)')
     expect(texto()).toContain('PRODUCTOS')
     expect(texto()).toContain('INSERT_UPDATE')
+  })
+
+  it('dice el número de cada paso y cuáles de un grupo corren a la vez', async () => {
+    await montar(DialogoDeEjecucion, props({
+      esOrquestacion: true,
+      integraciones: [
+        { nombre: 'MAESTRO', comando: 'INSERT_UPDATE', paso: 1, paralelo: false },
+        { nombre: 'FACTURAS', comando: 'REPLACE', paso: 2, paralelo: true },
+        { nombre: 'PRODUCCION', comando: 'REPLACE', paso: 2, paralelo: true },
+      ],
+    }))
+    expect(texto()).toContain('Paso 1 · MAESTRO')
+    expect(texto()).toContain('Paso 2 (a la vez) · FACTURAS')
+    expect(texto()).toContain('Paso 2 (a la vez) · PRODUCCION')
   })
 })
 

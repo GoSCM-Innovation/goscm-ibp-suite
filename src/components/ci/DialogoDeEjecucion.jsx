@@ -136,13 +136,13 @@ export default function DialogoDeEjecucion({
           <RevisionIbp avisos={avisos} />
           <div className="ci-seccion">
             <h3 className="ci-seccion-titulo">
-              {esOrquestacion ? `Se ejecutarán, por etapas (${integraciones.length})` : 'Se ejecutará'}
+              {esOrquestacion ? `Se ejecutarán, en este orden (${integraciones.length})` : 'Se ejecutará'}
             </h3>
             <ul className="ci-lista-ejecutar">
               {integraciones.map((una, i) => (
                 <li key={i}>
                   <span>
-                    {una.etapa && <span className="card-hint">Etapa {una.etapa} · </span>}
+                    {una.paso && <span className="card-hint">Paso {una.paso}{una.paralelo ? ' (a la vez)' : ''} · </span>}
                     {una.nombre}
                   </span>
                   {una.comando && <code className="mono" title="BatchCommand del body">{una.comando}</code>}
