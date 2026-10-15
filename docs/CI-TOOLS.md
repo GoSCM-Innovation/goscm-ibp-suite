@@ -78,6 +78,7 @@ Pedido del usuario: aprovechar el espacio. Lo que se hizo, por si alguien lo qui
 - **Menos aire arriba y a los lados** solo en CI Tools (`.content:has(.ci-tools)`): 8 px arriba y 14 px a los lados, en lugar de los 22 px de las demás pantallas.
 - **Las pestañas «Integraciones / Orquestaciones / Historial» van en la misma fila que las de conexión**, a su derecha (`ConnectionTabs`, prop `derecha`).
 - **El árbol mide 360 px, se queda a la vista mientras el formulario se desplaza y se ajusta**: un divisor en su borde se arrastra, se mueve con las flechas (16 px; 48 con Mayús), Inicio y doble clic lo devuelven. Entre 220 y 560 px, solo en memoria. El nombre completo sale al pasar el cursor por una fila.
+- **En la lista manda el nombre**: ocupa todo el ancho de la fila. Por carpeta, la fila es solo el nombre (el comando está al pasar el cursor y en el editor); por destino, el nombre en su línea y debajo, pequeño, la carpeta y el comando.
 - **Editor**: nombre, carpeta y botones en una fila; duplicar y eliminar son solo icono. «Cambios sin guardar» va en la fila de las pestañas y la acción principal pasa a ser Guardar mientras hay cambios, y Ejecutar cuando no.
 - **Formulario**: el nombre técnico del campo va en su etiqueta y la explicación, al pasar el cursor, en lugar de una línea de ayuda bajo cada campo.
 - **Estado de IBP**: en una línea a la derecha de las pestañas «Formulario / JSON»; el motivo de un fallo y los avisos, debajo.

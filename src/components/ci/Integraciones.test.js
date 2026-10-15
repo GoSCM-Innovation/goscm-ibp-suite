@@ -478,8 +478,9 @@ describe('ordenar por destino', () => {
     await pulsar(nodo('SBPRODUCT'))
 
     expect(nombresVisibles()).toEqual(['PRODUCTOS DEV', 'PRODUCTOS PRD', 'A MEDIAS'])
-    const carpetas = [...dom().querySelectorAll('.ci-arbol-carpeta-gris')].map((c) => c.textContent)
-    expect(carpetas).toEqual(['DM', 'PRD'])
+    // La segunda línea de cada fila: carpeta y comando. «A MEDIAS» no tiene carpeta, solo el comando.
+    const secundarios = [...dom().querySelectorAll('.ci-arbol-sub')].map((c) => c.textContent)
+    expect(secundarios).toEqual(['DM · INSERT_UPDATE', 'PRD · INSERT_UPDATE', 'INSERT_UPDATE'])
 
     await pulsar(nodo('SBPRODUCT'))
     expect(nombresVisibles()).toEqual(['A MEDIAS'])
@@ -692,5 +693,41 @@ describe('el árbol se adapta a lo que se ve', () => {
     const buscador = porEtiqueta('Buscar integraciones')
     expect(buscador.getAttribute('placeholder')).toBe('Buscar…')
     expect(buscador.getAttribute('title')).toContain('destino')
+  })
+})
+
+// En el árbol manda el nombre: lo secundario (carpeta, comando) no le quita ancho.
+describe('el nombre manda en cada fila del árbol', () => {
+  const filas = () => [...dom().querySelectorAll('.ci-arbol-integracion')]
+
+  it('por carpeta, la fila es solo el nombre: sin comando ni carpeta al lado', async () => {
+    await montarBiblioteca()
+    await abrirCarpeta('AREA')
+    await abrirCarpeta('Cifras')
+    const fila = filas().find((una) => una.textContent.includes('FACTURAS'))
+    expect(fila.textContent).toBe('FACTURAS')
+    expect(fila.querySelector('.ci-arbol-sub')).toBeNull()
+    // El comando sigue al alcance, en el cuadro que sale al pasar el cursor.
+    expect(fila.getAttribute('title')).toContain('REPLACE')
+  })
+
+  it('por destino, el nombre va en su línea y la carpeta y el comando en otra, pequeña, debajo', async () => {
+    await montarBiblioteca()
+    await pulsar(boton('Destino'))
+    const fila = filas()[0]
+    const [nombre, secundario] = [...fila.querySelectorAll('.ci-arbol-texto > span')]
+    expect(nombre.className).toBe('ci-arbol-nombre')
+    expect(secundario.className).toBe('ci-arbol-sub')
+    // El nombre es lo único que hay en su línea.
+    expect(nombre.textContent).toBe(fila.querySelector('.ci-arbol-nombre').textContent)
+    expect(fila.querySelector('.ci-arbol-texto').children[0]).toBe(nombre)
+  })
+
+  it('una integración con el body roto sigue mostrando su «!», sin segunda línea de comando', async () => {
+    ci.listIntegraciones.mockResolvedValue([{ id: 'r', connectionId: 'conn-1', name: 'ROTA', folder: '', resumen: resumenDeBody('{ no') }])
+    await montarBiblioteca()
+    const fila = filas()[0]
+    expect(fila.querySelector('.ci-arbol-alerta')).not.toBeNull()
+    expect(fila.querySelector('.ci-arbol-sub')).toBeNull()
   })
 })

@@ -44,8 +44,15 @@ const ANCHO_MAXIMO = 560
 const PASO_DEL_TECLADO = 16
 const limitarAncho = (ancho) => Math.min(ANCHO_MAXIMO, Math.max(ANCHO_MINIMO, Math.round(ancho)))
 
-/** Una integración en el árbol. En la vista por destino enseña su carpeta, porque ya no es lo que agrupa. */
+/**
+ * Una integración en el árbol. LO IMPORTANTE ES EL NOMBRE: ocupa todo el ancho de la fila y no se lo comen ni el comando ni
+ * la carpeta (los nombres de las integraciones son largos y se parecen). Lo secundario, solo donde hace falta: en la vista por
+ * destino, una segunda línea pequeña con la carpeta (ya no es lo que agrupa) y el comando. En la vista por carpeta, nada más
+ * que el nombre; el comando está en el cuadro que sale al pasar el cursor y en el editor.
+ */
 function FilaDeIntegracion({ una, nivel, elegida, onElegir, conCarpeta = false }) {
+  const comando = una.resumen?.valido ? una.resumen.comando : ''
+  const secundario = conCarpeta ? [una.folder, comando].filter(Boolean).join(' · ') : ''
   return (
     <button
       type="button"
@@ -55,10 +62,11 @@ function FilaDeIntegracion({ una, nivel, elegida, onElegir, conCarpeta = false }
       // El nombre completo, porque en la lista puede cortarse; y debajo qué es.
       title={`${una.name}\n${una.resumen?.valido ? `${una.resumen.tipo} · ${una.resumen.comando}` : una.resumen?.error}`}
     >
-      <span className="ci-arbol-nombre">{una.name}</span>
-      {conCarpeta && una.folder && <span className="ci-arbol-carpeta-gris" title="Carpeta">{una.folder}</span>}
+      <span className="ci-arbol-texto">
+        <span className="ci-arbol-nombre">{una.name}</span>
+        {secundario && <span className="ci-arbol-sub">{secundario}</span>}
+      </span>
       {!una.resumen?.valido && <span className="ci-arbol-alerta" title={una.resumen?.error}>!</span>}
-      {una.resumen?.valido && una.resumen.comando && <span className="ci-arbol-comando mono">{una.resumen.comando}</span>}
     </button>
   )
 }
