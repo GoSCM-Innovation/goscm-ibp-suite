@@ -13,6 +13,7 @@ import { useEffect, useState } from 'react'
 import { textosDeCambios } from '../../../core/ci/ajustes.js'
 import { duracionMs, escribirDuracion } from '../../../core/orchestrations/run-detail.js'
 import { ESTADOS_DE_PASO, detalleDeIntegracion, fechaLegible } from '../../lib/ci.js'
+import { integracionConAjustes, integracionConCambios } from '../../lib/ci-ajustes.js'
 import { esGrupo } from '../../lib/ci-pasos.js'
 import { copyText } from '../../lib/clipboard.js'
 import { runProgress } from '../../lib/orchestrations.js'
@@ -52,12 +53,22 @@ function Transcurrido({ desde }) {
   return <span className="ci-orq-tiempo mono">{escribirDuracion(Math.max(0, ahora - Date.parse(desde)))}</span>
 }
 
-/** Una fila de la ejecución: una integración con su estado y, si lo hay, lo que contestó CPI. */
-function FilaDeIntegracion({ estado, etiqueta, integracion, hijo = false }) {
+/**
+ * Una fila de la ejecución: una integración con su estado y, si lo hay, lo que contestó CPI.
+ *
+ * La línea de debajo del nombre dice lo que SE ENVÍA (con los ajustes de la orquestación y los del paso), no lo que dice la integración: de
+ * otro modo un paso con REPLACE ajustado se vería como INSERT_UPDATE mientras corre. Los ajustes se ven desde antes de empezar el paso;
+ * una vez terminado, vale lo que quedó anotado al enviarlo (no lo que valgan hoy los ajustes de la orquestación).
+ */
+function FilaDeIntegracion({ estado, etiqueta, integracion, tarea, ajustesDelLote, hijo = false }) {
   if (!estado) return null
   const vista = estadoDe(estado)
   const detalle = estado.detalle ?? {}
   const ms = estado.finishedAt ? duracionMs(estado) : null
+  const terminado = Boolean(estado.finishedAt)
+  const previstos = integracionConAjustes(integracion, tarea, ajustesDelLote)
+  const ajustes = terminado ? (detalle.ajustes ?? []) : previstos.cambios
+  const enviada = terminado ? integracionConCambios(integracion, ajustes) : previstos.efectiva
 
   return (
     <div className={`ci-orq-fila${hijo ? ' hijo' : ''}${estado.status === 'running' ? ' corriendo' : ''}`}>
@@ -71,12 +82,16 @@ function FilaDeIntegracion({ estado, etiqueta, integracion, hijo = false }) {
           {estado.retryCount > 0 && <span className="ci-orq-intento">intento {estado.retryCount + 1}</span>}
         </div>
 
-        {integracion && <div className="ci-orq-sub mono">{integracion.folder && `${integracion.folder} · `}{detalleDeIntegracion(integracion)}</div>}
+        {integracion && (
+          <div className={`ci-orq-sub mono${ajustes.length > 0 ? ' ajustada' : ''}`}>
+            {integracion.folder && `${integracion.folder} · `}{detalleDeIntegracion(enviada)}
+          </div>
+        )}
 
-        {(detalle.ajustes ?? []).length > 0 && (
+        {ajustes.length > 0 && (
           <div className="ci-orq-fila-ajustes" title="Lo que la orquestación cambió de esta integración al enviarla">
             <span className="ci-orq-ajustes-chip">Con ajustes</span>
-            {textosDeCambios(detalle.ajustes).join(' · ')}
+            {textosDeCambios(ajustes).join(' · ')}
           </div>
         )}
 
@@ -125,6 +140,8 @@ export default function VistaDeEjecucion({
   const progreso = runProgress(run)
   const duracion = run.finishedAt ? escribirDuracion(duracionMs(run)) : null
   const valores = Object.entries(run.defaults?.variables ?? {})
+  // Los del lote se fijaron al lanzar: son los de la ejecución, no los que la orquestación tenga guardados ahora.
+  const ajustesDelLote = run.defaults?.ajustes ?? {}
 
   return (
     <div className="ci-orq-ejecucion">
@@ -185,7 +202,15 @@ export default function VistaDeEjecucion({
                 {paso.children.map((hijo) => {
                   const integracion = porId.get(hijo.integrationId)
                   return (
-                    <FilaDeIntegracion key={hijo.id} estado={run.nodes[hijo.id]} etiqueta={integracion ? integracion.name : hijo.label} integracion={integracion} hijo />
+                    <FilaDeIntegracion
+                      key={hijo.id}
+                      estado={run.nodes[hijo.id]}
+                      etiqueta={integracion ? integracion.name : hijo.label}
+                      integracion={integracion}
+                      tarea={hijo}
+                      ajustesDelLote={ajustesDelLote}
+                      hijo
+                    />
                   )
                 })}
               </div>
@@ -201,6 +226,8 @@ export default function VistaDeEjecucion({
                 estado={estado}
                 etiqueta={`${i + 1}. ${integracion ? integracion.name : paso.label}`}
                 integracion={integracion}
+                tarea={paso}
+                ajustesDelLote={ajustesDelLote}
               />
             )
           }
@@ -224,6 +251,8 @@ export default function VistaDeEjecucion({
                     estado={estado.children?.[hijo.id]}
                     etiqueta={integracion ? integracion.name : hijo.label}
                     integracion={integracion}
+                    tarea={hijo}
+                    ajustesDelLote={ajustesDelLote}
                     hijo
                   />
                 )

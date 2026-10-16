@@ -342,6 +342,76 @@ describe('una ejecución con ajustes', () => {
     await montar(VistaDeEjecucion, props(run))
     expect(dom().querySelectorAll('.ci-orq-fila.hijo')[0].textContent).toContain('Con ajustes')
   })
+
+  // Lo que se vio en producción: con REPLACE ajustado en un paso, la ejecución seguía diciendo INSERT_UPDATE (el de la integración).
+  describe('la línea de cada paso dice lo que se envía', () => {
+    const conComando = (comando) => [{ ...paso('p1', 'int-a'), ajustes: { comando } }, ...PASOS.slice(1)]
+    const linea = (i = 0) => dom().querySelectorAll('.ci-orq-fila')[i].querySelector('.ci-orq-sub')
+
+    it('un paso en marcha con un ajuste propio muestra el comando ajustado, no el de la integración', async () => {
+      const run = ejecucion('running', { p1: estado('running') })
+      await montar(VistaDeEjecucion, props(run, { pasos: conComando('REPLACE') }))
+
+      expect(linea().textContent).toContain('REPLACE')
+      expect(linea().textContent).not.toContain('INSERT_UPDATE')
+      expect(linea().classList.contains('ajustada')).toBe(true)
+      // Y dice qué cambió, sin esperar a que el paso termine.
+      const fila = dom().querySelectorAll('.ci-orq-fila')[0]
+      expect(fila.textContent).toContain('Con ajustes')
+      expect(fila.textContent).toContain('Comando: INSERT_UPDATE → REPLACE')
+    })
+
+    it('un paso pendiente también', async () => {
+      const run = ejecucion('running', { p1: estado('pending') })
+      await montar(VistaDeEjecucion, props(run, { pasos: conComando('REPLACE') }))
+      expect(linea().textContent).toContain('REPLACE')
+      expect(dom().querySelectorAll('.ci-orq-fila')[0].textContent).toContain('Con ajustes')
+    })
+
+    it('un paso sin ajustes se ve como la integración, sin marca', async () => {
+      const run = ejecucion('running', { p1: estado('running') })
+      await montar(VistaDeEjecucion, props(run))
+      expect(linea().textContent).toContain('INSERT_UPDATE')
+      expect(linea().classList.contains('ajustada')).toBe(false)
+      expect(dom().querySelectorAll('.ci-orq-fila')[0].textContent).not.toContain('Con ajustes')
+    })
+
+    it('los ajustes del lote son los que se fijaron al lanzar la ejecución', async () => {
+      const run = ejecucion('running', { p1: estado('running') }, { defaults: { startedBy: { email: 'a@x.com' }, variables: {}, ajustes: { comando: 'REPLACE' } } })
+      await montar(VistaDeEjecucion, props(run))
+      expect(linea().textContent).toContain('REPLACE')
+      expect(dom().querySelectorAll('.ci-orq-fila')[0].textContent).toContain('Comando: INSERT_UPDATE → REPLACE')
+    })
+
+    it('un paso con ajustes dentro de un grupo, también en marcha', async () => {
+      const pasos = [PASOS[0], { ...PASOS[1], children: [{ ...paso('p2', 'int-b'), ajustes: { comando: 'INSERT_UPDATE' } }, PASOS[1].children[1]] }, PASOS[2]]
+      const run = ejecucion('running', { p1: estado('success'), g: delGrupo('running', { p2: estado('running'), p3: estado('pending') }) })
+      await montar(VistaDeEjecucion, props(run, { pasos }))
+      const hijo = dom().querySelectorAll('.ci-orq-fila.hijo')[0]
+      expect(hijo.querySelector('.ci-orq-sub').textContent).toContain('INSERT_UPDATE')
+      expect(hijo.textContent).toContain('Comando: REPLACE → INSERT_UPDATE')
+    })
+
+    // Una carga terminada vale por lo que se anotó al enviarla, aunque hoy la orquestación tenga otros ajustes (o ninguno).
+    it('un paso terminado se lee por lo que se anotó, no por lo que valgan hoy los ajustes', async () => {
+      const run = ejecucion('success', {
+        p1: estado('success', { detalle: { httpStatus: 200, ajustes: [{ clave: 'comando', etiqueta: 'Comando', de: 'INSERT_UPDATE', a: 'REPLACE', fuente: 'paso' }] } }),
+      })
+      // Hoy la orquestación no tiene ajustes en ese paso.
+      await montar(VistaDeEjecucion, props(run))
+      expect(linea().textContent).toContain('REPLACE')
+      expect(linea().classList.contains('ajustada')).toBe(true)
+    })
+
+    it('un paso terminado SIN ajustes anotados no se marca aunque hoy la orquestación los tenga', async () => {
+      // Una carga hecha antes de que existieran los ajustes, o antes de que se pusieran.
+      const run = ejecucion('success', { p1: estado('success', { detalle: { httpStatus: 200 } }) })
+      await montar(VistaDeEjecucion, props(run, { pasos: conComando('REPLACE') }))
+      expect(linea().textContent).toContain('INSERT_UPDATE')
+      expect(linea().classList.contains('ajustada')).toBe(false)
+      expect(dom().querySelectorAll('.ci-orq-fila')[0].textContent).not.toContain('Con ajustes')
+    })
+  })
 })
 
 describe('sin ejecución', () => {

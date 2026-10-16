@@ -71,18 +71,23 @@ function Condicion({ condicion, base, indice, ajustes, onCambiar }) {
               onCambiar(conFiltro(ajustes, campo, valores.join('\u0000') === base.valores.join('\u0000') ? null : { valores }))
             }}
           />
-        ) : esFecha ? (
-          <>
-            <CampoDeFecha id={`ci-paso-${indice}-desde`} valor={condicion.desde} ariaLabel={`${campo} desde`} onCambiar={(v) => cambiarLado('desde', v)} />
-            <span aria-hidden="true">→</span>
-            <CampoDeFecha id={`ci-paso-${indice}-hasta`} valor={condicion.hasta} ariaLabel={`${campo} hasta`} onCambiar={(v) => cambiarLado('hasta', v)} />
-          </>
         ) : (
-          <>
-            <input className="input input-sm mono" value={condicion.desde} aria-label={`${campo} desde`} onChange={(e) => cambiarLado('desde', e.target.value)} />
-            <span aria-hidden="true">→</span>
-            <input className="input input-sm mono" value={condicion.hasta} aria-label={`${campo} hasta`} onChange={(e) => cambiarLado('hasta', e.target.value)} />
-          </>
+          // Un rango: «Desde» y «Hasta» uno bajo el otro, cada uno con su nombre. Con una flecha entre los dos, en un panel angosto
+          // la flecha quedaba colgando al final de la primera línea.
+          <div className="ci-ajuste-rango">
+            <div className="ci-ajuste-rango-lado">
+              <span>Desde</span>
+              {esFecha
+                ? <CampoDeFecha id={`ci-paso-${indice}-desde`} valor={condicion.desde} ariaLabel={`${campo} desde`} onCambiar={(v) => cambiarLado('desde', v)} />
+                : <input className="input input-sm mono" value={condicion.desde} aria-label={`${campo} desde`} onChange={(e) => cambiarLado('desde', e.target.value)} />}
+            </div>
+            <div className="ci-ajuste-rango-lado">
+              <span>Hasta</span>
+              {esFecha
+                ? <CampoDeFecha id={`ci-paso-${indice}-hasta`} valor={condicion.hasta} ariaLabel={`${campo} hasta`} onCambiar={(v) => cambiarLado('hasta', v)} />
+                : <input className="input input-sm mono" value={condicion.hasta} aria-label={`${campo} hasta`} onChange={(e) => cambiarLado('hasta', e.target.value)} />}
+            </div>
+          </div>
         )}
       </div>
       {delPaso && (

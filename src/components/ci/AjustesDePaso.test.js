@@ -120,6 +120,17 @@ describe('el filtro de la integración', () => {
     expect(porEtiqueta('ZPERIODO desde').value).toBe('A1')
   })
 
+  // Con una flecha entre los dos extremos, en un panel angosto la flecha quedaba colgando al final de la primera línea.
+  it('un rango muestra «Desde» y «Hasta», cada uno con su nombre', async () => {
+    await montarCon()
+    const rangos = [...dom().querySelectorAll('.ci-ajuste-rango')]
+    expect(rangos).toHaveLength(2)
+    for (const rango of rangos) {
+      expect([...rango.querySelectorAll('.ci-ajuste-rango-lado > span:first-child')].map((lado) => lado.textContent)).toEqual(['Desde', 'Hasta'])
+    }
+    expect(dom().textContent).not.toContain('→')
+  })
+
   it('una integración sin filtro lo dice', async () => {
     await montarCon({ integracion: { ...INTEGRACION, resumen: { ...INTEGRACION.resumen, condiciones: [] } } })
     expect(texto()).toContain('Esta integración no tiene filtro.')

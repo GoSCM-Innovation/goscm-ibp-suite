@@ -223,6 +223,17 @@ describe('textosDeCambios', () => {
     expect(textosDeCambios(r.cambios)).toEqual(['Versión: base → PV2', 'Comando: REPLACE → INSERT_UPDATE'])
     expect(textosDeCambios(undefined)).toEqual([])
   })
+
+  // Dos flechas seguidas («20260101 → 20271231 → 20260301 → 20260331») no se entienden: un rango se escribe «desde a hasta».
+  it('un rango del filtro se lee «desde a hasta», con fechas como se ven en pantalla', () => {
+    const cambio = (de, a) => ({ clave: 'filtro', campo: 'KEYFIGUREDATE', etiqueta: 'KEYFIGUREDATE', de, a, fuente: 'paso' })
+    expect(textosDeCambios([cambio('20260101 → 20271231', '20260301 → 20260331')])).toEqual(['KEYFIGUREDATE: 01-01-2026 a 31-12-2027 → 01-03-2026 a 31-03-2026'])
+    // Una variable o un texto que no es fecha, tal cual.
+    expect(textosDeCambios([cambio('20260101 → 20271231', '{{DESDE}} → {{HASTA}}')])).toEqual(['KEYFIGUREDATE: 01-01-2026 a 31-12-2027 → {{DESDE}} a {{HASTA}}'])
+    expect(textosDeCambios([cambio('A1 → B9', 'A2 → B8')])).toEqual(['KEYFIGUREDATE: A1 a B9 → A2 a B8'])
+    // Los valores de una condición de igualdad no cambian.
+    expect(textosDeCambios([{ clave: 'filtro', campo: 'MATTYPEID', etiqueta: 'MATTYPEID', de: 'ZFER, ZHAW', a: 'ZFER', fuente: 'paso' }])).toEqual(['MATTYPEID: ZFER, ZHAW → ZFER'])
+  })
 })
 
 describe('aplicarAjustes', () => {

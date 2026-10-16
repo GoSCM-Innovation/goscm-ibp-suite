@@ -175,7 +175,7 @@ lote **con qué fechas se ven afectadas por paso**, origen y destino son los sis
 
 **En la pantalla** (por omisión todo cerrado y sin cambios)
 
-- **«⚙ Ajustes de la orquestación»**: una franja plegada arriba del editor. Cerrada dice «Sin cambios: cada integración usa lo suyo» o el resumen
+- **«⚙ Ajustes de la orquestación»**: una tarjeta plegada arriba de los pasos (se recorre con ellos, con un solo scroll). Cerrada dice «Sin cambios: cada integración usa lo suyo» o el resumen
   (`Versión PV2 · Fechas 01-03-2026 → 31-03-2026`, con «N ajustes» en ámbar). Abierta: cuatro listas («Como en cada integración» primero, después los
   valores que ya usan las integraciones de la conexión y «Otro valor…» a mano), un Desde y un Hasta con calendario, y la **tabla «Fechas por paso»**:
   para cada paso, sus fechas originales y cómo quedan, o «No filtra por fecha: no se toca». REPLACE avisa cuántos pasos pasan a REPLACE.
@@ -185,6 +185,12 @@ lote **con qué fechas se ven afectadas por paso**, origen y destino son los sis
   marca de ámbar si cambia algo (al pasar el cursor, qué). Con un panel abierto la tarjeta no se arrastra.
 - **Al ejecutar**, el diálogo lista cada paso con «Ajustes: Versión: PVSMD → PV2 · …», el comando que se enviará de verdad y las advertencias
   (REPLACE, ajustes sin aplicar). La ejecución y el **historial** dicen que la carga llevó ajustes y cuáles («con ajustes»).
+- **La vista de ejecución dice lo que se ENVÍA**, no lo que dice la integración: la línea de cada paso lleva el comando, la versión, el origen y
+  el destino ajustados (en ámbar) y «Con ajustes: …» desde antes de que el paso corra, con los ajustes del lote que se fijaron al lanzar. Una vez
+  terminado el paso vale lo que se anotó al enviarlo (`detalle.ajustes`), no lo que valgan hoy los ajustes de la orquestación. (Se vio en
+  producción el 2026-10-16: con REPLACE ajustado, la ejecución seguía mostrando INSERT_UPDATE aunque la carga SÍ salió con REPLACE.)
+- Un cambio de rango del filtro se escribe «01-01-2026 a 31-12-2027 → 01-03-2026 a 31-03-2026» (`textosDeCambios`): dos flechas seguidas no se
+  entendían.
 
 **Cómo está hecho**
 

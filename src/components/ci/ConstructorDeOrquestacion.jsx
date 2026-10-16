@@ -430,14 +430,6 @@ export default function ConstructorDeOrquestacion({
 
         {alertas && <div className="notice notice-error" role="alert">✕ {alertas}</div>}
 
-        <AjustesDeLaOrquestacion
-          ajustes={ajustesDelLote}
-          onCambiar={cambiarAjustesDelLote}
-          tareas={tareasDeLosPasos(pasos)}
-          porId={porId}
-          opciones={opcionesDelLote}
-        />
-
         {/* Un grafo que no es una lista: se avisa qué se muestra, y no se edita ni se ejecuta hasta convertirlo. */}
         {!exacto && (
           <div className="ci-orq-aviso" role="alert">
@@ -449,6 +441,14 @@ export default function ConstructorDeOrquestacion({
 
         {/* `inert`: con un grafo que no es una lista se ve, pero no se toca. */}
         <div className="ci-orq-secuencia" inert={!exacto}>
+          <AjustesDeLaOrquestacion
+            ajustes={ajustesDelLote}
+            onCambiar={cambiarAjustesDelLote}
+            tareas={tareasDeLosPasos(pasos)}
+            porId={porId}
+            opciones={opcionesDelLote}
+          />
+
           {pasos.length === 0 && (
             <div className="ci-orq-sin-pasos">
               <div className="ci-orq-sin-pasos-icono">⊞</div>

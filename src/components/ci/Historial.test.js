@@ -60,7 +60,7 @@ describe('el historial', () => {
     expect(detalle.textContent).toContain('Con ajustes:')
     const codigos = [...detalle.querySelectorAll('code')].map((c) => c.textContent)
     expect(codigos).toContain('Versión: PVSMD → PV2')
-    expect(codigos).toContain('KEYFIGUREDATE: 20260101 → 20271231 → 20260301 → 20260331')
+    expect(codigos).toContain('KEYFIGUREDATE: 01-01-2026 a 31-12-2027 → 01-03-2026 a 31-03-2026')
   })
 
   it('una ejecución sin ajustes no dice nada de ajustes al abrirla', async () => {

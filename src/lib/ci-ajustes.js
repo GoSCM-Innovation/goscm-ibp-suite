@@ -113,4 +113,29 @@ export const resumenConAjustes = (resumen, resuelto) => (resuelto ? {
   sistemaDestino: resuelto.destino,
 } : resumen)
 
+/**
+ * Una integración tal como se enviaría con los ajustes de la orquestación y los de su paso: `{ efectiva, resuelto, cambios }`. `efectiva`
+ * es la misma integración con el resumen cambiado (sirve para `detalleDeIntegracion`) y `cambios`, lo que cambia. Sin integración o con el
+ * body roto no hay nada que ajustar: la misma integración, `resuelto` en `null` y sin cambios.
+ */
+export function integracionConAjustes(integracion, tarea, ajustesDelLote) {
+  if (!integracion?.resumen?.valido) return { efectiva: integracion, resuelto: null, cambios: [] }
+  const resuelto = resolverAjustes(integracion.resumen, { general: ajustesDelLote, paso: tarea?.ajustes })
+  return { efectiva: { ...integracion, resumen: resumenConAjustes(integracion.resumen, resuelto) }, resuelto, cambios: resuelto.cambios }
+}
+
+/**
+ * Una integración como QUEDÓ al enviarla, según los cambios que se anotaron en esa llamada (`[{ clave, a, … }]`). Sirve para una carga
+ * que ya terminó: lo que valen hoy los ajustes de la orquestación puede ser otra cosa, y lo que se enseñó tiene que ser lo que se envió.
+ * Solo cambia los cuatro datos de la línea (versión, comando, origen y destino); los del filtro no se ven en ella.
+ */
+export function integracionConCambios(integracion, cambios) {
+  if (!integracion?.resumen?.valido) return integracion
+  const resumen = { ...integracion.resumen }
+  for (const { clave, a } of cambios ?? []) {
+    if (CAMPOS_DE_AJUSTE[clave] && typeof a === 'string') resumen[CAMPOS_DE_AJUSTE[clave].enVista] = a
+  }
+  return { ...integracion, resumen }
+}
+
 export { contarAjustes }

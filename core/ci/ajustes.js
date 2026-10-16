@@ -303,10 +303,20 @@ export function resolverAjustes(vista, { general = {}, paso = {} } = {}) {
 /** Un valor como se lee en un cambio: la versión vacía es «base»; cualquier otro vacío, «(vacío)». */
 const comoSeLee = (clave, valor) => (valor === '' ? (clave === 'version' ? 'base' : '(vacío)') : valor)
 
-/** Los cambios como frases cortas: `Versión: PVSMD → PV2`. */
-export const textosDeCambios = (cambios) => (cambios ?? []).map(
-  (cambio) => `${cambio.etiqueta}: ${comoSeLee(cambio.clave, cambio.de)} → ${comoSeLee(cambio.clave, cambio.a)}`,
-)
+/**
+ * Un lado de un cambio del filtro como se lee. Un rango se guarda como `20260101 → 20271231`; en una frase que ya lleva su propia flecha
+ * («antes → ahora») dos flechas seguidas no se entienden, así que el rango se escribe `01-01-2026 a 31-12-2027`.
+ */
+const ladoDelFiltro = (texto) => String(texto ?? '').split(' → ').map((parte) => (
+  esFechaAAAAMMDD(parte) ? `${parte.slice(6, 8)}-${parte.slice(4, 6)}-${parte.slice(0, 4)}` : parte
+)).join(' a ')
+
+/** Los cambios como frases cortas: `Versión: PVSMD → PV2`, o `KEYFIGUREDATE: 01-01-2026 a 31-12-2027 → 01-03-2026 a 31-03-2026`. */
+export const textosDeCambios = (cambios) => (cambios ?? []).map((cambio) => (
+  cambio.clave === 'filtro'
+    ? `${cambio.etiqueta}: ${ladoDelFiltro(cambio.de)} → ${ladoDelFiltro(cambio.a)}`
+    : `${cambio.etiqueta}: ${comoSeLee(cambio.clave, cambio.de)} → ${comoSeLee(cambio.clave, cambio.a)}`
+))
 
 /**
  * Aplica los ajustes de un paso (y los del lote) a un body y devuelve `{ texto, cambios, avisos }`. Si nada cambia, `texto` es

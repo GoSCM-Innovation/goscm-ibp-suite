@@ -8,6 +8,8 @@ import {
   fechaCorta,
   opcionesDeAjustes,
   rangoCorto,
+  integracionConAjustes,
+  integracionConCambios,
   resumenConAjustes,
   resumenDeLote,
 } from './ci-ajustes.js'
@@ -116,5 +118,54 @@ describe('efectosDeLosAjustes', () => {
     const efecto = efectosDeLosAjustes(tareasDeLosPasos(pasos), porId, { version: 'PV2', origen: 'QAS' })[0]
     expect(resumenConAjustes(efecto.integracion.resumen, efecto.resuelto)).toMatchObject({ version: 'PV2', sistemaOrigen: 'QAS', comando: 'REPLACE', sistemaDestino: 'IBP' })
     expect(resumenConAjustes({ valido: false }, null)).toEqual({ valido: false })
+  })
+})
+
+describe('integracionConAjustes', () => {
+  const base = integracion('a')
+
+  it('es la integración como se enviaría, con lo que cambia', () => {
+    const { efectiva, cambios } = integracionConAjustes(base, { ajustes: { comando: 'INSERT_UPDATE' } }, { version: 'PV2' })
+    expect(efectiva.resumen).toMatchObject({ version: 'PV2', comando: 'INSERT_UPDATE', sistemaOrigen: 'PRD', sistemaDestino: 'IBP' })
+    expect(cambios.map((c) => [c.clave, c.fuente])).toEqual([['version', 'orquestacion'], ['comando', 'paso']])
+    // La integración original no se toca.
+    expect(base.resumen).toMatchObject({ version: 'PVSMD', comando: 'REPLACE' })
+  })
+
+  it('sin ajustes es la misma integración y sin cambios', () => {
+    const { efectiva, cambios } = integracionConAjustes(base, {}, {})
+    expect(efectiva.resumen).toMatchObject({ version: 'PVSMD', comando: 'REPLACE' })
+    expect(cambios).toEqual([])
+  })
+
+  it('sin integración o con el body roto no hay nada que ajustar', () => {
+    expect(integracionConAjustes(undefined, { ajustes: { comando: 'X' } }, {})).toEqual({ efectiva: undefined, resuelto: null, cambios: [] })
+    const rota = { id: 'z', resumen: { valido: false, error: 'x' } }
+    expect(integracionConAjustes(rota, { ajustes: { comando: 'X' } }, {})).toEqual({ efectiva: rota, resuelto: null, cambios: [] })
+  })
+})
+
+describe('integracionConCambios', () => {
+  const base = integracion('a')
+
+  it('deja la integración como quedó según lo anotado al enviarla', () => {
+    const anotados = [
+      { clave: 'version', de: 'PVSMD', a: 'PV2' },
+      { clave: 'destino', de: 'IBP', a: 'IBP2' },
+      { clave: 'filtro', campo: 'KEYFIGUREDATE', de: '20260101 → 20271231', a: '20260301 → 20260331' },
+    ]
+    expect(integracionConCambios(base, anotados).resumen).toMatchObject({ version: 'PV2', comando: 'REPLACE', sistemaOrigen: 'PRD', sistemaDestino: 'IBP2' })
+    expect(base.resumen.version).toBe('PVSMD')
+  })
+
+  it('la versión base anotada es un valor vacío, no «sin cambio»', () => {
+    expect(integracionConCambios(base, [{ clave: 'version', de: 'PVSMD', a: '' }]).resumen.version).toBe('')
+  })
+
+  it('sin cambios anotados, o con el body roto, no toca nada', () => {
+    expect(integracionConCambios(base, undefined)).toEqual(base)
+    expect(integracionConCambios(base, [])).toEqual(base)
+    const rota = { id: 'z', resumen: { valido: false } }
+    expect(integracionConCambios(rota, [{ clave: 'comando', a: 'X' }])).toBe(rota)
   })
 })

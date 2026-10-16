@@ -10,7 +10,7 @@
 import { useState } from 'react'
 import { resolverAjustes, textosDeCambios } from '../../../core/ci/ajustes.js'
 import { detalleDeIntegracion } from '../../lib/ci.js'
-import { resumenConAjustes } from '../../lib/ci-ajustes.js'
+import { integracionConAjustes } from '../../lib/ci-ajustes.js'
 import { ESPERA_MAXIMA_S, ESPERA_MINIMA_S, ESPERA_POR_OMISION_S, REINTENTOS_MAXIMOS, esGrupo } from '../../lib/ci-pasos.js'
 import { useIsMobile } from '../../lib/useIsMobile.js'
 import AjustesDePaso from './AjustesDePaso.jsx'
@@ -115,16 +115,15 @@ const resolverDelPaso = (paso, integracion, ajustesDelLote) => (
 function DatosDeIntegracion({ paso, integracion, ajustesDelLote, pequeno = false }) {
   const nombre = integracion ? integracion.name : paso.label
   const variables = integracion?.resumen?.variables ?? []
-  const resuelto = resolverDelPaso(paso, integracion, ajustesDelLote)
-  const cambia = Boolean(resuelto) && resuelto.cambios.length > 0
-  const efectiva = integracion && resuelto ? { ...integracion, resumen: resumenConAjustes(integracion.resumen, resuelto) } : integracion
+  const { efectiva, cambios } = integracionConAjustes(integracion, paso, ajustesDelLote)
+  const cambia = cambios.length > 0
   return (
     <>
       <div className={`ci-orq-nombre-paso${pequeno ? ' pequeno' : ''}`} title={nombre}>{nombre}</div>
       {integracion ? (
         <div
           className={`ci-orq-sub${cambia ? ' ajustada' : ''}`}
-          title={cambia ? `Con los ajustes:\n${textosDeCambios(resuelto.cambios).join('\n')}` : detalleDeIntegracion(integracion)}
+          title={cambia ? `Con los ajustes:\n${textosDeCambios(cambios).join('\n')}` : detalleDeIntegracion(integracion)}
         >
           {integracion.folder && `${integracion.folder} · `}
           {detalleDeIntegracion(efectiva)}

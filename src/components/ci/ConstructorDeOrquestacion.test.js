@@ -857,7 +857,7 @@ describe('los ajustes en el editor', () => {
       await pulsar(boton('▶ Ejecutar'))
       await pasar(0)
 
-      expect(texto()).toContain('Ajustes: Versión: PVSMD → PV2 · KEYFIGUREDATE: 20260101 → 20271231 → 20260301 → 20260331')
+      expect(texto()).toContain('Ajustes: Versión: PVSMD → PV2 · KEYFIGUREDATE: 01-01-2026 a 31-12-2027 → 01-03-2026 a 31-03-2026')
       expect(dom().querySelector('.ci-lista-ejecutar-cambios')).not.toBeNull()
     })
 
