@@ -42,6 +42,8 @@ export default async function handler(req, res) {
       })),
       variables: info.variables,
       variablesDeFecha: info.variablesDeFecha ?? [],
+      // Lo que los ajustes de la orquestación (los del lote, y por paso en `pasos`) cambian: lo que se enviaría.
+      ajustes: orquestacion.ajustes ?? {},
       rotos: info.rotos,
       ultimas,
     })

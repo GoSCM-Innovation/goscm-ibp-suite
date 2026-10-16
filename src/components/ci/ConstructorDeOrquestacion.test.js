@@ -674,3 +674,234 @@ describe('el ancho de la paleta', () => {
     expect(Number(asa.getAttribute('aria-valuenow'))).toBe(520)
   })
 })
+
+// Los ajustes: lo que la orquestación cambia de las integraciones (versión, comando, origen, destino, fechas y filtro), sin tocarlas.
+describe('los ajustes en el editor', () => {
+  const FECHAS = { campo: 'KEYFIGUREDATE', tipo: 'entre', desde: '20260101', hasta: '20271231' }
+  const COSTOS = { id: 'int-d', name: 'COSTOS', folder: 'AREA', resumen: resumen({ comando: 'INSERT_UPDATE', condiciones: [FECHAS] }) }
+  const CON_FECHAS = [...INTEGRACIONES, COSTOS]
+  const pasoCostos = (id, extra = {}) => ({ ...pasoDeIntegracion(COSTOS, id), ...extra })
+  const conCostos = (extra = {}) => props({ integraciones: CON_FECHAS, orquestacion: orquestacion([pasoCostos('p1')]), ...extra })
+
+  const franja = () => dom().querySelector('.ci-orq-ajustes-cabeza')
+  const campoDelLote = (clave) => dom().querySelector(`#ci-lote-${clave}`)
+
+  it('la franja está cerrada y dice que no cambia nada', async () => {
+    await montar(ConstructorDeOrquestacion, props())
+    expect(texto()).toContain('Ajustes de la orquestación')
+    expect(texto()).toContain('Sin cambios: cada integración usa lo suyo')
+    expect(dom().querySelector('.ci-orq-ajustes-cuerpo')).toBeNull()
+  })
+
+  it('una orquestación que ya tiene ajustes los enseña al abrirla', async () => {
+    await montar(ConstructorDeOrquestacion, props({ orquestacion: orquestacion([], { ajustes: { version: 'PV2', fechas: { desde: '20260301' } } }) }))
+    expect(texto()).toContain('Versión PV2 · Fechas 01-03-2026 → …')
+    expect(texto()).toContain('2 ajustes')
+  })
+
+  it('cambiar un ajuste del lote lo guarda solo, junto con lo demás', async () => {
+    const p = props({ orquestacion: orquestacion([paso('p1', 'int-a')]) })
+    await montar(ConstructorDeOrquestacion, p)
+    await pulsar(franja())
+    await elegir(campoDelLote('version'), 'PVSMD')
+    await elegir(campoDelLote('origen'), 'PRD')
+    await pasar(800)
+
+    expect(orquestaciones.saveOrchestration).toHaveBeenCalledTimes(1)
+    expect(guardadoCon().ajustes).toEqual({ version: 'PVSMD', origen: 'PRD' })
+    expect(texto()).toContain('✓ Guardado')
+    expect(p.onGuardada).toHaveBeenCalled()
+  })
+
+  it('sin tocarlos no se mandan: cambiar otra cosa no los pisa', async () => {
+    await montar(ConstructorDeOrquestacion, props({ orquestacion: orquestacion([], { ajustes: { version: 'PV2' } }) }))
+    await pulsar(porEtiqueta('Agregar a la secuencia: MAESTRO'))
+    await pasar(800)
+    expect(guardadoCon()).not.toHaveProperty('ajustes')
+  })
+
+  it('«Restablecer todo» guarda unos ajustes vacíos (así se quitan del servidor)', async () => {
+    await montar(ConstructorDeOrquestacion, props({ orquestacion: orquestacion([], { ajustes: { version: 'PV2' } }) }))
+    await pulsar(franja())
+    await pulsar(boton('Restablecer todo'))
+    await pasar(800)
+    expect(guardadoCon().ajustes).toEqual({})
+    expect(texto()).toContain('Sin cambios')
+  })
+
+  it('un error al guardar los ajustes se dice, y el siguiente guardado los manda otra vez', async () => {
+    orquestaciones.saveOrchestration.mockRejectedValueOnce(new Error('Comando: lleva comillas'))
+    await montar(ConstructorDeOrquestacion, props())
+    await pulsar(franja())
+    await elegir(campoDelLote('comando'), 'REPLACE')
+    await pasar(800)
+    expect(texto()).toContain('Comando: lleva comillas')
+
+    // Otro cambio cualquiera: los ajustes que no se pudieron guardar vuelven a ir.
+    await pulsar(porEtiqueta('Agregar a la secuencia: MAESTRO'))
+    await pasar(800)
+    expect(guardadoCon().ajustes).toEqual({ comando: 'REPLACE' })
+  })
+
+  it('al desmontar guarda los ajustes que estuvieran pendientes', async () => {
+    await montar(ConstructorDeOrquestacion, props())
+    await pulsar(franja())
+    await elegir(campoDelLote('comando'), 'REPLACE')
+    expect(orquestaciones.saveOrchestration).not.toHaveBeenCalled()
+    await desmontar()
+    expect(guardadoCon().ajustes).toEqual({ comando: 'REPLACE' })
+  })
+
+  describe('en cada paso', () => {
+    const ajustesDe = (nombre) => porEtiqueta(`Ajustes de ${nombre}`)
+
+    it('cada integración tiene su «⚙ Ajustes», cerrado', async () => {
+      await montar(ConstructorDeOrquestacion, props({ orquestacion: orquestacion([paso('p1', 'int-a'), grupo('g', [paso('p2', 'int-b')])]) }))
+      expect(ajustesDe('MAESTRO').textContent).toBe('⚙ Ajustes')
+      expect(ajustesDe('FACTURAS').textContent).toBe('⚙ Ajustes')
+      expect(dom().querySelector('.ci-orq-ajustes-paso')).toBeNull()
+    })
+
+    it('cambiar un ajuste del paso lo guarda en SU nodo y lo cuenta en el botón', async () => {
+      await montar(ConstructorDeOrquestacion, conCostos())
+      await pulsar(ajustesDe('COSTOS'))
+      await elegir(dom().querySelector('#ci-p1-comando'), 'REPLACE')
+      await pasar(800)
+
+      expect(guardadoCon().nodes[0].data.ajustes).toEqual({ comando: 'REPLACE' })
+      // El lote no cambió: no se manda.
+      expect(guardadoCon()).not.toHaveProperty('ajustes')
+      expect(ajustesDe('COSTOS').textContent).toBe('⚙ Ajustes · 1')
+      expect(ajustesDe('COSTOS').classList.contains('con-cambios')).toBe(true)
+    })
+
+    it('la línea de la tarjeta dice lo que se enviaría, marcada, con lo que cambia al pasar el cursor', async () => {
+      await montar(ConstructorDeOrquestacion, conCostos({ orquestacion: orquestacion([pasoCostos('p1', { ajustes: { version: 'PV2', comando: 'REPLACE' } })]) }))
+      const sub = dom().querySelector('.ci-orq-sub')
+      expect(sub.textContent).toContain('STARBRANDS · PV2 · REPLACE · PRD → IBP')
+      expect(sub.classList.contains('ajustada')).toBe(true)
+      expect(sub.title).toContain('Versión: PVSMD → PV2')
+      expect(sub.title).toContain('Comando: INSERT_UPDATE → REPLACE')
+    })
+
+    it('sin ajustes la línea no se marca', async () => {
+      await montar(ConstructorDeOrquestacion, conCostos())
+      expect(dom().querySelector('.ci-orq-sub').classList.contains('ajustada')).toBe(false)
+    })
+
+    it('con ajustes del lote, el paso los hereda: se ve en su línea y en su botón', async () => {
+      await montar(ConstructorDeOrquestacion, conCostos({ orquestacion: orquestacion([pasoCostos('p1')], { ajustes: { version: 'PV2' } }) }))
+      expect(ajustesDe('COSTOS').textContent).toBe('⚙ Ajustes · heredados')
+      expect(ajustesDe('COSTOS').classList.contains('heredado')).toBe(true)
+      expect(dom().querySelector('.ci-orq-sub').textContent).toContain('PV2')
+    })
+
+    it('al cambiar los del lote, las tarjetas lo reflejan al instante', async () => {
+      await montar(ConstructorDeOrquestacion, conCostos())
+      await pulsar(franja())
+      await elegir(campoDelLote('destino'), '__otro__')
+      await escribir(porEtiqueta('Destino: valor a mano'), 'IBP2')
+      expect(dom().querySelector('.ci-orq-sub').textContent).toContain('PRD → IBP2')
+    })
+
+    it('un paso dentro de un grupo tiene los suyos y se guardan en su nodo', async () => {
+      await montar(ConstructorDeOrquestacion, conCostos({ orquestacion: orquestacion([grupo('g', [pasoCostos('p2')])]) }))
+      await pulsar(ajustesDe('COSTOS'))
+      await elegir(dom().querySelector('#ci-p2-comando'), 'REPLACE')
+      await pasar(800)
+      expect(guardadoCon().nodes.find((nodo) => nodo.id === 'p2').data.ajustes).toEqual({ comando: 'REPLACE' })
+    })
+
+    it('con el panel abierto la tarjeta no se arrastra (dentro hay campos de texto)', async () => {
+      await montar(ConstructorDeOrquestacion, conCostos())
+      expect(tarjetas()[0].draggable).toBe(true)
+      await pulsar(ajustesDe('COSTOS'))
+      expect(tarjetas()[0].draggable).toBe(false)
+      await pulsar(ajustesDe('COSTOS'))
+      expect(tarjetas()[0].draggable).toBe(true)
+    })
+
+    it('una integración borrada no tiene ajustes que dar', async () => {
+      const huerfano = { ...pasoCostos('p1'), integrationId: 'borrada' }
+      await montar(ConstructorDeOrquestacion, conCostos({ orquestacion: orquestacion([huerfano]) }))
+      expect(dom().querySelector('.ci-orq-ajustes-boton')).toBeNull()
+      expect(texto()).toContain('La integración ya no existe')
+    })
+
+    it('los ajustes guardados de un paso vuelven al abrirlo (viajan en el grafo)', async () => {
+      const guardado = pasoCostos('p1', { ajustes: { comando: 'REPLACE', filtro: { KEYFIGUREDATE: { desde: '20260301' } } } })
+      await montar(ConstructorDeOrquestacion, conCostos({ orquestacion: orquestacion([guardado]) }))
+      await pulsar(ajustesDe('COSTOS'))
+      expect(porEtiqueta('KEYFIGUREDATE desde').value).toBe('2026-03-01')
+      expect(dom().querySelector('#ci-p1-comando').value).toBe('REPLACE')
+    })
+  })
+
+  describe('al ejecutar', () => {
+    const informe = (pasos, extra = {}) => ({
+      pasos, variables: [], variablesDeFecha: [], rotos: [], ultimas: {}, ...extra,
+    })
+    const pasoDeInfo = (nodeId, extra = {}) => ({
+      nodeId, label: 'COSTOS', integrationId: 'int-d', variables: [], integracion: COSTOS, cambios: [], avisos: [],
+      efectivo: { comando: 'INSERT_UPDATE' }, ...extra,
+    })
+
+    it('el diálogo dice lo que cambian los ajustes en cada paso', async () => {
+      infoDeOrquestacion.mockResolvedValue(informe([pasoDeInfo('p1', {
+        cambios: [
+          { clave: 'version', etiqueta: 'Versión', de: 'PVSMD', a: 'PV2', fuente: 'orquestacion' },
+          { clave: 'filtro', campo: 'KEYFIGUREDATE', etiqueta: 'KEYFIGUREDATE', de: '20260101 → 20271231', a: '20260301 → 20260331', fuente: 'orquestacion' },
+        ],
+      })]))
+      await montar(ConstructorDeOrquestacion, conCostos())
+      await pulsar(boton('▶ Ejecutar'))
+      await pasar(0)
+
+      expect(texto()).toContain('Ajustes: Versión: PVSMD → PV2 · KEYFIGUREDATE: 20260101 → 20271231 → 20260301 → 20260331')
+      expect(dom().querySelector('.ci-lista-ejecutar-cambios')).not.toBeNull()
+    })
+
+    it('REPLACE pone una advertencia, con cuántos pasos, y el comando que se enviará es el efectivo', async () => {
+      infoDeOrquestacion.mockResolvedValue(informe([
+        pasoDeInfo('p1', { cambios: [{ clave: 'comando', etiqueta: 'Comando', de: 'INSERT_UPDATE', a: 'REPLACE', fuente: 'orquestacion' }], efectivo: { comando: 'REPLACE' } }),
+        pasoDeInfo('p2'),
+      ]))
+      await montar(ConstructorDeOrquestacion, conCostos())
+      await pulsar(boton('▶ Ejecutar'))
+      await pasar(0)
+
+      expect(texto()).toContain('REPLACE puede reemplazar los datos que ya hay: los ajustes lo ponen en 1 paso')
+      expect(dom().querySelector('.modal .ci-lista-ejecutar code').textContent).toBe('REPLACE')
+    })
+
+    it('un ajuste del paso que ya no tiene a qué aplicarse se avisa, con el nombre del paso', async () => {
+      infoDeOrquestacion.mockResolvedValue(informe([pasoDeInfo('p1', { avisos: ['El ajuste del filtro «ZVIGENTE» no se aplica: la integración ya no tiene esa condición.'] })]))
+      await montar(ConstructorDeOrquestacion, conCostos())
+      await pulsar(boton('▶ Ejecutar'))
+      await pasar(0)
+      expect(texto()).toContain('«COSTOS»: El ajuste del filtro «ZVIGENTE» no se aplica')
+    })
+
+    it('sin ajustes no hay líneas de cambios ni advertencias', async () => {
+      infoDeOrquestacion.mockResolvedValue(informe([pasoDeInfo('p1')]))
+      await montar(ConstructorDeOrquestacion, conCostos())
+      await pulsar(boton('▶ Ejecutar'))
+      await pasar(0)
+      expect(dom().querySelector('.ci-lista-ejecutar-cambios')).toBeNull()
+      expect(dom().querySelector('.modal .notice-aviso')).toBeNull()
+    })
+
+    it('guarda los ajustes pendientes antes de pedir la información: lo que se ve es lo que se ejecuta', async () => {
+      infoDeOrquestacion.mockResolvedValue(informe([pasoDeInfo('p1')]))
+      await montar(ConstructorDeOrquestacion, conCostos())
+      await pulsar(franja())
+      await elegir(campoDelLote('comando'), 'REPLACE')
+      await pulsar(boton('▶ Ejecutar'))
+      await pasar(0)
+
+      expect(orquestaciones.saveOrchestration).toHaveBeenCalledTimes(1)
+      expect(guardadoCon().ajustes).toEqual({ comando: 'REPLACE' })
+      expect(infoDeOrquestacion).toHaveBeenCalled()
+    })
+  })
+})

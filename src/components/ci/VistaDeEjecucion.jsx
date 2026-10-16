@@ -10,6 +10,7 @@
 // El estado lo arma el motor del servidor; esta pantalla solo lo enseña.
 
 import { useEffect, useState } from 'react'
+import { textosDeCambios } from '../../../core/ci/ajustes.js'
 import { duracionMs, escribirDuracion } from '../../../core/orchestrations/run-detail.js'
 import { ESTADOS_DE_PASO, detalleDeIntegracion, fechaLegible } from '../../lib/ci.js'
 import { esGrupo } from '../../lib/ci-pasos.js'
@@ -71,6 +72,13 @@ function FilaDeIntegracion({ estado, etiqueta, integracion, hijo = false }) {
         </div>
 
         {integracion && <div className="ci-orq-sub mono">{integracion.folder && `${integracion.folder} · `}{detalleDeIntegracion(integracion)}</div>}
+
+        {(detalle.ajustes ?? []).length > 0 && (
+          <div className="ci-orq-fila-ajustes" title="Lo que la orquestación cambió de esta integración al enviarla">
+            <span className="ci-orq-ajustes-chip">Con ajustes</span>
+            {textosDeCambios(detalle.ajustes).join(' · ')}
+          </div>
+        )}
 
         {(detalle.httpStatus || detalle.mplId) && (
           <div className="ci-orq-fila-cpi">

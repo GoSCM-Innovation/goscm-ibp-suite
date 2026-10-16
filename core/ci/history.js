@@ -53,6 +53,8 @@ const aEjecucion = (fila, ahora) => {
     mplId: fila.mpl_id,
     message,
     variables: fila.variables ?? {},
+    // Qué cambió la orquestación de la integración en esta llamada (vacío en las ejecuciones de siempre).
+    ajustes: Array.isArray(fila.adjustments) ? fila.adjustments : [],
     startedAt: fila.started_at,
     finishedAt: fila.finished_at,
   }
@@ -63,15 +65,15 @@ const aEjecucion = (fila, ahora) => {
  * usa para los fallos que ocurren antes de enviar, que nacen y terminan en el mismo instante).
  */
 export async function registrarEjecucion(clientId, {
-  id, connectionId, integracion, orchestrationId = null, origin, user = null, variables = {}, resultado = null,
+  id, connectionId, integracion, orchestrationId = null, origin, user = null, variables = {}, ajustes = [], resultado = null,
 }) {
   const cerrada = resultado !== null
   await queryScoped(
     clientId,
     `insert into ci_runs
        (id, client_id, connection_id, integration_id, integration_name, folder, orchestration_id, origin,
-        user_id, user_email, status, http_status, duration_ms, mpl_id, message, variables, finished_at)
-     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16::jsonb,
+        user_id, user_email, status, http_status, duration_ms, mpl_id, message, variables, adjustments, finished_at)
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16::jsonb, $17::jsonb,
              ${cerrada ? 'now()' : 'null'})`,
     [
       id, clientId, connectionId, integracion.id, integracion.name, integracion.folder, orchestrationId, origin,
@@ -82,6 +84,7 @@ export async function registrarEjecucion(clientId, {
       cerrada ? resultado.mplId ?? null : null,
       cerrada ? resultado.mensaje ?? null : null,
       JSON.stringify(variables),
+      JSON.stringify(ajustes ?? []),
     ],
   )
 }
@@ -115,7 +118,7 @@ export async function listarEjecuciones(clientId, { connectionId, integrationId 
   const filas = await queryScoped(
     clientId,
     `select r.id, r.integration_id, r.integration_name, r.folder, r.orchestration_id, o.name as orchestration_name,
-            r.origin, r.user_email, r.status, r.http_status, r.duration_ms, r.mpl_id, r.message, r.variables,
+            r.origin, r.user_email, r.status, r.http_status, r.duration_ms, r.mpl_id, r.message, r.variables, r.adjustments,
             r.started_at, r.finished_at
        from ci_runs r
        left join orchestrations o on o.id = r.orchestration_id and o.client_id = r.client_id
@@ -160,7 +163,7 @@ export async function obtenerEjecucion(clientId, id, ahora = Date.now()) {
   const fila = await queryOneScoped(
     clientId,
     `select r.id, r.integration_id, r.integration_name, r.folder, r.orchestration_id, null as orchestration_name,
-            r.origin, r.user_email, r.status, r.http_status, r.duration_ms, r.mpl_id, r.message, r.variables,
+            r.origin, r.user_email, r.status, r.http_status, r.duration_ms, r.mpl_id, r.message, r.variables, r.adjustments,
             r.started_at, r.finished_at
        from ci_runs r where r.id = $1 and r.client_id = $2`,
     [id, clientId],

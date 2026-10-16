@@ -3,16 +3,10 @@
 //
 // Pura, sin dependencias: la usan la pantalla y las pruebas.
 
-/** ¿Es una fecha real escrita como `AAAAMMDD`? `20261301` y `20260230` no lo son. */
-export function esFechaAAAAMMDD(valor) {
-  const texto = String(valor ?? '')
-  if (!/^\d{8}$/.test(texto)) return false
-  const anio = Number(texto.slice(0, 4))
-  const mes = Number(texto.slice(4, 6))
-  const dia = Number(texto.slice(6, 8))
-  const fecha = new Date(Date.UTC(anio, mes - 1, dia))
-  return fecha.getUTCFullYear() === anio && fecha.getUTCMonth() === mes - 1 && fecha.getUTCDate() === dia
-}
+import { esFechaAAAAMMDD } from '../../core/ci/fechas.js'
+
+// Vive en `core/ci`: el servidor la necesita para validar los ajustes de una orquestación. Aquí se vuelve a exportar.
+export { esFechaAAAAMMDD }
 
 /** De `AAAAMMDD` a lo que entiende el calendario del navegador. Lo que no es una fecha, vacío. */
 export const aFechaDelCalendario = (valor) => (

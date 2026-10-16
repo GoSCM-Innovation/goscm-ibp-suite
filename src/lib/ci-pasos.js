@@ -20,7 +20,12 @@
 // guardaban como un grafo SIN grupos. Esas orquestaciones se siguen leyendo: una etapa con una integración es un paso,
 // y una con varias es un grupo paralelo.
 //
+// Los AJUSTES de un paso (otra versión, otras fechas…; ver `core/ci/ajustes.js`) viajan en el `data` de su nodo y en el paso de la
+// pantalla se llaman igual: `paso.ajustes`. Un paso sin ajustes no lleva la clave.
+//
 // Pura, sin React ni red: solo traduce, y por eso se prueba entera.
+
+import { sinAjustes } from '../../core/ci/ajustes.js'
 
 const ALTO_DE_PASO = 140
 
@@ -91,6 +96,7 @@ function nodoDeTarea(paso, posicion, parentId) {
     data: {
       label: texto(paso.label),
       integrationId: texto(paso.integrationId) || null,
+      ...(sinAjustes(paso.ajustes) ? {} : { ajustes: paso.ajustes }),
       ...reintentosDe(paso),
     },
   }
@@ -142,6 +148,7 @@ function tareaDeNodo(nodo) {
     type: 'task',
     integrationId: texto(datos.integrationId) || null,
     label: texto(datos.label),
+    ...(sinAjustes(datos.ajustes) ? {} : { ajustes: datos.ajustes }),
     ...reintentosDe(datos),
   }
 }
@@ -361,6 +368,16 @@ export function reordenar(pasos, desdeId, haciaId, posicion) {
   copia.splice(indice, 0, movido)
   return copia
 }
+
+/**
+ * Las integraciones de la lista, una por una y en el orden en que se leen: las de los pasos y las de dentro de cada grupo. Cada una dice
+ * en qué paso va (`numero`) y si va dentro de un grupo.
+ */
+export const tareasDeLosPasos = (pasos) => pasos.flatMap((una, i) => (
+  esGrupo(una)
+    ? (una.children ?? []).map((tarea) => ({ tarea, numero: i + 1, enGrupo: true }))
+    : [{ tarea: una, numero: i + 1, enGrupo: false }]
+))
 
 /** Cuántas integraciones se ejecutan en total: las de los pasos y las de los grupos. */
 export const totalDeIntegraciones = (pasos) => pasos.reduce(

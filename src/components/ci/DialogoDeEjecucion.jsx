@@ -75,6 +75,7 @@ export default function DialogoDeEjecucion({
   variablesDeFecha = [],
   iniciales = {},
   avisos = [],
+  advertencias = [],
   esOrquestacion = false,
   onEjecutar,
   onCerrar,
@@ -134,6 +135,9 @@ export default function DialogoDeEjecucion({
       {fase !== 'listo' && (
         <>
           <RevisionIbp avisos={avisos} />
+          {advertencias.map((advertencia) => (
+            <div key={advertencia} className="notice notice-aviso" role="status">{advertencia}</div>
+          ))}
           <div className="ci-seccion">
             <h3 className="ci-seccion-titulo">
               {esOrquestacion ? `Se ejecutarán, en este orden (${integraciones.length})` : 'Se ejecutará'}
@@ -146,6 +150,11 @@ export default function DialogoDeEjecucion({
                     {una.nombre}
                   </span>
                   {una.comando && <code className="mono" title="BatchCommand del body">{una.comando}</code>}
+                  {(una.cambios ?? []).length > 0 && (
+                    <span className="ci-lista-ejecutar-cambios" title="Lo que los ajustes de la orquestación cambian en este paso">
+                      Ajustes: {una.cambios.join(' · ')}
+                    </span>
+                  )}
                 </li>
               ))}
             </ul>

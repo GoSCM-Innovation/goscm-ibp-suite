@@ -233,3 +233,57 @@ describe('lo que pasa después de enviar', () => {
     expect((await ejecutar({ llamar: llamadaQue(duda) })).resultado).toBe('unconfirmed')
   })
 })
+
+describe('los ajustes de una orquestación', () => {
+  const ajustes = {
+    general: { version: 'PV2', fechas: { desde: '20261101', hasta: '{{HASTA}}' } },
+    paso: { comando: 'INSERT_UPDATE' },
+  }
+
+  it('se aplican al body ANTES de las variables, y solo a lo que se envía', async () => {
+    const llamar = llamadaQue(exito)
+    await ejecutar({ llamar, ajustes })
+
+    const enviado = JSON.parse(llamar.mock.calls[0][0].cuerpo).KEYFIGURE
+    expect(enviado.PlanningAreaVersion).toBe('PV2')
+    expect(enviado.BatchCommand).toBe('INSERT_UPDATE')
+    // La fecha del lote es fija y la otra es una variable que se resuelve con las de la ejecución.
+    expect(enviado.FilterForTheDataSource).toBe("KEYFIGUREDATE BT '20261101' '20270412'")
+    // La integración guardada no se tocó.
+    expect(integracion.body).toBe(BODY)
+  })
+
+  it('lo que cambió se anota en el historial y vuelve en el resultado', async () => {
+    const salida = await ejecutar({ llamar: llamadaQue(exito), ajustes })
+
+    const claves = salida.ajustes.map((cambio) => cambio.clave)
+    expect(claves).toEqual(['version', 'comando', 'filtro'])
+    expect(registrarEjecucion).toHaveBeenCalledWith(CLIENTE, expect.objectContaining({ ajustes: salida.ajustes }))
+  })
+
+  it('sin ajustes envía el body de siempre y no anota nada', async () => {
+    const llamar = llamadaQue(exito)
+    const salida = await ejecutar({ llamar })
+    expect(JSON.parse(llamar.mock.calls[0][0].cuerpo).KEYFIGURE.BatchCommand).toBe('REPLACE')
+    expect(salida.ajustes).toEqual([])
+    expect(registrarEjecucion).toHaveBeenCalledWith(CLIENTE, expect.objectContaining({ ajustes: [] }))
+  })
+
+  it('unos ajustes que no valen NO envían nada y quedan anotados como error', async () => {
+    const llamar = llamadaQue(exito)
+    const salida = await ejecutar({ llamar, ajustes: { general: { comando: "RE'PLACE" } } })
+
+    expect(llamar).not.toHaveBeenCalled()
+    expect(salida).toMatchObject({ resultado: 'error', enviado: false })
+    expect(salida.mensaje).toMatch(/Comando/)
+    expect(registrarEjecucion).toHaveBeenCalledTimes(1)
+  })
+
+  it('una variable que trae un ajuste y no tiene valor NO se envía', async () => {
+    const llamar = llamadaQue(exito)
+    const salida = await ejecutar({ llamar, ajustes: { general: { fechas: { desde: '{{OTRA}}' } } } })
+
+    expect(llamar).not.toHaveBeenCalled()
+    expect(salida.mensaje).toMatch(/Falta el valor de \{\{OTRA\}\}/)
+  })
+})

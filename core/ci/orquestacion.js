@@ -8,6 +8,7 @@
 //     integración borrada, o una variable sin valor, se descubre ANTES del primer paso y no en el quinto, con
 //     las cuatro primeras cargas ya hechas.
 
+import { aplicarAjustes, ajustesDelLote, vistaDeBloque } from './ajustes.js'
 import { getIntegrations } from './integrations.js'
 import { esNombreDeVariable, leerBody, motivoDeValorInvalido, variablesDeBody, variablesDeFechaDeBloque } from './body.js'
 
@@ -18,9 +19,14 @@ export const pasosDeIntegracion = (orquestacion) => (orquestacion?.nodes ?? []).
  * Qué lleva una orquestación: sus pasos con la integración de cada uno, las variables que piden entre todos
  * y qué pasos apuntan a una integración que no existe.
  *
- * `{ pasos: [{ nodeId, label, integrationId, integracion|null, variables, variablesDeFecha }], variables: [...],
- *    variablesDeFecha: [...], rotos: [nodeId] }`. `variablesDeFecha` son las variables que en TODOS los pasos donde aparecen
- * son una fecha (condición sobre `KEYFIGUREDATE`): se piden con un calendario.
+ * `{ pasos: [{ nodeId, label, integrationId, integracion|null, variables, variablesDeFecha, cambios, avisos, errorDeAjustes,
+ *    efectivo }], variables: [...], variablesDeFecha: [...], rotos: [nodeId] }`. `variablesDeFecha` son las variables que en TODOS los
+ * pasos donde aparecen son una fecha (condición sobre `KEYFIGUREDATE`): se piden con un calendario.
+ *
+ * Todo sale del body CON LOS AJUSTES aplicados (los de la orquestación y los del paso), que es lo que se enviaría: una variable que un
+ * ajuste reemplaza por una fecha fija deja de pedirse, y una que un ajuste agrega, se pide. `cambios` es lo que los ajustes cambian en
+ * ese paso, `avisos` lo que ya no tiene a qué aplicarse, `errorDeAjustes` el motivo si unos ajustes no valen (y entonces no se puede
+ * lanzar), y `efectivo` lo que el paso quedaría diciendo (área, versión, comando, origen y destino).
  */
 export async function infoDeOrquestacion(clientId, orquestacion) {
   const nodos = pasosDeIntegracion(orquestacion)
@@ -31,13 +37,38 @@ export async function infoDeOrquestacion(clientId, orquestacion) {
     const integracion = porId.get(nodo.data?.integrationId) ?? null
     // Una integración de OTRA conexión tampoco vale: el paso correría contra un tenant que no es el de la orquestación.
     const valida = integracion && integracion.connectionId === orquestacion.connectionId
+
+    let aplicado = null
+    let errorDeAjustes = null
+    if (valida) {
+      try {
+        aplicado = aplicarAjustes(integracion.body, { general: orquestacion.ajustes, paso: nodo.data?.ajustes })
+      } catch (fallo) {
+        errorDeAjustes = fallo.message
+      }
+    }
+    // Con unos ajustes que no valen se lee el body original: igual no se podrá lanzar (`validarInicio`).
+    const cuerpo = valida ? (aplicado?.texto ?? integracion.body) : ''
+    const leido = valida ? leerBody(cuerpo) : { ok: false }
+    const vista = leido.ok ? vistaDeBloque(leido.bloque) : null
+
     return {
       nodeId: nodo.id,
       label: nodo.data?.label ?? '',
       integrationId: nodo.data?.integrationId ?? null,
       integracion: valida ? integracion : null,
-      variables: valida ? variablesDeBody(integracion.body) : [],
-      variablesDeFecha: valida ? variablesDeFechaDeBloque(leerBody(integracion.body).bloque) : [],
+      variables: valida ? variablesDeBody(cuerpo) : [],
+      variablesDeFecha: valida ? variablesDeFechaDeBloque(leido.bloque) : [],
+      cambios: aplicado?.cambios ?? [],
+      avisos: aplicado?.avisos ?? [],
+      errorDeAjustes,
+      efectivo: vista && {
+        areaDePlanificacion: vista.areaDePlanificacion,
+        version: vista.version,
+        comando: vista.comando,
+        sistemaOrigen: vista.sistemaOrigen,
+        sistemaDestino: vista.sistemaDestino,
+      },
     }
   })
 
@@ -52,12 +83,13 @@ export async function infoDeOrquestacion(clientId, orquestacion) {
 }
 
 /**
- * Lo que viaja con una ejecución, ya limpio: las variables que valen y quién la lanzó.
+ * Lo que viaja con una ejecución, ya limpio: las variables que valen, quién la lanzó y los ajustes de la orquestación.
  *
  * `quien` sale de la sesión del servidor, no del cuerpo de la petición: el historial dice quién ejecutó, y eso
- * no lo puede decidir quien ejecuta.
+ * no lo puede decidir quien ejecuta. Los ajustes del lote tampoco vienen de la petición: salen de la orquestación guardada y se
+ * fijan al lanzar, para que una ejecución (y su «Retomar») use siempre los mismos.
  */
-export function defaultsDeCi(defaults, quien) {
+export function defaultsDeCi(defaults, quien, ajustes = {}) {
   const crudas = defaults?.variables && typeof defaults.variables === 'object' && !Array.isArray(defaults.variables)
     ? defaults.variables
     : {}
@@ -65,7 +97,7 @@ export function defaultsDeCi(defaults, quien) {
   for (const [nombre, valor] of Object.entries(crudas)) {
     if (esNombreDeVariable(nombre) && typeof valor === 'string') variables[nombre] = valor
   }
-  return { variables, startedBy: { id: quien?.id ?? null, email: quien?.email ?? null } }
+  return { variables, startedBy: { id: quien?.id ?? null, email: quien?.email ?? null }, ajustes: ajustesDelLote(ajustes) }
 }
 
 /**
@@ -87,6 +119,13 @@ export async function validarInicio(clientId, orquestacion, defaults) {
       `No se puede lanzar: ${nombres.join(', ')} ${nombres.length === 1 ? 'apunta' : 'apuntan'} a una integración `
       + 'que ya no existe en esta conexión. Cámbialo o quítalo.',
     )
+  }
+
+  // Unos ajustes que no valen no se descubren en el quinto paso: se dicen aquí, antes de enviar nada.
+  const malos = info.pasos.filter((paso) => paso.errorDeAjustes)
+  if (malos.length > 0) {
+    const detalle = malos.map((paso) => `«${paso.label || paso.nodeId}»: ${paso.errorDeAjustes}`).join(' ')
+    throw new Error(`No se puede lanzar: los ajustes no valen. ${detalle}`)
   }
 
   const valores = defaults?.variables ?? {}

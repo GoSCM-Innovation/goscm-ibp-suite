@@ -20,6 +20,7 @@
 import { randomUUID } from 'node:crypto'
 import { getRedis, tenantKey } from '../persistence/redis.js'
 import { CI_AGREEMENT, getCredentials } from '../connections/connections.js'
+import { aplicarAjustes } from './ajustes.js'
 import { aplicarVariables } from './body.js'
 import { llamarEndpoint } from './call.js'
 import { cerrarEjecucion, registrarEjecucion } from './history.js'
@@ -56,6 +57,10 @@ const sinEnviar = (mensaje, extra = {}) => ({
  *   { runId, nombre, resultado: 'success' | 'warning' | 'error' | 'unconfirmed', enviado, httpStatus, duracionMs, mplId,
  *     mensaje, bloqueada? }
  *
+ * `ajustes` (`{ general, paso }`) son los de la orquestación que ejecuta el paso: se aplican al body ANTES de las variables, y solo a
+ * lo que se envía; la integración original no se toca. Lo que cambió se anota en el historial y vuelve en `ajustes`. Unos ajustes que
+ * no valen no envían nada.
+ *
  * No lanza por problemas de la ejecución: los devuelve como `error` para que un paso de una orquestación los
  * trate como el fallo de ese paso. `bloqueada` es `true` cuando no salió porque otra ejecución de la misma
  * integración estaba en curso.
@@ -67,6 +72,7 @@ export async function executeIntegration({
   connectionId,
   integrationId,
   variables = {},
+  ajustes = null,
   origin = 'manual',
   orchestrationId = null,
   user = null,
@@ -85,7 +91,7 @@ export async function executeIntegration({
     return { runId, nombre: null, ...sinEnviar('La integración no existe en esta conexión.') }
   }
 
-  const registro = { id: runId, connectionId, integracion, orchestrationId, origin, user, variables }
+  const registro = { id: runId, connectionId, integracion, orchestrationId, origin, user, variables, ajustes: [] }
 
   /** Falla antes de enviar: se anota (nace y termina cerrada) y se devuelve. */
   const fallaAntes = async (mensaje) => {
@@ -99,8 +105,13 @@ export async function executeIntegration({
   }
 
   let cuerpo
+  let cambios = []
   try {
-    cuerpo = aplicarVariables(integracion.body, variables)
+    // Primero los ajustes y después las variables: un ajuste puede traer una variable (`{{FECHA_DESDE}}`) que se resuelve aquí.
+    const ajustado = aplicarAjustes(integracion.body, ajustes ?? {})
+    cambios = ajustado.cambios
+    registro.ajustes = cambios
+    cuerpo = aplicarVariables(ajustado.texto, variables)
   } catch (fallo) {
     return fallaAntes(fallo.message)
   }
@@ -144,7 +155,7 @@ export async function executeIntegration({
       // La carga ya salió: se devuelve su resultado aunque no se haya podido anotar.
       console.error(`[ci/execute] no se pudo cerrar el registro: ${fallo.message}`)
     }
-    return { runId, nombre: integracion.name, ...resultado }
+    return { runId, nombre: integracion.name, ...resultado, ajustes: cambios }
   } finally {
     await soltarCandado(clientId, integrationId, runId)
   }

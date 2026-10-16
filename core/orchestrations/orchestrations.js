@@ -12,6 +12,7 @@
 
 import { queryOneScoped, queryScoped } from '../persistence/tenant-scope.js'
 import { getConnectionTarget } from '../connections/connections.js'
+import { ajustesDelLote } from '../ci/ajustes.js'
 import { getIntegrations } from '../ci/integrations.js'
 import { normalizeGraph } from './graph.js'
 import { borrarRun, errorDeConflicto, esTerminal, getRun } from './run-store.js'
@@ -23,11 +24,13 @@ const toOrchestration = (row) => row && ({
   name: row.name,
   nodes: row.nodes ?? [],
   edges: row.edges ?? [],
+  // Lo que la orquestación cambia de TODAS sus integraciones (solo CI Tools; ver `core/ci/ajustes.js`). Los de cada paso van en su nodo.
+  ajustes: row.adjustments ?? {},
   createdAt: row.created_at,
   updatedAt: row.updated_at,
 })
 
-const COLUMNAS = 'id, connection_id, production, name, nodes, edges, created_at, updated_at'
+const COLUMNAS = 'id, connection_id, production, name, nodes, edges, adjustments, created_at, updated_at'
 
 function nombreValido(name) {
   const limpio = String(name ?? '').trim()
@@ -96,19 +99,24 @@ export async function getOrchestration(clientId, id) {
   ))
 }
 
-export async function createOrchestration(clientId, { connectionId, production = false, name, nodes, edges }) {
+export async function createOrchestration(clientId, { connectionId, production = false, name, nodes, edges, ajustes }) {
   const nombre = nombreValido(name)
   const conexion = await assertDestino(clientId, connectionId)
   // El tipo decide los topes de los reintentos: los de IBP son los de v8 y no los de v9.
   const grafo = normalizeGraph({ nodes, edges }, { kind: conexion.kind })
   await assertIntegraciones(clientId, conexion, grafo)
+  // Los ajustes del lote son de CI Tools: en los demás tipos de conexión no significan nada y no se guardan.
+  const ajustesDelLoteValidos = conexion.kind === 'ci' ? ajustesDelLote(ajustes) : {}
 
   return toOrchestration(await queryOneScoped(
     clientId,
-    `insert into orchestrations (client_id, connection_id, production, name, nodes, edges)
-     values ($1, $2, $3, $4, $5, $6)
+    `insert into orchestrations (client_id, connection_id, production, name, nodes, edges, adjustments)
+     values ($1, $2, $3, $4, $5, $6, $7::jsonb)
      returning ${COLUMNAS}`,
-    [clientId, connectionId, Boolean(production), nombre, JSON.stringify(grafo.nodes), JSON.stringify(grafo.edges)],
+    [
+      clientId, connectionId, Boolean(production), nombre, JSON.stringify(grafo.nodes), JSON.stringify(grafo.edges),
+      JSON.stringify(ajustesDelLoteValidos),
+    ],
   ))
 }
 
@@ -119,7 +127,7 @@ export async function createOrchestration(clientId, { connectionId, production =
  * repositorio concreto, y moverla a otro dejaría pasos que apuntan a tareas inexistentes. Para eso
  * está duplicar.
  */
-export async function updateOrchestration(clientId, id, { name, nodes, edges } = {}) {
+export async function updateOrchestration(clientId, id, { name, nodes, edges, ajustes } = {}) {
   const actual = await getOrchestration(clientId, id)
   if (!actual) throw new Error('La orquestación no existe para este cliente.')
 
@@ -132,13 +140,15 @@ export async function updateOrchestration(clientId, id, { name, nodes, edges } =
     edges: edges === undefined ? actual.edges : edges,
   }, { kind: conexion.kind })
   await assertIntegraciones(clientId, conexion, grafo)
+  // Lo que no se manda no se toca; lo que se manda se valida (y en otros tipos de conexión no se guarda).
+  const ajustesDelLoteValidos = conexion.kind !== 'ci' ? {} : ajustes === undefined ? actual.ajustes : ajustesDelLote(ajustes)
 
   return toOrchestration(await queryOneScoped(
     clientId,
-    `update orchestrations set name = $1, nodes = $2, edges = $3, updated_at = now()
+    `update orchestrations set name = $1, nodes = $2, edges = $3, adjustments = $6::jsonb, updated_at = now()
      where id = $4 and client_id = $5
      returning ${COLUMNAS}`,
-    [nombre, JSON.stringify(grafo.nodes), JSON.stringify(grafo.edges), id, clientId],
+    [nombre, JSON.stringify(grafo.nodes), JSON.stringify(grafo.edges), id, clientId, JSON.stringify(ajustesDelLoteValidos)],
   ))
 }
 
@@ -165,8 +175,8 @@ export async function duplicateOrchestration(clientId, id) {
 
   return toOrchestration(await queryOneScoped(
     clientId,
-    `insert into orchestrations (client_id, connection_id, production, name, nodes, edges)
-     values ($1, $2, $3, $4, $5, $6)
+    `insert into orchestrations (client_id, connection_id, production, name, nodes, edges, adjustments)
+     values ($1, $2, $3, $4, $5, $6, $7::jsonb)
      returning ${COLUMNAS}`,
     [
       clientId,
@@ -175,6 +185,7 @@ export async function duplicateOrchestration(clientId, id) {
       nombre,
       JSON.stringify(original.nodes),
       JSON.stringify(original.edges),
+      JSON.stringify(original.ajustes ?? {}),
     ],
   ))
 }

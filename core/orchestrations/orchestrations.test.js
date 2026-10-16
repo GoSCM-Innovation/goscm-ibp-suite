@@ -291,3 +291,88 @@ describe('deleteOrchestration', () => {
     await expect(deleteOrchestration(CLIENTE, ORQUESTACION)).resolves.toBe(true)
   })
 })
+
+// Los ajustes del lote de una orquestación de CI Tools: se guardan en su columna, se validan y no se pierden al duplicar.
+describe('ajustes del lote (CI Tools)', () => {
+  const AJUSTES = { version: 'PV2', fechas: { desde: '20260101', hasta: '{{HASTA}}' } }
+  const nueva = { connectionId: CONEXION, name: 'Carga', nodes: [], edges: [] }
+
+  beforeEach(() => {
+    getConnectionTarget.mockResolvedValue({ id: CONEXION, kind: 'ci', name: 'CPI' })
+  })
+
+  it('al leer, la orquestación trae sus ajustes (vacíos si no tiene)', async () => {
+    queryOneScoped.mockResolvedValue({ ...FILA, adjustments: AJUSTES })
+    expect((await getOrchestration(CLIENTE, ORQUESTACION)).ajustes).toEqual(AJUSTES)
+    queryOneScoped.mockResolvedValue({ ...FILA, adjustments: null })
+    expect((await getOrchestration(CLIENTE, ORQUESTACION)).ajustes).toEqual({})
+    // La consulta pide la columna.
+    expect(queryOneScoped.mock.calls.at(-1)[1]).toContain('adjustments')
+  })
+
+  it('crear guarda los ajustes, ya limpios, y con el cliente en la fila', async () => {
+    await createOrchestration(CLIENTE, { ...nueva, ajustes: { ...AJUSTES, version: ' PV2 ' } })
+    const [, sql, params] = queryOneScoped.mock.calls.at(-1)
+    expect(sql).toContain('adjustments')
+    expect(params[0]).toBe(CLIENTE)
+    expect(JSON.parse(params[6])).toEqual(AJUSTES)
+  })
+
+  it('crear sin ajustes guarda una lista vacía', async () => {
+    await createOrchestration(CLIENTE, nueva)
+    expect(JSON.parse(queryOneScoped.mock.calls.at(-1)[2][6])).toEqual({})
+  })
+
+  it('unos ajustes que no valen no se guardan, y dicen por qué', async () => {
+    await expect(createOrchestration(CLIENTE, { ...nueva, ajustes: { comando: "x'y" } })).rejects.toThrow(/Comando/)
+    await expect(createOrchestration(CLIENTE, { ...nueva, ajustes: { fechas: { desde: '20261301' } } })).rejects.toThrow(/Fecha desde/)
+    expect(queryOneScoped).not.toHaveBeenCalled()
+  })
+
+  it('el lote no lleva filtro: el filtro es de cada paso', async () => {
+    await expect(createOrchestration(CLIENTE, { ...nueva, ajustes: { filtro: { A: { valores: ['x'] } } } })).rejects.toThrow(/no llevan filtro/)
+  })
+
+  it('en CI-DS e IBP no significan nada y no se guardan', async () => {
+    getConnectionTarget.mockResolvedValue({ id: CONEXION, kind: 'cids', name: 'CI-DS' })
+    await createOrchestration(CLIENTE, { ...nueva, ajustes: AJUSTES })
+    expect(JSON.parse(queryOneScoped.mock.calls.at(-1)[2][6])).toEqual({})
+  })
+
+  it('guardar sin mandar los ajustes no los toca', async () => {
+    queryOneScoped.mockResolvedValue({ ...FILA, adjustments: AJUSTES })
+    await updateOrchestration(CLIENTE, ORQUESTACION, { name: 'Otro nombre' })
+    const [, sql, params] = queryOneScoped.mock.calls.at(-1)
+    expect(sql).toContain('adjustments = $6')
+    expect(JSON.parse(params[5])).toEqual(AJUSTES)
+  })
+
+  it('guardar con ajustes los reemplaza (y vaciarlos los quita)', async () => {
+    queryOneScoped.mockResolvedValue({ ...FILA, adjustments: AJUSTES })
+    await updateOrchestration(CLIENTE, ORQUESTACION, { ajustes: { comando: 'REPLACE' } })
+    expect(JSON.parse(queryOneScoped.mock.calls.at(-1)[2][5])).toEqual({ comando: 'REPLACE' })
+
+    await updateOrchestration(CLIENTE, ORQUESTACION, { ajustes: {} })
+    expect(JSON.parse(queryOneScoped.mock.calls.at(-1)[2][5])).toEqual({})
+  })
+
+  it('guardar unos ajustes que no valen no guarda nada', async () => {
+    await expect(updateOrchestration(CLIENTE, ORQUESTACION, { ajustes: { destino: '' } })).rejects.toThrow(/Destino/)
+    expect(queryOneScoped.mock.calls.every(([, sql]) => !sql.startsWith('update'))).toBe(true)
+  })
+
+  it('en CI-DS guardar no conserva unos ajustes que no le tocan', async () => {
+    getConnectionTarget.mockResolvedValue({ id: CONEXION, kind: 'cids', name: 'CI-DS' })
+    await updateOrchestration(CLIENTE, ORQUESTACION, { ajustes: AJUSTES })
+    expect(JSON.parse(queryOneScoped.mock.calls.at(-1)[2][5])).toEqual({})
+  })
+
+  it('duplicar los copia', async () => {
+    queryScoped.mockResolvedValue([])
+    queryOneScoped.mockResolvedValue({ ...FILA, adjustments: AJUSTES })
+    await duplicateOrchestration(CLIENTE, ORQUESTACION)
+    const [, sql, params] = queryOneScoped.mock.calls.at(-1)
+    expect(sql).toContain('adjustments')
+    expect(JSON.parse(params[6])).toEqual(AJUSTES)
+  })
+})

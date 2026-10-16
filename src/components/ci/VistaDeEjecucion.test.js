@@ -311,6 +311,39 @@ describe('una ejecución del editor de etapas', () => {
   })
 })
 
+// Lo que la orquestación cambió de una integración al enviarla queda en el detalle del paso: se ve en la ejecución.
+describe('una ejecución con ajustes', () => {
+  const CAMBIOS = [
+    { clave: 'version', etiqueta: 'Versión', de: 'PVSMD', a: 'PV2', fuente: 'orquestacion' },
+    { clave: 'comando', etiqueta: 'Comando', de: 'INSERT_UPDATE', a: 'REPLACE', fuente: 'paso' },
+  ]
+
+  it('el paso lo dice, con lo que cambió', async () => {
+    const run = ejecucion('success', {
+      p1: estado('success', { detalle: { httpStatus: 200, ajustes: CAMBIOS } }),
+      g: delGrupo('success', { p2: estado('success', { detalle: { httpStatus: 200 } }), p3: estado('success', { detalle: { httpStatus: 200, ajustes: [] } }) }),
+      p4: estado('success', { detalle: { httpStatus: 200 } }),
+    })
+    await montar(VistaDeEjecucion, props(run))
+
+    const filas = [...dom().querySelectorAll('.ci-orq-fila')]
+    expect(filas[0].textContent).toContain('Con ajustes')
+    expect(filas[0].textContent).toContain('Versión: PVSMD → PV2 · Comando: INSERT_UPDATE → REPLACE')
+    // Los que no llevaron ajustes no dicen nada.
+    expect(filas.slice(1).every((fila) => !fila.textContent.includes('Con ajustes'))).toBe(true)
+  })
+
+  it('un paso con ajustes dentro de un grupo también', async () => {
+    const run = ejecucion('success', {
+      p1: estado('success'),
+      g: delGrupo('success', { p2: estado('success', { detalle: { httpStatus: 200, ajustes: CAMBIOS } }), p3: estado('success') }),
+      p4: estado('success'),
+    })
+    await montar(VistaDeEjecucion, props(run))
+    expect(dom().querySelectorAll('.ci-orq-fila.hijo')[0].textContent).toContain('Con ajustes')
+  })
+})
+
 describe('sin ejecución', () => {
   it('no dibuja nada', async () => {
     await montar(VistaDeEjecucion, { ...props(enMarcha()), run: null })

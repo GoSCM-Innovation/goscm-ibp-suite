@@ -2,9 +2,9 @@
 //
 //   GET    ?connectionId=…&production=…   listar
 //   GET    ?id=…                          una, con su grafo
-//   POST   { connectionId, production, name, nodes, edges }   crear
+//   POST   { connectionId, production, name, nodes, edges, ajustes }   crear
 //   POST   { action: 'duplicate', id }                        duplicar
-//   PATCH  { id, name?, nodes?, edges? }                      guardar cambios
+//   PATCH  { id, name?, nodes?, edges?, ajustes? }            guardar cambios (`ajustes`: los del lote, solo CI Tools)
 //   DELETE { id }                                             borrar (409 si tiene una ejecución activa)
 //
 // El handler es delgado a propósito: quién es el dueño, si el destino existe y si el grafo se puede
@@ -71,7 +71,7 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'POST') {
-      const { action, id, connectionId, production, name, nodes, edges } = req.body ?? {}
+      const { action, id, connectionId, production, name, nodes, edges, ajustes } = req.body ?? {}
 
       if (action === 'duplicate') {
         if (!id) return res.status(400).json({ error: 'Falta la orquestación a duplicar.' })
@@ -89,18 +89,19 @@ export default async function handler(req, res) {
         name,
         nodes,
         edges,
+        ajustes,
       })
       return res.status(201).json({ orchestration })
     }
 
     if (req.method === 'PATCH') {
-      const { id, name, nodes, edges } = req.body ?? {}
+      const { id, name, nodes, edges, ajustes } = req.body ?? {}
       if (!id) return res.status(400).json({ error: 'Falta la orquestación.' })
       if (!(await exigirModuloDeLaOrquestacion(id))) {
         return res.status(404).json({ error: 'La orquestación no existe.' })
       }
       // Se pasan tal cual: `undefined` significa "no lo cambies", y core lo distingue.
-      return res.status(200).json({ orchestration: await updateOrchestration(clientId, id, { name, nodes, edges }) })
+      return res.status(200).json({ orchestration: await updateOrchestration(clientId, id, { name, nodes, edges, ajustes }) })
     }
 
     if (req.method === 'DELETE') {

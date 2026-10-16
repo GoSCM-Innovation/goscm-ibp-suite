@@ -150,6 +150,57 @@ con varias es un grupo paralelo. No se reescriben hasta que alguien cambie algo.
 de una etapa, el grupo queda en «detener» (un grupo decide por todas a la vez). Un grafo que no cabe en una lista (dos cadenas
 independientes, por ejemplo) se enseña en su orden de ejecución, sin poder editarse ni ejecutarse hasta pulsar «Convertir a lista».
 
+## Ajustes de una orquestación (2026-10-15)
+
+Pedido del usuario: que dentro de una orquestación se puedan cambiar parámetros **para todo el lote** (versión, comando, origen y destino) y
+**las fechas y los valores del filtro**, con sus propias configuraciones distintas a las de la integración original. «Por defecto el usuario no
+modificará nada, pero tiene que estar la posibilidad»; «intuitiva y rápida». Confirmado por el usuario: dos niveles, atajo de fechas para todo el
+lote **con qué fechas se ven afectadas por paso**, origen y destino son los sistemas (como en la lista), y los ajustes **se guardan en la orquestación**.
+
+**Cómo funciona**
+
+- **La integración no se modifica nunca.** Los ajustes viven en la orquestación y se aplican al body SOLO al enviarlo (`aplicarAjustes`,
+  `core/ci/ajustes.js`; una sola implementación para el servidor y la pantalla: lo que se ve es lo que se envía).
+- **Dos niveles, manda el más específico**: integración < ajustes de la orquestación (todo el lote) < ajustes del paso.
+  - Del **lote**: versión (`PlanningAreaVersion`; la versión BASE es un valor, no «sin cambio»), comando (`BatchCommand`), origen
+    (`DestinationforAddon`: PRD, QAS…), destino (`DestinationforSAPIBP`: IBP) y **fechas** (un Desde y un Hasta que van a toda condición
+    `KEYFIGUREDATE BT`; cada lado es opcional).
+  - Del **paso**: lo mismo, y además el **filtro** de ESA integración, condición por condición (valores de un `EQ`, o desde y hasta de un `BT`).
+    Las fechas de un paso mandan sobre las del lote, lado por lado.
+- Un valor puede ser una **variable entera** (`{{FECHA_DESDE}}`): se pide al ejecutar, con calendario si va en una fecha. Una variable que un
+  ajuste reemplaza por una fecha fija deja de pedirse; una que trae, se pide.
+- Un ajuste igual a lo que ya valdría **no cuenta como cambio** (ni se guarda desde la pantalla). Un campo repetido en el filtro se ajusta en UNA
+  fila (la primera). Un ajuste de un paso cuya condición ya no existe en la integración se **avisa** y no cambia nada. Del filtro solo se tocan las
+  condiciones ajustadas; lo que no se entiende se conserva tal cual.
+
+**En la pantalla** (por omisión todo cerrado y sin cambios)
+
+- **«⚙ Ajustes de la orquestación»**: una franja plegada arriba del editor. Cerrada dice «Sin cambios: cada integración usa lo suyo» o el resumen
+  (`Versión PV2 · Fechas 01-03-2026 → 31-03-2026`, con «N ajustes» en ámbar). Abierta: cuatro listas («Como en cada integración» primero, después los
+  valores que ya usan las integraciones de la conexión y «Otro valor…» a mano), un Desde y un Hasta con calendario, y la **tabla «Fechas por paso»**:
+  para cada paso, sus fechas originales y cómo quedan, o «No filtra por fecha: no se toca». REPLACE avisa cuántos pasos pasan a REPLACE.
+- **«⚙ Ajustes» en cada tarjeta** (también en las de dentro de un grupo): sus cuatro campos («Como en la integración (PVSMD)», o «De la
+  orquestación (PV2)» si el lote cambia ese dato) y el filtro de la integración con sus fechas en calendario y «antes: …» en lo cambiado.
+  El botón cuenta los ajustes del paso (ámbar), o dice «heredados» si solo vienen del lote. **La línea de la tarjeta dice lo que se enviaría** y se
+  marca de ámbar si cambia algo (al pasar el cursor, qué). Con un panel abierto la tarjeta no se arrastra.
+- **Al ejecutar**, el diálogo lista cada paso con «Ajustes: Versión: PVSMD → PV2 · …», el comando que se enviará de verdad y las advertencias
+  (REPLACE, ajustes sin aplicar). La ejecución y el **historial** dicen que la carga llevó ajustes y cuáles («con ajustes»).
+
+**Cómo está hecho**
+
+- `core/ci/ajustes.js` (puro): `normalizarAjustes` (valida; lo que se guarda y lo que se aplica), `resolverAjustes` (qué quedaría; lo usa la pantalla
+  para enseñarlo), `aplicarAjustes` (el body que se envía). Los topes y las comillas/comas prohibidas son los del filtro y de las variables.
+- **Migración 009** (aplicada el 2026-10-15): `orchestrations.adjustments` (los del lote) y `ci_runs.adjustments` (qué cambió en esa llamada).
+  Los de cada paso viajan en el grafo, dentro del `data` de su nodo (`graph.js`; solo en CI Tools).
+- Se aplican en `executeIntegration` ANTES de las variables. Los del lote se **fijan al lanzar** (`defaults.ajustes`, tomados de la orquestación
+  guardada y no de la petición) para que una ejecución y su «Retomar» usen siempre los mismos; los del paso se leen de su nodo. Unos ajustes que no
+  valen no envían nada y quedan anotados como error; `validarInicio` los dice ANTES del primer paso.
+- `resumenDeBody` ahora trae `condiciones` (qué filtra cada integración) y `fuenteDeDatos`, `sistemaOrigen`, `sistemaDestino`.
+
+**Sin hacer / límites**: no se agregan ni se quitan condiciones del filtro (solo se cambian sus valores); las fechas del lote solo cambian rangos
+`BT` sobre `KEYFIGUREDATE` (una fecha suelta `EQ` no se toca); un grupo no tiene ajustes propios (son de cada integración); y no hay cambio de
+`PlanningArea` (no se pidió). Se probó en el motor y en pantalla, **no con una carga real**.
+
 ## Decisiones del usuario
 
 Tomadas durante el diseño (2026-10-13 y 2026-10-14). Si alguna se quiere revertir, es del usuario:
@@ -172,6 +223,7 @@ Tomadas durante el diseño (2026-10-13 y 2026-10-14). Si alguna se quiere revert
 
 ```
 core/ci/            body.js  filter.js  mapping.js  campos.js      puras: las comparte la pantalla
+                    ajustes.js  fechas.js                          puras: lo que una orquestación cambia de sus integraciones
                     ibp-nombres.js                                 puras: prefijo y tipo de tabla, versión base, campos de sistema
                     call.js  integrations.js  history.js           la llamada a CPI, la biblioteca, el historial
                     execute.js  orquestacion.js                    ejecutar una integración / lo que pide una orquestación
@@ -181,10 +233,12 @@ handlers/ci/        integrations  run  runs  orchestration-info  ibp   → api/c
 src/components/ci/  CiTools  Integraciones  EditorDeIntegracion  FormularioDeBloque  ConstructorDeFiltro
                     TablaDeMapeo  DialogoDeEjecucion  Historial  useCiRun
                     OrquestacionesCi  ConstructorDeOrquestacion  PaletaDeIntegraciones  TarjetaDePaso  VistaDeEjecucion
+                    AjustesDeLaOrquestacion  AjustesDePaso  CampoDeAjuste
                     BarraIbp  CampoConLista  ConstructorDeCifra  RevisionIbp  useCatalogoIbp  useIbpDelBody
-src/lib/            ci.js  ci-ibp.js  ci-pasos.js  fechas.js  useFilasLocales.js
+src/lib/            ci.js  ci-ibp.js  ci-pasos.js  ci-ajustes.js  fechas.js  useFilasLocales.js
 core/persistence/migrations/006_ci_tools.sql                      módulo y tipo de conexión nuevos, `ci_integrations`, `ci_runs`
 core/persistence/migrations/007_ci_ibp_destino.sql                `connections.ibp_connection_id`: el IBP de destino de una conexión de CI
+core/persistence/migrations/009_ci_ajustes.sql                    `orchestrations.adjustments` y `ci_runs.adjustments`: los ajustes de una orquestación
 ```
 
 Las orquestaciones reutilizan el **mismo motor** que CI-DS e IBP (`/api/orchestrations`, `/api/orchestration-run`):

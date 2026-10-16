@@ -10,8 +10,10 @@
 // ejecución la dejaría apuntando a pasos que ya no están): por eso, con una ejecución en marcha, quien manda es la vista de
 // ejecución y este editor ni se monta.
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { textosDeCambios } from '../../../core/ci/ajustes.js'
 import { etiquetaDeIntegracion, infoDeOrquestacion } from '../../lib/ci.js'
+import { opcionesDeAjustes } from '../../lib/ci-ajustes.js'
 import {
   agregarAGrupo,
   agregarGrupo,
@@ -27,10 +29,12 @@ import {
   quitarHijo,
   quitarPaso,
   reordenar,
+  tareasDeLosPasos,
   totalDeIntegraciones,
 } from '../../lib/ci-pasos.js'
 import { saveOrchestration } from '../../lib/orchestrations.js'
 import { useIsMobile } from '../../lib/useIsMobile.js'
+import AjustesDeLaOrquestacion from './AjustesDeLaOrquestacion.jsx'
 import DialogoDeEjecucion from './DialogoDeEjecucion.jsx'
 import PaletaDeIntegraciones from './PaletaDeIntegraciones.jsx'
 import TarjetaDePaso from './TarjetaDePaso.jsx'
@@ -52,14 +56,16 @@ const TEXTO_DE_GUARDADO = {
 }
 
 /**
- * Qué se manda al servidor: el nombre si cambió, y la lista (como grafo) si se puede mostrar como lista. Un grafo que no
- * tiene forma de lista NO se guarda hasta que alguien lo convierta: guardarlo así lo cambiaría sin que se pidiera.
+ * Qué se manda al servidor: el nombre si cambió, la lista (como grafo) si se puede mostrar como lista, y los ajustes del lote si
+ * cambiaron. Un grafo que no tiene forma de lista NO se guarda hasta que alguien lo convierta: guardarlo así lo cambiaría sin que se
+ * pidiera.
  */
-function cambiosParaGuardar({ nombre, nombreGuardado, pasos, exacto }) {
+function cambiosParaGuardar({ nombre, nombreGuardado, pasos, exacto, ajustes, ajustesCambiaron }) {
   const limpio = nombre.trim()
   return {
     ...(limpio !== '' && limpio !== nombreGuardado ? { name: limpio } : {}),
     ...(exacto ? grafoDePasos(pasos) : {}),
+    ...(ajustesCambiaron ? { ajustes } : {}),
   }
 }
 
@@ -84,6 +90,8 @@ export default function ConstructorDeOrquestacion({
   const [errorAlGuardar, setErrorAlGuardar] = useState('')
   const [errorAlPedir, setErrorAlPedir] = useState('')
   const [aEjecutar, setAEjecutar] = useState(null)
+  // Los ajustes de TODA la orquestación (otra versión, otras fechas…). Los de cada paso van dentro del paso.
+  const [ajustesDelLote, setAjustesDelLote] = useState(() => orquestacion.ajustes ?? {})
   const [grupoActivo, setGrupoActivo] = useState(null)
   const [paletaAbierta, setPaletaAbierta] = useState(false)
   const [anchoPaleta, setAnchoPaleta] = useState(ANCHO_DE_LA_PALETA)
@@ -96,6 +104,8 @@ export default function ConstructorDeOrquestacion({
   const exactoActual = useRef(inicial.exacto)
   const nombreActual = useRef(orquestacion.name)
   const nombreGuardado = useRef(orquestacion.name)
+  const ajustesActuales = useRef(orquestacion.ajustes ?? {})
+  const ajustesCambiaron = useRef(false)
   const hayPendiente = useRef(false)
   const temporizador = useRef(null)
   const arrastrado = useRef(null)
@@ -103,15 +113,23 @@ export default function ConstructorDeOrquestacion({
 
   const porId = new Map(integraciones.map((una) => [una.id, una]))
   const total = totalDeIntegraciones(pasos)
+  const opcionesDelLote = useMemo(() => opcionesDeAjustes(integraciones), [integraciones])
 
   // ── Guardado automático ──────────────────────────────────────────────────────────────────────────
 
   async function guardar() {
     clearTimeout(temporizador.current)
     const cambios = cambiosParaGuardar({
-      nombre: nombreActual.current, nombreGuardado: nombreGuardado.current, pasos: pasosActuales.current, exacto: exactoActual.current,
+      nombre: nombreActual.current,
+      nombreGuardado: nombreGuardado.current,
+      pasos: pasosActuales.current,
+      exacto: exactoActual.current,
+      ajustes: ajustesActuales.current,
+      ajustesCambiaron: ajustesCambiaron.current,
     })
     // Lo pendiente se da por tomado ANTES de esperar: un cambio que llegue mientras se guarda vuelve a marcarlo.
+    const huboAjustes = ajustesCambiaron.current
+    ajustesCambiaron.current = false
     hayPendiente.current = false
     if (Object.keys(cambios).length === 0) { setEstadoDeGuardado('guardado'); return }
 
@@ -125,6 +143,7 @@ export default function ConstructorDeOrquestacion({
       if (!hayPendiente.current) setEstadoDeGuardado('guardado')
     } catch (fallo) {
       hayPendiente.current = true
+      if (huboAjustes) ajustesCambiaron.current = true
       setErrorAlGuardar(fallo.message)
       setEstadoDeGuardado('error')
       throw fallo
@@ -149,7 +168,12 @@ export default function ConstructorDeOrquestacion({
     clearTimeout(temporizador.current)
     if (!hayPendiente.current) return
     const cambios = cambiosParaGuardar({
-      nombre: nombreActual.current, nombreGuardado: nombreGuardado.current, pasos: pasosActuales.current, exacto: exactoActual.current,
+      nombre: nombreActual.current,
+      nombreGuardado: nombreGuardado.current,
+      pasos: pasosActuales.current,
+      exacto: exactoActual.current,
+      ajustes: ajustesActuales.current,
+      ajustesCambiaron: ajustesCambiaron.current,
     })
     if (Object.keys(cambios).length > 0) {
       saveOrchestration(orquestacion.id, cambios).then((guardada) => onGuardada?.(guardada)).catch(() => {})
@@ -161,6 +185,14 @@ export default function ConstructorDeOrquestacion({
     const siguientes = hacer(pasosActuales.current)
     pasosActuales.current = siguientes
     setPasos(siguientes)
+    programar()
+  }
+
+  /** Cambia los ajustes de TODA la orquestación y programa el guardado. */
+  function cambiarAjustesDelLote(ajustes) {
+    ajustesActuales.current = ajustes
+    ajustesCambiaron.current = true
+    setAjustesDelLote(ajustes)
     programar()
   }
 
@@ -285,12 +317,23 @@ export default function ConstructorDeOrquestacion({
         const dato = porNodo.get(tarea.id)
         return {
           nombre: dato?.integracion ? etiquetaDeIntegracion(dato.integracion) : (dato?.label ?? tarea.label),
-          comando: dato?.integracion?.resumen?.comando ?? '',
+          // El comando es el que se enviará (con los ajustes), y lo que cambió va debajo.
+          comando: dato?.efectivo?.comando ?? dato?.integracion?.resumen?.comando ?? '',
+          cambios: textosDeCambios(dato?.cambios ?? []),
           paso: numero,
           paralelo,
         }
       }
+      // Lo que cambian los ajustes sale de lo que dice el servidor (es lo que se enviará): REPLACE merece una segunda mirada.
+      const conReplace = info.pasos.filter((paso) => (paso.cambios ?? []).some((c) => c.clave === 'comando' && c.a === 'REPLACE')).length
+      const advertencias = [
+        ...(conReplace > 0
+          ? [`REPLACE puede reemplazar los datos que ya hay: los ajustes lo ponen en ${conReplace === 1 ? '1 paso' : `${conReplace} pasos`} que antes cargaban con otro comando.`]
+          : []),
+        ...info.pasos.flatMap((paso) => (paso.avisos ?? []).map((aviso) => `«${paso.label}»: ${aviso}`)),
+      ]
       setAEjecutar({
+        advertencias,
         variables: info.variables,
         variablesDeFecha: info.variablesDeFecha ?? [],
         iniciales: info.ultimas,
@@ -387,6 +430,14 @@ export default function ConstructorDeOrquestacion({
 
         {alertas && <div className="notice notice-error" role="alert">✕ {alertas}</div>}
 
+        <AjustesDeLaOrquestacion
+          ajustes={ajustesDelLote}
+          onCambiar={cambiarAjustesDelLote}
+          tareas={tareasDeLosPasos(pasos)}
+          porId={porId}
+          opciones={opcionesDelLote}
+        />
+
         {/* Un grafo que no es una lista: se avisa qué se muestra, y no se edita ni se ejecuta hasta convertirlo. */}
         {!exacto && (
           <div className="ci-orq-aviso" role="alert">
@@ -413,6 +464,8 @@ export default function ConstructorDeOrquestacion({
               indice={i}
               total={pasos.length}
               porId={porId}
+              ajustesDelLote={ajustesDelLote}
+              opcionesDeAjustes={opcionesDelLote}
               esGrupoActivo={grupoActivo === paso.id}
               onQuitar={() => quitar(paso.id)}
               onSubir={() => cambiar((previos) => moverPaso(previos, paso.id, -1))}
@@ -447,6 +500,7 @@ export default function ConstructorDeOrquestacion({
           variables={aEjecutar.variables}
           variablesDeFecha={aEjecutar.variablesDeFecha}
           iniciales={aEjecutar.iniciales}
+          advertencias={aEjecutar.advertencias}
           esOrquestacion
           onEjecutar={onArrancar}
           onCerrar={() => setAEjecutar(null)}

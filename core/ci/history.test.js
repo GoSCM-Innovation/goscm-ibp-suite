@@ -27,7 +27,7 @@ const AHORA = Date.UTC(2026, 9, 14, 12, 0, 0)
 const fila = (extra = {}) => ({
   id: 'r-1', integration_id: INTEGRACION, integration_name: 'FACTURAS', folder: 'A', orchestration_id: null,
   orchestration_name: null, origin: 'manual', user_email: 'a@x.com', status: 'success', http_status: 200,
-  duration_ms: 21_430, mpl_id: null, message: 'OK', variables: { DESDE: '20261005' },
+  duration_ms: 21_430, mpl_id: null, message: 'OK', variables: { DESDE: '20261005' }, adjustments: [],
   started_at: new Date(AHORA - 60_000).toISOString(), finished_at: new Date(AHORA - 40_000).toISOString(), ...extra,
 })
 
@@ -73,7 +73,17 @@ describe('registrarEjecucion', () => {
     expect(sql).toContain('null)')
     expect(params[1]).toBe(CLIENTE)
     expect(params).toContain('running')
-    expect(params.at(-1)).toBe('{"DESDE":"1"}')
+    expect(params.at(-2)).toBe('{"DESDE":"1"}')
+    // Sin ajustes, una lista vacía: las ejecuciones de siempre no cambian.
+    expect(params.at(-1)).toBe('[]')
+  })
+
+  it('anota qué cambió una orquestación de la integración (sus ajustes), para que el historial lo diga', async () => {
+    const cambios = [{ clave: 'version', etiqueta: 'Versión', de: 'PVSMD', a: 'PV2', fuente: 'orquestacion' }]
+    await registrarEjecucion(CLIENTE, { ...base, ajustes: cambios })
+    const [, sql, params] = queryScoped.mock.calls[0]
+    expect(sql).toContain('adjustments')
+    expect(JSON.parse(params.at(-1))).toEqual(cambios)
   })
 
   it('con resultado, nace ya cerrada', async () => {

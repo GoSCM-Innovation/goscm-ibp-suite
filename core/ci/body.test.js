@@ -225,6 +225,14 @@ describe('resumenDeBody', () => {
     expect(resumenDeBody(texto({ K: { TypeOfData: 'KEYFIGURES' } }))).toMatchObject({ fuenteDeDatos: '', sistemaOrigen: '', sistemaDestino: '' })
   })
 
+  it('dice qué filtra, para que una orquestación pueda ajustar sus fechas y valores sin abrir el body', () => {
+    expect(resumenDeBody(texto(KEYFIGURE)).condiciones).toEqual([
+      { campo: 'AUTYP', tipo: 'igual', valores: ['40'] },
+      { campo: 'KEYFIGUREDATE', tipo: 'entre', desde: '{{FECHA_DESDE}}', hasta: '{{FECHA_HASTA}}' },
+    ])
+    expect(resumenDeBody(texto({ K: { TypeOfData: 'KEYFIGURES' } })).condiciones).toEqual([])
+  })
+
   it('un body roto dice por qué', () => {
     expect(resumenDeBody('{ no')).toMatchObject({ valido: false })
   })

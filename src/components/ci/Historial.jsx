@@ -9,6 +9,7 @@ import { ESTADOS_DE_EJECUCION, fechaLegible, listarEjecuciones } from '../../lib
 import { copyText } from '../../lib/clipboard.js'
 import BotonActualizar from '../ui/BotonActualizar.jsx'
 import BotonCopiar from '../ui/BotonCopiar.jsx'
+import { textosDeCambios } from '../../../core/ci/ajustes.js'
 import { AvisoDeAdvertencia } from './DialogoDeEjecucion.jsx'
 
 const ESTADOS_DEL_FILTRO = [['', 'Todas'], ['error', 'Con error'], ['warning', 'Con advertencias'], ['unconfirmed', 'Sin confirmar'], ['success', 'Completadas']]
@@ -114,7 +115,10 @@ function FilaDeHistorial({ una, meta, desplegada, onAlternar }) {
       <tr className="ci-historial-fila" onClick={onAlternar} style={{ cursor: 'pointer' }}>
         <td className="mono">{fechaLegible(una.startedAt)}</td>
         <td>
-          <div>{una.integrationName}</div>
+          <div>
+            {una.integrationName}
+            {(una.ajustes ?? []).length > 0 && <span className="ci-orq-ajustes-chip" title="La orquestación cambió algo de esta integración al enviarla">con ajustes</span>}
+          </div>
           {una.folder && <div className="card-hint">{una.folder}</div>}
         </td>
         <td>{una.origin === 'orchestration' ? `Orquestación${una.orchestrationName ? ` · ${una.orchestrationName}` : ''}` : 'Manual'}</td>
@@ -140,6 +144,12 @@ function FilaDeHistorial({ una, meta, desplegada, onAlternar }) {
                 {Object.entries(una.variables).map(([nombre, valor]) => (
                   <code key={nombre} className="mono ci-variable">{nombre} = {valor}</code>
                 ))}
+              </div>
+            )}
+            {(una.ajustes ?? []).length > 0 && (
+              <div className="ci-variables-usadas">
+                <span className="card-hint">Con ajustes:</span>
+                {textosDeCambios(una.ajustes).map((texto) => <code key={texto} className="mono ci-variable">{texto}</code>)}
               </div>
             )}
             {una.status === 'warning' && <AvisoDeAdvertencia httpStatus={una.httpStatus} />}

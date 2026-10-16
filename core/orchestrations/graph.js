@@ -13,6 +13,8 @@
 // Guardar algo que no se puede ejecutar no sirve de nada, así que se rechaza al guardar, con el
 // usuario delante y pudiendo arreglarlo.
 
+import { ajustesDePaso, sinAjustes } from '../ci/ajustes.js'
+
 /** Qué hacer cuando un paso falla. Los tres de v9. */
 export const ERROR_STRATEGIES = Object.freeze(['stop', 'continue', 'retry'])
 
@@ -96,13 +98,17 @@ const aTextoOnulo = (valor) => {
  * La etiqueta de un GRUPO puede quedar vacía: en v8 era una descripción opcional, y rellenarla con
  * «Sin nombre» la haría aparecer escrita en la casilla al volver a abrirlo.
  */
-function normalizarDatos(datos = {}, { tipo, limites }) {
+function normalizarDatos(datos = {}, { tipo, limites, kind }) {
   const templateName = aTextoOnulo(datos.templateName) ?? aTextoOnulo(datos.jobTemplateName)
   const jobText = aTextoOnulo(datos.jobText) ?? aTextoOnulo(datos.jobTemplateText)
 
   // Un paso de CI Tools dice qué integración ejecutar. Se guarda SOLO cuando viene, como la plantilla de IBP,
   // para que las orquestaciones de CI-DS e IBP se sigan guardando igual que antes.
   const integrationId = aTextoOnulo(datos.integrationId)
+
+  // Los ajustes de un paso de CI Tools (otra versión, otras fechas…). Solo en las tareas de ese tipo de conexión: en las demás
+  // no significan nada y no se guardan.
+  const ajustes = kind === 'ci' && tipo === 'task' ? ajustesDePaso(datos.ajustes) : {}
 
   const etiqueta = aTextoOnulo(datos.label)
   const label = tipo === 'group'
@@ -116,6 +122,7 @@ function normalizarDatos(datos = {}, { tipo, limites }) {
     ...(templateName ? { templateName } : {}),
     ...(jobText ? { jobText } : {}),
     ...(integrationId ? { integrationId } : {}),
+    ...(sinAjustes(ajustes) ? {} : { ajustes }),
     label,
     agentName: aTextoOnulo(datos.agentName),
     profileName: aTextoOnulo(datos.profileName),
@@ -129,7 +136,7 @@ function normalizarDatos(datos = {}, { tipo, limites }) {
   }
 }
 
-function normalizarNodo(nodo, indice, limites) {
+function normalizarNodo(nodo, indice, limites, kind) {
   if (!nodo?.id) throw new Error(`El nodo en la posición ${indice} no tiene identificador.`)
 
   const tipo = TIPOS_DEL_LIENZO[nodo.type] ?? nodo.type
@@ -141,7 +148,7 @@ function normalizarNodo(nodo, indice, limites) {
     id: String(nodo.id),
     type: tipo,
     position: { x: aNumero(nodo.position?.x), y: aNumero(nodo.position?.y) },
-    data: normalizarDatos(nodo.data, { tipo, limites }),
+    data: normalizarDatos(nodo.data, { tipo, limites, kind }),
   }
 
   // `parentId` es lo que mete un nodo dentro de un grupo. `extent: 'parent'` es de la librería del
@@ -218,7 +225,7 @@ export function normalizeGraph({ nodes = [], edges = [] } = {}, { kind = 'cids' 
   if (!Array.isArray(edges)) throw new Error('Las conexiones tienen que venir en una lista.')
 
   const limites = RETRY_LIMITS[kind] ?? RETRY_LIMITS.cids
-  const nodosNormalizados = nodes.map((nodo, indice) => normalizarNodo(nodo, indice, limites))
+  const nodosNormalizados = nodes.map((nodo, indice) => normalizarNodo(nodo, indice, limites, kind))
   const aristasNormalizadas = edges.map(normalizarArista)
 
   const identificadores = new Set()

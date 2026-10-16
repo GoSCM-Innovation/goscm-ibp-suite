@@ -2,12 +2,18 @@
 // IBP (`StepCard`): el asa ⠿ para arrastrar, el número, «Si falla…», ↑ ↓ ✕ y el grupo morado plegable con
 // «+ Agregar integración al grupo».
 //
+// Cada integración lleva su «⚙ Ajustes» (plegado): lo que esta orquestación cambia de ESA integración (versión, comando, origen, destino,
+// fechas y valores del filtro). La línea de debajo del nombre dice lo que se enviaría CON los ajustes, y se marca si cambia algo.
+//
 // No sabe guardar nada: cada cambio sube por una función y quien la recibe arma la lista nueva.
 
 import { useState } from 'react'
+import { resolverAjustes, textosDeCambios } from '../../../core/ci/ajustes.js'
 import { detalleDeIntegracion } from '../../lib/ci.js'
+import { resumenConAjustes } from '../../lib/ci-ajustes.js'
 import { ESPERA_MAXIMA_S, ESPERA_MINIMA_S, ESPERA_POR_OMISION_S, REINTENTOS_MAXIMOS, esGrupo } from '../../lib/ci-pasos.js'
 import { useIsMobile } from '../../lib/useIsMobile.js'
+import AjustesDePaso from './AjustesDePaso.jsx'
 
 const SI_FALLA = [
   { valor: 'stop', texto: 'Detener si falla' },
@@ -97,17 +103,31 @@ function SiFalla({ paso, nombre, onCambiar }) {
   )
 }
 
-/** Qué integración es: su nombre y, debajo, a qué carga. Con la integración borrada, lo dice. */
-function DatosDeIntegracion({ paso, integracion, pequeno = false }) {
+/** Lo que los ajustes (los del lote y los del paso) cambian de una integración, o `null` si el body no se puede leer. */
+const resolverDelPaso = (paso, integracion, ajustesDelLote) => (
+  integracion?.resumen?.valido ? resolverAjustes(integracion.resumen, { general: ajustesDelLote, paso: paso.ajustes }) : null
+)
+
+/**
+ * Qué integración es: su nombre y, debajo, a qué carga. Con ajustes, la línea dice lo que se enviaría con ellos y se marca de ámbar (con
+ * lo que cambia al pasar el cursor). Con la integración borrada, lo dice.
+ */
+function DatosDeIntegracion({ paso, integracion, ajustesDelLote, pequeno = false }) {
   const nombre = integracion ? integracion.name : paso.label
   const variables = integracion?.resumen?.variables ?? []
+  const resuelto = resolverDelPaso(paso, integracion, ajustesDelLote)
+  const cambia = Boolean(resuelto) && resuelto.cambios.length > 0
+  const efectiva = integracion && resuelto ? { ...integracion, resumen: resumenConAjustes(integracion.resumen, resuelto) } : integracion
   return (
     <>
       <div className={`ci-orq-nombre-paso${pequeno ? ' pequeno' : ''}`} title={nombre}>{nombre}</div>
       {integracion ? (
-        <div className="ci-orq-sub" title={detalleDeIntegracion(integracion)}>
+        <div
+          className={`ci-orq-sub${cambia ? ' ajustada' : ''}`}
+          title={cambia ? `Con los ajustes:\n${textosDeCambios(resuelto.cambios).join('\n')}` : detalleDeIntegracion(integracion)}
+        >
           {integracion.folder && `${integracion.folder} · `}
-          {detalleDeIntegracion(integracion)}
+          {detalleDeIntegracion(efectiva)}
           {variables.length > 0 && ` · pide ${variables.map((variable) => `{{${variable}}}`).join(', ')}`}
         </div>
       ) : (
@@ -117,8 +137,41 @@ function DatosDeIntegracion({ paso, integracion, pequeno = false }) {
   )
 }
 
+/**
+ * El «⚙ Ajustes» de una integración y su panel. El botón dice cuántos ajustes tiene este paso (ámbar) y, si solo vienen de la
+ * orquestación, que los hereda. Con la integración borrada o con el body roto no hay nada que ajustar.
+ */
+function AjustesDeLaIntegracion({ paso, integracion, ajustesDelLote, opciones, abierto, onAlternar, onCambiar }) {
+  const resuelto = resolverDelPaso(paso, integracion, ajustesDelLote)
+  if (!resuelto) return null
+
+  const delPaso = resuelto.cambios.filter((cambio) => cambio.fuente === 'paso').length
+  const delLote = resuelto.cambios.filter((cambio) => cambio.fuente === 'orquestacion').length
+  const estado = delPaso > 0 ? ' con-cambios' : delLote > 0 ? ' heredado' : ''
+  const resumen = delPaso > 0 ? ` · ${delPaso}` : delLote > 0 ? ' · heredados' : ''
+
+  return (
+    <div className="ci-orq-ajustes-caja">
+      <button
+        type="button"
+        className={`ci-orq-ajustes-boton${estado}`}
+        aria-expanded={abierto}
+        aria-label={`Ajustes de ${integracion.name}`}
+        title={resuelto.cambios.length > 0 ? textosDeCambios(resuelto.cambios).join('\n') : 'Cambiar versión, comando, origen, destino o filtro solo en esta orquestación'}
+        onClick={onAlternar}
+      >
+        ⚙ Ajustes{resumen}
+      </button>
+      {abierto && (
+        <AjustesDePaso paso={paso} integracion={integracion} ajustesDelLote={ajustesDelLote} opciones={opciones} onCambiar={(ajustes) => onCambiar({ ajustes })} />
+      )}
+    </div>
+  )
+}
+
 export default function TarjetaDePaso({
   paso, indice, total, porId,
+  ajustesDelLote, opcionesDeAjustes,
   esGrupoActivo,
   onQuitar, onSubir, onBajar, onCambiar,
   onAgregarAlGrupo, onQuitarHijo, onCambiarHijo, onSubirHijo, onBajarHijo,
@@ -127,6 +180,14 @@ export default function TarjetaDePaso({
 }) {
   const [grupoAbierto, setGrupoAbierto] = useState(true)
   const [arrastrando, setArrastrando] = useState(false)
+  // Los paneles de ajustes abiertos (por identificador de integración). Con uno abierto la tarjeta no se arrastra: dentro hay campos de
+  // texto, y arrastrar a la vez que se selecciona lo escrito sería un fastidio.
+  const [conAjustesAbiertos, setConAjustesAbiertos] = useState(() => new Set())
+  const alternarAjustes = (id) => setConAjustesAbiertos((previos) => {
+    const siguientes = new Set(previos)
+    if (!siguientes.delete(id)) siguientes.add(id)
+    return siguientes
+  })
   const movil = useIsMobile()
 
   const deGrupo = esGrupo(paso)
@@ -143,7 +204,7 @@ export default function TarjetaDePaso({
   return (
     <div
       className={clases}
-      draggable={!movil}
+      draggable={!movil && conAjustesAbiertos.size === 0}
       onDragStart={(evento) => { if (movil) return; setArrastrando(true); onArrastrar(evento, paso.id) }}
       onDragEnd={() => setArrastrando(false)}
       onDragOver={(evento) => { evento.preventDefault(); onPasarPor(evento, paso.id) }}
@@ -184,8 +245,17 @@ export default function TarjetaDePaso({
             </>
           ) : (
             <>
-              <DatosDeIntegracion paso={paso} integracion={porId.get(paso.integrationId)} />
+              <DatosDeIntegracion paso={paso} integracion={porId.get(paso.integrationId)} ajustesDelLote={ajustesDelLote} />
               <SiFalla paso={paso} nombre={nombre} onCambiar={onCambiar} />
+              <AjustesDeLaIntegracion
+                paso={paso}
+                integracion={porId.get(paso.integrationId)}
+                ajustesDelLote={ajustesDelLote}
+                opciones={opcionesDeAjustes}
+                abierto={conAjustesAbiertos.has(paso.id)}
+                onAlternar={() => alternarAjustes(paso.id)}
+                onCambiar={onCambiar}
+              />
             </>
           )}
         </div>
@@ -209,8 +279,17 @@ export default function TarjetaDePaso({
               <div key={hijo.id} className="ci-orq-hijo">
                 <div className="ci-orq-paralelo" title="Corre a la vez que las demás del grupo">∥</div>
                 <div className="ci-orq-tarjeta-cuerpo">
-                  <DatosDeIntegracion paso={hijo} integracion={integracion} pequeno />
+                  <DatosDeIntegracion paso={hijo} integracion={integracion} ajustesDelLote={ajustesDelLote} pequeno />
                   <SiFalla paso={hijo} nombre={nombreDelHijo} onCambiar={(cambios) => onCambiarHijo(hijo.id, cambios)} />
+                  <AjustesDeLaIntegracion
+                    paso={hijo}
+                    integracion={integracion}
+                    ajustesDelLote={ajustesDelLote}
+                    opciones={opcionesDeAjustes}
+                    abierto={conAjustesAbiertos.has(hijo.id)}
+                    onAlternar={() => alternarAjustes(hijo.id)}
+                    onCambiar={(cambios) => onCambiarHijo(hijo.id, cambios)}
+                  />
                 </div>
                 <div className="ci-orq-botones">
                   <button type="button" className="ci-orq-mini" disabled={i === 0} onClick={() => onSubirHijo(hijo.id)} title="Mover arriba" aria-label={`Subir ${nombreDelHijo} dentro del grupo`}>↑</button>

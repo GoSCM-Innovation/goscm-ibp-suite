@@ -103,6 +103,19 @@ export function leerFiltro(texto) {
   return filas
 }
 
+/**
+ * Las condiciones de un filtro que se entienden, sin los identificadores de fila: lo que una lista o una orquestación necesita para
+ * decir qué filtra una integración. `{ campo, tipo: 'igual', valores }` o `{ campo, tipo: 'entre', desde, hasta }`. Lo que no se
+ * entiende (una fila de texto) no está: es lo que `escribirFiltro` conserva tal cual.
+ */
+export function condicionesDeFiltro(texto) {
+  return leerFiltro(texto)
+    .filter((fila) => fila.tipo !== 'texto')
+    .map((fila) => (fila.tipo === 'entre'
+      ? { campo: fila.campo, tipo: 'entre', desde: fila.desde, hasta: fila.hasta }
+      : { campo: fila.campo, tipo: 'igual', valores: [...fila.valores] }))
+}
+
 /** Escribe las filas de vuelta como cadena. Una fila sin campo o sin valores no se escribe. */
 export function escribirFiltro(filas) {
   const condiciones = []

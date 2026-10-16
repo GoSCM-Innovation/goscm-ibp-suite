@@ -72,7 +72,7 @@ export default async function handler(req, res) {
         // apunte a una integración que exista y que cada variable traiga su valor), y quién la lanzó sale de
         // la sesión: el historial dice quién ejecutó, y eso no lo decide el cuerpo de la petición.
         const valores = destino.conexion.kind === 'ci'
-          ? defaultsDeCi(defaults, { id: session.userId, email: session.email })
+          ? defaultsDeCi(defaults, { id: session.userId, email: session.email }, destino.orquestacion.ajustes)
           : defaults
         if (destino.conexion.kind === 'ci') await validarInicio(clientId, destino.orquestacion, valores)
         return res.status(200).json({ run: await startRun(clientId, id, { defaults: valores }) })

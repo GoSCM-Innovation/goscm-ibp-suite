@@ -15,7 +15,7 @@
 //   - Las variables (`{{FECHA_DESDE}}`) se sustituyen sobre los VALORES de texto ya leídos, nunca sobre el
 //     texto crudo: así un valor no puede cerrar una cadena ni abrir otra clave.
 
-import { leerFiltro } from './filter.js'
+import { condicionesDeFiltro, leerFiltro } from './filter.js'
 import { componerTipo } from './ibp-nombres.js'
 import { leerMapeo } from './mapping.js'
 
@@ -252,6 +252,8 @@ export function resumenDeBody(texto) {
     variablesDeFecha: variablesDeFechaDeBloque(bloque),
     nombreDeLote: texto1('BatchName'),
     fuenteDeDatos: texto1('DataSource'),
+    // Qué filtra: lo que una orquestación necesita para ajustar las fechas y los valores de cada paso sin abrir el body.
+    condiciones: condicionesDeFiltro(texto1('FilterForTheDataSource')),
     // De qué sistema sale la carga y a cuál llega: «Destino del add-on» (PRD, QAS) y «Destino en SAP IBP» (IBP).
     sistemaOrigen: texto1('DestinationforAddon'),
     sistemaDestino: texto1('DestinationforSAPIBP'),

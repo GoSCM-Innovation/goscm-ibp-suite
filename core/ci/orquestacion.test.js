@@ -81,6 +81,82 @@ describe('infoDeOrquestacion', () => {
   })
 })
 
+// Una orquestación puede cambiar, para su carga, lo que dicen sus integraciones. Lo que se pide al ejecutar y lo que se enseña es lo que
+// quedaría DESPUÉS de los ajustes: lo que se ve es lo que se envía.
+describe('infoDeOrquestacion con ajustes', () => {
+  const conFecha = (id) => ({
+    id, connectionId: CONEXION, name: id, folder: '',
+    body: JSON.stringify({ K: {
+      BatchCommand: 'REPLACE', PlanningAreaVersion: 'PVSMD', DestinationforAddon: 'PRD', DestinationforSAPIBP: 'IBP',
+      FilterForTheDataSource: "KEYFIGUREDATE BT '{{DESDE}}' '{{HASTA}}'",
+    } }),
+  })
+  const conAjustes = (nodes, ajustes) => ({ ...orq(nodes), ajustes })
+
+  it('una variable que un ajuste reemplaza por una fecha fija deja de pedirse', async () => {
+    getIntegrations.mockResolvedValue([conFecha('i-1')])
+    const info = await infoDeOrquestacion(CLIENTE, conAjustes([paso('a', 'i-1')], { fechas: { desde: '20260101', hasta: '20261231' } }))
+    expect(info.variables).toEqual([])
+    expect(info.pasos[0].variables).toEqual([])
+    expect(info.pasos[0].cambios.map((c) => c.clave)).toEqual(['filtro'])
+  })
+
+  it('una variable que un ajuste trae se pide, y con calendario si va en una fecha', async () => {
+    getIntegrations.mockResolvedValue([conFecha('i-1')])
+    const info = await infoDeOrquestacion(CLIENTE, conAjustes([paso('a', 'i-1')], { fechas: { desde: '{{INICIO}}', hasta: '{{FIN}}' } }))
+    expect(info.variables).toEqual(['FIN', 'INICIO'])
+    expect(info.variablesDeFecha).toEqual(['FIN', 'INICIO'])
+  })
+
+  it('los ajustes del paso se suman a los del lote y mandan sobre ellos', async () => {
+    getIntegrations.mockResolvedValue([conFecha('i-1'), conFecha('i-2')])
+    const nodos = [
+      paso('a', 'i-1'),
+      { ...paso('b', 'i-2'), data: { label: 'b', integrationId: 'i-2', ajustes: { version: 'PV3', filtro: { KEYFIGUREDATE: { desde: '20260601', hasta: '20260630' } } } } },
+    ]
+    const info = await infoDeOrquestacion(CLIENTE, conAjustes(nodos, { version: 'PV2', fechas: { desde: '20260101', hasta: '20261231' } }))
+
+    expect(info.pasos[0].efectivo).toMatchObject({ version: 'PV2', comando: 'REPLACE', sistemaOrigen: 'PRD', sistemaDestino: 'IBP' })
+    expect(info.pasos[1].efectivo.version).toBe('PV3')
+    expect(info.pasos[1].cambios.find((c) => c.clave === 'filtro')).toMatchObject({ a: '20260601 → 20260630', fuente: 'paso' })
+    expect(info.variables).toEqual([])
+  })
+
+  it('sin ajustes todo queda como antes, y `efectivo` dice lo de la integración', async () => {
+    getIntegrations.mockResolvedValue([conFecha('i-1')])
+    const info = await infoDeOrquestacion(CLIENTE, orq([paso('a', 'i-1')]))
+    expect(info.pasos[0]).toMatchObject({ cambios: [], avisos: [], errorDeAjustes: null, efectivo: { version: 'PVSMD', comando: 'REPLACE' } })
+    expect(info.variables).toEqual(['DESDE', 'HASTA'])
+  })
+
+  it('un ajuste del paso que ya no tiene a qué aplicarse da un aviso', async () => {
+    getIntegrations.mockResolvedValue([conFecha('i-1')])
+    const nodo = { ...paso('a', 'i-1'), data: { label: 'a', integrationId: 'i-1', ajustes: { filtro: { ZVIGENTE: { valores: ['S'] } } } } }
+    const info = await infoDeOrquestacion(CLIENTE, orq([nodo]))
+    expect(info.pasos[0].avisos).toHaveLength(1)
+  })
+
+  it('unos ajustes que no valen se dicen en el paso, sin romper el resto', async () => {
+    getIntegrations.mockResolvedValue([conFecha('i-1'), conFecha('i-2')])
+    const malo = { ...paso('a', 'i-1'), data: { label: 'a', integrationId: 'i-1', ajustes: { comando: "x'y" } } }
+    const info = await infoDeOrquestacion(CLIENTE, orq([malo, paso('b', 'i-2')]))
+    expect(info.pasos[0].errorDeAjustes).toMatch(/Comando/)
+    expect(info.pasos[1].errorDeAjustes).toBeNull()
+  })
+
+  it('una orquestación con ajustes que no valen no se lanza, y dice en qué paso', async () => {
+    getIntegrations.mockResolvedValue([conFecha('i-1')])
+    const malo = { ...paso('a', 'i-1'), data: { label: 'a', integrationId: 'i-1', ajustes: { comando: "x'y" } } }
+    await expect(validarInicio(CLIENTE, orq([malo]), { variables: { DESDE: '1', HASTA: '2' } })).rejects.toThrow(/los ajustes no valen.*«a»: Comando/)
+  })
+
+  it('valida las variables que quedan DESPUÉS de los ajustes: una que sobraba ya no hace falta', async () => {
+    getIntegrations.mockResolvedValue([conFecha('i-1')])
+    const lote = { fechas: { desde: '20260101', hasta: '20261231' } }
+    await expect(validarInicio(CLIENTE, conAjustes([paso('a', 'i-1')], lote), { variables: {} })).resolves.toMatchObject({ variables: [] })
+  })
+})
+
 describe('validarInicio', () => {
   const conDosVariables = () => getIntegrations.mockResolvedValue([integracion('i-1', "K BT '{{DESDE}}' '{{HASTA}}'")])
 
@@ -138,7 +214,22 @@ describe('defaultsDeCi', () => {
     expect(defaultsDeCi(
       { variables: { DESDE: '20261005', '1mala': 'x', OTRA: 7, 'a-b': 'y' }, startedBy: { email: 'falso@x.com' } },
       { id: 'u-1', email: 'a@x.com' },
-    )).toEqual({ variables: { DESDE: '20261005' }, startedBy: { id: 'u-1', email: 'a@x.com' } })
+    )).toEqual({ variables: { DESDE: '20261005' }, startedBy: { id: 'u-1', email: 'a@x.com' }, ajustes: {} })
+  })
+
+  // Los del lote salen de la orquestación guardada, no de la petición: lo que mande el navegador no los decide.
+  it('lleva los ajustes del lote de la orquestación guardada, y no los que traiga la petición', () => {
+    const limpio = defaultsDeCi(
+      { ajustes: { version: 'LA_DEL_NAVEGADOR' } },
+      { id: 'u-1', email: 'a@x.com' },
+      { version: 'PV2', fechas: { desde: '20260101' } },
+    )
+    expect(limpio.ajustes).toEqual({ version: 'PV2', fechas: { desde: '20260101' } })
+  })
+
+  it('unos ajustes guardados que no valen no dejan lanzar', () => {
+    expect(() => defaultsDeCi({}, { id: 'u', email: 'e' }, { comando: "x'y" })).toThrow(/Comando/)
+    expect(() => defaultsDeCi({}, { id: 'u', email: 'e' }, { filtro: { A: { valores: ['x'] } } })).toThrow(/no llevan filtro/)
   })
 
   it('lo que llega en el cuerpo no decide quién ejecutó', () => {

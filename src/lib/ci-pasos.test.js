@@ -19,6 +19,7 @@ import {
   quitarHijo,
   quitarPaso,
   reordenar,
+  tareasDeLosPasos,
   totalDeIntegraciones,
 } from './ci-pasos.js'
 
@@ -355,5 +356,47 @@ describe('contar e identificar', () => {
   it('una orquestación de etapas y su ejecución son de la misma versión aunque la pantalla las enseñe con grupos', () => {
     const guardada = grafoDeEtapas([[paso('a')], [paso('b'), paso('c')]])
     expect(esDeLaMismaVersion(guardada.nodes, { nodes: { a: {}, b: {}, c: {} } })).toBe(true)
+  })
+})
+
+// Los ajustes de un paso (otra versión, otras fechas…) viajan en su nodo y vuelven a la lista tal cual.
+describe('ajustes de un paso', () => {
+  const AJUSTES = { version: 'PV2', filtro: { KEYFIGUREDATE: { desde: '20260101', hasta: '20261231' } } }
+
+  it('van al grafo dentro del `data` del paso, y un paso sin ajustes no lleva la clave', () => {
+    const grafo = grafoDePasos([paso('a', { ajustes: AJUSTES }), paso('b'), paso('c', { ajustes: {} })])
+    expect(grafo.nodes[0].data.ajustes).toEqual(AJUSTES)
+    expect(grafo.nodes[1].data).not.toHaveProperty('ajustes')
+    expect(grafo.nodes[2].data).not.toHaveProperty('ajustes')
+  })
+
+  it('vuelven del grafo a la lista, también dentro de un grupo, y sobreviven al servidor', () => {
+    const lista = [paso('a', { ajustes: AJUSTES }), grupo('g', [paso('b', { ajustes: { comando: 'REPLACE' } }), paso('c')])]
+    const guardado = normalizeGraph(grafoDePasos(lista), { kind: 'ci' })
+    const { pasos } = pasosDeGrafo(guardado)
+    expect(pasos[0].ajustes).toEqual(AJUSTES)
+    expect(pasos[1].children[0].ajustes).toEqual({ comando: 'REPLACE' })
+    expect(pasos[1].children[1]).not.toHaveProperty('ajustes')
+    expect(pasos).toEqual(lista)
+  })
+
+  it('cambiarPaso y cambiarHijo los ponen y los quitan', () => {
+    let lista = cambiarPaso([paso('a')], 'a', { ajustes: AJUSTES })
+    expect(lista[0].ajustes).toEqual(AJUSTES)
+    lista = cambiarPaso(lista, 'a', { ajustes: {} })
+    expect(grafoDePasos(lista).nodes[0].data).not.toHaveProperty('ajustes')
+
+    const enGrupo = cambiarHijo([grupo('g', [paso('b')])], 'g', 'b', { ajustes: AJUSTES })
+    expect(enGrupo[0].children[0].ajustes).toEqual(AJUSTES)
+  })
+})
+
+describe('tareasDeLosPasos', () => {
+  it('las integraciones una por una, con el número de su paso y si van en un grupo', () => {
+    const lista = [paso('a'), grupo('g', [paso('b'), paso('c')]), paso('d'), grupo('vacio')]
+    expect(tareasDeLosPasos(lista).map(({ tarea, numero, enGrupo }) => [tarea.id, numero, enGrupo])).toEqual([
+      ['a', 1, false], ['b', 2, true], ['c', 2, true], ['d', 3, false],
+    ])
+    expect(tareasDeLosPasos([])).toEqual([])
   })
 })

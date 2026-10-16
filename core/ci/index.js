@@ -26,7 +26,22 @@ export {
   plantillaDeBody,
 } from './campos.js'
 
-export { escribirFiltro, leerFiltro } from './filter.js'
+export {
+  CAMPOS_DE_AJUSTE,
+  ajustesDelLote,
+  ajustesDePaso,
+  aplicarAjustes,
+  contarAjustes,
+  normalizarAjustes,
+  resolverAjustes,
+  sinAjustes,
+  textosDeCambios,
+  vistaDeBloque,
+} from './ajustes.js'
+
+export { esFechaAAAAMMDD } from './fechas.js'
+
+export { condicionesDeFiltro, escribirFiltro, leerFiltro } from './filter.js'
 
 export { CAMPOS_DEL_MAPEO, escribirMapeo, leerMapeo, leerPegado } from './mapping.js'
 

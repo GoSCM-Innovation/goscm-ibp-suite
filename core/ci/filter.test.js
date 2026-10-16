@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { escribirFiltro, leerFiltro, motivoDeValorDeFiltroInvalido } from './filter.js'
+import { condicionesDeFiltro, escribirFiltro, leerFiltro, motivoDeValorDeFiltroInvalido } from './filter.js'
 
 // Los filtros reales de los bodies que el usuario mostró.
 const FILTROS = [
@@ -101,5 +101,30 @@ describe('motivoDeValorDeFiltroInvalido', () => {
     expect(motivoDeValorDeFiltroInvalido('a,b')).toMatch(/comas/)
     expect(motivoDeValorDeFiltroInvalido('ZFER')).toBeNull()
     expect(motivoDeValorDeFiltroInvalido('')).toBeNull()
+  })
+})
+
+describe('condicionesDeFiltro', () => {
+  it('lista lo que filtra, sin identificadores', () => {
+    expect(condicionesDeFiltro("AUART EQ 'ZVEX',MATTYPEID EQ 'ZFER',MATTYPEID EQ 'ZHAW',KEYFIGUREDATE BT '20260101' '20271231'")).toEqual([
+      { campo: 'AUART', tipo: 'igual', valores: ['ZVEX'] },
+      { campo: 'MATTYPEID', tipo: 'igual', valores: ['ZFER', 'ZHAW'] },
+      { campo: 'KEYFIGUREDATE', tipo: 'entre', desde: '20260101', hasta: '20271231' },
+    ])
+  })
+
+  it('lo que no se entiende no aparece (se conserva al escribir, pero no se puede ajustar)', () => {
+    expect(condicionesDeFiltro("A EQ '1',ALGO RARO,B BT '1' '2'").map((c) => c.campo)).toEqual(['A', 'B'])
+  })
+
+  it('un filtro vacío no filtra nada', () => {
+    expect(condicionesDeFiltro('')).toEqual([])
+    expect(condicionesDeFiltro(undefined)).toEqual([])
+  })
+
+  it('devuelve copias: cambiarlas no cambia la lectura siguiente', () => {
+    const [una] = condicionesDeFiltro("A EQ '1'")
+    una.valores.push('x')
+    expect(condicionesDeFiltro("A EQ '1'")[0].valores).toEqual(['1'])
   })
 })

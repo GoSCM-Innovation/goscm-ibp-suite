@@ -357,3 +357,59 @@ describe('orquestaciones de CI Tools', () => {
     }, { kind: 'ci' })).toThrow(/ciclo/)
   })
 })
+
+// Los ajustes de un paso de CI Tools (otra versión, otras fechas…) viajan en el `data` de su nodo.
+describe('ajustes de un paso (CI Tools)', () => {
+  const conAjustes = (ajustes, extra = {}) => ({
+    id: 'a', type: 'task', position: { x: 0, y: 0 }, data: { label: 'A', integrationId: 'int-a', ajustes, ...extra },
+  })
+  const AJUSTES = { version: ' PV2 ', filtro: { MATTYPEID: { valores: ['ZNEW'] } } }
+
+  it('en CI Tools se guardan, limpios', () => {
+    const { nodes } = normalizeGraph({ nodes: [conAjustes(AJUSTES)], edges: [] }, { kind: 'ci' })
+    expect(nodes[0].data.ajustes).toEqual({ version: 'PV2', filtro: { MATTYPEID: { valores: ['ZNEW'] } } })
+  })
+
+  it('sobreviven a guardar dos veces (normalizar lo ya normalizado)', () => {
+    const una = normalizeGraph({ nodes: [conAjustes(AJUSTES)], edges: [] }, { kind: 'ci' })
+    expect(normalizeGraph(una, { kind: 'ci' })).toEqual(una)
+  })
+
+  it('un paso sin ajustes no lleva la clave', () => {
+    for (const ajustes of [undefined, {}, { filtro: {} }]) {
+      const { nodes } = normalizeGraph({ nodes: [conAjustes(ajustes)], edges: [] }, { kind: 'ci' })
+      expect(nodes[0].data).not.toHaveProperty('ajustes')
+    }
+  })
+
+  it('en CI-DS e IBP no significan nada y no se guardan', () => {
+    for (const kind of ['cids', 'ibp']) {
+      const { nodes } = normalizeGraph({ nodes: [conAjustes(AJUSTES)], edges: [] }, { kind })
+      expect(nodes[0].data).not.toHaveProperty('ajustes')
+    }
+    expect(normalizeGraph({ nodes: [conAjustes(AJUSTES)], edges: [] }).nodes[0].data).not.toHaveProperty('ajustes')
+  })
+
+  it('un grupo no lleva ajustes', () => {
+    const grupo = { id: 'g', type: 'group', data: { label: 'G', ajustes: AJUSTES } }
+    expect(normalizeGraph({ nodes: [grupo], edges: [] }, { kind: 'ci' }).nodes[0].data).not.toHaveProperty('ajustes')
+  })
+
+  it('unos ajustes que no valen se rechazan al guardar, con el motivo', () => {
+    expect(() => normalizeGraph({ nodes: [conAjustes({ comando: "x'y" })], edges: [] }, { kind: 'ci' })).toThrow(/Comando/)
+    expect(() => normalizeGraph({ nodes: [conAjustes({ filtro: { A: { valores: ['a,b'] } } })], edges: [] }, { kind: 'ci' })).toThrow(/comas/)
+  })
+
+  it('las «fechas» son del lote: un paso las dice en su filtro', () => {
+    expect(() => normalizeGraph({ nodes: [conAjustes({ fechas: { desde: '20260101' } })], edges: [] }, { kind: 'ci' }))
+      .toThrow(/no llevan «fechas»/)
+  })
+
+  it('un paso dentro de un grupo también guarda los suyos', () => {
+    const nodes = [
+      { id: 'g', type: 'group', data: { label: 'G' } },
+      { ...conAjustes({ comando: 'INSERT_UPDATE' }), id: 'h', parentId: 'g' },
+    ]
+    expect(normalizeGraph({ nodes, edges: [] }, { kind: 'ci' }).nodes[1].data.ajustes).toEqual({ comando: 'INSERT_UPDATE' })
+  })
+})

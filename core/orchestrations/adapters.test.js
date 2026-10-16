@@ -343,8 +343,28 @@ describe('adaptador de CI Tools', () => {
 
     expect(executeIntegration).toHaveBeenCalledWith({
       clientId: 'c-1', connectionId: 'x-1', integrationId: 'int-1', variables: { D: '1' },
+      ajustes: { general: {}, paso: {} },
       origin: 'orchestration', orchestrationId: 'orq-1', user: { id: 'u-1', email: 'a@x.com' }, runId: 'run-1',
     })
+  })
+
+  // Los del lote se fijan al lanzar (salen de la ejecución) y los del paso salen de su nodo.
+  it('le pasa los ajustes del lote (de la ejecución) y los del paso (de su nodo)', async () => {
+    executeIntegration.mockResolvedValue(bien)
+    const deLote = { version: 'PV2', fechas: { desde: '20260101' } }
+    const delPaso = { comando: 'INSERT_UPDATE', filtro: { MATTYPEID: { valores: ['ZNEW'] } } }
+    await ci.ejecutar(destino, { ...nodo, data: { ...nodo.data, ajustes: delPaso } }, { ajustes: deLote }, {})
+
+    expect(executeIntegration.mock.calls[0][0].ajustes).toEqual({ general: deLote, paso: delPaso })
+  })
+
+  it('lo que cambiaron los ajustes queda en el detalle del paso, para que la pantalla lo enseñe', async () => {
+    const cambios = [{ clave: 'version', etiqueta: 'Versión', de: 'PVSMD', a: 'PV2', fuente: 'orquestacion' }]
+    executeIntegration.mockResolvedValue({ ...bien, ajustes: cambios })
+    expect((await ci.ejecutar(destino, nodo, {}, {})).detalle.ajustes).toEqual(cambios)
+
+    executeIntegration.mockResolvedValue(bien)
+    expect((await ci.ejecutar(destino, nodo, {}, {})).detalle.ajustes).toEqual([])
   })
 
   it('un 2xx es SUCCESS y trae la duración', async () => {

@@ -7,6 +7,12 @@ actualiza al terminar cada sesión, y su orden es el de prioridad acordada.
 
 ## Dónde estamos
 
+- **CI Tools: ajustes de una orquestación (2026-10-15)**, directo en `main`. Una orquestación puede cambiar, para su carga y sin tocar las
+  integraciones, la versión, el comando, el origen y el destino de **todo el lote**, las **fechas** (con la tabla de qué fechas quedan en cada
+  paso) y, por paso, el **filtro**. Por omisión todo cerrado y sin cambios. **Migración 009 aplicada.** Detalle, reglas y límites en
+  [`CI-TOOLS.md`](CI-TOOLS.md) («Ajustes de una orquestación»). **Falta probarlo con el usuario delante y con una carga real** (solo se probó en el
+  motor y en pantalla).
+
 - **CI Tools, tres pedidos del usuario (2026-10-15)**, directo en `main`: (1) **calendario** para `KEYFIGUREDATE` en el filtro y
   al ejecutar; (2) **«completada con advertencias»**: una respuesta de CPI distinta de OK que trae MPL ID no es un error (migración
   008 aplicada); (3) **el orquestador rehecho como el de IBP Tools**: lista plegable, paleta de integraciones, tarjetas con

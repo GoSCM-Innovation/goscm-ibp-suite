@@ -259,6 +259,8 @@ function estadoDelMotor(salida) {
       enviado: salida.enviado !== false,
       bloqueada: Boolean(salida.bloqueada),
       ejecucionId: salida.runId ?? null,
+      // Qué cambió la orquestación de la integración en este paso (otra versión, otras fechas…): la pantalla lo enseña.
+      ajustes: Array.isArray(salida.ajustes) ? salida.ajustes : [],
     },
   }
 }
@@ -289,6 +291,8 @@ const adaptadorCi = {
       connectionId: destino.connectionId,
       integrationId,
       variables: porOmision.variables ?? {},
+      // Los del lote salen de la ejecución (se fijaron al lanzarla) y los del paso, de su nodo.
+      ajustes: { general: porOmision.ajustes ?? {}, paso: nodo.data?.ajustes ?? {} },
       origin: 'orchestration',
       orchestrationId: orchestrationId ?? null,
       user: quien?.email ? { id: quien.id ?? null, email: quien.email } : null,
